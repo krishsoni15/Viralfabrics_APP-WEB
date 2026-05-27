@@ -1,0 +1,408 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   DESIGN SYSTEM TOKENS
+   ============================================================================ */
+
+:root {
+  /* Colors - WCAG AA Compliant */
+  --color-primary-50: #eff6ff;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  
+  --color-neutral-50: #fafafa;
+  --color-neutral-100: #f5f5f5;
+  --color-neutral-200: #e5e5e5;
+  --color-neutral-700: #404040;
+  --color-neutral-800: #262626;
+  --color-neutral-900: #171717;
+  
+  /* Spacing (8px base unit) */
+  --spacing-xs: 0.25rem;   /* 4px */
+  --spacing-sm: 0.5rem;    /* 8px */
+  --spacing-md: 1rem;      /* 16px */
+  --spacing-lg: 1.5rem;    /* 24px */
+  --spacing-xl: 2rem;      /* 32px */
+  
+  /* Typography */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Monaco, Consolas, monospace;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  
+  /* Border Radius */
+  --radius-sm: 0.125rem;   /* 2px */
+  --radius-md: 0.375rem;   /* 6px */
+  --radius-lg: 0.5rem;     /* 8px */
+  --radius-xl: 0.75rem;    /* 12px */
+  
+  /* Transitions */
+  --transition-fast: 150ms;
+  --transition-base: 200ms;
+  --transition-slow: 300ms;
+  
+  /* Focus Ring */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--color-primary-500);
+}
+
+.dark {
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+}
+
+/* ============================================================================
+   ACCESSIBILITY ENHANCEMENTS
+   ============================================================================ */
+
+/* Skip to main content link */
+.skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--color-primary-600);
+  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  z-index: 100;
+  border-radius: var(--radius-md);
+}
+
+.skip-to-content:focus {
+  top: 0;
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only:focus,
+.sr-only:focus-visible {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Focus visible styles (keyboard navigation) */
+*:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+/* Remove focus outline for mouse users */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ============================================================================
+   RESPONSIVE UTILITIES (320px+)
+   ============================================================================ */
+
+@layer utilities {
+  /* Extra small screens (320px+) */
+  @media (min-width: 320px) {
+    .xs\:text-xs { font-size: 0.75rem; }
+    .xs\:text-sm { font-size: 0.875rem; }
+    .xs\:px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+    .xs\:py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+  }
+  
+  /* Small screens (640px+) */
+  @media (min-width: 640px) {
+    .sm\:text-base { font-size: 1rem; }
+    .sm\:px-4 { padding-left: 1rem; padding-right: 1rem; }
+    .sm\:py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  }
+  
+  /* Medium screens (768px+) */
+  @media (min-width: 768px) {
+    .md\:text-lg { font-size: 1.125rem; }
+    .md\:px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+  }
+  
+  /* Large screens (1024px+) */
+  @media (min-width: 1024px) {
+    .lg\:text-xl { font-size: 1.25rem; }
+  }
+}
+
+/* ============================================================================
+   TOUCH TARGET SIZES (WCAG 2.5.5)
+   ============================================================================ */
+
+/* Minimum 44x44px for touch targets */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@media (min-width: 640px) {
+  .touch-target {
+    min-height: 40px;
+    min-width: 40px;
+  }
+}
+
+/* ============================================================================
+   ANIMATIONS (Optimized for Performance)
+   ============================================================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Optimized animations with will-change */
+.animate-fade-in {
+  animation: fadeIn var(--transition-base) ease-out;
+  will-change: opacity;
+}
+
+.animate-slide-in-up {
+  animation: slideInUp var(--transition-slow) ease-out;
+  will-change: opacity, transform;
+}
+
+.animate-slide-in-down {
+  animation: slideInDown var(--transition-slow) ease-out;
+  will-change: opacity, transform;
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--transition-base) ease-out;
+  will-change: opacity, transform;
+}
+
+/* Skeleton shimmer animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  will-change: background-position;
+}
+
+.dark .skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #374151 25%,
+    #4b5563 50%,
+    #374151 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* ============================================================================
+   DARK MODE ENHANCEMENTS (WCAG Compliant)
+   ============================================================================ */
+
+.dark {
+  color-scheme: dark;
+}
+
+/* Ensure sufficient contrast in dark mode */
+.dark .text-gray-600 {
+  color: #d1d5db; /* gray-300 - better contrast */
+}
+
+.dark .text-gray-500 {
+  color: #9ca3af; /* gray-400 - better contrast */
+}
+
+/* ============================================================================
+   LAYOUT SHIFT PREVENTION
+   ============================================================================ */
+
+/* Prevent layout shifts from images */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Aspect ratio containers */
+.aspect-video {
+  aspect-ratio: 16 / 9;
+}
+
+.aspect-square {
+  aspect-ratio: 1 / 1;
+}
+
+/* ============================================================================
+   SMOOTH SCROLLING
+   ============================================================================ */
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================================
+   BASE STYLES
+   ============================================================================ */
+
+html {
+  background-color: rgb(248 250 252); /* slate-50 */
+  transition: background-color var(--transition-base) ease;
+}
+
+html.dark {
+  background-color: rgb(30 41 59); /* slate-800 */
+}
+
+body {
+  background: var(--background, white);
+  color: var(--foreground, #171717);
+  font-family: var(--font-sans);
+  transition: background-color var(--transition-base) ease, color var(--transition-base) ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================================
+   FOCUS STYLES (Accessibility)
+   ============================================================================ */
+
+/* Enhanced focus styles for keyboard navigation */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+/* Remove default focus for mouse users */
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ============================================================================
+   RESPONSIVE TYPOGRAPHY
+   ============================================================================ */
+
+/* Fluid typography for better responsiveness */
+@media (min-width: 320px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 640px) {
+  html {
+    font-size: 15px;
+  }
+}
+
+@media (min-width: 1024px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+/* ============================================================================
+   PRINT STYLES
+   ============================================================================ */
+
+@media print {
+  * {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
+

@@ -1,0 +1,83 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+        # Verify environment variables are available (for debugging)
+        - echo "Checking environment variables..."
+        - |
+          if [ -z "$MONGODB_URI" ]; then
+            echo "❌ WARNING: MONGODB_URI is not set in build environment"
+            echo "This will cause runtime errors!"
+          else
+            echo "✅ MONGODB_URI is set (length: ${#MONGODB_URI})"
+          fi
+        - |
+          if [ -z "$JWT_SECRET" ]; then
+            echo "❌ WARNING: JWT_SECRET is not set in build environment"
+          else
+            echo "✅ JWT_SECRET is set"
+          fi
+        # Create .env.production file from environment variables
+        - |
+          cat > .env.production << EOF
+          MONGODB_URI=$MONGODB_URI
+          JWT_SECRET=$JWT_SECRET
+          NODE_ENV=$NODE_ENV
+          S3_ACCESS_KEY_ID=$S3_ACCESS_KEY_ID
+          S3_SECRET_ACCESS_KEY=$S3_SECRET_ACCESS_KEY
+          S3_BUCKET_NAME=$S3_BUCKET_NAME
+          S3_REGION=$S3_REGION
+          NEXTAUTH_SECRET=$NEXTAUTH_SECRET
+          NEXTAUTH_URL=$NEXTAUTH_URL
+          EOF
+          echo "✅ Created .env.production file"
+    build:
+      commands:
+        # Ensure env vars are available during build
+        - export MONGODB_URI="$MONGODB_URI"
+        - export JWT_SECRET="$JWT_SECRET"
+        - export NODE_ENV="$NODE_ENV"
+        - npm run build
+        # Copy .env file to standalone directory if it exists
+        - |
+          if [ -f .env.production ]; then
+            if [ -d .next/standalone ]; then
+              cp .env.production .next/standalone/.env.production
+              echo "✅ Copied .env.production to standalone directory"
+            fi
+            if [ -d .next/standalone/app ]; then
+              cp .env.production .next/standalone/app/.env.production
+              echo "✅ Copied .env.production to standalone/app directory"
+            fi
+          fi
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+      - '.env.production'
+  cache:
+    paths:
+      - node_modules/**/*
+      - .next/cache/**/*
+  customHeaders:
+    - pattern: '**/*.html'
+      headers:
+        - key: 'Cache-Control'
+          value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
+        - key: 'Pragma'
+          value: 'no-cache'
+        - key: 'Expires'
+          value: '0'
+    - pattern: '/'
+      headers:
+        - key: 'Cache-Control'
+          value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
+        - key: 'Pragma'
+          value: 'no-cache'
+    - pattern: '/_next/static/**'
+      headers:
+        - key: 'Cache-Control'
+          value: 'public, max-age=31536000, immutable'
+
