@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
 import bcrypt from "bcryptjs";
+import "./Party";
 
 // Enhanced TypeScript interfaces
 export interface IUser extends Document {
