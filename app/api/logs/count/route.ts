@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Allow both users and superadmins to view logs
-    if (session.role !== 'superadmin' && session.role !== 'user') {
+    if (!['master','superadmin','admin'].includes(session.role)) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
     

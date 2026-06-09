@@ -465,7 +465,7 @@ export function useAuthSession(): AuthSession {
     };
   }, [validateSession]);
 
-  const isSuperAdmin = user?.role === 'superadmin';
+  const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'master';
   const isUser = user?.role === 'user';
   const isMaster = user?.role === 'master';
 

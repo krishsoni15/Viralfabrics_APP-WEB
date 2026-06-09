@@ -2413,8 +2413,12 @@ export default function UsersPage() {
                             : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
                       }`}
                     >
-                      <option value="user" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>User</option>
                       <option value="superadmin" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Super Admin</option>
+                      <option value="admin" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Admin</option>
+                      <option value="user" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>User</option>
+                      {currentUser?.role === 'master' && (
+                        <option value="master" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Master</option>
+                      )}
                       <option value="party" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Party</option>
                     </select>
                     {formErrors.role && (
@@ -2737,8 +2741,12 @@ export default function UsersPage() {
                           : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
                       }`}
                     >
-                      <option value="user" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>User</option>
                       <option value="superadmin" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Super Admin</option>
+                      <option value="admin" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Admin</option>
+                      <option value="user" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>User</option>
+                      {currentUser?.role === 'master' && (
+                        <option value="master" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Master</option>
+                      )}
                       <option value="party" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Party</option>
                     </select>
                   </div>

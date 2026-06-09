@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Only superadmin can view log stats
-    if (session.role !== 'superadmin') {
+    if (!['master','superadmin','admin'].includes(session.role)) {
       return unauthorized('Superadmin access required');
     }
     
