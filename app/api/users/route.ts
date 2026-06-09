@@ -1,7 +1,7 @@
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
 import Party from "@/models/Party";
-import { requireSuperAdmin, getSession } from "@/lib/session";
+import { requireSuperAdmin } from "@/lib/session";
 import bcrypt from "bcryptjs";
 import { type NextRequest } from "next/server";
 import { logCreate } from "@/lib/logger";
@@ -18,17 +18,13 @@ export async function GET(req: NextRequest) {
     const rateLimitError = await checkRateLimitOrError(req, apiRateLimiter);
     if (rateLimitError) return rateLimitError;
 
-    // Log the session info
-    const session = await getSession(req);
-    console.log("DEBUG: GET /api/users session:", session);
-
     // Require superadmin access
-    await requireSuperAdmin(req);
+    const session = await requireSuperAdmin(req);
 
     // Check cache first
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '25'), 1), 100); // Enforce max 100
-    const page = Math.max(parseInt(searchParams.get('page') || '1'), 1); // Enforce min page 1
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '25'), 1), 100);
+    const page = Math.max(parseInt(searchParams.get('page') || '1'), 1);
     const cacheKey = `users-${limit}-${page}-${session?.role}`;
     
     const cached = usersCache.get(cacheKey);
@@ -182,6 +178,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine final role to be saved
+    // ⚡ SECURITY: Only master can assign master role
     let targetRole = "user";
     if (newUserRole === "superadmin") {
       targetRole = "superadmin";
@@ -189,7 +186,14 @@ export async function POST(req: NextRequest) {
       targetRole = "admin";
     } else if (newUserRole === "party") {
       targetRole = "party";
-    } else if (newUserRole === "master" && session.role === "master") {
+    } else if (newUserRole === "master") {
+      // Only a master-role user can create another master user
+      if (session.role !== "master") {
+        return new Response(
+          JSON.stringify({ success: false, message: "Access denied - Only master can create master accounts" }),
+          { status: 403 }
+        );
+      }
       targetRole = "master";
     }
 
