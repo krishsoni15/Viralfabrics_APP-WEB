@@ -121,18 +121,27 @@ export async function GET(request: NextRequest) {
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime;
     
+    // Log the actual error for debugging (visible in Vercel logs)
+    console.error('[users-instant] Error:', error instanceof Error ? error.message : error);
+    
     if (error instanceof Error) {
-      if (error.message.includes("Unauthorized")) {
+      if (error.message.includes("Unauthorized") || error.message.includes("Authentication")) {
         return NextResponse.json({ 
           success: false,
           message: "Unauthorized" 
         }, { status: 401 });
       }
-      if (error.message.includes("Forbidden")) {
+      if (error.message.includes("Forbidden") || error.message.includes("Access denied")) {
         return NextResponse.json({ 
           success: false,
           message: "Access denied - Superadmin access required" 
         }, { status: 403 });
+      }
+      if (error.message.includes("MONGODB_URI")) {
+        return NextResponse.json({ 
+          success: false,
+          message: "Database not configured - check environment variables" 
+        }, { status: 503 });
       }
     }
     
@@ -140,7 +149,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ 
       success: false,
       message,
-      'X-Response-Time': `${responseTime}ms`
+      responseTime: `${responseTime}ms`
     }, { status: 500 });
   }
 }

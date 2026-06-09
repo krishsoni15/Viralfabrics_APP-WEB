@@ -17,9 +17,10 @@ export async function GET(request: NextRequest) {
       return unauthorized('Authentication required');
     }
     
-    // Allow both users and superadmins to view logs
-    if (session.role !== 'superadmin' && session.role !== 'user') {
-      return unauthorized('Insufficient permissions');
+    // Allow master, superadmin, and admin to view logs
+    const allowedRoles = ['master', 'superadmin', 'admin'];
+    if (!allowedRoles.includes(session.role)) {
+      return unauthorized('Insufficient permissions - Admin access required');
     }
     
     const { searchParams } = new URL(request.url);

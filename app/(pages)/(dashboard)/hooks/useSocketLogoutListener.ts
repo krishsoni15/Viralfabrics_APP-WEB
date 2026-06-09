@@ -120,7 +120,9 @@ export function useSocketLogoutListener(onLogout: (data?: {
 
         // Handle connection
         socket.on('connect', () => {
-          console.log('✅ Socket.IO connected:', socket.id);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('✅ Socket.IO connected:', socket.id);
+          }
           reconnectAttemptsRef.current = 0;
           socketConnectedRef.current = true;
           
@@ -132,8 +134,7 @@ export function useSocketLogoutListener(onLogout: (data?: {
         });
 
         // Handle connection confirmation
-        socket.on('connected', (data) => {
-          console.log('✅ Socket.IO connection confirmed:', data);
+        socket.on('connected', () => {
           reconnectAttemptsRef.current = 0;
         });
 
@@ -159,43 +160,37 @@ export function useSocketLogoutListener(onLogout: (data?: {
 
         // Handle disconnection
         socket.on('disconnect', (reason) => {
-          console.log('❌ Socket.IO disconnected:', reason);
-          
-          // Only attempt reconnection if it wasn't intentional
-          if (reason === 'io server disconnect') {
-            // Server disconnected, don't reconnect
-            return;
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Socket.IO disconnected:', reason);
           }
           
-          if (reason === 'io client disconnect') {
-            // Client disconnected, don't reconnect
+          // Only attempt reconnection if it wasn't intentional
+          if (reason === 'io server disconnect' || reason === 'io client disconnect') {
             return;
           }
 
           // Attempt reconnection
           reconnectAttemptsRef.current++;
           if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-            console.warn('⚠️ Max reconnect attempts reached for Socket.IO, stopping...');
             socket.disconnect();
             socketRef.current = null;
-          } else {
-            console.log(`🔄 Socket.IO reconnecting (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})...`);
           }
         });
 
         // Handle connection errors
         socket.on('connect_error', (error) => {
-          console.error('❌ Socket.IO connection error:', error);
+          // Only log in development - on Vercel/production these are expected
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Socket.IO connection error (expected on serverless):', error.message);
+          }
           reconnectAttemptsRef.current++;
           if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-            console.warn('⚠️ Max connection attempts reached for Socket.IO, falling back to polling...');
             socket.disconnect();
             socketRef.current = null;
             socketConnectedRef.current = false;
             
             // Start polling as fallback when Socket.IO fails
             if (!pollingIntervalRef.current) {
-              console.log('🔄 Starting polling fallback for logout-all detection...');
               startPolling();
             }
           }
@@ -210,7 +205,21 @@ export function useSocketLogoutListener(onLogout: (data?: {
       }
     };
 
-    // Try Socket.IO first, with polling as fallback
+    // ⚡ VERCEL DETECTION: Vercel serverless doesn't support persistent WebSocket connections.
+    // Skip Socket.IO on Vercel and go straight to polling (which works everywhere).
+    const isVercel = typeof window !== 'undefined' && (
+      window.location.hostname.includes('vercel.app') ||
+      window.location.hostname.includes('vercel.com') ||
+      process.env.NEXT_PUBLIC_VERCEL === '1'
+    );
+
+    if (isVercel) {
+      // On Vercel: skip Socket.IO entirely, use polling directly
+      startPolling();
+      return;
+    }
+
+    // Try Socket.IO first (works on self-hosted server with server.js), with polling as fallback
     connect();
     
     // ⚡ OPTIMIZATION: Wait longer before starting polling (Socket.IO usually connects quickly)
