@@ -1,21 +1,21 @@
 import { Metadata } from 'next';
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
-import { fetchWeaversAction } from '@/app/actions/samplingActions';
-import SamplingPageSkeleton from './components/SamplingPageSkeleton';
+import { fetchWeaversAction } from '@/app/actions/weaverActions';
+import WeaverPageSkeleton from './components/WeaverPageSkeleton';
 import type { Weaver, PaginationInfo } from './hooks/useWeavers';
 
 // Lazy load client component
-const SamplingClient = dynamic(() => import('./SamplingClient'), {
-  loading: () => <SamplingPageSkeleton />,
+const WeaverClient = dynamic(() => import('./WeaverClient'), {
+  loading: () => <WeaverPageSkeleton />,
   ssr: false, // Client component handles all interactions
 });
 
 export const metadata: Metadata = {
-  title: 'Sampling | ViralFabrics',
+  title: 'Weaver | ViralFabrics',
   description: 'Manage weavers and fabric samples',
   openGraph: {
-    title: 'Sampling | ViralFabrics',
+    title: 'Weaver | ViralFabrics',
     description: 'Manage weavers and fabric samples',
     type: 'website',
   },
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
  * Server Component - Fetches initial data on server
  * Passes data to client component for UI interactions
  */
-export default async function SamplingPage({
+export default async function WeaverPage({
   searchParams,
 }: {
   searchParams: Promise<{ 
@@ -63,14 +63,14 @@ export default async function SamplingPage({
     // Error will be handled by ErrorBoundary
     const logger = (await import('@/lib/logger')).logger;
     logger.error('Failed to fetch initial weavers', error instanceof Error ? error : new Error(String(error)), {
-      endpoint: 'SamplingPage',
+      endpoint: 'WeaverPage',
       params: params
     });
   }
 
   return (
-    <Suspense fallback={<SamplingPageSkeleton />}>
-      <SamplingClient 
+    <Suspense fallback={<WeaverPageSkeleton />}>
+      <WeaverClient 
         initialWeavers={initialWeavers}
         initialPagination={initialPagination}
       />

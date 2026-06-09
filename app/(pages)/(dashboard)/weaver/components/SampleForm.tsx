@@ -359,7 +359,7 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
     return Object.keys(newErrors).length === 0;
   };
 
-  const uploadFileToS3 = async (file: File, folder: string = 'sampling'): Promise<string> => {
+  const uploadFileToS3 = async (file: File, folder: string = 'weaver'): Promise<string> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('folder', folder);
@@ -598,8 +598,8 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
       
       const token = localStorage.getItem('token');
       const url = sample?._id 
-        ? `/api/sampling/samples/${sample._id}`
-        : '/api/sampling/samples';
+        ? `/api/weaver/samples/${sample._id}`
+        : '/api/weaver/samples';
       const method = sample?._id ? 'PUT' : 'POST';
       
       const response = await fetch(url, {

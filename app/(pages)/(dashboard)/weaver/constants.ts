@@ -1,5 +1,5 @@
 /**
- * Constants for Sampling Module
+ * Constants for Weaver Module
  * Centralized configuration values
  */
 

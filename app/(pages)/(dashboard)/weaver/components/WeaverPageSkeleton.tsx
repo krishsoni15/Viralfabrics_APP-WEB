@@ -3,7 +3,7 @@
 import React from 'react';
 import { useDarkMode } from '../../hooks/useDarkMode';
 
-export default function SamplingPageSkeleton() {
+export default function WeaverPageSkeleton() {
   const { isDarkMode, mounted } = useDarkMode();
   
   // Get initial theme to prevent flash

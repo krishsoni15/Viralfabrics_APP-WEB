@@ -9,7 +9,7 @@ interface CacheEntry<T> {
   ttl: number;
 }
 
-class SamplingCache {
+class WeaverCache {
   private cache = new Map<string, CacheEntry<any>>();
   private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -78,7 +78,7 @@ class SamplingCache {
 }
 
 // Export singleton instance
-export const samplingCache = new SamplingCache();
+export const weaverCache = new WeaverCache();
 
 // Export TTL constants
 export const CACHE_TTL = {

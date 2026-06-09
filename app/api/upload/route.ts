@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
       // All image types (PNG, JPEG, JPG) go directly in the weaver's folder
       // For other folders: uploads/{folder}/
       let fileName: string;
-      if (folder === 'sampling' && weaverId) {
+      if ((folder === 'sampling' || folder === 'weaver') && weaverId) {
         // Sample images: sample/{weaverId}/filename
         // All images go directly in weaver folder - simple structure
         const timestamp = Date.now().toString();

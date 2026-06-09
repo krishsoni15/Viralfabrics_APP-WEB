@@ -62,7 +62,7 @@ export default function UnauthorizedMessage() {
           effectiveDarkMode ? 'text-gray-300' : 'text-gray-600'
         }`}>
           <p className="mb-4">
-            You don&apos;t have permission to access the Sampling page. This area is restricted to superadmin users only.
+            You don&apos;t have permission to access the Weaver page. This area is restricted to superadmin users only.
           </p>
         </div>
 

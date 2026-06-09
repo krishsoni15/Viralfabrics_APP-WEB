@@ -1,5 +1,5 @@
 /**
- * Shared Type Definitions for Sampling Module
+ * Shared Type Definitions for Weaver Module
  * 
  * All shared types should be imported from this file to ensure consistency
  */

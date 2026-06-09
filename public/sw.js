@@ -15,7 +15,7 @@ const STATIC_FILES = [
   '/',
   '/dashboard',
   '/orders',
-  '/sampling',
+  '/weaver',
   '/manifest.json',
   '/favicon.ico'
 ];

@@ -6,12 +6,12 @@ import { unauthorizedResponse } from "@/lib/response";
 import { type NextRequest } from "next/server";
 import { sanitizeString } from "@/lib/sanitize";
 import type { FilterQuery } from "mongoose";
-import { samplingRateLimiter, getClientIdentifier, rateLimit } from "@/lib/rateLimiter";
+import { weaverRateLimiter, getClientIdentifier, rateLimit } from "@/lib/rateLimiter";
 import { logger } from "@/lib/logger";
-import { samplingCache, CACHE_TTL } from "@/lib/cache/samplingCache";
+import { weaverCache, CACHE_TTL } from "@/lib/cache/weaverCache";
 // Service layer (optional - can use for consistency)
-import { getSamples as getSamplesService, createSample as createSampleService } from "@/app/(pages)/(dashboard)/sampling/lib/services/sampleService";
-import { FABRIC_TYPES } from "@/app/(pages)/(dashboard)/sampling/constants";
+import { getSamples as getSamplesService, createSample as createSampleService } from "@/app/(pages)/(dashboard)/weaver/lib/services/sampleService";
+import { FABRIC_TYPES } from "@/app/(pages)/(dashboard)/weaver/constants";
 
 export async function GET(req: NextRequest) {
   const startTime = Date.now();
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     // Rate limiting
     const clientId = getClientIdentifier(req);
-    const rateLimitResult = rateLimit(samplingRateLimiter, clientId);
+    const rateLimitResult = rateLimit(weaverRateLimiter, clientId);
     if (!rateLimitResult.allowed) {
       return Response.json({
         success: false,
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     
     // Check cache (skip if force refresh)
     if (!force) {
-      const cached = samplingCache.get(cacheKey);
+      const cached = weaverCache.get(cacheKey);
       if (cached) {
         return Response.json(cached, {
           headers: {
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
     };
   
     // Cache response
-    samplingCache.set(cacheKey, response, CACHE_TTL.MEDIUM);
+    weaverCache.set(cacheKey, response, CACHE_TTL.MEDIUM);
     
     return Response.json(response, {
       headers: {
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: unknown) {
     logger.error('Error fetching samples', error instanceof Error ? error : new Error(String(error)), {
-      endpoint: 'GET /api/sampling/samples'
+      endpoint: 'GET /api/weaver/samples'
     });
     const errorMessage = error instanceof Error ? error.message : "Failed to fetch samples";
     return Response.json({
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
 
     // Rate limiting
     const clientId = getClientIdentifier(req);
-    const rateLimitResult = rateLimit(samplingRateLimiter, clientId);
+    const rateLimitResult = rateLimit(weaverRateLimiter, clientId);
     if (!rateLimitResult.allowed) {
       return Response.json({
         success: false,
@@ -176,9 +176,9 @@ export async function POST(req: NextRequest) {
       });
       
       // Invalidate cache
-      samplingCache.invalidate('samples:');
+      weaverCache.invalidate('samples:');
       if (weaverId) {
-        samplingCache.invalidate(`samples:${weaverId}:`);
+        weaverCache.invalidate(`samples:${weaverId}:`);
       }
       
       return Response.json({
@@ -211,7 +211,7 @@ export async function POST(req: NextRequest) {
     }
   } catch (error: unknown) {
     logger.error('Error creating sample', error instanceof Error ? error : new Error(String(error)), {
-      endpoint: 'POST /api/sampling/samples'
+      endpoint: 'POST /api/weaver/samples'
     });
     const errorMessage = error instanceof Error ? error.message : "Failed to create sample";
     return Response.json({

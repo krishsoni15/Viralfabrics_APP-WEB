@@ -84,6 +84,7 @@ class RateLimiter {
 
 // Create rate limiters for different endpoints
 export const samplingRateLimiter = new RateLimiter(60000, 100); // 100 requests per minute
+export const weaverRateLimiter = samplingRateLimiter;
 export const uploadRateLimiter = new RateLimiter(60000, 20); // 20 uploads per minute
 
 /**

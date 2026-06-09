@@ -5,7 +5,7 @@ import { getSession } from "@/lib/session";
 import { unauthorizedResponse } from "@/lib/response";
 import { type NextRequest } from "next/server";
 import { sanitizeString } from "@/lib/sanitize";
-import { samplingRateLimiter, getClientIdentifier, rateLimit } from "@/lib/rateLimiter";
+import { weaverRateLimiter, getClientIdentifier, rateLimit } from "@/lib/rateLimiter";
 import { logger } from "@/lib/logger";
 
 export async function GET(
@@ -20,7 +20,7 @@ export async function GET(
 
     // Rate limiting
     const clientId = getClientIdentifier(req);
-    const rateLimitResult = rateLimit(samplingRateLimiter, clientId);
+    const rateLimitResult = rateLimit(weaverRateLimiter, clientId);
     if (!rateLimitResult.allowed) {
       return Response.json({
         success: false,
@@ -64,7 +64,7 @@ export async function GET(
     });
   } catch (error: unknown) {
     logger.error('Error fetching sample', error instanceof Error ? error : new Error(String(error)), {
-      endpoint: 'GET /api/sampling/samples/[id]'
+      endpoint: 'GET /api/weaver/samples/[id]'
     });
     const errorMessage = error instanceof Error ? error.message : "Failed to fetch sample";
     return Response.json({
@@ -86,7 +86,7 @@ export async function PUT(
 
     // Rate limiting
     const clientId = getClientIdentifier(req);
-    const rateLimitResult = rateLimit(samplingRateLimiter, clientId);
+    const rateLimitResult = rateLimit(weaverRateLimiter, clientId);
     if (!rateLimitResult.allowed) {
       return Response.json({
         success: false,
@@ -222,7 +222,7 @@ export async function PUT(
     });
   } catch (error: unknown) {
     logger.error('Error updating sample', error instanceof Error ? error : new Error(String(error)), {
-      endpoint: 'PUT /api/sampling/samples/[id]'
+      endpoint: 'PUT /api/weaver/samples/[id]'
     });
     const errorMessage = error instanceof Error ? error.message : "Failed to update sample";
     return Response.json({
@@ -247,7 +247,7 @@ export async function DELETE(
 
     // Rate limiting
     const clientId = getClientIdentifier(req);
-    const rateLimitResult = rateLimit(samplingRateLimiter, clientId);
+    const rateLimitResult = rateLimit(weaverRateLimiter, clientId);
     if (!rateLimitResult.allowed) {
       return Response.json({
         success: false,
@@ -281,7 +281,7 @@ export async function DELETE(
     });
   } catch (error: unknown) {
     logger.error('Error deleting sample', error instanceof Error ? error : new Error(String(error)), {
-      endpoint: 'DELETE /api/sampling/samples/[id]'
+      endpoint: 'DELETE /api/weaver/samples/[id]'
     });
     const errorMessage = error instanceof Error ? error.message : "Failed to delete sample";
     return Response.json({

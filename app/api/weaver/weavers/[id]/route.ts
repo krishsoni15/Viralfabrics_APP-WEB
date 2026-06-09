@@ -4,11 +4,11 @@ import { getSession } from "@/lib/session";
 import { unauthorizedResponse } from "@/lib/response";
 import { type NextRequest } from "next/server";
 import { sanitizeString } from "@/lib/sanitize";
-import { samplingRateLimiter, getClientIdentifier, rateLimit } from "@/lib/rateLimiter";
+import { weaverRateLimiter, getClientIdentifier, rateLimit } from "@/lib/rateLimiter";
 import { logger } from "@/lib/logger";
-import { samplingCache } from "@/lib/cache/samplingCache";
+import { weaverCache } from "@/lib/cache/weaverCache";
 // Service layer (optional - can use for consistency)
-import { getWeaverById, updateWeaver as updateWeaverService, deleteWeaver as deleteWeaverService } from "@/app/(pages)/(dashboard)/sampling/lib/services/weaverService";
+import { getWeaverById, updateWeaver as updateWeaverService, deleteWeaver as deleteWeaverService } from "@/app/(pages)/(dashboard)/weaver/lib/services/weaverService";
 
 export async function GET(
   req: NextRequest,
@@ -49,7 +49,7 @@ export async function GET(
     }
   } catch (error: unknown) {
     logger.error('Error fetching weaver', error instanceof Error ? error : new Error(String(error)), {
-      endpoint: 'GET /api/sampling/weavers/[id]'
+      endpoint: 'GET /api/weaver/weavers/[id]'
     });
     const errorMessage = error instanceof Error ? error.message : "Failed to fetch weaver";
     return Response.json({
@@ -140,8 +140,8 @@ export async function PUT(
       });
       
       // Invalidate cache
-      samplingCache.invalidate('weavers:');
-      samplingCache.invalidate('samples:');
+      weaverCache.invalidate('weavers:');
+      weaverCache.invalidate('samples:');
       
       return Response.json({
         success: true,
@@ -166,7 +166,7 @@ export async function PUT(
     }
   } catch (error: unknown) {
     logger.error('Error updating weaver', error instanceof Error ? error : new Error(String(error)), {
-      endpoint: 'PUT /api/sampling/weavers/[id]'
+      endpoint: 'PUT /api/weaver/weavers/[id]'
     });
     const errorMessage = error instanceof Error ? error.message : "Failed to update weaver";
     return Response.json({
@@ -191,7 +191,7 @@ export async function DELETE(
 
     // Rate limiting
     const clientId = getClientIdentifier(req);
-    const rateLimitResult = rateLimit(samplingRateLimiter, clientId);
+    const rateLimitResult = rateLimit(weaverRateLimiter, clientId);
     if (!rateLimitResult.allowed) {
       return Response.json({
         success: false,
@@ -214,9 +214,9 @@ export async function DELETE(
       const result = await deleteWeaverService(id);
       
       // Invalidate cache
-      samplingCache.invalidate('weavers:');
-      samplingCache.invalidate('samples:');
-      samplingCache.invalidate(`samples:${id}:`);
+      weaverCache.invalidate('weavers:');
+      weaverCache.invalidate('samples:');
+      weaverCache.invalidate(`samples:${id}:`);
       
       const message = result.sampleCount > 0 
         ? `Weaver and ${result.sampleCount} associated sample(s) deleted successfully`
@@ -251,7 +251,7 @@ export async function DELETE(
     
   } catch (error: unknown) {
     logger.error('Error deleting weaver', error instanceof Error ? error : new Error(String(error)), {
-      endpoint: 'DELETE /api/sampling/weavers/[id]'
+      endpoint: 'DELETE /api/weaver/weavers/[id]'
     });
     const errorMessage = error instanceof Error ? error.message : "Failed to delete weaver";
     return Response.json({

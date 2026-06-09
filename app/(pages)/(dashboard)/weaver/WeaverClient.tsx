@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Client Component for Sampling Page
+ * Client Component for Weaver Page
  * Handles all UI interactions, state management, and client-side logic
  * 
  * This component receives initial data from the server component
@@ -15,19 +15,19 @@ import { useRouter } from 'next/navigation';
 import { logger } from '@/lib/logger';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useAuthSession } from '../hooks/useAuthSession';
-import SamplingPageSkeleton from './components/SamplingPageSkeleton';
+import WeaverPageSkeleton from './components/WeaverPageSkeleton';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import type { Weaver, PaginationInfo } from './types';
 
-interface SamplingClientProps {
+interface WeaverClientProps {
   initialWeavers?: Weaver[];
   initialPagination?: PaginationInfo;
 }
 
-export default function SamplingClient({ 
+export default function WeaverClient({ 
   initialWeavers = [],
   initialPagination
-}: SamplingClientProps) {
+}: WeaverClientProps) {
   const router = useRouter();
   const { isDarkMode, mounted: darkModeMounted } = useDarkMode();
   const { isSuperAdmin, isLoading: authLoading, isAuthenticated } = useAuthSession();
@@ -44,7 +44,7 @@ export default function SamplingClient({
     // Fallback to sessionStorage
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('samplingWeavers');
+        const saved = sessionStorage.getItem('weaverWeavers');
         if (saved) {
           return JSON.parse(saved);
         }
@@ -61,7 +61,7 @@ export default function SamplingClient({
     }
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('samplingPagination');
+        const saved = sessionStorage.getItem('weaverPagination');
         if (saved) {
           return JSON.parse(saved);
         }
@@ -87,14 +87,14 @@ export default function SamplingClient({
   return (
     <ErrorBoundary>
       <div 
-        id="sampling-page"
+        id="weaver-page"
         className={`min-h-screen w-full transition-colors duration-500 ${
           isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'
         }`}
         suppressHydrationWarning
       >
         {/* Main content will be rendered here */}
-        <SamplingPageSkeleton />
+        <WeaverPageSkeleton />
       </div>
     </ErrorBoundary>
   );

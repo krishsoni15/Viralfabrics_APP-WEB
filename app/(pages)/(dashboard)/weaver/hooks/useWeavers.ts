@@ -17,7 +17,7 @@ export function useWeavers(options: UseWeaversOptions) {
   const [weavers, setWeavers] = useState<Weaver[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('samplingWeavers');
+        const saved = sessionStorage.getItem('weaverWeavers');
         if (saved) {
           return JSON.parse(saved);
         }
@@ -31,7 +31,7 @@ export function useWeavers(options: UseWeaversOptions) {
   const [paginationInfo, setPaginationInfo] = useState<PaginationInfo>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('samplingPagination');
+        const saved = sessionStorage.getItem('weaverPagination');
         if (saved) {
           return JSON.parse(saved);
         }
@@ -63,7 +63,7 @@ export function useWeavers(options: UseWeaversOptions) {
       // Persist to sessionStorage
       if (typeof window !== 'undefined') {
         try {
-          sessionStorage.setItem('samplingWeavers', JSON.stringify(newWeavers));
+          sessionStorage.setItem('weaverWeavers', JSON.stringify(newWeavers));
         } catch (e) {
           // Ignore storage errors
         }
@@ -79,7 +79,7 @@ export function useWeavers(options: UseWeaversOptions) {
       // Persist to sessionStorage
       if (typeof window !== 'undefined') {
         try {
-          sessionStorage.setItem('samplingPagination', JSON.stringify(newPagination));
+          sessionStorage.setItem('weaverPagination', JSON.stringify(newPagination));
         } catch (e) {
           // Ignore storage errors
         }
@@ -143,7 +143,7 @@ export function useWeavers(options: UseWeaversOptions) {
         }
       }, 10000);
       
-      const url = new URL('/api/sampling/weavers', window.location.origin);
+      const url = new URL('/api/weaver/weavers', window.location.origin);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
       url.searchParams.append('sort', sort);
@@ -171,7 +171,7 @@ export function useWeavers(options: UseWeaversOptions) {
           
           if (typeof window !== 'undefined') {
             try {
-              sessionStorage.setItem('samplingWeavers', JSON.stringify(weaversData));
+              sessionStorage.setItem('weaverWeavers', JSON.stringify(weaversData));
             } catch (e) {
               // Ignore storage errors
             }
@@ -190,7 +190,7 @@ export function useWeavers(options: UseWeaversOptions) {
             
             if (typeof window !== 'undefined') {
               try {
-                sessionStorage.setItem('samplingPagination', JSON.stringify(paginationData));
+                sessionStorage.setItem('weaverPagination', JSON.stringify(paginationData));
               } catch (e) {
                 // Ignore storage errors
               }

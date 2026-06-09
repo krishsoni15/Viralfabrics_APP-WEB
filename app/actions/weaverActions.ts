@@ -8,8 +8,8 @@
  */
 
 import { cookies, headers } from 'next/headers';
-import { getWeavers, getWeaverById } from '@/app/(pages)/(dashboard)/sampling/lib/services/weaverService';
-import { getSamples } from '@/app/(pages)/(dashboard)/sampling/lib/services/sampleService';
+import { getWeavers, getWeaverById } from '@/app/(pages)/(dashboard)/weaver/lib/services/weaverService';
+import { getSamples } from '@/app/(pages)/(dashboard)/weaver/lib/services/sampleService';
 
 // Helper to check authentication from cookies/headers
 async function checkAuth() {

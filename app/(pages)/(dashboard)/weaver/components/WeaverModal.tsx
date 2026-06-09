@@ -133,8 +133,8 @@ export default function WeaverModal({ weaver, onClose, onSave, isDarkMode, onMes
     try {
       const token = localStorage.getItem('token');
       const url = weaver?._id 
-        ? `/api/sampling/weavers/${weaver._id}`
-        : '/api/sampling/weavers';
+        ? `/api/weaver/weavers/${weaver._id}`
+        : '/api/weaver/weavers';
       const method = weaver?._id ? 'PUT' : 'POST';
       
       const response = await fetch(url, {

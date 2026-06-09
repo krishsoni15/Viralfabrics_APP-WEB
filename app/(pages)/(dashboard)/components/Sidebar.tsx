@@ -153,8 +153,8 @@ export default function Sidebar({
         icon: CubeIcon
       },
       {
-        name: 'Sampling',
-        href: '/sampling',
+        name: 'Weaver',
+        href: '/weaver',
         icon: BeakerIcon
       }
     ];
@@ -164,7 +164,7 @@ export default function Sidebar({
       return items.filter(item => item.name === 'Orders');
     }
 
-    // Only show Users, Fabrics, and Sampling for superadmin and master
+    // Only show Users, Fabrics, and Weaver for superadmin and master
     if (user?.role !== 'superadmin' && user?.role !== 'master') {
       items.splice(1, 1); // Remove Users item for non-admin
       // Remove Fabrics item for non-admin
@@ -172,10 +172,10 @@ export default function Sidebar({
       if (fabricsIndex !== -1) {
         items.splice(fabricsIndex, 1);
       }
-      // Remove Sampling item for non-admin
-      const samplingIndex = items.findIndex(item => item.name === 'Sampling');
-      if (samplingIndex !== -1) {
-        items.splice(samplingIndex, 1);
+      // Remove Weaver item for non-admin
+      const weaverIndex = items.findIndex(item => item.name === 'Weaver');
+      if (weaverIndex !== -1) {
+        items.splice(weaverIndex, 1);
       }
     }
     

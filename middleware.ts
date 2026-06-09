@@ -41,9 +41,9 @@ const SUPERADMIN_ROUTES = [
   '/api/backup',
   '/fabrics',
   '/api/fabrics',
-  // Sampling is accessible to all authenticated users
-  // '/sampling',
-  // '/api/sampling',
+  // Weaver is accessible to all authenticated users
+  // '/weaver',
+  // '/api/weaver',
 ];
 
 /**

@@ -35,7 +35,7 @@ import {
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useAuthSession } from '../hooks/useAuthSession';
 import { lazy, Suspense } from 'react';
-import SamplingPageSkeleton from './components/SamplingPageSkeleton';
+import WeaverPageSkeleton from './components/WeaverPageSkeleton';
 import UnauthorizedMessage from './components/UnauthorizedMessage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ImageGallery } from './components/ImageGallery';
@@ -49,7 +49,7 @@ const preloadWeaverModal = () => import('./components/WeaverModal');
 // Import shared types
 import type { Weaver, Sample, PaginationInfo } from './types';
 
-export default function SamplingPage() {
+export default function WeaverPage() {
   const router = useRouter();
   const { isDarkMode, mounted: darkModeMounted } = useDarkMode();
   // Preload the Weaver modal chunk so the first open is instant
@@ -87,7 +87,7 @@ export default function SamplingPage() {
   const [weavers, setWeavers] = useState<Weaver[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('samplingWeavers');
+        const saved = sessionStorage.getItem('weaverWeavers');
         if (saved) {
           return JSON.parse(saved);
         }
@@ -102,7 +102,7 @@ export default function SamplingPage() {
     // If we have persisted data, start with loading false
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('samplingWeavers');
+        const saved = sessionStorage.getItem('weaverWeavers');
         if (saved && JSON.parse(saved).length > 0) {
           return false;
         }
@@ -154,7 +154,7 @@ export default function SamplingPage() {
 
   const [itemsPerPage, setItemsPerPage] = useState<number>(() => {
     if (typeof window !== 'undefined') {
-      const savedItemsPerPage = getCookie('samplingItemsPerPage');
+      const savedItemsPerPage = getCookie('weaverItemsPerPage');
       if (savedItemsPerPage) {
         const parsed = parseInt(savedItemsPerPage, 10);
         if ([10, 25, 50, 100].includes(parsed)) {
@@ -168,7 +168,7 @@ export default function SamplingPage() {
   const [currentPage, setCurrentPage] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('samplingPagination');
+        const saved = sessionStorage.getItem('weaverPagination');
         if (saved) {
           const parsed = JSON.parse(saved);
           return parsed.currentPage || 1;
@@ -182,7 +182,7 @@ export default function SamplingPage() {
   const [paginationInfo, setPaginationInfo] = useState<PaginationInfo>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('samplingPagination');
+        const saved = sessionStorage.getItem('weaverPagination');
         if (saved) {
           return JSON.parse(saved);
         }
@@ -205,7 +205,7 @@ export default function SamplingPage() {
   const searchAbortControllerRef = useRef<AbortController | null>(null);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>(() => {
     if (typeof window !== 'undefined') {
-      const savedSortOrder = getCookie('samplingSortOrder');
+      const savedSortOrder = getCookie('weaverSortOrder');
       if (savedSortOrder === 'newest' || savedSortOrder === 'oldest') {
         return savedSortOrder;
       }
@@ -229,7 +229,7 @@ export default function SamplingPage() {
       // Persist to sessionStorage
       if (typeof window !== 'undefined') {
         try {
-          sessionStorage.setItem('samplingWeavers', JSON.stringify(newWeavers));
+          sessionStorage.setItem('weaverWeavers', JSON.stringify(newWeavers));
         } catch (e) {
           // Ignore storage errors
         }
@@ -245,7 +245,7 @@ export default function SamplingPage() {
       // Persist to sessionStorage
       if (typeof window !== 'undefined') {
         try {
-          sessionStorage.setItem('samplingPagination', JSON.stringify(newPagination));
+          sessionStorage.setItem('weaverPagination', JSON.stringify(newPagination));
         } catch (e) {
           // Ignore storage errors
         }
@@ -261,7 +261,7 @@ export default function SamplingPage() {
   });
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
     if (typeof window !== 'undefined') {
-      const savedViewMode = getCookie('samplingViewMode');
+      const savedViewMode = getCookie('weaverViewMode');
       if (savedViewMode === 'table' || savedViewMode === 'cards') {
         return savedViewMode;
       }
@@ -269,7 +269,7 @@ export default function SamplingPage() {
       const isSmallScreen = window.innerWidth < 600;
       const defaultMode = isSmallScreen ? 'cards' : 'table';
       // Save the default to cookie
-      setCookie('samplingViewMode', defaultMode, 365);
+      setCookie('weaverViewMode', defaultMode, 365);
       return defaultMode;
     }
     return 'table';
@@ -394,7 +394,7 @@ export default function SamplingPage() {
         }
       }, 10000); // 10 second timeout
       
-      const url = new URL('/api/sampling/weavers', window.location.origin);
+      const url = new URL('/api/weaver/weavers', window.location.origin);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
       url.searchParams.append('sort', sort);
@@ -423,7 +423,7 @@ export default function SamplingPage() {
           // Persist to sessionStorage
           if (typeof window !== 'undefined') {
             try {
-              sessionStorage.setItem('samplingWeavers', JSON.stringify(weaversData));
+              sessionStorage.setItem('weaverWeavers', JSON.stringify(weaversData));
             } catch (e) {
               // Ignore storage errors
             }
@@ -442,7 +442,7 @@ export default function SamplingPage() {
             // Persist to sessionStorage
             if (typeof window !== 'undefined') {
               try {
-                sessionStorage.setItem('samplingPagination', JSON.stringify(paginationData));
+                sessionStorage.setItem('weaverPagination', JSON.stringify(paginationData));
               } catch (e) {
                 // Ignore storage errors
               }
@@ -555,8 +555,8 @@ export default function SamplingPage() {
       
       // Only use PUT if we have a valid MongoDB ObjectId, otherwise use POST
       const url = isEdit && editingId && isValidMongoId(editingId)
-        ? `/api/sampling/weavers/${editingId}`
-        : '/api/sampling/weavers';
+        ? `/api/weaver/weavers/${editingId}`
+        : '/api/weaver/weavers';
       const method = isEdit && editingId && isValidMongoId(editingId) ? 'PUT' : 'POST';
       
       // Add timeout to fetch request
@@ -711,8 +711,8 @@ export default function SamplingPage() {
       }, 10000); // 10 second timeout
       
       const url = weaverId 
-        ? `/api/sampling/samples?weaverId=${weaverId}`
-        : '/api/sampling/samples';
+        ? `/api/weaver/samples?weaverId=${weaverId}`
+        : '/api/weaver/samples';
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -752,7 +752,7 @@ export default function SamplingPage() {
   // Initial load - wait for auth to be ready before fetching
   useEffect(() => {
     // Check sessionStorage to see if we just navigated back (component persisted)
-    const wasNavigatingBack = typeof window !== 'undefined' && sessionStorage.getItem('samplingNavigatedBack') === 'true';
+    const wasNavigatingBack = typeof window !== 'undefined' && sessionStorage.getItem('weaverNavigatedBack') === 'true';
     
     // If weavers are already loaded from persisted state (e.g., navigating back), skip initial load
     if (weavers.length > 0 && paginationInfo.totalCount > 0) {
@@ -761,7 +761,7 @@ export default function SamplingPage() {
       setLoading(false);
       // Clear the navigation flag
       if (wasNavigatingBack) {
-        sessionStorage.removeItem('samplingNavigatedBack');
+        sessionStorage.removeItem('weaverNavigatedBack');
       }
       return;
     }
@@ -769,12 +769,12 @@ export default function SamplingPage() {
     // If we just navigated back but data is empty, it means component remounted
     // In this case, we should still skip if we're just viewing (no data changed)
     if (wasNavigatingBack) {
-      const dataChanged = sessionStorage.getItem('samplingDataChanged') === 'true';
+      const dataChanged = sessionStorage.getItem('weaverDataChanged') === 'true';
       if (!dataChanged) {
         // User just viewed, no changes - try to restore from sessionStorage
         try {
-          const savedWeavers = sessionStorage.getItem('samplingWeavers');
-          const savedPagination = sessionStorage.getItem('samplingPagination');
+          const savedWeavers = sessionStorage.getItem('weaverWeavers');
+          const savedPagination = sessionStorage.getItem('weaverPagination');
           if (savedWeavers && savedPagination) {
             const parsedWeavers = JSON.parse(savedWeavers);
             const parsedPagination = JSON.parse(savedPagination);
@@ -785,7 +785,7 @@ export default function SamplingPage() {
               hasInitialLoadRef.current = true;
               isInitialMountRef.current = false;
               setLoading(false);
-              sessionStorage.removeItem('samplingNavigatedBack');
+              sessionStorage.removeItem('weaverNavigatedBack');
               return;
             }
           }
@@ -796,11 +796,11 @@ export default function SamplingPage() {
         hasInitialLoadRef.current = true;
         isInitialMountRef.current = false;
         setLoading(false);
-        sessionStorage.removeItem('samplingNavigatedBack');
+        sessionStorage.removeItem('weaverNavigatedBack');
         return;
       }
       // Data changed, we'll fetch below
-      sessionStorage.removeItem('samplingNavigatedBack');
+      sessionStorage.removeItem('weaverNavigatedBack');
     }
     
     if (hasInitialLoadRef.current) return; // Prevent duplicate initial loads
@@ -882,16 +882,16 @@ export default function SamplingPage() {
     if (isFetchingRef.current) return;
     
     // Check if we just navigated back - if so, skip unless data changed
-    const wasNavigatingBack = typeof window !== 'undefined' && sessionStorage.getItem('samplingNavigatedBack') === 'true';
+    const wasNavigatingBack = typeof window !== 'undefined' && sessionStorage.getItem('weaverNavigatedBack') === 'true';
     if (wasNavigatingBack) {
-      const dataChanged = sessionStorage.getItem('samplingDataChanged') === 'true';
+      const dataChanged = sessionStorage.getItem('weaverDataChanged') === 'true';
       if (!dataChanged) {
         // Just viewing, no changes - skip fetch
-        sessionStorage.removeItem('samplingNavigatedBack');
+        sessionStorage.removeItem('weaverNavigatedBack');
         return;
       }
       // Data changed, continue with fetch below
-      sessionStorage.removeItem('samplingNavigatedBack');
+      sessionStorage.removeItem('weaverNavigatedBack');
     }
     
     // Check if this is the same fetch as the last one (prevents duplicate calls)
@@ -925,20 +925,20 @@ export default function SamplingPage() {
 
     const checkDataChanged = () => {
       if (typeof window !== 'undefined') {
-        const dataChanged = sessionStorage.getItem('samplingDataChanged');
-        const wasNavigatingBack = sessionStorage.getItem('samplingNavigatedBack') === 'true';
+        const dataChanged = sessionStorage.getItem('weaverDataChanged');
+        const wasNavigatingBack = sessionStorage.getItem('weaverNavigatedBack') === 'true';
         
         if (dataChanged === 'true') {
           // Clear both flags
-          sessionStorage.removeItem('samplingDataChanged');
-          sessionStorage.removeItem('samplingNavigatedBack');
+          sessionStorage.removeItem('weaverDataChanged');
+          sessionStorage.removeItem('weaverNavigatedBack');
           // Refresh the weavers list only if we're not currently loading and data exists
           if (!loading && !isChangingPage && !isFetchingRef.current && hasInitialLoadRef.current) {
             fetchWeavers(currentPage, itemsPerPage, searchQuery, sortOrder);
           }
         } else if (wasNavigatingBack) {
           // Just navigating back, no data changed - clear flag
-          sessionStorage.removeItem('samplingNavigatedBack');
+          sessionStorage.removeItem('weaverNavigatedBack');
         }
       }
     };
@@ -1085,7 +1085,7 @@ export default function SamplingPage() {
         return;
       }
       
-      const response = await fetch(`/api/sampling/weavers/${weaverId}`, {
+      const response = await fetch(`/api/weaver/weavers/${weaverId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -1152,7 +1152,7 @@ export default function SamplingPage() {
 
   const handleViewWeaverSamples = async (weaver: Weaver) => {
     // Navigate to separate view page
-    router.push(`/sampling/view/${weaver._id}`);
+    router.push(`/weaver/view/${weaver._id}`);
   };
 
 
@@ -1205,7 +1205,7 @@ export default function SamplingPage() {
         setDeleteConfirmation(null);
         return;
       }
-      const response = await fetch(`/api/sampling/samples/${deleteConfirmation.id}`, {
+      const response = await fetch(`/api/weaver/samples/${deleteConfirmation.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -1268,7 +1268,7 @@ export default function SamplingPage() {
           const uploadFileToS3 = async (file: File): Promise<string> => {
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('folder', 'sampling');
+            formData.append('folder', 'weaver');
             if (selectedWeaver?._id) {
               formData.append('weaverId', selectedWeaver._id);
             }
@@ -1308,8 +1308,8 @@ export default function SamplingPage() {
       const allImages = [...sampleData.images, ...uploadedUrls];
       
       const url = wasEdit && editingSample
-        ? `/api/sampling/samples/${editingSample._id}`
-        : '/api/sampling/samples';
+        ? `/api/weaver/samples/${editingSample._id}`
+        : '/api/weaver/samples';
       const method = wasEdit && editingSample ? 'PUT' : 'POST';
       
       // Add timeout to fetch request
@@ -1431,7 +1431,7 @@ export default function SamplingPage() {
     
     setIsChangingPage(true);
     setItemsPerPage(newItemsPerPage);
-    setCookie('samplingItemsPerPage', newItemsPerPage.toString(), 365);
+    setCookie('weaverItemsPerPage', newItemsPerPage.toString(), 365);
     setCurrentPage(1);
     
     try {
@@ -1518,7 +1518,7 @@ export default function SamplingPage() {
     }
     
     setSortOrder(sort);
-    setCookie('samplingSortOrder', sort, 365); // Save to cookie
+    setCookie('weaverSortOrder', sort, 365); // Save to cookie
     setCurrentPage(1); // Reset to first page on sort change
     // Don't set isChangingPage for sort changes - we want smooth flip animation without skeleton
     fetchWeavers(1, itemsPerPage, searchQuery, sort);
@@ -1591,7 +1591,7 @@ export default function SamplingPage() {
   // Handle view mode change
   const handleViewModeChange = useCallback((newMode: 'table' | 'cards') => {
     setViewMode(newMode);
-    setCookie('samplingViewMode', newMode, 365);
+    setCookie('weaverViewMode', newMode, 365);
   }, []);
 
   // Get first letter of name for avatar
@@ -1752,14 +1752,14 @@ export default function SamplingPage() {
     }
   };
 
-  // Sampling page is accessible to all authenticated users
+  // Weaver page is accessible to all authenticated users
   // No redirect needed for non-superadmin users
 
   // Show skeleton while loading auth or dark mode (only if authenticated)
   if (!darkModeMounted || authLoading) {
     // Only show skeleton if user is authenticated or still loading
     if (authLoading || isAuthenticated) {
-      return <SamplingPageSkeleton />;
+      return <WeaverPageSkeleton />;
     }
     // If not authenticated and not loading, return null (will redirect via layout)
     return null;
@@ -1770,7 +1770,7 @@ export default function SamplingPage() {
     return null; // Layout will handle redirect
   }
 
-  // Check if user is superadmin - Sampling page is only for superadmin
+  // Check if user is superadmin - Weaver page is only for superadmin
   if (isAuthenticated && !authLoading && !isSuperAdmin) {
     return <UnauthorizedMessage />;
   }
@@ -1778,7 +1778,7 @@ export default function SamplingPage() {
   return (
     <ErrorBoundary>
       <div 
-        id="sampling-page"
+        id="weaver-page"
         className={`min-h-screen w-full transition-colors duration-500 ${
           isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'
         }`}

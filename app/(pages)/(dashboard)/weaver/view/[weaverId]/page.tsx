@@ -121,7 +121,7 @@ export default function WeaverSamplesViewPage() {
         }
       }, 10000); // 10 second timeout
 
-      const samplesResponse = await fetch(`/api/sampling/samples?weaverId=${weaverId}`, {
+      const samplesResponse = await fetch(`/api/weaver/samples?weaverId=${weaverId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -220,13 +220,13 @@ export default function WeaverSamplesViewPage() {
 
       // Fetch weaver and samples in parallel for faster loading - optimized to fetch single weaver
       const [weaverResponse, samplesResponse] = await Promise.all([
-        fetch(`/api/sampling/weavers/${weaverId}`, {
+        fetch(`/api/weaver/weavers/${weaverId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           },
           signal: controller.signal
         }),
-        fetch(`/api/sampling/samples?weaverId=${weaverId}`, {
+        fetch(`/api/weaver/samples?weaverId=${weaverId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           },
@@ -569,7 +569,7 @@ export default function WeaverSamplesViewPage() {
     // Mark that data has changed
     dataChangedRef.current = true;
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('samplingDataChanged', 'true');
+      sessionStorage.setItem('weaverDataChanged', 'true');
     }
     
     // Make API calls in background
@@ -588,7 +588,7 @@ export default function WeaverSamplesViewPage() {
 
       // Delete all samples in parallel
       const deletePromises = samplesToDelete.map(sample =>
-        fetch(`/api/sampling/samples/${sample._id}`, {
+        fetch(`/api/weaver/samples/${sample._id}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -660,7 +660,7 @@ export default function WeaverSamplesViewPage() {
     // Mark that data has changed
     dataChangedRef.current = true;
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('samplingDataChanged', 'true');
+      sessionStorage.setItem('weaverDataChanged', 'true');
     }
     
     // Make API call in background
@@ -683,7 +683,7 @@ export default function WeaverSamplesViewPage() {
         return;
       }
       
-      const response = await fetch(`/api/sampling/samples/${sampleId}`, {
+      const response = await fetch(`/api/weaver/samples/${sampleId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -792,7 +792,7 @@ export default function WeaverSamplesViewPage() {
     // Mark that data has changed
     dataChangedRef.current = true;
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('samplingDataChanged', 'true');
+      sessionStorage.setItem('weaverDataChanged', 'true');
     }
     
     // Upload images and make API call in background
@@ -808,7 +808,7 @@ export default function WeaverSamplesViewPage() {
         const uploadFileToS3 = async (file: File): Promise<string> => {
           const formData = new FormData();
           formData.append('file', file);
-          formData.append('folder', 'sampling');
+          formData.append('folder', 'weaver');
           if (weaver?._id) {
             formData.append('weaverId', weaver._id);
           }
@@ -877,8 +877,8 @@ export default function WeaverSamplesViewPage() {
       }
       
       const url = wasEdit && editingSample
-        ? `/api/sampling/samples/${editingSample._id}`
-        : '/api/sampling/samples';
+        ? `/api/weaver/samples/${editingSample._id}`
+        : '/api/weaver/samples';
       const method = wasEdit && editingSample ? 'PUT' : 'POST';
       
       const response = await fetch(url, {
@@ -973,7 +973,7 @@ export default function WeaverSamplesViewPage() {
     dataChangedRef.current = true;
     // Store flag in sessionStorage to notify main page
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('samplingDataChanged', 'true');
+      sessionStorage.setItem('weaverDataChanged', 'true');
     }
     setShowSampleForm(false);
     setEditingSample(null);
@@ -1111,7 +1111,7 @@ export default function WeaverSamplesViewPage() {
           onClick={() => {
             // Mark that we're navigating back (for main page to skip reload)
             if (typeof window !== 'undefined') {
-              sessionStorage.setItem('samplingNavigatedBack', 'true');
+              sessionStorage.setItem('weaverNavigatedBack', 'true');
             }
             // Use router.back() for smooth navigation without reload
             router.back();
@@ -1189,7 +1189,7 @@ export default function WeaverSamplesViewPage() {
                 onClick={() => {
                   // Mark that we're navigating back (for main page to skip reload)
                   if (typeof window !== 'undefined') {
-                    sessionStorage.setItem('samplingNavigatedBack', 'true');
+                    sessionStorage.setItem('weaverNavigatedBack', 'true');
                   }
                   // Use router.back() for smooth navigation without reload
                   router.back();
@@ -1214,7 +1214,7 @@ export default function WeaverSamplesViewPage() {
                   onClick={() => {
                     // Mark that we're navigating back (for main page to skip reload)
                     if (typeof window !== 'undefined') {
-                      sessionStorage.setItem('samplingNavigatedBack', 'true');
+                      sessionStorage.setItem('weaverNavigatedBack', 'true');
                     }
                     // Use router.back() for smooth navigation without reload
                     router.back();
