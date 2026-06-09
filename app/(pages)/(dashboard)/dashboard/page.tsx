@@ -6,6 +6,7 @@ import { verifyToken } from '@/lib/auth';
 import { fetchDashboardStatsAction, fetchOrdersAction, fetchPartiesAction, fetchQualitiesAction, fetchMillsAction } from '@/app/actions/dataActions';
 import DashboardSkeleton from './components/DashboardSkeleton';
 import OrdersTableSkeleton from '../orders/components/OrdersTableSkeleton';
+import PartyDashboard from './components/PartyDashboard';
 
 // Lazy load client component (must be in client component, not server)
 const DashboardClient = dynamic(() => import('./DashboardClient'), {
@@ -42,48 +43,18 @@ export default async function DashboardPage({
   const payload = token ? await verifyToken(token) : null;
   const isPartyUser = payload?.role === 'party';
 
-  if (isPartyUser) {
-    let initialOrders: any[] = [];
-    let initialParties: any[] = [];
-    let initialQualities: any[] = [];
-    let initialMills: any[] = [];
-
-    try {
-      const [ordersResult, partiesResult, qualitiesResult, millsResult] = await Promise.allSettled([
-        fetchOrdersAction({ limit: 25, page: 1 }),
-        fetchPartiesAction({ limit: 100 }),
-        fetchQualitiesAction({ limit: 100 }),
-        fetchMillsAction({ limit: 100 }),
-      ]);
-
-      if (ordersResult.status === 'fulfilled' && ordersResult.value.success) {
-        initialOrders = ordersResult.value.data || [];
-      }
-      if (partiesResult.status === 'fulfilled' && partiesResult.value.success) {
-        initialParties = partiesResult.value.data || [];
-      }
-      if (qualitiesResult.status === 'fulfilled' && qualitiesResult.value.success) {
-        initialQualities = qualitiesResult.value.data || [];
-      }
-      if (millsResult.status === 'fulfilled' && millsResult.value.success) {
-        initialMills = millsResult.value.data || [];
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        // eslint-disable-next-line no-console
-        console.error('Failed to fetch party order view data:', error);
-      }
-    }
-
+  if (isPartyUser && payload) {
     return (
-      <Suspense fallback={<OrdersTableSkeleton />}>
-        <OrdersClient
-          initialOrders={initialOrders}
-          initialParties={initialParties}
-          initialQualities={initialQualities}
-          initialMills={initialMills}
-        />
-      </Suspense>
+      <PartyDashboard
+        user={{
+          id: payload.id,
+          username: payload.username,
+          role: payload.role,
+          name: payload.name,
+          phoneNumber: payload.phoneNumber,
+          address: payload.address,
+        }}
+      />
     );
   }
 

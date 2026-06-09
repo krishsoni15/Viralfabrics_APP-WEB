@@ -44,6 +44,40 @@ interface UserFormData {
   partyId?: string;
 }
 
+// Helper function to generate the next incremented username for a party
+const getNextUsername = (partyName: string, existingUsers: User[]): string => {
+  const base = partyName
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
+
+  if (!Array.isArray(existingUsers)) return `${base}_01`;
+
+  const pattern = new RegExp(`^${base}(?:_(\\d+))?$`);
+  let maxSuffix = 0;
+  let hasMatch = false;
+
+  existingUsers.forEach(u => {
+    if (!u.username) return;
+    const username = u.username.toLowerCase().trim();
+    const match = username.match(pattern);
+    if (match) {
+      hasMatch = true;
+      if (match[1]) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxSuffix) {
+          maxSuffix = num;
+        }
+      }
+    }
+  });
+
+  const nextSuffix = maxSuffix > 0 ? maxSuffix + 1 : 1;
+  const suffixStr = String(nextSuffix).padStart(2, '0');
+  return `${base}_${suffixStr}`;
+};
+
 export default function UsersPage() {
   const router = useRouter();
   const { isDarkMode, mounted } = useDarkMode();
@@ -904,8 +938,7 @@ export default function UsersPage() {
         setFormData(prev => ({
           ...prev,
           partyId: createdParty._id,
-          name: createdParty.name,
-          username: createdParty.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+          username: getNextUsername(createdParty.name, users)
         }));
         
         setNewPartyForm({
@@ -1168,8 +1201,8 @@ export default function UsersPage() {
                 }}
               >
                 <option value="all" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>All Roles</option>
+                <option value="master" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Master</option>
                 <option value="superadmin" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Super Admin</option>
-                <option value="admin" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Admin</option>
                 <option value="user" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>User</option>
                 <option value="party" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Party</option>
               </select>
@@ -1466,7 +1499,10 @@ export default function UsersPage() {
                 ))
               ) : (
                 currentUsers.map((user, index) => (
-                <tr key={user._id || `user-${index}`} className={`hover:${
+                <tr key={user._id || `user-${index}`} onClick={() => {
+                  setSelectedUser(user);
+                  setShowProfileModal(true);
+                }} className={`cursor-pointer hover:${
                   isDarkMode ? 'bg-white/5' : 'bg-gray-50'
                 } transition-colors duration-200 ${
                   currentUser && user._id === currentUser._id
@@ -2384,8 +2420,7 @@ export default function UsersPage() {
                                             setFormData(prev => ({
                                               ...prev,
                                               partyId: p._id,
-                                              name: p.name,
-                                              username: p.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
+                                              username: getNextUsername(p.name, users),
                                               phoneNumber: p.contactPhone || prev.phoneNumber || '',
                                               address: p.address || prev.address || ''
                                             }));
@@ -2779,8 +2814,7 @@ export default function UsersPage() {
                                             setFormData(prev => ({
                                               ...prev,
                                               partyId: p._id,
-                                              name: p.name,
-                                              username: p.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
+                                              username: getNextUsername(p.name, users),
                                               phoneNumber: p.contactPhone || prev.phoneNumber || '',
                                               address: p.address || prev.address || ''
                                             }));
@@ -3130,7 +3164,7 @@ export default function UsersPage() {
               <h3 className={`text-lg font-semibold ${
                 isDarkMode ? 'text-white' : 'text-gray-900'
               }`}>
-                User Profile
+                {selectedUser.role === 'party' ? 'Party Profile' : 'User Profile'}
               </h3>
               <button
                 onClick={() => {
@@ -3220,13 +3254,38 @@ export default function UsersPage() {
                           ? isDarkMode
                             ? 'bg-amber-900/20 text-amber-400'
                             : 'bg-amber-100 text-amber-800'
-                          : isDarkMode
-                            ? 'bg-blue-900/20 text-blue-400'
-                            : 'bg-blue-100 text-blue-800'
+                          : selectedUser.role === 'party'
+                            ? isDarkMode
+                              ? 'bg-green-900/20 text-green-400'
+                              : 'bg-green-100 text-green-800'
+                            : isDarkMode
+                              ? 'bg-blue-900/20 text-blue-400'
+                              : 'bg-blue-100 text-blue-800'
                   }`}>
-                    {selectedUser.role === 'master' ? 'Master' : selectedUser.role === 'superadmin' ? 'Super Admin' : selectedUser.role === 'admin' ? 'Admin' : 'User'}
+                    {selectedUser.role === 'master' ? 'Master' : selectedUser.role === 'superadmin' ? 'Super Admin' : selectedUser.role === 'admin' ? 'Admin' : selectedUser.role === 'party' ? `Party: ${typeof selectedUser.partyId === 'object' && selectedUser.partyId !== null ? selectedUser.partyId.name : (parties.find(p => p._id === selectedUser.partyId)?.name || 'Party User')}` : 'User'}
                   </span>
                 </div>
+
+                {selectedUser.role === 'party' && (
+                  <div>
+                    <label className={`block text-sm font-medium mb-1 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Party Information
+                    </label>
+                    <div className={`p-3 rounded-lg border ${
+                      isDarkMode ? 'bg-green-900/10 border-green-500/20' : 'bg-green-50 border-green-200'
+                    }`}>
+                      <p className={`text-sm font-medium ${
+                        isDarkMode ? 'text-green-400' : 'text-green-800'
+                      }`}>
+                        {typeof selectedUser.partyId === 'object' && selectedUser.partyId !== null
+                          ? selectedUser.partyId.name
+                          : parties.find(p => p._id === selectedUser.partyId)?.name || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className={`block text-sm font-medium mb-1 ${

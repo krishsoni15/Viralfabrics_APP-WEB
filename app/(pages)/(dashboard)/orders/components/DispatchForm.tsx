@@ -9,7 +9,10 @@ import {
   ExclamationTriangleIcon,
   CheckIcon,
   TrashIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  CameraIcon,
+  PhotoIcon,
+  CloudArrowUpIcon
 } from '@heroicons/react/24/outline';
 import { FileText } from 'lucide-react';
 import { Order } from '@/types';
@@ -17,6 +20,7 @@ import { useDarkMode } from '../../hooks/useDarkMode';
 import { useSession } from '../../hooks/useSession';
 import { createPortal } from 'react-dom';
 import { getDisplayOrderId } from '@/utils/orders';
+import CameraModal from '../../components/CameraModal';
 
 // Enhanced Dropdown Component (copied from MillOutputForm)
 interface EnhancedDropdownProps {
@@ -231,6 +235,7 @@ interface DispatchFormProps {
   existingDispatches?: any[];
   qualities?: any[];
   readOnly?: boolean;
+  onPreviewImage?: (url: string, alt: string, allImages?: string[], startIndex?: number) => void;
 }
 
 interface ValidationErrors {
@@ -628,7 +633,8 @@ export default function DispatchForm({
   isEditing = false,
   existingDispatches = [],
   qualities = [],
-  readOnly = false
+  readOnly = false,
+  onPreviewImage
 }: DispatchFormProps) {
   const { isDarkMode, mounted } = useDarkMode();
   const { isMaster } = useSession();
@@ -716,6 +722,7 @@ export default function DispatchForm({
   // Pending photo uploads for dispatch sub-items
   const [pendingPhotoFiles, setPendingPhotoFiles] = useState<Record<string, { file: File; previewUrl: string }[]>>({});
   const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
+  const [activeCameraSubItemId, setActiveCameraSubItemId] = useState<string | null>(null);
 
   // Sync local qualities with prop qualities
   useEffect(() => {
@@ -892,13 +899,31 @@ export default function DispatchForm({
     throw new Error(data.message || 'Upload failed: no URL returned');
   };
 
-  const handleDispatchSubItemPhotoChange = (subItemId: string, files: FileList | null) => {
+  const handleDispatchSubItemPhotoChange = (
+    subItemId: string,
+    files: FileList | File[] | File | null,
+    eventTarget?: HTMLInputElement
+  ) => {
     if (!files) return;
-    const newFiles = Array.from(files).map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
+    let fileArray: File[] = [];
+    if (files instanceof FileList) {
+      fileArray = Array.from(files);
+    } else if (Array.isArray(files)) {
+      fileArray = files;
+    } else if (files instanceof File) {
+      fileArray = [files];
+    } else {
+      fileArray = Array.from(files as any);
+    }
+
+    const newFiles = fileArray.map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
     setPendingPhotoFiles(prev => ({
       ...prev,
       [subItemId]: [...(prev[subItemId] || []), ...newFiles]
     }));
+    if (eventTarget) {
+      eventTarget.value = '';
+    }
   };
 
   const removeDispatchSubItemPhoto = (subItemId: string, type: 'pending' | 'existing', index: number) => {
@@ -2514,7 +2539,7 @@ export default function DispatchForm({
                         )}
 
                         {/* Date, Bill No, Transport No, LR No */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                           {/* Dispatch Date */}
                           <div>
                             <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
@@ -2725,7 +2750,7 @@ export default function DispatchForm({
                                 </button>
                               </div>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                               <div>
                                 <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                   Chindi (kg)
@@ -2797,13 +2822,13 @@ export default function DispatchForm({
                                   className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`rejectedMtr_${subItem.id}`]
                                     ? isDarkMode
                                       ? 'border-red-500 bg-gray-800 text-white'
-                                      : 'border-red-500 bg-white text-gray-900'
-                                    : isDarkMode
-                                      ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
-                                      : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
-                                    }`}
-                                />
-                                {errors[`rejectedMtr_${subItem.id}`] && (
+                                       : 'border-red-500 bg-white text-gray-900'
+                                     : isDarkMode
+                                       ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
+                                       : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
+                                     }`}
+                                 />
+                                 {errors[`rejectedMtr_${subItem.id}`] && (
                                   <p className={`text-sm mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
                                     {errors[`rejectedMtr_${subItem.id}`]}
                                   </p>
@@ -2812,55 +2837,112 @@ export default function DispatchForm({
 
                               <div>
                                 <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                  Photos
+                                  Dispatch Photos
                                 </label>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  multiple
-                                  capture="environment"
-                                  onChange={(e) => handleDispatchSubItemPhotoChange(subItem.id, e.target.files)}
-                                  disabled={readOnly}
-                                  className={`w-full text-sm text-gray-500 ${isDarkMode ? 'file:bg-gray-700 file:text-gray-200' : 'file:bg-gray-100 file:text-gray-800'}`}
-                                />
-                                <div className="mt-3 grid grid-cols-3 gap-2">
+                                {!readOnly && (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2 mb-4">
+                                    {/* Gallery Upload Option */}
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      multiple
+                                      onChange={(e) => handleDispatchSubItemPhotoChange(subItem.id, e.target.files, e.target)}
+                                      disabled={readOnly}
+                                      className="hidden"
+                                      id={`photo-gallery-upload-${subItem.id}`}
+                                    />
+                                    <label
+                                      htmlFor={`photo-gallery-upload-${subItem.id}`}
+                                      className={`flex items-center justify-center px-3 py-2.5 rounded-xl border transition-all duration-200 text-xs xl:text-sm font-medium active:scale-[0.98] hover:scale-[1.01] cursor-pointer shadow-sm ${isDarkMode
+                                        ? 'bg-slate-800/85 border-slate-700/80 hover:bg-slate-700 text-slate-200 hover:text-white hover:border-blue-500/50 hover:shadow-blue-500/5'
+                                        : 'bg-white border-gray-200/80 hover:bg-gray-50 text-gray-700 hover:text-gray-955 hover:border-blue-500/50 hover:shadow-blue-500/5'
+                                      }`}
+                                    >
+                                      <CloudArrowUpIcon className="h-4.5 w-4.5 mr-1.5 text-blue-500 flex-shrink-0" />
+                                      <span className="truncate">Upload Photos</span>
+                                    </label>
+
+                                    {/* Direct Camera Option */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveCameraSubItemId(subItem.id)}
+                                      disabled={readOnly}
+                                      className={`flex items-center justify-center px-3 py-2.5 rounded-xl border transition-all duration-200 text-xs xl:text-sm font-medium active:scale-[0.98] hover:scale-[1.01] cursor-pointer shadow-sm ${isDarkMode
+                                        ? 'bg-slate-800/85 border-slate-700/80 hover:bg-slate-700 text-slate-200 hover:text-white hover:border-emerald-500/50 hover:shadow-emerald-500/5'
+                                        : 'bg-white border-gray-200/80 hover:bg-gray-50 text-gray-700 hover:text-gray-955 hover:border-emerald-500/50 hover:shadow-emerald-500/5'
+                                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    >
+                                      <CameraIcon className="h-4.5 w-4.5 mr-1.5 text-emerald-500 flex-shrink-0" />
+                                      <span className="truncate">Use Camera</span>
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Preview Cards */}
+                                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                  {/* Existing Photos */}
                                   {(subItem.photos || []).map((url, index) => (
-                                    <div key={`existing-photo-${subItem.id}-${index}`} className={
-                                      `relative rounded-lg overflow-hidden border ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`
-                                    }>
-                                      <img src={url} alt={`Dispatch photo ${index + 1}`} className="h-20 w-full object-cover" />
+                                    <div
+                                      key={`existing-photo-${subItem.id}-${index}`}
+                                      className={`group relative aspect-square rounded-lg overflow-hidden border shadow-sm hover:shadow-md transition-all duration-200 bg-gray-100 dark:bg-gray-700 ${isDarkMode ? 'border-gray-600' : 'border-gray-200'} cursor-pointer`}
+                                      onClick={() => onPreviewImage && onPreviewImage(url, `Dispatch photo ${index + 1}`, subItem.photos, index)}
+                                    >
+                                      <img src={url} alt={`Dispatch photo ${index + 1}`} className="w-full h-full object-cover" />
                                       {!readOnly && (
                                         <button
                                           type="button"
-                                          onClick={() => removeDispatchSubItemPhoto(subItem.id, 'existing', index)}
-                                          className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeDispatchSubItemPhoto(subItem.id, 'existing', index);
+                                          }}
+                                          className="absolute top-1.5 right-1.5 rounded-full bg-red-500 text-white p-1 hover:bg-red-600 transition-colors shadow z-10"
                                           title="Remove photo"
                                         >
-                                          <XMarkIcon className="h-4 w-4" />
+                                          <XMarkIcon className="h-3.5 w-3.5" />
                                         </button>
                                       )}
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                        <span className="text-[10px] text-white font-bold tracking-wider uppercase px-1.5 py-0.5 bg-black/50 rounded">View Photo</span>
+                                      </div>
                                     </div>
                                   ))}
+
+                                  {/* Pending Photos */}
                                   {(pendingPhotoFiles[subItem.id] || []).map((entry, index) => (
-                                    <div key={`pending-photo-${subItem.id}-${index}`} className={
-                                      `relative rounded-lg overflow-hidden border ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`
-                                    }>
-                                      <img src={entry.previewUrl} alt={`Pending dispatch photo ${index + 1}`} className="h-20 w-full object-cover" />
+                                    <div
+                                      key={`pending-photo-${subItem.id}-${index}`}
+                                      className="group relative aspect-square rounded-lg overflow-hidden border border-yellow-400 dark:border-yellow-500/70 shadow-sm hover:shadow-md transition-all duration-200 bg-gray-100 dark:bg-gray-700 cursor-pointer"
+                                      onClick={() => onPreviewImage && onPreviewImage(entry.previewUrl, `Pending dispatch photo ${index + 1}`, (pendingPhotoFiles[subItem.id] || []).map(p => p.previewUrl), index)}
+                                    >
+                                      <img src={entry.previewUrl} alt={`Pending dispatch photo ${index + 1}`} className="w-full h-full object-cover" />
                                       {!readOnly && (
                                         <button
                                           type="button"
-                                          onClick={() => removeDispatchSubItemPhoto(subItem.id, 'pending', index)}
-                                          className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeDispatchSubItemPhoto(subItem.id, 'pending', index);
+                                          }}
+                                          className="absolute top-1.5 right-1.5 rounded-full bg-red-500 text-white p-1 hover:bg-red-600 transition-colors shadow z-10"
                                           title="Remove photo"
                                         >
-                                          <XMarkIcon className="h-4 w-4" />
+                                          <XMarkIcon className="h-3.5 w-3.5" />
                                         </button>
                                       )}
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                        <span className="text-[10px] text-white font-bold tracking-wider uppercase px-1.5 py-0.5 bg-black/50 rounded">View Photo</span>
+                                      </div>
+                                      <div className="absolute inset-0 bg-yellow-500/10 opacity-100 group-hover:opacity-0 transition-opacity flex items-center justify-center pointer-events-none">
+                                        <span className="text-[10px] text-yellow-800 dark:text-yellow-200 bg-yellow-100/90 dark:bg-yellow-950/90 px-1.5 py-0.5 rounded font-semibold border border-yellow-300 dark:border-yellow-600">Pending</span>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
+
                                 {photoUploading[subItem.id] && (
-                                  <p className="text-xs mt-2 text-blue-500">Uploading photos…</p>
+                                  <div className="flex items-center space-x-2 mt-3">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                    <span className="text-sm text-blue-500 font-medium">Uploading photos…</span>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -3078,6 +3160,18 @@ export default function DispatchForm({
             </div>
           </div>
         )}
+
+        {/* Camera Capture Modal */}
+        <CameraModal
+          isOpen={activeCameraSubItemId !== null}
+          onClose={() => setActiveCameraSubItemId(null)}
+          onCapture={(file) => {
+            if (activeCameraSubItemId) {
+              handleDispatchSubItemPhotoChange(activeCameraSubItemId, file);
+            }
+          }}
+          isDarkMode={isDarkMode}
+        />
       </div>
     </>
   );

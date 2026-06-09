@@ -9600,7 +9600,7 @@ export default function OrdersClient({
 
       {/* Image Preview Modal */}
       {showImagePreview && previewImage && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-enter">
+        <div className="fixed inset-0 bg-black/90 z-[80] flex items-center justify-center p-4 backdrop-enter">
           <div
             className="relative max-w-6xl max-h-[90vh] w-full h-full flex items-center justify-center"
             onTouchStart={handleTouchStart}
@@ -10343,6 +10343,7 @@ export default function OrdersClient({
           existingDispatches={existingDispatches}
           readOnly={isParty}
           onRefreshQualities={fetchQualities}
+          onPreviewImage={handleImagePreview}
           onClose={() => {
             setShowDispatchForm(false);
             setSelectedOrderForDispatch(null);

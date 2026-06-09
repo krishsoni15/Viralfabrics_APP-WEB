@@ -854,7 +854,7 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
               </span>
             </div>
             
-            <div className="flex items-center space-x-4 mb-4">
+            <div className="flex items-center gap-2 sm:gap-3 mb-4">
               <input
                 type="file"
                 accept="image/*"
@@ -866,43 +866,43 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
               />
               <label
                 htmlFor="sample-image-upload"
-                className={`px-6 py-3 rounded-lg border-2 border-dashed cursor-pointer transition-all ${
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl border-2 border-dashed cursor-pointer transition-all text-sm font-medium ${
                   isDarkMode
-                    ? 'border-gray-600 hover:border-blue-500 text-gray-300'
-                    : 'border-gray-300 hover:border-blue-400 text-gray-600'
+                    ? 'border-gray-600 hover:border-blue-500 text-gray-300 hover:text-blue-400 hover:bg-blue-500/5'
+                    : 'border-gray-300 hover:border-blue-400 text-gray-600 hover:text-blue-600 hover:bg-blue-50'
                 }`}
               >
-                <CloudArrowUpIcon className="h-5 w-5 inline mr-2" />
-                Upload Image
+                <CloudArrowUpIcon className="h-5 w-5" />
+                <span className="whitespace-nowrap">Upload</span>
               </label>
               
               <button
                 type="button"
                 onClick={() => setShowCamera(true)}
-                className={`px-6 py-3 rounded-lg border-2 border-dashed transition-all ${
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl border-2 border-dashed transition-all text-sm font-medium ${
                   isDarkMode
-                    ? 'border-gray-600 hover:border-green-500 text-gray-300'
-                    : 'border-gray-300 hover:border-green-400 text-gray-600'
+                    ? 'border-gray-600 hover:border-green-500 text-gray-300 hover:text-green-400 hover:bg-green-500/5'
+                    : 'border-gray-300 hover:border-green-400 text-gray-600 hover:text-green-600 hover:bg-green-50'
                 }`}
               >
-                <PhotoIcon className="h-5 w-5 inline mr-2" />
-                Camera
+                <PhotoIcon className="h-5 w-5" />
+                <span className="whitespace-nowrap">Camera</span>
               </button>
             </div>
             
-            {/* Image Previews */}
+            {/* Image Previews - Single row horizontal scroll */}
             {((pendingImageFiles.length > 0) || (formData.images && formData.images.length > 0)) && (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 md:gap-3 mt-4">
+              <div className="flex gap-2 md:gap-3 mt-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-thin">
                 {pendingImageFiles.map((pendingFile, idx) => (
-                  <div key={`pending-${idx}`} className="relative group">
+                  <div key={`pending-${idx}`} className="relative group flex-shrink-0 snap-start">
                     <div 
-                      className={`aspect-square rounded-lg overflow-hidden border-2 cursor-pointer transition-all hover:scale-105 ${
+                      className={`w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-xl overflow-hidden border-2 cursor-pointer transition-all hover:scale-105 ${
                         isDarkMode ? 'border-yellow-500 hover:border-yellow-400' : 'border-yellow-400 hover:border-yellow-500'
                       }`}
                       onClick={() => setSelectedImageIndex(idx)}
                     >
                       <img src={pendingFile.previewUrl} alt={`Pending ${idx}`} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center rounded-xl">
                         <EyeIcon className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
@@ -912,24 +912,24 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
                         e.stopPropagation();
                         removeImage(idx);
                       }}
-                      className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-all z-10"
+                      className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-all z-10 shadow-md text-xs"
                     >
-                      <XMarkIcon className="h-4 w-4" />
+                      <XMarkIcon className="h-3 w-3" />
                     </button>
                   </div>
                 ))}
                 {formData.images.map((img, idx) => {
                   const imageIndex = pendingImageFiles.length + idx;
                   return (
-                    <div key={`uploaded-${idx}`} className="relative group">
+                    <div key={`uploaded-${idx}`} className="relative group flex-shrink-0 snap-start">
                       <div 
-                        className={`aspect-square rounded-lg overflow-hidden border-2 cursor-pointer transition-all hover:scale-105 ${
+                        className={`w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-xl overflow-hidden border-2 cursor-pointer transition-all hover:scale-105 ${
                           isDarkMode ? 'border-green-500 hover:border-green-400' : 'border-green-400 hover:border-green-500'
                         }`}
                         onClick={() => setSelectedImageIndex(imageIndex)}
                       >
                         <img src={img} alt={`Uploaded ${idx}`} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center rounded-xl">
                           <EyeIcon className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                       </div>
@@ -939,9 +939,9 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
                           e.stopPropagation();
                           removeImage(imageIndex);
                         }}
-                        className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-all z-10"
+                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-all z-10 shadow-md text-xs"
                       >
-                        <XMarkIcon className="h-4 w-4" />
+                        <XMarkIcon className="h-3 w-3" />
                       </button>
                     </div>
                   );

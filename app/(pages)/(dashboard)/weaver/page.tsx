@@ -8,7 +8,6 @@ import {
   PlusIcon,
   PencilIcon,
   TrashIcon,
-  BeakerIcon,
   XMarkIcon,
   CheckIcon,
   EyeIcon,
@@ -32,6 +31,7 @@ import {
   Squares2X2Icon,
   ListBulletIcon
 } from '@heroicons/react/24/outline';
+import WeaverIcon from '../components/WeaverIcon';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useAuthSession } from '../hooks/useAuthSession';
 import { lazy, Suspense } from 'react';
@@ -2380,7 +2380,7 @@ export default function WeaverPage() {
                       isDarkMode ? 'text-gray-300' : 'text-gray-700'
                     }`}>
                       <div className="flex items-center space-x-2">
-                        <BeakerIcon className="h-4 w-4" />
+                        <WeaverIcon className="h-4 w-4" />
                         <span>Actions</span>
                       </div>
                     </th>
@@ -2476,7 +2476,7 @@ export default function WeaverPage() {
                         <div className={`flex flex-col items-center justify-center min-h-[30vh] sm:min-h-[50vh] space-y-3 sm:space-y-6 ${
                           isDarkMode ? 'text-gray-400' : 'text-gray-600'
                         }`}>
-                          <BeakerIcon className={`w-12 h-12 sm:w-20 sm:h-20 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                          <WeaverIcon className={`w-12 h-12 sm:w-20 sm:h-20 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
                           <h3 className={`text-base sm:text-xl font-semibold text-center px-2 ${
                             isDarkMode ? 'text-white' : 'text-gray-900'
                           }`}>
@@ -2637,7 +2637,7 @@ export default function WeaverPage() {
                             }`}
                             title="Add Sample"
                           >
-                            <BeakerIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                            <WeaverIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                             <span className="font-medium whitespace-nowrap">Add Sample</span>
                           </button>
                           {/* Delete Button - Show for master only */}
@@ -2740,7 +2740,7 @@ export default function WeaverPage() {
                     <div className={`flex flex-col items-center justify-center space-y-3 sm:space-y-6 max-w-md ${
                       isDarkMode ? 'text-gray-400' : 'text-gray-600'
                     }`}>
-                      <BeakerIcon className={`w-12 h-12 sm:w-20 sm:h-20 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                      <WeaverIcon className={`w-12 h-12 sm:w-20 sm:h-20 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
                       <h3 className={`text-base sm:text-xl font-semibold text-center ${
                         isDarkMode ? 'text-white' : 'text-gray-900'
                       }`}>
@@ -2876,7 +2876,7 @@ export default function WeaverPage() {
                             }`}
                             title="Add Sample"
                           >
-                            <BeakerIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                            <WeaverIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                             <span className="font-medium whitespace-nowrap">Add Sample</span>
                           </button>
                           {/* View Button */}
@@ -3220,7 +3220,7 @@ export default function WeaverPage() {
                   }`}
                   title="Add Sample"
                 >
-                  <BeakerIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <WeaverIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span className="whitespace-nowrap">Add Sample</span>
                 </button>
                 {/* Delete Button */}
@@ -3319,7 +3319,7 @@ export default function WeaverPage() {
                     : 'bg-red-50 border-red-200'
                 }`}>
                   <div className="flex items-center space-x-2 mb-2">
-                    <BeakerIcon className={`h-5 w-5 ${
+                    <WeaverIcon className={`h-5 w-5 ${
                       isDarkMode ? 'text-red-400' : 'text-red-600'
                     }`} />
                     <p className={`font-bold ${

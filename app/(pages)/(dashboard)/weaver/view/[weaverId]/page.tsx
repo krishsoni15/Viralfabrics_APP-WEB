@@ -1206,7 +1206,13 @@ export default function WeaverSamplesViewPage() {
                 <h2 className={`text-base sm:text-xl lg:text-2xl xl:text-3xl font-bold flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0 ${
                   isDarkMode ? 'text-white' : 'text-gray-900'
                 }`}>
-                  <UserIcon className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7 xl:h-8 xl:w-8 flex-shrink-0" />
+                  <div className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center font-bold text-sm sm:text-base lg:text-lg border-2 transition-all ${
+                    isDarkMode 
+                      ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white border-blue-400/30' 
+                      : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-300'
+                  }`}>
+                    {weaver.name.trim().charAt(0).toUpperCase()}
+                  </div>
                   <span className="break-words min-w-0 leading-tight">{weaver.name}</span>
                 </h2>
                 {/* Cross Button - Only on screens under 400px, right side of name */}

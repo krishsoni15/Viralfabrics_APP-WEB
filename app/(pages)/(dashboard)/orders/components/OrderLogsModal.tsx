@@ -1388,7 +1388,7 @@ export default function OrderLogsModal({ orderId, orderNumber, onClose }: OrderL
       
       {/* Image Preview Modal */}
       {showImagePreview && previewImages.length > 0 && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[80] p-4">
           <div className="relative max-w-6xl max-h-[90vh] w-full">
             {/* Action Buttons */}
             <div className="absolute top-4 right-4 z-20 flex items-center space-x-2">

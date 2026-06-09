@@ -17,9 +17,9 @@ import {
   ArrowsPointingInIcon, 
   DevicePhoneMobileIcon, 
   ArrowRightOnRectangleIcon,
-  MoonIcon,
-  BeakerIcon
+  MoonIcon
 } from '@heroicons/react/24/outline';
+import WeaverIcon from './WeaverIcon';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { BRAND_NAME, BRAND_COPYRIGHT, BRAND_TAGLINE } from '@/lib/config';
 
@@ -155,13 +155,13 @@ export default function Sidebar({
       {
         name: 'Weaver',
         href: '/weaver',
-        icon: BeakerIcon
+        icon: WeaverIcon
       }
     ];
 
-    // Only show Orders for party users - one page only
+    // Show only Dashboard for party users
     if (user?.role === 'party') {
-      return items.filter(item => item.name === 'Orders');
+      return items.filter(item => item.name === 'Dashboard');
     }
 
     // Only show Users, Fabrics, and Weaver for superadmin and master
