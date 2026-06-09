@@ -1,20 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { BRAND_NAME, BRAND_DESCRIPTION } from '@/lib/config';
 import { DarkModeProvider } from './contexts/DarkModeContext';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-  display: 'swap', // Optimize font loading
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  display: 'swap', // Optimize font loading
-});
+// Mock font variables to avoid build-time Google Fonts downloads without network access
+const geistSans = { variable: "var(--font-geist-sans)" };
+const geistMono = { variable: "var(--font-geist-mono)" };
 
 export const metadata: Metadata = {
   title: {

@@ -23,7 +23,7 @@ export default function CameraModal({ isOpen, onClose, onCapture, isDarkMode }: 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoTrackRef = useRef<MediaStreamTrack | null>(null);
-  const autoRetryIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const autoRetryIntervalRef = useRef<any>(null);
 
   // Get available cameras
   const getAvailableCameras = async () => {

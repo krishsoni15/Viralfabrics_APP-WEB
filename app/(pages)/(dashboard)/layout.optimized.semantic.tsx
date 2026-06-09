@@ -43,7 +43,7 @@ export default function SuperAdminLayout({
 
   // Track screen size with debouncing
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: any;
     
     const handleResize = () => {
       clearTimeout(timeoutId);

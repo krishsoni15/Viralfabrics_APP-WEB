@@ -121,7 +121,7 @@ export function useWeavers(options: UseWeaversOptions) {
     lastFetchParamsRef.current = { page, limit, search, sort };
     
     let controller: AbortController | null = null;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     
     try {
       const token = localStorage.getItem('token');

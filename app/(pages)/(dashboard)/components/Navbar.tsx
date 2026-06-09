@@ -101,7 +101,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
 
   // Track screen size with debouncing
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: any;
     
     const handleResize = () => {
       clearTimeout(timeoutId);

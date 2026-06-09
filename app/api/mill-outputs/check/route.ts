@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     // ⚡ ULTRA-FAST: Just count documents (no data fetching)
     const count = await MillOutput.countDocuments({ order: orderId })
       .maxTimeMS(1000)
-      .lean();
+      .lean() as any;
 
     return NextResponse.json(
       successResponse({ exists: count > 0, count }, 'Mill output check completed'),

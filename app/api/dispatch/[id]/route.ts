@@ -27,7 +27,7 @@ export async function GET(
 
     const dispatch = await Dispatch.findById(id)
       .populate('order', 'orderId orderType party')
-      .lean();
+      .lean() as any;
     
     if (!dispatch) {
       return NextResponse.json(notFoundResponse('Dispatch'), { status: 404 });

@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const orders = await Order.find({})
       .sort({ createdAt: 1 })
       .select('_id orderId')
-      .lean();
+      .lean() as any;
 
     if (orders.length === 0) {
       // No orders to renumber, just reset counter

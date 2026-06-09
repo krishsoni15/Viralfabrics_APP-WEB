@@ -35,10 +35,10 @@ export async function GET(
     
     // First, find the order to get both orderId (string) and _id (ObjectId)
     // Try to find by _id first, then by orderId if _id doesn't work
-    let order = await Order.findById(id).lean();
+    let order = await Order.findById(id).lean() as any;
     if (!order) {
       // Try finding by orderId string if _id lookup failed
-      order = await Order.findOne({ orderId: id }).lean();
+      order = await Order.findOne({ orderId: id }).lean() as any;
     }
     const orderIdString = order?.orderId || null;
     const orderObjectId = order?._id?.toString() || id;

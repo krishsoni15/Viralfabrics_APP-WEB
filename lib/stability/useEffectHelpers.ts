@@ -67,7 +67,7 @@ export function useSafeTimeout(
   delay: number | null
 ) {
   const savedCallback = useRef(callback);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<any>(null);
 
   // Remember the latest callback
   useEffect(() => {
@@ -106,7 +106,7 @@ export function useDebouncedEffect(
   deps: DependencyList,
   delay: number = 300
 ) {
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<any>(null);
   const cleanupRef = useRef<(() => void) | undefined>(undefined);
 
   useEffect(() => {

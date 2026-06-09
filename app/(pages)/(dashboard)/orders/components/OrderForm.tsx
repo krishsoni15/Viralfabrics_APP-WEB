@@ -41,6 +41,7 @@ interface OrderFormProps {
   onRemoveQuality?: (qualityId: string) => void;
   onSetRecentlyAddedParty?: (partyId: string | null) => void;
   onSetRecentlyAddedQuality?: (qualityId: string | null) => void;
+  readOnly?: boolean;
 }
 
 interface ValidationErrors {
@@ -155,12 +156,14 @@ function CustomDatePicker({
   value,
   onChange,
   placeholder,
-  isDarkMode
+  isDarkMode,
+  disabled = false
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   isDarkMode: boolean;
+  disabled?: boolean;
 }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -276,6 +279,7 @@ function CustomDatePicker({
           ref={dateInputRef}
           type="text"
           value={inputValue}
+          disabled={disabled}
           onChange={(e) => {
             const value = e.target.value;
 
@@ -293,14 +297,14 @@ function CustomDatePicker({
           }}
           onKeyDown={handleKeyDown}
           placeholder="dd/mm/yyyy"
-          onFocus={() => setShowCalendar(true)}
+          onFocus={() => !disabled && setShowCalendar(true)}
           className={`w-full p-3 pr-12 rounded-lg border ${isDarkMode
               ? 'bg-white/10 border-white/20 text-white placeholder-gray-400'
               : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
             } focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200`}
         />
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-          {value && (
+          {!disabled && value && (
             <button
               type="button"
               onClick={clearDate}
@@ -314,7 +318,8 @@ function CustomDatePicker({
           )}
           <button
             type="button"
-            onClick={() => setShowCalendar(!showCalendar)}
+            disabled={disabled}
+            onClick={() => !disabled && setShowCalendar(!showCalendar)}
             className={`p-1.5 rounded-lg transition-all duration-200 ${isDarkMode
                 ? 'text-gray-400 hover:text-blue-400 hover:bg-gray-700/50'
                 : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
@@ -516,7 +521,8 @@ function EnhancedDropdown({
   itemIndex,
   recentlyAddedId,
   isLoading,
-  deletingItems
+  deletingItems,
+  disabled = false
 }: {
   options: any[];
   value: string;
@@ -535,6 +541,7 @@ function EnhancedDropdown({
   recentlyAddedId?: string | null;
   isLoading?: boolean;
   deletingItems?: string[];
+  disabled?: boolean;
 }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { isMaster } = useSession();
@@ -572,7 +579,7 @@ function EnhancedDropdown({
             type="text"
             placeholder={placeholder}
             value={displayValue}
-            disabled={false}
+            disabled={disabled}
             onChange={(e) => {
               const newValue = e.target.value;
               onSearchChange(newValue);
@@ -583,7 +590,7 @@ function EnhancedDropdown({
             }}
             onFocus={() => {
               // Always allow dropdown to open, even if loading
-              onToggleDropdown();
+              if (!disabled) onToggleDropdown();
             }}
             className={`w-full p-3 rounded-lg border ${isDarkMode
                 ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
@@ -591,7 +598,7 @@ function EnhancedDropdown({
               } ${error ? 'border-red-500' : ''} focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200`}
           />
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-            {searchValue && (
+            {!disabled && searchValue && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -611,7 +618,7 @@ function EnhancedDropdown({
               } ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
           </div>
         </div>
-        {onAddNew && (
+        {!disabled && onAddNew && (
           <button
             type="button"
             onClick={onAddNew}
@@ -682,7 +689,7 @@ function EnhancedDropdown({
                     {value === (option._id || (option as any).id) && (
                       <CheckIcon className="h-4 w-4 text-blue-500" />
                     )}
-                    {isMaster && onDelete && (
+                    {!disabled && isMaster && onDelete && (
                       <div
                         onClick={(e) => {
                           e.stopPropagation();
@@ -751,7 +758,8 @@ function ImageUploadSection({
   onPreviewImage,
   isDarkMode,
   imageUploading,
-  pendingImageFiles
+  pendingImageFiles,
+  readOnly = false
 }: {
   itemIndex: number;
   imageUrls: string[];
@@ -761,6 +769,7 @@ function ImageUploadSection({
   isDarkMode: boolean;
   imageUploading: { [key: number]: boolean };
   pendingImageFiles?: Array<{ file: File; previewUrl: string }>;
+  readOnly?: boolean;
 }) {
   // Combine pending files (with preview URLs) and uploaded URLs for display
   const allImages: Array<{ url: string; isPending: boolean }> = [
@@ -791,53 +800,55 @@ function ImageUploadSection({
       <label className="block text-sm font-medium mb-3">Images</label>
 
       {/* Upload Area */}
-      <div className="flex items-center space-x-4 mb-4">
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onImageUpload(file, itemIndex);
-          }}
-          className="hidden"
-          id={`image-upload-${itemIndex}`}
-        />
-        <label
-          htmlFor={`image-upload-${itemIndex}`}
-          className={`px-6 py-3 rounded-lg border-2 border-dashed cursor-pointer transition-all duration-200 hover:scale-105 ${isDarkMode
-              ? 'border-gray-600 hover:border-blue-500 text-gray-300 hover:text-blue-400'
-              : 'border-gray-300 hover:border-blue-400 text-gray-600 hover:text-blue-600'
-            }`}
-        >
-          <CloudArrowUpIcon className="h-5 w-5 inline mr-2" />
-          Upload Image
-        </label>
+      {!readOnly && (
+        <div className="flex items-center space-x-4 mb-4">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onImageUpload(file, itemIndex);
+            }}
+            className="hidden"
+            id={`image-upload-${itemIndex}`}
+          />
+          <label
+            htmlFor={`image-upload-${itemIndex}`}
+            className={`px-6 py-3 rounded-lg border-2 border-dashed cursor-pointer transition-all duration-200 hover:scale-105 ${isDarkMode
+                ? 'border-gray-600 hover:border-blue-500 text-gray-300 hover:text-blue-400'
+                : 'border-gray-300 hover:border-blue-400 text-gray-600 hover:text-blue-600'
+              }`}
+          >
+            <CloudArrowUpIcon className="h-5 w-5 inline mr-2" />
+            Upload Image
+          </label>
 
-        {/* Camera Button */}
-        <button
-          type="button"
-          onClick={() => setShowCamera(true)}
-          onTouchStart={(e) => {
-            // Prevent double-tap zoom on mobile
-            e.preventDefault();
-          }}
-          className={`px-6 py-3 rounded-lg border-2 border-dashed transition-all duration-200 hover:scale-105 active:scale-95 ${isDarkMode
-              ? 'border-gray-600 hover:border-green-500 text-gray-300 hover:text-green-400'
-              : 'border-gray-300 hover:border-green-400 text-gray-600 hover:text-green-600'
-            }`}
-        >
-          <PhotoIcon className="h-5 w-5 inline mr-2" />
-          Camera
-        </button>
+          {/* Camera Button */}
+          <button
+            type="button"
+            onClick={() => setShowCamera(true)}
+            onTouchStart={(e) => {
+              // Prevent double-tap zoom on mobile
+              e.preventDefault();
+            }}
+            className={`px-6 py-3 rounded-lg border-2 border-dashed transition-all duration-200 hover:scale-105 active:scale-95 ${isDarkMode
+                ? 'border-gray-600 hover:border-green-500 text-gray-300 hover:text-green-400'
+                : 'border-gray-300 hover:border-green-400 text-gray-600 hover:text-green-600'
+              }`}
+          >
+            <PhotoIcon className="h-5 w-5 inline mr-2" />
+            Camera
+          </button>
 
-        {imageUploading[itemIndex] && (
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-            <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-              }`}>Uploading...</span>
-          </div>
-        )}
-      </div>
+          {imageUploading[itemIndex] && (
+            <div className="flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+              <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                }`}>Uploading...</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Image Previews - Show both pending and uploaded images */}
       {allImages.length > 0 && (
@@ -874,14 +885,16 @@ function ImageUploadSection({
                 </div>
 
                 {/* Remove Button */}
-                <button
-                  type="button"
-                  onClick={() => onRemoveImage(itemIndex, imgIndex)}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-all duration-200 opacity-100 z-10 hover:scale-110"
-                  title="Remove Image"
-                >
-                  <XMarkIcon className="h-3 w-3" />
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveImage(itemIndex, imgIndex)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-all duration-200 opacity-100 z-10 hover:scale-110"
+                    title="Remove Image"
+                  >
+                    <XMarkIcon className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -902,7 +915,7 @@ function ImageUploadSection({
   );
 }
 
-export default function OrderForm({ order, parties, qualities, onClose, onSuccess, onError, onStart, onFormOpen, onAddParty, onRefreshParties, onAddQuality, onRefreshQualities, onRemoveParty, onRemoveQuality, onSetRecentlyAddedParty, onSetRecentlyAddedQuality }: OrderFormProps) {
+export default function OrderForm({ order, parties, qualities, onClose, onSuccess, onError, onStart, onFormOpen, onAddParty, onRefreshParties, onAddQuality, onRefreshQualities, onRemoveParty, onRemoveQuality, onSetRecentlyAddedParty, onSetRecentlyAddedQuality, readOnly = false }: OrderFormProps) {
   const { isDarkMode, mounted } = useDarkMode();
   const { isMaster } = useSession();
   const [formData, setFormData] = useState<OrderFormData>({
@@ -1016,7 +1029,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
   // ⚡ FIX: localStorage persistence for form data to prevent data loss on tab switch
   const FORM_DATA_STORAGE_KEY = 'orderFormDraftData';
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<any>(null);
   const hasRestoredDataRef = useRef<boolean>(false);
   const lastSavedDataRef = useRef<string>('');
 
@@ -2846,7 +2859,8 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
               ? 'scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800'
               : 'scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100'
             }`}>
-            <div className="p-6 space-y-8 pb-24">
+            <fieldset disabled={readOnly} className="space-y-8 contents">
+              <div className="p-6 space-y-8 pb-24">
               {/* Basic Information - Enhanced Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {/* Order Type */}
@@ -2857,7 +2871,8 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setShowOrderTypeDropdown(!showOrderTypeDropdown)}
+                      disabled={readOnly}
+                      onClick={() => !readOnly && setShowOrderTypeDropdown(!showOrderTypeDropdown)}
                       className={`w-full p-3 pr-10 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left ${isDarkMode
                           ? 'bg-gray-800 border-gray-600 text-white'
                           : 'bg-white border-gray-300 text-gray-900'
@@ -2945,6 +2960,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                     onChange={(value) => handleFieldChange('arrivalDate', value)}
                     placeholder="Select arrival date"
                     isDarkMode={isDarkMode}
+                    disabled={readOnly}
                   />
                 </div>
 
@@ -2956,6 +2972,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                     onChange={(value) => handleFieldChange('poDate', value)}
                     placeholder="Select PO date"
                     isDarkMode={isDarkMode}
+                    disabled={readOnly}
                   />
                 </div>
 
@@ -2967,6 +2984,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                     onChange={(value) => handleFieldChange('deliveryDate', value)}
                     placeholder="Select delivery date"
                     isDarkMode={isDarkMode}
+                    disabled={readOnly}
                   />
                 </div>
 
@@ -3010,6 +3028,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                     onDelete={(party) => handleDeleteParty(party)}
                     recentlyAddedId={recentlyAddedParty}
                     deletingItems={deletingParty ? [deletingParty] : []}
+                    disabled={readOnly}
                   />
                 </div>
 
@@ -3027,7 +3046,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                         }`}
                     />
-                    {formData.contactName && (
+                    {!readOnly && formData.contactName && (
                       <button
                         type="button"
                         onClick={() => handleFieldChange('contactName', '')}
@@ -3057,7 +3076,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                         }`}
                     />
-                    {formData.contactPhone && (
+                    {!readOnly && formData.contactPhone && (
                       <button
                         type="button"
                         onClick={() => handleFieldChange('contactPhone', '')}
@@ -3087,7 +3106,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                         }`}
                     />
-                    {formData.poNumber && (
+                    {!readOnly && formData.poNumber && (
                       <button
                         type="button"
                         onClick={() => handleFieldChange('poNumber', '')}
@@ -3117,7 +3136,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                         }`}
                     />
-                    {formData.styleNo && (
+                    {!readOnly && formData.styleNo && (
                       <button
                         type="button"
                         onClick={() => handleFieldChange('styleNo', '')}
@@ -3253,6 +3272,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                             itemIndex={index}
                             recentlyAddedId={recentlyAddedQuality}
                             deletingItems={deletingQuality ? [deletingQuality] : []}
+                            disabled={readOnly}
                           />
                         </div>
 
@@ -3290,44 +3310,46 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                                 } ${errors[`items.${index}.quantity`] ? 'border-red-500' : ''}`}
                             />
                             {/* Custom Increment/Decrement Buttons */}
-                            <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex flex-col">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const currentValue = parseInt(String(item.quantity || '0')) || 0;
-                                  handleItemChange(index, 'quantity', String(currentValue + 1));
-                                }}
-                                className={`w-6 h-6 flex items-center justify-center rounded-t-sm border-b border-gray-300 transition-all duration-200 hover:scale-110 ${isDarkMode
-                                    ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
-                                  }`}
-                                title="Increase quantity"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const currentValue = parseInt(String(item.quantity || '0')) || 0;
-                                  if (currentValue > 1) {
-                                    handleItemChange(index, 'quantity', String(currentValue - 1));
-                                  } else if (currentValue === 1) {
-                                    handleItemChange(index, 'quantity', ''); // Clear if 1 and decremented
-                                  }
-                                }}
-                                className={`w-6 h-6 flex items-center justify-center rounded-b-sm transition-all duration-200 hover:scale-110 ${isDarkMode
-                                    ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
-                                  }`}
-                                title="Decrease quantity"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-                            </div>
+                            {!readOnly && (
+                              <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex flex-col">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentValue = parseInt(String(item.quantity || '0')) || 0;
+                                    handleItemChange(index, 'quantity', String(currentValue + 1));
+                                  }}
+                                  className={`w-6 h-6 flex items-center justify-center rounded-t-sm border-b border-gray-300 transition-all duration-200 hover:scale-110 ${isDarkMode
+                                      ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                                    }`}
+                                  title="Increase quantity"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentValue = parseInt(String(item.quantity || '0')) || 0;
+                                    if (currentValue > 1) {
+                                      handleItemChange(index, 'quantity', String(currentValue - 1));
+                                    } else if (currentValue === 1) {
+                                      handleItemChange(index, 'quantity', ''); // Clear if 1 and decremented
+                                    }
+                                  }}
+                                  className={`w-6 h-6 flex items-center justify-center rounded-b-sm transition-all duration-200 hover:scale-110 ${isDarkMode
+                                      ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                                    }`}
+                                  title="Decrease quantity"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
                           </div>
                           {errors[`items.${index}.quantity`] && (
                             <p className="text-red-500 text-sm mt-2">{errors[`items.${index}.quantity`]}</p>
@@ -3350,7 +3372,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                                   : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                                 }`}
                             />
-                            {item.weaverSupplierName && (
+                            {!readOnly && item.weaverSupplierName && (
                               <button
                                 type="button"
                                 onClick={() => handleItemChange(index, 'weaverSupplierName', '')}
@@ -3379,7 +3401,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                                   : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                                 }`}
                             />
-                            {item.description && (
+                            {!readOnly && item.description && (
                               <button
                                 type="button"
                                 onClick={() => handleItemChange(index, 'description', '')}
@@ -3429,48 +3451,50 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                                 }`}
                             />
                             {/* Custom Increment/Decrement Buttons */}
-                            <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex flex-col">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const currentValue = parseFloat(String(item.purchaseRate || '0')) || 0;
-                                  const newValue = currentValue + 0.01;
-                                  // Format to 2 decimal places
-                                  const formattedValue = newValue.toFixed(2);
-                                  handleItemChange(index, 'purchaseRate', formattedValue);
-                                }}
-                                className={`w-6 h-6 flex items-center justify-center rounded-t-sm border-b border-gray-300 transition-all duration-200 hover:scale-110 ${isDarkMode
-                                    ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
-                                  }`}
-                                title="Increase purchase rate by 0.01"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const currentValue = parseFloat(String(item.purchaseRate || '0')) || 0;
-                                  if (currentValue > 0) {
-                                    const newValue = Math.max(0, currentValue - 0.01);
+                            {!readOnly && (
+                              <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex flex-col">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentValue = parseFloat(String(item.purchaseRate || '0')) || 0;
+                                    const newValue = currentValue + 0.01;
                                     // Format to 2 decimal places
                                     const formattedValue = newValue.toFixed(2);
                                     handleItemChange(index, 'purchaseRate', formattedValue);
-                                  }
-                                }}
-                                className={`w-6 h-6 flex items-center justify-center rounded-b-sm transition-all duration-200 hover:scale-110 ${isDarkMode
-                                    ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
-                                  }`}
-                                title="Decrease purchase rate by 0.01"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-                            </div>
+                                  }}
+                                  className={`w-6 h-6 flex items-center justify-center rounded-t-sm border-b border-gray-300 transition-all duration-200 hover:scale-110 ${isDarkMode
+                                      ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                                    }`}
+                                  title="Increase purchase rate by 0.01"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentValue = parseFloat(String(item.purchaseRate || '0')) || 0;
+                                    if (currentValue > 0) {
+                                      const newValue = Math.max(0, currentValue - 0.01);
+                                      // Format to 2 decimal places
+                                      const formattedValue = newValue.toFixed(2);
+                                      handleItemChange(index, 'purchaseRate', formattedValue);
+                                    }
+                                  }}
+                                  className={`w-6 h-6 flex items-center justify-center rounded-b-sm transition-all duration-200 hover:scale-110 ${isDarkMode
+                                      ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                                    }`}
+                                  title="Decrease purchase rate by 0.01"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -3509,48 +3533,50 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                                 }`}
                             />
                             {/* Custom Increment/Decrement Buttons */}
-                            <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex flex-col">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const currentValue = parseFloat(String(item.millRate || '0')) || 0;
-                                  const newValue = currentValue + 0.01;
-                                  // Format to 2 decimal places
-                                  const formattedValue = newValue.toFixed(2);
-                                  handleItemChange(index, 'millRate', formattedValue);
-                                }}
-                                className={`w-6 h-6 flex items-center justify-center rounded-t-sm border-b border-gray-300 transition-all duration-200 hover:scale-110 ${isDarkMode
-                                    ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
-                                  }`}
-                                title="Increase mill rate by 0.01"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const currentValue = parseFloat(String(item.millRate || '0')) || 0;
-                                  if (currentValue > 0) {
-                                    const newValue = Math.max(0, currentValue - 0.01);
+                            {!readOnly && (
+                              <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex flex-col">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentValue = parseFloat(String(item.millRate || '0')) || 0;
+                                    const newValue = currentValue + 0.01;
                                     // Format to 2 decimal places
                                     const formattedValue = newValue.toFixed(2);
                                     handleItemChange(index, 'millRate', formattedValue);
-                                  }
-                                }}
-                                className={`w-6 h-6 flex items-center justify-center rounded-b-sm transition-all duration-200 hover:scale-110 ${isDarkMode
-                                    ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
-                                  }`}
-                                title="Decrease mill rate by 0.01"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-                            </div>
+                                  }}
+                                  className={`w-6 h-6 flex items-center justify-center rounded-t-sm border-b border-gray-300 transition-all duration-200 hover:scale-110 ${isDarkMode
+                                      ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                                    }`}
+                                  title="Increase mill rate by 0.01"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentValue = parseFloat(String(item.millRate || '0')) || 0;
+                                    if (currentValue > 0) {
+                                      const newValue = Math.max(0, currentValue - 0.01);
+                                      // Format to 2 decimal places
+                                      const formattedValue = newValue.toFixed(2);
+                                      handleItemChange(index, 'millRate', formattedValue);
+                                    }
+                                  }}
+                                  className={`w-6 h-6 flex items-center justify-center rounded-b-sm transition-all duration-200 hover:scale-110 ${isDarkMode
+                                      ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                                    }`}
+                                  title="Decrease mill rate by 0.01"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -3589,54 +3615,56 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                                 }`}
                             />
                             {/* Custom Increment/Decrement Buttons */}
-                            <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex flex-col">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const currentValue = parseFloat(String(item.salesRate || '0')) || 0;
-                                  const newValue = currentValue + 0.01;
-                                  // Format to 2 decimal places
-                                  const formattedValue = newValue.toFixed(2);
-                                  handleItemChange(index, 'salesRate', formattedValue);
-                                }}
-                                className={`w-6 h-6 flex items-center justify-center rounded-t-sm border-b border-gray-300 transition-all duration-200 hover:scale-110 ${isDarkMode
-                                    ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
-                                  }`}
-                                title="Increase sales rate by 0.01"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const currentValue = parseFloat(String(item.salesRate || '0')) || 0;
-                                  if (currentValue > 0) {
-                                    const newValue = Math.max(0, currentValue - 0.01);
+                            {!readOnly && (
+                              <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex flex-col">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentValue = parseFloat(String(item.salesRate || '0')) || 0;
+                                    const newValue = currentValue + 0.01;
                                     // Format to 2 decimal places
                                     const formattedValue = newValue.toFixed(2);
                                     handleItemChange(index, 'salesRate', formattedValue);
-                                  }
-                                }}
-                                className={`w-6 h-6 flex items-center justify-center rounded-b-sm transition-all duration-200 hover:scale-110 ${isDarkMode
-                                    ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
-                                  }`}
-                                title="Decrease sales rate by 0.01"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-                            </div>
+                                  }}
+                                  className={`w-6 h-6 flex items-center justify-center rounded-t-sm border-b border-gray-300 transition-all duration-200 hover:scale-110 ${isDarkMode
+                                      ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                                    }`}
+                                  title="Increase sales rate by 0.01"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentValue = parseFloat(String(item.salesRate || '0')) || 0;
+                                    if (currentValue > 0) {
+                                      const newValue = Math.max(0, currentValue - 0.01);
+                                      // Format to 2 decimal places
+                                      const formattedValue = newValue.toFixed(2);
+                                      handleItemChange(index, 'salesRate', formattedValue);
+                                    }
+                                  }}
+                                  className={`w-6 h-6 flex items-center justify-center rounded-b-sm transition-all duration-200 hover:scale-110 ${isDarkMode
+                                      ? 'bg-gray-600 text-gray-300 hover:bg-gray-500 hover:text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                                    }`}
+                                  title="Decrease sales rate by 0.01"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
                         {/* Actions */}
                         <div className="flex items-end justify-end">
-                          {(!order || !(formData.items[index] as any)?._id || (formData.items[index] as any)?._id?.startsWith('temp-') || isMaster) && (
+                          {!readOnly && (!order || !(formData.items[index] as any)?._id || (formData.items[index] as any)?._id?.startsWith('temp-') || isMaster) && (
                             <button
                               type="button"
                               onClick={() => {
@@ -3675,30 +3703,33 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                         isDarkMode={isDarkMode}
                         imageUploading={imageUploading}
                         pendingImageFiles={pendingImageFiles[index]}
+                        readOnly={readOnly}
                       />
                     </div>
                   ))}
 
                   {/* Add Item Card */}
-                  <div className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 hover:shadow-lg cursor-pointer ${isDarkMode
-                      ? 'border-gray-600 bg-gray-800/50 hover:border-blue-500 hover:bg-gray-800'
-                      : 'border-gray-300 bg-gray-50/50 hover:border-blue-400 hover:bg-gray-50'
-                    }`} onClick={addItem}>
-                    <div className="flex items-center justify-center space-x-3 py-4">
-                      <div className={`p-2 rounded-full ${isDarkMode
-                          ? 'bg-blue-600/20 text-blue-400'
-                          : 'bg-blue-100 text-blue-600'
-                        }`}>
-                        <PlusIcon className="h-5 w-5" />
-                      </div>
-                      <div className="text-center">
-                        <h4 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                  {!readOnly && (
+                    <div className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 hover:shadow-lg cursor-pointer ${isDarkMode
+                        ? 'border-gray-600 bg-gray-800/50 hover:border-blue-500 hover:bg-gray-800'
+                        : 'border-gray-300 bg-gray-50/50 hover:border-blue-400 hover:bg-gray-50'
+                      }`} onClick={addItem}>
+                      <div className="flex items-center justify-center space-x-3 py-4">
+                        <div className={`p-2 rounded-full ${isDarkMode
+                            ? 'bg-blue-600/20 text-blue-400'
+                            : 'bg-blue-100 text-blue-600'
                           }`}>
-                          Add New Item
-                        </h4>
+                          <PlusIcon className="h-5 w-5" />
+                        </div>
+                        <div className="text-center">
+                          <h4 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                            Add New Item
+                          </h4>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -3781,26 +3812,23 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                 </div>
               )}
             </div>
-          </form>
+          </fieldset>
 
-          {/* Sticky Submit Button */}
-          <div className={`sticky bottom-0 left-0 right-0 p-6 border-t shadow-lg ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'
-            }`}>
-            <div className="flex justify-end space-x-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className={`px-8 py-3 rounded-lg border transition-all duration-200 hover:scale-105 active:scale-95 ${isDarkMode
-                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
-                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                  }`}
-              >
-                Cancel
-              </button>
+          <div className="flex justify-end gap-4 p-6 border-t border-gray-200 dark:border-gray-700">
+            <button
+              type="button"
+              onClick={onClose}
+              className={`px-8 py-3 rounded-lg border transition-all duration-200 hover:scale-105 active:scale-95 ${isDarkMode
+                  ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+            >
+              {readOnly ? 'Close' : 'Cancel'}
+            </button>
+            {!readOnly && (
               <button
                 type="submit"
                 disabled={loading}
-                onClick={handleSubmit}
                 className={`px-10 py-3 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105 ${loading
                     ? 'bg-gray-400 cursor-not-allowed'
                     : isDarkMode
@@ -3810,8 +3838,9 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
               >
                 {loading ? 'Saving...' : (order ? 'Update Order' : 'Create Order')}
               </button>
-            </div>
+            )}
           </div>
+        </form>
 
           {/* Image Preview Modal */}
           {showImagePreview && (

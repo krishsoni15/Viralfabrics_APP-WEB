@@ -121,7 +121,7 @@ export default function OrderLogsModal({ orderId, orderNumber, onClose }: OrderL
     }
     
     let controller: AbortController | null = null;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     
     try {
       setIsFetching(true);

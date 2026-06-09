@@ -1418,7 +1418,7 @@ export async function PATCH(
     // Fast status change - minimal validation but WITH logging
     if (status && ['pending', 'delivered'].includes(status)) {
       // Get old status before update
-      const existingOrder = await Order.findById(id).select('status orderId').lean();
+      const existingOrder = await Order.findById(id).select('status orderId').lean() as any;
       const oldStatus = existingOrder?.status || 'Not set';
       
       // Direct update without validation for maximum speed

@@ -515,7 +515,7 @@ export async function PUT(
             
             const saved = await newFabric.save();
             // ⚡ FIX: Verify the fabric was actually saved by fetching it
-            const verified = await Fabric.findById(saved._id).lean();
+            const verified = await Fabric.findById(saved._id).lean() as any;
             if (verified) {
               createdFabrics.push(saved);
             } else {

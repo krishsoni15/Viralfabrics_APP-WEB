@@ -28,7 +28,7 @@ export async function GET(
     // ⚡ OPTIMIZED: Query without populate (fetch related data separately)
     const fetchedGreyInfo = await GreyInfo.findById(id)
       .select('orderId order quality quantity chalanNo numberOfPieces date weaverName createdAt updatedAt')
-      .lean();
+      .lean() as any;
 
     if (!fetchedGreyInfo) {
       return NextResponse.json(notFoundResponse('Grey information'), { status: 404 });
@@ -83,7 +83,7 @@ export async function PUT(
     const existingGreyInfo = await GreyInfo.findById(id)
       .populate('quality', 'name')
       .populate('order', 'orderId')
-      .lean();
+      .lean() as any;
     if (!existingGreyInfo) {
       return NextResponse.json(notFoundResponse('Grey information'), { status: 404 });
     }
@@ -138,7 +138,7 @@ export async function PUT(
       { new: true, runValidators: false }
     )
       .select('orderId order quality quantity chalanNo numberOfPieces date weaverName')
-      .lean();
+      .lean() as any;
 
     if (!updatedGreyInfo) {
       return NextResponse.json(notFoundResponse('Grey information'), { status: 404 });
@@ -220,7 +220,7 @@ export async function DELETE(
     // ⚡ OPTIMIZED: Get grey info without populate
     const deletedGreyInfo = await GreyInfo.findById(id)
       .select('orderId order quality quantity chalanNo numberOfPieces date weaverName')
-      .lean();
+      .lean() as any;
 
     if (!deletedGreyInfo) {
       return NextResponse.json(notFoundResponse('Grey information'), { status: 404 });

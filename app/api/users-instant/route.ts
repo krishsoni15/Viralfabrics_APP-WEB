@@ -7,8 +7,7 @@ import { getSession } from "@/lib/session";
 import { checkRateLimitOrError, apiRateLimiter } from '@/lib/rateLimit';
 import { serializeMongoDocs } from '@/lib/serialize';
 
-// Professional in-memory cache for users data
-export const usersCache = new Map<string, { data: unknown; timestamp: number }>();
+import { usersCacheInstant as usersCache } from '../users/cache';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes for better performance
 
 export async function GET(request: NextRequest) {

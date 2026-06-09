@@ -289,7 +289,7 @@ export async function POST(request: NextRequest) {
     // ⚡ OPTIMIZED: Fetch related data separately (faster than populate)
     const fetchedMillInput = await MillInput.findById(millInput._id)
       .select('orderId order mill millDate chalanNo greighMtr pcs quality processName additionalMeters notes createdAt updatedAt')
-      .lean();
+      .lean() as any;
     
     if (!fetchedMillInput) {
       return NextResponse.json(errorResponse('Failed to retrieve created mill input'), { status: 500 });

@@ -53,6 +53,7 @@ interface MillInputFormProps {
   isOpen?: boolean; // Add isOpen prop like LabDataModal
   isEditing?: boolean;
   existingMillInputs?: any[];
+  readOnly?: boolean;
 }
 
 interface ValidationErrors {
@@ -84,12 +85,14 @@ function CustomDatePicker({
   value,
   onChange,
   placeholder,
-  isDarkMode
+  isDarkMode,
+  disabled = false
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   isDarkMode: boolean;
+  disabled?: boolean;
 }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -228,6 +231,7 @@ function CustomDatePicker({
           ref={dateInputRef}
           type="text"
           value={inputValue}
+          disabled={disabled}
           onChange={(e) => {
             const value = e.target.value;
             setInputValue(value);
@@ -243,7 +247,7 @@ function CustomDatePicker({
           }}
           onKeyDown={handleKeyDown}
           placeholder="dd/mm/yyyy"
-          onFocus={() => setShowCalendar(true)}
+          onFocus={() => !disabled && setShowCalendar(true)}
           required
           className={`w-full p-2.5 sm:p-3 pr-10 sm:pr-12 rounded-lg border text-sm sm:text-base ${isDarkMode
             ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
@@ -251,7 +255,7 @@ function CustomDatePicker({
             } focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200`}
         />
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-          {value && (
+          {!disabled && value && (
             <button
               type="button"
               onClick={clearDate}
@@ -263,7 +267,8 @@ function CustomDatePicker({
           )}
           <button
             type="button"
-            onClick={() => setShowCalendar(!showCalendar)}
+            disabled={disabled}
+            onClick={() => !disabled && setShowCalendar(!showCalendar)}
             className={`p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${isDarkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-400 hover:text-blue-500'
               }`}
           >
@@ -474,7 +479,8 @@ function EnhancedDropdown({
   onDelete,
   itemIndex,
   recentlyAddedId,
-  deletingItems
+  deletingItems,
+  disabled = false
 }: {
   options: any[];
   value: string;
@@ -492,6 +498,7 @@ function EnhancedDropdown({
   itemIndex?: number;
   recentlyAddedId?: string | null;
   deletingItems?: string[];
+  disabled?: boolean;
 }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { isMaster } = useSession();
@@ -543,14 +550,15 @@ function EnhancedDropdown({
                 onChange('');
               }
             }}
-            onFocus={() => onToggleDropdown()}
+            onFocus={() => !disabled && onToggleDropdown()}
+            disabled={disabled}
             className={`w-full p-2.5 sm:p-3 rounded-lg border text-sm sm:text-base ${isDarkMode
               ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
               : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
               } ${error ? 'border-red-500' : ''} focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200`}
           />
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-            {searchValue && (
+            {!disabled && searchValue && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -570,7 +578,7 @@ function EnhancedDropdown({
               } ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
           </div>
         </div>
-        {onAddNew && (
+        {!disabled && onAddNew && (
           <button
             type="button"
             onClick={onAddNew}
@@ -705,7 +713,8 @@ export default function MillInputForm({
   onRefreshQualities,
   isOpen = true, // Default to true for backward compatibility
   isEditing = false,
-  existingMillInputs = []
+  existingMillInputs = [],
+  readOnly = false
 }: MillInputFormProps) {
   const { isDarkMode, mounted } = useDarkMode();
   const { isMaster } = useSession();
@@ -1748,7 +1757,7 @@ export default function MillInputForm({
 
     console.log('📡 Fetching mill inputs for order:', order.orderId);
 
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
 
     try {
       const token = localStorage.getItem('token');
@@ -3260,7 +3269,8 @@ export default function MillInputForm({
             ? 'scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800'
             : 'scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100'
             }`}>
-            <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 pb-20 sm:pb-24">
+            <fieldset disabled={readOnly} className="space-y-6 sm:space-y-8 contents">
+              <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 pb-20 sm:pb-24">
               {/* Success Message */}
               {successMessage && (
                 <div className={`p-4 rounded-lg border ${isDarkMode
@@ -3360,6 +3370,7 @@ export default function MillInputForm({
                         onDelete={handleDeleteMillClick}
                         recentlyAddedId={recentlyAddedMill}
                         deletingItems={deletingMill ? [deletingMill] : []}
+                        disabled={readOnly}
                       />
                       <div className="absolute top-2 right-2 flex space-x-1">
                         {millsLoading && (mills.length > 0 || localMills.length > 0) && (
@@ -3403,7 +3414,7 @@ export default function MillInputForm({
                             }`}>
                             Mill Item {itemIndex + 1}
                           </h4>
-                          {(!hasExistingData || item.id.startsWith('new-') || isMaster) && (
+                          {!readOnly && (!hasExistingData || item.id.startsWith('new-') || isMaster) && (
                             <button
                               type="button"
                               onClick={() => removeMillItem(item.id)}
@@ -3432,6 +3443,7 @@ export default function MillInputForm({
                             onChange={(value) => updateMillItem(item.id, 'millDate', value)}
                             placeholder="Select mill date"
                             isDarkMode={isDarkMode}
+                            disabled={readOnly}
                           />
                           {errors[`millDate_${item.id}`] && (
                             <p className={`text-sm mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'
@@ -3453,6 +3465,7 @@ export default function MillInputForm({
                             onChange={(e) => updateMillItem(item.id, 'chalanNo', e.target.value)}
                             placeholder="Enter chalan number"
                             required
+                            disabled={readOnly}
                             className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base ${errors[`chalanNo_${item.id}`]
                               ? isDarkMode
                                 ? 'border-red-500 bg-gray-800 text-white'
@@ -3577,8 +3590,9 @@ export default function MillInputForm({
                                   isDarkMode={isDarkMode}
                                   error={errors[`quality_${item.id}`]}
                                   recentlyAddedId={recentlyAddedQuality}
+                                  disabled={readOnly}
                                 />
-                                {item.quality && (
+                                {item.quality && !readOnly && (
                                   <button
                                     type="button"
                                     onClick={() => updateMillItem(item.id, 'quality', '')}
@@ -3634,8 +3648,9 @@ export default function MillInputForm({
                                   onSelect={(process) => handleProcessSelect(item.id, 'main', process.name)}
                                   isDarkMode={isDarkMode}
                                   error={errors[`process_${item.id}`]}
+                                  disabled={readOnly}
                                 />
-                                {item.process && (
+                                {item.process && !readOnly && (
                                   <button
                                     type="button"
                                     onClick={() => updateMillItem(item.id, 'process', '')}
@@ -3671,6 +3686,7 @@ export default function MillInputForm({
                                   min="0"
                                   step="0.01"
                                   required
+                                  disabled={readOnly}
                                   className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-10 sm:pl-12 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base ${isDarkMode
                                     ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
                                     : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
@@ -3693,6 +3709,7 @@ export default function MillInputForm({
                                   placeholder="Enter pieces"
                                   min="0"
                                   required
+                                  disabled={readOnly}
                                   className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-10 sm:pl-12 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base ${isDarkMode
                                     ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
                                     : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
@@ -3707,19 +3724,10 @@ export default function MillInputForm({
                             <div className="flex items-end sm:col-span-2 lg:col-span-1">
                               <button
                                 type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-
-                                  // Only allow deletion if M2 exists (so M2 can move to M1)
-                                  if (item.additionalMeters.length === 0) {
-                                    return;
-                                  }
-
-                                  // Delete only M1 (main entry) - M2 will move to M1
+                                onClick={() => {
                                   removeMainMillItem(item.id);
                                 }}
-                                disabled={item.additionalMeters.length === 0}
+                                disabled={readOnly || item.additionalMeters.length === 0}
                                 className={`w-full px-3 py-2.5 sm:py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${item.additionalMeters.length === 0
                                   ? isDarkMode
                                     ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
@@ -3831,8 +3839,9 @@ export default function MillInputForm({
                                     isDarkMode={isDarkMode}
                                     error={errors[`additionalQuality_${item.id}_${index}`]}
                                     recentlyAddedId={recentlyAddedQuality}
+                                    disabled={readOnly}
                                   />
-                                  {additional.quality && (
+                                  {additional.quality && !readOnly && (
                                     <button
                                       type="button"
                                       onClick={() => updateAdditionalMeters(item.id, index, 'quality', '')}
@@ -3888,8 +3897,9 @@ export default function MillInputForm({
                                     onSelect={(process) => handleProcessSelect(item.id, 'additional', process.name, index)}
                                     isDarkMode={isDarkMode}
                                     error={errors[`additionalProcess_${item.id}_${index}`]}
+                                    disabled={readOnly}
                                   />
-                                  {additional.process && (
+                                  {additional.process && !readOnly && (
                                     <button
                                       type="button"
                                       onClick={() => updateAdditionalMeters(item.id, index, 'process', '')}
@@ -3925,6 +3935,7 @@ export default function MillInputForm({
                                     min="0"
                                     step="0.01"
                                     required
+                                    disabled={readOnly}
                                     className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-10 sm:pl-12 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base ${isDarkMode
                                       ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
                                       : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
@@ -3947,6 +3958,7 @@ export default function MillInputForm({
                                     placeholder="Enter pieces"
                                     min="0"
                                     required
+                                    disabled={readOnly}
                                     className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 pl-10 sm:pl-12 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base ${isDarkMode
                                       ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
                                       : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
@@ -3961,20 +3973,10 @@ export default function MillInputForm({
                               <div className="flex items-end sm:col-span-2 lg:col-span-1">
                                 <button
                                   type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-
-                                    // Only allow deletion if there's more than one entry (M1 + at least one additional)
-                                    const totalEntries = 1 + (item.additionalMeters.length || 0);
-                                    if (totalEntries <= 1) {
-                                      return;
-                                    }
-
-                                    // Remove additional meter (M2, M3, etc.)
+                                  onClick={() => {
                                     removeAdditionalMeters(item.id, index);
                                   }}
-                                  disabled={1 + (item.additionalMeters.length || 0) <= 1}
+                                  disabled={readOnly || 1 + (item.additionalMeters.length || 0) <= 1}
                                   className={`w-full px-3 py-2.5 sm:py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${1 + (item.additionalMeters.length || 0) <= 1
                                     ? isDarkMode
                                       ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
@@ -3993,47 +3995,52 @@ export default function MillInputForm({
                         </div>
 
                         {/* Add More Additional Meters Button - Full width horizontal design */}
-                        <div className="mt-3 sm:mt-4">
-                          <button
-                            type="button"
-                            onClick={() => addAdditionalMeters(item.id)}
-                            className={`w-full flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border-2 transition-all duration-200 text-xs sm:text-sm font-semibold ${isDarkMode
-                              ? 'bg-gray-800/70 border-gray-600 hover:bg-gray-700 hover:border-gray-500 text-gray-200 hover:text-white'
-                              : 'bg-gray-50 border-gray-300 hover:bg-gray-100 hover:border-gray-400 text-gray-700 hover:text-gray-900'
-                              }`}
-                          >
-                            <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" />
-                            <span>Add More Meters & Pieces</span>
-                          </button>
-                        </div>
+                        {!readOnly && (
+                          <div className="mt-3 sm:mt-4">
+                            <button
+                              type="button"
+                              onClick={() => addAdditionalMeters(item.id)}
+                              className={`w-full flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border-2 transition-all duration-200 text-xs sm:text-sm font-semibold ${isDarkMode
+                                ? 'bg-gray-800/70 border-gray-600 hover:bg-gray-700 hover:border-gray-500 text-gray-200 hover:text-white'
+                                : 'bg-gray-50 border-gray-300 hover:bg-gray-100 hover:border-gray-400 text-gray-700 hover:text-gray-900'
+                                }`}
+                            >
+                              <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" />
+                              <span>Add More Meters & Pieces</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
 
                   {/* Add Item Card */}
-                  <div className={`p-3 sm:p-4 rounded-xl border-2 border-dashed transition-all duration-200 hover:shadow-lg cursor-pointer ${isDarkMode
-                    ? 'border-gray-600 bg-gray-800/50 hover:border-blue-500 hover:bg-gray-800'
-                    : 'border-gray-300 bg-gray-50/50 hover:border-blue-400 hover:bg-gray-50'
-                    }`} onClick={addMillItem}>
-                    <div className="flex items-center justify-center space-x-2 sm:space-x-3 py-3 sm:py-4">
-                      <div className={`p-1.5 sm:p-2 rounded-full ${isDarkMode
-                        ? 'bg-blue-600/20 text-blue-400'
-                        : 'bg-blue-100 text-blue-600'
-                        }`}>
-                        <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                      </div>
-                      <div className="text-center">
-                        <h4 className={`text-sm sm:text-base font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                  {!readOnly && (
+                    <div className={`p-3 sm:p-4 rounded-xl border-2 border-dashed transition-all duration-200 hover:shadow-lg cursor-pointer ${isDarkMode
+                      ? 'border-gray-600 bg-gray-800/50 hover:border-blue-500 hover:bg-gray-800'
+                      : 'border-gray-300 bg-gray-50/50 hover:border-blue-400 hover:bg-gray-50'
+                      }`} onClick={addMillItem}>
+                      <div className="flex items-center justify-center space-x-2 sm:space-x-3 py-3 sm:py-4">
+                        <div className={`p-1.5 sm:p-2 rounded-full ${isDarkMode
+                          ? 'bg-blue-600/20 text-blue-400'
+                          : 'bg-blue-100 text-blue-600'
                           }`}>
-                          Add New Mill Item
-                        </h4>
+                          <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                        </div>
+                        <div className="text-center">
+                          <h4 className={`text-sm sm:text-base font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                            Add New Mill Item
+                          </h4>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
-          </form>
+          </fieldset>
+        </form>
 
           {/* Sticky Submit Button */}
           <div className={`sticky bottom-0 left-0 right-0 p-3 sm:p-6 border-t shadow-lg bg-inherit ${isDarkMode ? 'border-gray-700' : 'border-gray-200'
@@ -4047,11 +4054,11 @@ export default function MillInputForm({
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                   }`}
               >
-                Cancel
+                {readOnly ? 'Close' : 'Cancel'}
               </button>
 
               {/* Delete Button - Show only when has existing data */}
-              {isMaster && hasExistingData && (
+              {!readOnly && isMaster && hasExistingData && (
                 <button
                   type="button"
                   onClick={handleDeleteClick}
@@ -4068,19 +4075,21 @@ export default function MillInputForm({
                 </button>
               )}
 
-              <button
-                type="submit"
-                disabled={saving}
-                onClick={handleSubmit}
-                className={`px-6 sm:px-10 py-2.5 sm:py-3 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105 text-sm sm:text-base ${saving
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : isDarkMode
-                    ? 'bg-blue-600 hover:bg-blue-700 shadow-lg'
-                    : 'bg-blue-500 hover:bg-blue-600 shadow-lg'
-                  }`}
-              >
-                {saving ? 'Saving...' : (hasExistingData ? 'Update' : 'Add')}
-              </button>
+              {!readOnly && (
+                <button
+                  type="submit"
+                  disabled={saving}
+                  onClick={handleSubmit}
+                  className={`px-6 sm:px-10 py-2.5 sm:py-3 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105 text-sm sm:text-base ${saving
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : isDarkMode
+                      ? 'bg-blue-600 hover:bg-blue-700 shadow-lg'
+                      : 'bg-blue-500 hover:bg-blue-600 shadow-lg'
+                    }`}
+                >
+                  {saving ? 'Saving...' : (hasExistingData ? 'Update' : 'Add')}
+                </button>
+              )}
             </div>
           </div>
 

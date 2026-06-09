@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       .sort({ timestamp: -1 })
       .limit(10)
       .select('action resource username timestamp')
-      .lean();
+      .lean() as any;
     
     return NextResponse.json({
       totalCount,

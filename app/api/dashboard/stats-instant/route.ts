@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     const cacheKey = `dashboard-stats-${startDate || 'all'}-${endDate || 'all'}-${financialYear || 'all'}`;
     
     // Check cache first (using a Map for multiple filter combinations)
-    const cached = cacheMap.get(cacheKey);
+    const cached = getCacheMap().get(cacheKey);
     if (cached && Date.now() - cached.timestamp < dashboardCache.ttl) {
       const responseTime = Date.now() - startTime;
       // ⚡ ISR CACHING: Add cache tags
@@ -195,7 +195,7 @@ export async function GET(request: NextRequest) {
     };
 
     // Update cache with filter-specific key
-    cacheMap.set(cacheKey, {
+    getCacheMap().set(cacheKey, {
       data: dashboardData,
       timestamp: Date.now()
     });
@@ -228,7 +228,7 @@ export async function GET(request: NextRequest) {
     const errorEndDate = searchParams.get('endDate');
     const errorFinancialYear = searchParams.get('financialYear');
     const cacheKey = `dashboard-stats-${errorStartDate || 'all'}-${errorEndDate || 'all'}-${errorFinancialYear || 'all'}`;
-    const cached = cacheMap.get(cacheKey);
+    const cached = getCacheMap().get(cacheKey);
     
     // Return cached data if available, otherwise return empty data
     const fallbackData = cached?.data || dashboardCache.data || {

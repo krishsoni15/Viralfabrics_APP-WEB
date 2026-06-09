@@ -201,7 +201,7 @@ export default function SamplingPage() {
   const [isChangingPage, setIsChangingPage] = useState(false);
   const itemsPerPageOptions = [10, 25, 50, 100] as const;
   const [searchQuery, setSearchQuery] = useState('');
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<any>(null);
   const searchAbortControllerRef = useRef<AbortController | null>(null);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>(() => {
     if (typeof window !== 'undefined') {
@@ -369,7 +369,7 @@ export default function SamplingPage() {
     lastFetchParamsRef.current = { page, limit, search, sort };
     
     let controller: AbortController | null = null;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     
     try {
       const token = localStorage.getItem('token');
@@ -693,7 +693,7 @@ export default function SamplingPage() {
     }
     
     let controller: AbortController | null = null;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     
     try {
       const token = localStorage.getItem('token');

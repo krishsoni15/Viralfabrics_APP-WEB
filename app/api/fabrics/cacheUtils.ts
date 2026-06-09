@@ -61,7 +61,7 @@ export async function verifyFabricsInDatabase(fabrics: any[]): Promise<any[]> {
   for (const fabric of fabrics) {
     if (fabric && fabric._id) {
       try {
-        const verified = await Fabric.findById(fabric._id).lean();
+        const verified = await Fabric.findById(fabric._id).lean() as any;
         if (verified) {
           verifiedFabrics.push(verified);
         } else {

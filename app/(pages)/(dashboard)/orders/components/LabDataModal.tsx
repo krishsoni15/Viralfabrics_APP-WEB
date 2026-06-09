@@ -67,6 +67,7 @@ interface LabDataModalProps {
     items: OrderItem[];
   };
   onLabDataUpdate: (operationType?: 'add' | 'edit' | 'delete' | 'deleteAll') => void;
+  readOnly?: boolean;
 }
 
 // Custom Date Picker Component (from OrderForm)
@@ -74,12 +75,14 @@ function CustomDatePicker({
   value,
   onChange,
   placeholder,
-  isDarkMode
+  isDarkMode,
+  disabled = false
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   isDarkMode: boolean;
+  disabled?: boolean;
 }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -251,6 +254,7 @@ function CustomDatePicker({
           ref={dateInputRef}
           type="text"
           value={inputValue}
+          disabled={disabled}
           onChange={(e) => {
             const value = e.target.value;
             setInputValue(value);
@@ -266,14 +270,14 @@ function CustomDatePicker({
           }}
           onKeyDown={handleKeyDown}
           placeholder="dd/mm/yyyy"
-          onFocus={() => setShowCalendar(true)}
+          onFocus={() => !disabled && setShowCalendar(true)}
           className={`w-full px-4 py-3 pr-12 text-base rounded-lg border-2 ${isDarkMode
               ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
               : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
             } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200`}
         />
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-          {value && (
+          {!disabled && value && (
             <button
               type="button"
               onClick={clearDate}
@@ -285,7 +289,8 @@ function CustomDatePicker({
           )}
           <button
             type="button"
-            onClick={() => setShowCalendar(!showCalendar)}
+            disabled={disabled}
+            onClick={() => !disabled && setShowCalendar(!showCalendar)}
             className={`p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${isDarkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-400 hover:text-blue-500'
               }`}
           >
@@ -478,7 +483,7 @@ function CustomDatePicker({
   );
 }
 
-export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }: LabDataModalProps) {
+export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate, readOnly = false }: LabDataModalProps) {
   const { isDarkMode, mounted } = useDarkMode();
   const { isMaster } = useSession();
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -1141,7 +1146,7 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }
 
 
               {/* Delete All Lab Data Button */}
-              {isMaster && hasLabData && (
+              {!readOnly && isMaster && hasLabData && (
                 <button
                   onClick={handleDeleteAllClick}
                   disabled={isLoading}
@@ -1197,7 +1202,7 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleEditLabData(item)}
-                            disabled={isLoading || loadingData}
+                            disabled={isLoading || loadingData || (readOnly && !item.labData?.labSendDate)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${isDarkMode
                                 ? 'bg-amber-600/20 border border-amber-500/30 text-amber-400 hover:bg-amber-600/30 hover:border-amber-500/50'
                                 : 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300'
@@ -1208,7 +1213,7 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }
                             ) : (
                               <BeakerIcon className="h-4 w-4" />
                             )}
-                            {isLoading ? 'Loading Lab Data...' : item.labData?.labSendDate ? 'Edit Lab' : 'Add Lab'}
+                            {isLoading ? 'Loading Lab Data...' : item.labData?.labSendDate ? (readOnly ? 'View Lab' : 'Edit Lab') : (readOnly ? 'No Lab Data' : 'Add Lab')}
                           </button>
                         </div>
                       </div>
@@ -1244,7 +1249,7 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }
                               </p>
                             </div>
                           )}
-                          {isMaster && (
+                          {!readOnly && isMaster && (
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => handleDeleteClick(item._id || '')}
@@ -1296,6 +1301,7 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }
                                 onChange={(value) => setLabData(prev => ({ ...prev, labSendDate: value }))}
                                 placeholder="Select lab send date"
                                 isDarkMode={isDarkMode}
+                                disabled={readOnly}
                               />
                             </div>
 
@@ -1310,6 +1316,7 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }
                                 onChange={(value) => setLabData(prev => ({ ...prev, approvalDate: value }))}
                                 placeholder="Select approval date"
                                 isDarkMode={isDarkMode}
+                                disabled={readOnly}
                               />
                             </div>
 
@@ -1325,6 +1332,7 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }
                                   value={labData.sampleNumber}
                                   onChange={(e) => setLabData(prev => ({ ...prev, sampleNumber: e.target.value }))}
                                   placeholder="Enter sample number"
+                                  disabled={readOnly}
                                   className={`w-full px-4 py-3 pl-12 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDarkMode
                                       ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
                                       : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
@@ -1345,30 +1353,32 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }
                                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                                 }`}
                             >
-                              Cancel
+                              {readOnly ? 'Close' : 'Cancel'}
                             </button>
-                            <button
-                              onClick={handleSave}
-                              disabled={isLoading}
-                              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${isLoading
-                                  ? 'bg-gray-400 cursor-not-allowed'
-                                  : isDarkMode
-                                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg'
-                                    : 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg'
-                                }`}
-                            >
-                              {isLoading ? (
-                                <>
-                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                  Saving...
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle size={16} />
-                                  {localItems.find(li => li._id === item._id)?.labData?.labSendDate ? 'Update Lab Data' : 'Save Lab Data'}
-                                </>
-                              )}
-                            </button>
+                            {!readOnly && (
+                              <button
+                                onClick={handleSave}
+                                disabled={isLoading}
+                                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${isLoading
+                                    ? 'bg-gray-400 cursor-not-allowed'
+                                    : isDarkMode
+                                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg'
+                                      : 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg'
+                                  }`}
+                              >
+                                {isLoading ? (
+                                  <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    Saving...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle size={16} />
+                                    {localItems.find(li => li._id === item._id)?.labData?.labSendDate ? 'Update Lab Data' : 'Save Lab Data'}
+                                  </>
+                                )}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

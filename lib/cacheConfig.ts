@@ -148,7 +148,7 @@ export function getNoCacheHeaders(): HeadersInit {
 
 // Example 1: Orders API with cache tags
 export async function GET(request: NextRequest) {
-  const orders = await Order.find().lean();
+  const orders = await Order.find().lean() as any;
   
   return Response.json(
     { success: true, data: orders },

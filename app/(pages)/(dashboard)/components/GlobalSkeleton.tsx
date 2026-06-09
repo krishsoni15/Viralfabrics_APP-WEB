@@ -22,7 +22,7 @@ const GlobalSkeleton: React.FC<GlobalSkeletonProps> = ({
   const [progress, setProgress] = useState(0);
   const [loadingText, setLoadingText] = useState('Loading...');
   const startTime = useRef<number>(Date.now());
-  const progressInterval = useRef<NodeJS.Timeout | null>(null);
+  const progressInterval = useRef<any>(null);
 
   useEffect(() => {
     // Start timing immediately

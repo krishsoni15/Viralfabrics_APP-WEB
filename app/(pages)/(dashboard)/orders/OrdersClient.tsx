@@ -757,7 +757,7 @@ export default function OrdersClient({
   }, []);
 
   // Debounce timeout ref
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<any>(null);
 
   // Enhanced server-side search handler with debounce and search type
   const handleSearchChange = useCallback(async (value: string) => {
@@ -7201,7 +7201,7 @@ export default function OrdersClient({
                                                 )}
                                               </td>
 
-                                              /* Actions */
+                                              {/* Actions */}
                                               <td className="px-2 py-2 text-center">
                                                 <div className="flex flex-col gap-2">
                                                   {/* PDF Download Button - Only show for non-users */}
@@ -7248,7 +7248,6 @@ export default function OrdersClient({
                               <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5">
                                 <div className="flex flex-col gap-2">
                                   {/* Row 0: Status Label and Buttons */}
-                                  {!isParty && (
                                     <div className={`flex items-center justify-center gap-3 px-3 py-2 rounded-lg border transition-colors ${isDarkMode
                                       ? 'bg-gray-700/50 border-gray-600'
                                       : 'bg-gray-100 border-gray-300'
@@ -7260,7 +7259,7 @@ export default function OrdersClient({
                                       <div className="flex items-center gap-1">
                                         <button
                                           onClick={() => handleStatusChangeClick(order._id, 'pending', order.orderId)}
-                                          disabled={changingStatus}
+                                          disabled={changingStatus || isParty}
                                           className={`px-3 py-2 text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center ${(order.status || 'pending') === 'pending'
                                             ? isDarkMode
                                               ? 'bg-blue-600 text-white'
@@ -7268,13 +7267,13 @@ export default function OrdersClient({
                                             : isDarkMode
                                               ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                            } ${changingStatus ? 'opacity-50 cursor-not-allowed pointer-events-none scale-95' : 'hover:scale-105'}`}
+                                            } ${changingStatus || isParty ? 'opacity-50 cursor-not-allowed pointer-events-none scale-95' : 'hover:scale-105'}`}
                                         >
                                           Pending
                                         </button>
                                         <button
                                           onClick={() => handleStatusChangeClick(order._id, 'delivered', order.orderId)}
-                                          disabled={changingStatus}
+                                          disabled={changingStatus || isParty}
                                           className={`px-3 py-2 text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center ${order.status === 'delivered'
                                             ? isDarkMode
                                               ? 'bg-green-600 text-white'
@@ -7282,41 +7281,14 @@ export default function OrdersClient({
                                             : isDarkMode
                                               ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                            } ${changingStatus ? 'opacity-50 cursor-not-allowed pointer-events-none scale-95' : 'hover:scale-105'}`}
+                                            } ${changingStatus || isParty ? 'opacity-50 cursor-not-allowed pointer-events-none scale-95' : 'hover:scale-105'}`}
                                         >
                                           Delivered
                                         </button>
                                       </div>
                                     </div>
-                                  )}
 
-                                  {isParty ? (
-                                    <div className="flex flex-col gap-2">
-                                      <button
-                                        onClick={() => handleView(order)}
-                                        className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 ${isDarkMode
-                                          ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30'
-                                          : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
-                                          }`}
-                                        title="View Order Details"
-                                      >
-                                        <EyeIcon className="h-4 w-4" />
-                                        <span>View Details</span>
-                                      </button>
-                                      <button
-                                        onClick={() => handleViewLogs(order)}
-                                        className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 ${isDarkMode
-                                          ? 'bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600/30'
-                                          : 'bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100'
-                                          }`}
-                                        title="View Logs"
-                                      >
-                                        <ChartBarIcon className="h-4 w-4" />
-                                        <span>View Logs</span>
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    /* Table Actions - 2 Columns Layout (Same as Card View) */
+                                    {/* Table Actions - 2 Columns Layout (Same as Card View) */}
                                     <div className="grid grid-cols-2 gap-4">
                                       {/* Column 1: Lab, Input, Output, Dispatch */}
                                       <div className="space-y-3">
@@ -7521,8 +7493,7 @@ export default function OrdersClient({
                                         </button>
                                       </div>
                                     </div>
-                                  )}
-                                </div>
+                                  </div>
                               </td>
 
                             </tr>
@@ -7613,39 +7584,37 @@ export default function OrdersClient({
                             {order.orderType || 'Not selected'}
                           </div>
                         </div>
-                        {!isParty && (
-                          /* Status Buttons - Mobile Optimized */
-                          <div className="flex items-center gap-2 sm:gap-2">
-                            <button
-                              onClick={() => handleStatusChangeClick(order._id, 'pending', order.orderId)}
-                              disabled={changingStatus}
-                              className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center shadow-md hover-lift ${(order.status || 'pending') === 'pending'
-                                ? isDarkMode
-                                  ? 'bg-blue-600 text-white shadow-blue-600/50 badge-pulse'
-                                  : 'bg-blue-600 text-white shadow-blue-600/30 badge-pulse'
-                                : isDarkMode
-                                  ? 'bg-gray-700/50 text-gray-400 hover:bg-gray-600/50 border border-gray-600'
-                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
-                                } ${changingStatus ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
-                            >
-                              Pending
-                            </button>
-                            <button
-                              onClick={() => handleStatusChangeClick(order._id, 'delivered', order.orderId)}
-                              disabled={changingStatus}
-                              className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center shadow-md hover-lift ${order.status === 'delivered'
-                                ? isDarkMode
-                                  ? 'bg-green-600 text-white shadow-green-600/50 badge-pulse'
-                                  : 'bg-green-600 text-white shadow-green-600/30 badge-pulse'
-                                : isDarkMode
-                                  ? 'bg-gray-700/50 text-gray-400 hover:bg-gray-600/50 border border-gray-600'
-                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
-                                } ${changingStatus ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
-                            >
-                              Delivered
-                            </button>
-                          </div>
-                        )}
+                        {/* Status Buttons - Mobile Optimized */}
+                        <div className="flex items-center gap-2 sm:gap-2">
+                          <button
+                            onClick={() => handleStatusChangeClick(order._id, 'pending', order.orderId)}
+                            disabled={changingStatus || isParty}
+                            className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center shadow-md hover-lift ${(order.status || 'pending') === 'pending'
+                              ? isDarkMode
+                                ? 'bg-blue-600 text-white shadow-blue-600/50 badge-pulse'
+                                : 'bg-blue-600 text-white shadow-blue-600/30 badge-pulse'
+                              : isDarkMode
+                                ? 'bg-gray-700/50 text-gray-400 hover:bg-gray-600/50 border border-gray-600'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
+                              } ${changingStatus || isParty ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'active:scale-95'}`}
+                          >
+                            Pending
+                          </button>
+                          <button
+                            onClick={() => handleStatusChangeClick(order._id, 'delivered', order.orderId)}
+                            disabled={changingStatus || isParty}
+                            className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center shadow-md hover-lift ${order.status === 'delivered'
+                              ? isDarkMode
+                                ? 'bg-green-600 text-white shadow-green-600/50 badge-pulse'
+                                : 'bg-green-600 text-white shadow-green-600/30 badge-pulse'
+                              : isDarkMode
+                                ? 'bg-gray-700/50 text-gray-400 hover:bg-gray-600/50 border border-gray-600'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
+                              } ${changingStatus || isParty ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'active:scale-95'}`}
+                          >
+                            Delivered
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -7883,34 +7852,6 @@ export default function OrdersClient({
                       ? 'border-gray-600/50 bg-gradient-to-br from-gray-700/30 to-gray-800/20'
                       : 'border-gray-200 bg-gradient-to-br from-gray-50/50 to-white'
                       }`}>
-                      {isParty ? (
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleView(order)}
-                            className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md flex items-center justify-center gap-1.5 ${isDarkMode
-                              ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40 hover:bg-blue-600/40 shadow-blue-900/20'
-                              : 'bg-blue-100 text-blue-800 border border-blue-300 hover:bg-blue-200 shadow-blue-200/50'
-                              }`}
-                            title="View Order Details"
-                          >
-                            <EyeIcon className="h-4 w-4 flex-shrink-0" />
-                            <span className="truncate">View Details</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleViewLogs(order)}
-                            className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md flex items-center justify-center gap-1.5 ${isDarkMode
-                              ? 'bg-violet-600/30 text-violet-300 border border-violet-500/40 hover:bg-violet-600/40 shadow-violet-900/20'
-                              : 'bg-violet-100 text-violet-800 border border-violet-300 hover:bg-violet-200 shadow-violet-200/50'
-                              }`}
-                            title="View Logs"
-                          >
-                            <ChartBarIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                            <span className="truncate">Logs</span>
-                          </button>
-                        </div>
-                      ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 sm:gap-3">
                         {/* Column 1: Add Grey Info, Add Mill Input, Mill Output, Dispatch */}
                         <div className="space-y-2">
@@ -8138,7 +8079,6 @@ export default function OrdersClient({
                           </button>
                         </div>
                       </div>
-                      )}
 
                     </div>
                   </div>
@@ -8354,6 +8294,7 @@ export default function OrdersClient({
           order={editingOrder}
           parties={formParties}
           qualities={formQualities}
+          readOnly={isParty}
           onRefreshQualities={fetchQualities}
           onFormOpen={() => {
             // Data is already loaded by openFormWithData
@@ -9835,6 +9776,7 @@ export default function OrdersClient({
       {showLabDataModal && selectedOrderForLabData && (
         <LabDataModal
           isOpen={showLabDataModal}
+          readOnly={isParty}
           onClose={() => {
             setShowLabDataModal(false);
             setSelectedOrderForLabData(null);
@@ -9942,6 +9884,7 @@ export default function OrdersClient({
             qualities={qualities}
             isOpen={showMillInputForm}
             isEditing={isEditingMillInput}
+            readOnly={isParty}
             existingMillInputs={existingMillInputs}
             onRefreshQualities={fetchQualities}
             onClose={() => {
@@ -10232,6 +10175,7 @@ export default function OrdersClient({
           isOpen={showMillOutputForm}
           isEditing={isEditingMillOutput}
           existingMillOutputs={existingMillOutputs}
+          readOnly={isParty}
           onRefreshQualities={fetchQualities}
           onClose={() => {
             setShowMillOutputForm(false);
@@ -10397,6 +10341,7 @@ export default function OrdersClient({
           isOpen={showDispatchForm}
           isEditing={isEditingDispatch}
           existingDispatches={existingDispatches}
+          readOnly={isParty}
           onRefreshQualities={fetchQualities}
           onClose={() => {
             setShowDispatchForm(false);
@@ -10574,6 +10519,7 @@ export default function OrdersClient({
           order={selectedOrderForGreyInfo}
           qualities={qualities}
           isOpen={showGreyInfoModal}
+          readOnly={isParty}
           existingGreyInfo={
             selectedOrderForGreyInfo._id
               ? (orderGreyInfo[String(selectedOrderForGreyInfo._id)] || (selectedOrderForGreyInfo.orderId ? orderGreyInfo[String(selectedOrderForGreyInfo.orderId)] : undefined) || undefined)

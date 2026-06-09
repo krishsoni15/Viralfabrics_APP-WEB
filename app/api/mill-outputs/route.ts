@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
     // ⚡ OPTIMIZED: Fetch related data separately for logging
     const fetchedMillOutput = await MillOutput.findById(millOutput._id)
       .select('orderId order recdDate millBillNo finishedMtr millRate quality createdAt updatedAt')
-      .lean();
+      .lean() as any;
     
     if (!fetchedMillOutput) {
       return NextResponse.json(errorResponse('Failed to retrieve created mill output'), { status: 500 });

@@ -193,7 +193,7 @@ export default function Sidebar({
 
   // Optimized screen size tracking with debouncing
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: any;
     
     const handleResize = () => {
       clearTimeout(timeoutId);

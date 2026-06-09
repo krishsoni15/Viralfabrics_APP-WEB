@@ -20,8 +20,8 @@ export default function DeleteSuccessPopup({
 }: DeleteSuccessPopupProps) {
   const { isDarkMode, mounted } = useDarkMode();
   const [isVisible, setIsVisible] = useState(false);
-  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const closeTimeoutRef = useRef<any>(null);
+  const autoCloseTimerRef = useRef<any>(null);
 
   const handleClose = useCallback(() => {
     setIsVisible(false);

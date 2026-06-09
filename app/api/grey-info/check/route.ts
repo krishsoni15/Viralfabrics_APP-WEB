@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     // ⚡ ULTRA-FAST: Just count documents (no data fetching)
     const count = await GreyInfo.countDocuments({ orderId })
       .maxTimeMS(1000)
-      .lean();
+      .lean() as any;
 
     return NextResponse.json(
       successResponse({ exists: count > 0, count }, 'Grey info check completed'),

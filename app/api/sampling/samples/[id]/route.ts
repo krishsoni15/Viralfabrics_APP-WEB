@@ -49,7 +49,7 @@ export async function GET(
     
     const sample = await Sample.findById(id)
       .populate('weaverId', 'name phone address')
-      .lean();
+      .lean() as any;
     
     if (!sample) {
       return Response.json({
@@ -149,7 +149,7 @@ export async function PUT(
           message: "Invalid weaver ID format"
         }, { status: 400 });
       }
-      const weaver = await SamplingWeaver.findById(weaverId).lean();
+      const weaver = await SamplingWeaver.findById(weaverId).lean() as any;
       if (!weaver) {
         return Response.json({
           success: false,
@@ -206,7 +206,7 @@ export async function PUT(
       { new: true, runValidators: true }
     )
       .populate('weaverId', 'name phone address')
-      .lean();
+      .lean() as any;
     
     if (!sample) {
       return Response.json({
@@ -266,7 +266,7 @@ export async function DELETE(
     await dbConnect();
     const { id } = await params;
     
-    const sample = await Sample.findByIdAndDelete(id).lean();
+    const sample = await Sample.findByIdAndDelete(id).lean() as any;
     
     if (!sample) {
       return Response.json({

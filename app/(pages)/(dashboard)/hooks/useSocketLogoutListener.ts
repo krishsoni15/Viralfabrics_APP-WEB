@@ -15,11 +15,11 @@ export function useSocketLogoutListener(onLogout: (data?: {
   message?: string;
 }) => void) {
   const socketRef = useRef<Socket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<any>(null);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
   const reconnectDelay = 3000; // 3 seconds
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<any>(null);
   const socketConnectedRef = useRef(false);
   const lastCheckedTimestampRef = useRef<string | null>(null);
 

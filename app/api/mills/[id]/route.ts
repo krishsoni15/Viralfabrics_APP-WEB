@@ -23,7 +23,7 @@ export async function GET(
 
     const { id } = await params;
 
-    const mill = await Mill.findById(id).lean();
+    const mill = await Mill.findById(id).lean() as any;
     
     if (!mill) {
       return NextResponse.json(notFoundResponse('Mill'), { status: 404 });

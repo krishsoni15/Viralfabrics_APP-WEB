@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     // ⚡ OPTIMIZED: Fetch related data separately (faster than populate)
     const fetchedGreyInfo = await GreyInfo.findById(greyInfo._id)
       .select('orderId order quality quantity chalanNo numberOfPieces date weaverName createdAt updatedAt')
-      .lean();
+      .lean() as any;
     
     if (!fetchedGreyInfo) {
       return NextResponse.json(errorResponse('Failed to retrieve created grey info'), { status: 500 });

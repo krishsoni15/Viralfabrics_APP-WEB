@@ -189,7 +189,7 @@ export default function FabricsPage() {
   // ⚡ FIX: Track permanently deleted fabric IDs to prevent them from reappearing
   const deletedFabricIdsRef = useRef<Set<string>>(new Set());
   // Debounce search input to avoid rapid network calls
-  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const searchDebounceRef = useRef<any>(null);
   // Skip first render for search effect (initial fetch already runs)
   const hasInitializedSearchRef = useRef<boolean>(false);
   // Track active fabrics fetch to cancel stale requests
@@ -201,7 +201,7 @@ export default function FabricsPage() {
   // Prevent duplicate initial fetches
   const initialFetchStartedRef = useRef<boolean>(false);
   // Track items per page change timeout for cleanup
-  const itemsPerPageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const itemsPerPageTimeoutRef = useRef<any>(null);
   // Track if initial fetch has completed to prevent duplicate calls
   const hasInitialFetchRef = useRef<boolean>(false);
   // Track if filters effect should run (skip on mount)
@@ -448,7 +448,7 @@ export default function FabricsPage() {
     setLoading(true);
     }
     
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     const cleanup = () => {
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -979,7 +979,7 @@ export default function FabricsPage() {
 
   // Fetch quality names for filter
   const fetchQualityNames = async () => {
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     try {
       const controller = new AbortController();
       timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
@@ -1031,7 +1031,7 @@ export default function FabricsPage() {
 
   // Fetch weavers for filter
   const fetchWeavers = async () => {
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     try {
       setFiltersLoading(true);
       const controller = new AbortController();
@@ -1092,7 +1092,7 @@ export default function FabricsPage() {
 
   // Fetch weaver quality names for filter
   const fetchWeaverQualityNames = async () => {
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     try {
       setFiltersLoading(true);
       const controller = new AbortController();

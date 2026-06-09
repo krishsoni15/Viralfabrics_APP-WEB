@@ -49,3 +49,6 @@ yarn-error.log*
 *.tsbuildinfo
 # Note: next-env.d.ts should be committed (it's a Next.js generated file)
 .env*.local
+
+# Mobile app (excluded from web repo)
+/mobile-app

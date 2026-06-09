@@ -336,8 +336,8 @@ const deliveredSoonCache = {
 
 const DeliveredSoonTable: React.FC<DeliveredSoonTableProps> = ({ isDarkMode }) => {
   // Use refs to track intervals and prevent duplicate calls
-  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const retryIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const refreshIntervalRef = useRef<any>(null);
+  const retryIntervalRef = useRef<any>(null);
   const isFetchingRef = useRef(false);
 
   // Load from localStorage for instant display
@@ -759,8 +759,8 @@ const DeliveredSoonTable: React.FC<DeliveredSoonTableProps> = ({ isDarkMode }) =
     let retryCount = 0;
     const MAX_INITIAL_RETRIES = 2;
     const INITIAL_RETRY_DELAY = 3000; // 3 seconds
-    let retryTimeout1: NodeJS.Timeout | null = null;
-    let retryTimeout2: NodeJS.Timeout | null = null;
+    let retryTimeout1: any = null;
+    let retryTimeout2: any = null;
 
     const initialFetchWithRetry = async () => {
       // First attempt - immediate

@@ -7,8 +7,7 @@ import { type NextRequest } from "next/server";
 import { logCreate } from "@/lib/logger";
 import { apiRateLimiter, writeRateLimiter, checkRateLimitOrError } from "@/lib/rateLimit";
 
-// Professional in-memory cache for users data
-export const usersCache = new Map<string, { data: any; timestamp: number }>();
+import { usersCacheNormal as usersCache } from "./cache";
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes for better performance
 
 export async function GET(req: NextRequest) {

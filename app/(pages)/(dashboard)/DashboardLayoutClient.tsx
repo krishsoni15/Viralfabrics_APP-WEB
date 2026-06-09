@@ -66,7 +66,7 @@ export default function DashboardLayoutClient({
 
   // Track screen size and set sidebar state (only if no persisted preference)
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: any;
     
     const handleResize = () => {
       clearTimeout(timeoutId);

@@ -102,7 +102,7 @@ export default function WeaverSamplesViewPage() {
     
     isFetchingSamplesRef.current = true;
     let controller: AbortController | null = null;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     
     try {
       const token = localStorage.getItem('token');
@@ -194,7 +194,7 @@ export default function WeaverSamplesViewPage() {
     isFetchingRef.current = true;
     setLoading(true);
     let controller: AbortController | null = null;
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     
     try {
       const token = localStorage.getItem('token');

@@ -55,7 +55,7 @@ export async function dbLeanQuery<T>(
 ): Promise<T[]> {
   await dbConnect();
   
-  let queryBuilder = model.find(query, projection).lean();
+  let queryBuilder = model.find(query, projection).lean() as any;
   
   if (options.sort) {
     queryBuilder = queryBuilder.sort(options.sort);

@@ -200,7 +200,7 @@ export function createDebouncedSearch(
   callback: (term: string) => void,
   delay: number = 300
 ): (term: string) => void {
-  let timeoutId: NodeJS.Timeout | null = null;
+  let timeoutId: any = null;
 
   return (term: string) => {
     if (timeoutId) {

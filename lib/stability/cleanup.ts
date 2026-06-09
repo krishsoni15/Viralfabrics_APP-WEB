@@ -130,7 +130,7 @@ export function createAbortController(timeout?: number): {
   cleanup: () => void;
 } {
   const controller = new AbortController();
-  let timeoutId: NodeJS.Timeout | null = null;
+  let timeoutId: any = null;
 
   if (timeout) {
     timeoutId = setTimeout(() => {

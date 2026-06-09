@@ -39,8 +39,11 @@ export type PaymentStatus = typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS];
 // ============================================================================
 
 export const USER_ROLE = {
+  MASTER: 'master',
   SUPERADMIN: 'superadmin',
+  ADMIN: 'admin',
   USER: 'user',
+  PARTY: 'party',
 } as const;
 
 export type UserRole = typeof USER_ROLE[keyof typeof USER_ROLE];

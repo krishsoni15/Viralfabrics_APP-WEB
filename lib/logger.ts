@@ -17,7 +17,7 @@ class Logger {
   private logQueue: LogEntry[] = [];
   private batchSize = 10;
   private flushInterval = 1000; // 1 second
-  private flushTimer: NodeJS.Timeout | null = null;
+  private flushTimer: any = null;
 
   constructor() {
     this.startBatchProcessor();

@@ -484,7 +484,7 @@ export async function POST(req: NextRequest) {
       if (fabric && fabric._id) {
         try {
           // Query by ID to ensure it exists
-          const verified = await Fabric.findById(fabric._id).lean();
+          const verified = await Fabric.findById(fabric._id).lean() as any;
           if (verified) {
             verifiedFabrics.push(verified);
           } else {
@@ -495,7 +495,7 @@ export async function POST(req: NextRequest) {
               qualityName: fabric.qualityName,
               weaver: fabric.weaver,
               weaverQualityName: fabric.weaverQualityName
-            }).lean();
+            }).lean() as any;
             if (found) {
               verifiedFabrics.push(found);
             }

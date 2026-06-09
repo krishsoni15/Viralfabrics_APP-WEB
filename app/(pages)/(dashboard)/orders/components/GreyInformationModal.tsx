@@ -88,12 +88,14 @@ function CustomDatePicker({
   value,
   onChange,
   placeholder,
-  isDarkMode
+  isDarkMode,
+  disabled = false
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   isDarkMode: boolean;
+  disabled?: boolean;
 }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -215,6 +217,7 @@ function CustomDatePicker({
           ref={dateInputRef}
           type="text"
           value={inputValue}
+          disabled={disabled}
           onChange={(e) => {
             const value = e.target.value;
 
@@ -232,14 +235,14 @@ function CustomDatePicker({
           }}
           onKeyDown={handleKeyDown}
           placeholder="dd/mm/yyyy"
-          onFocus={() => setShowCalendar(true)}
+          onFocus={() => !disabled && setShowCalendar(true)}
           className={`w-full px-4 py-3 pr-12 text-base rounded-lg border-2 ${isDarkMode
             ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
             : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
             } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200`}
         />
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-          {value && (
+          {!disabled && value && (
             <button
               type="button"
               onClick={clearDate}
@@ -251,7 +254,8 @@ function CustomDatePicker({
           )}
           <button
             type="button"
-            onClick={() => setShowCalendar(!showCalendar)}
+            disabled={disabled}
+            onClick={() => !disabled && setShowCalendar(!showCalendar)}
             className={`p-1 rounded-full hover:bg-opacity-80 transition-colors ${isDarkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-400 hover:text-blue-500'
               }`}
           >
@@ -431,6 +435,7 @@ interface GreyInformationModalProps {
   onSuccess: (savedEntries?: any[]) => void;
   existingGreyInfo?: any;
   onRefreshQualities?: () => void | Promise<void>; // Add quality refresh function
+  readOnly?: boolean;
 }
 
 interface GreyInfoEntry {
@@ -454,7 +459,8 @@ export default function GreyInformationModal({
   onClose,
   onSuccess,
   existingGreyInfo,
-  onRefreshQualities
+  onRefreshQualities,
+  readOnly = false
 }: GreyInformationModalProps) {
   const { isDarkMode } = useDarkMode();
   const { isMaster } = useSession();
@@ -577,7 +583,7 @@ export default function GreyInformationModal({
   // Also handle multiple rapid quality creations
   useEffect(() => {
     let pendingQualities: any[] = [];
-    let batchTimeout: NodeJS.Timeout | null = null;
+    let batchTimeout: any = null;
 
     const handleQualityAdded = (event: any) => {
       const newQuality = event.detail?.quality;
@@ -1687,6 +1693,7 @@ export default function GreyInformationModal({
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <fieldset disabled={readOnly} className="space-y-6 contents">
             {/* Show message when no existing data and modal was opened expecting data (edit mode) */}
             {!loadingGreyInfo && (() => {
               const greyInfoToCheck = fetchedGreyInfo !== null ? fetchedGreyInfo : existingGreyInfo;
@@ -1726,7 +1733,7 @@ export default function GreyInformationModal({
                     }`}>
                     Entry {index + 1}
                   </h3>
-                  {entries.length > 1 && (
+                  {!readOnly && entries.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleRemoveEntry(entry.id)}
@@ -1753,6 +1760,7 @@ export default function GreyInformationModal({
                         <input
                           type="text"
                           placeholder="Enter quality"
+                          disabled={readOnly}
                           value={entry.qualityName || entry.qualitySearch || ''}
                           onChange={(e) => {
                             const newValue = e.target.value;
@@ -1782,6 +1790,7 @@ export default function GreyInformationModal({
                             }
                           }}
                           onFocus={async (e) => {
+                            if (readOnly) return;
                             // Always show dropdown on focus
                             e.stopPropagation();
                             // ⚡ FIX: Always fetch fresh qualities when opening dropdown
@@ -1795,6 +1804,7 @@ export default function GreyInformationModal({
                             ));
                           }}
                           onClick={async (e) => {
+                            if (readOnly) return;
                             // Show dropdown when clicking on input
                             e.stopPropagation();
                             // ⚡ FIX: Always fetch fresh qualities when opening dropdown
@@ -1813,7 +1823,7 @@ export default function GreyInformationModal({
                             } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all`}
                         />
                         {/* Clear button - shows when there's text in the field */}
-                        {(entry.qualityName || entry.qualitySearch) && (entry.qualityName || entry.qualitySearch).trim() !== '' && (
+                        {!readOnly && (entry.qualityName || entry.qualitySearch) && (entry.qualityName || entry.qualitySearch).trim() !== '' && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1924,6 +1934,7 @@ export default function GreyInformationModal({
                         value={entry.quantity}
                         onChange={(e) => updateEntry(entry.id, 'quantity', e.target.value)}
                         placeholder="Enter Quantity"
+                        disabled={readOnly}
                         className={`w-full px-4 py-3 text-base rounded-lg border-2 ${isDarkMode
                           ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
@@ -1942,6 +1953,7 @@ export default function GreyInformationModal({
                         value={entry.chalanNo}
                         onChange={(e) => updateEntry(entry.id, 'chalanNo', e.target.value)}
                         placeholder="Enter chalan number"
+                        disabled={readOnly}
                         className={`w-full px-4 py-3 text-base rounded-lg border-2 ${isDarkMode
                           ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
@@ -1961,6 +1973,7 @@ export default function GreyInformationModal({
                         value={entry.numberOfPieces}
                         onChange={(e) => updateEntry(entry.id, 'numberOfPieces', e.target.value)}
                         placeholder="Enter number of pieces"
+                        disabled={readOnly}
                         className={`w-full px-4 py-3 text-base rounded-lg border-2 ${isDarkMode
                           ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
@@ -1979,6 +1992,7 @@ export default function GreyInformationModal({
                         onChange={(value) => updateEntry(entry.id, 'date', value)}
                         placeholder="Select date"
                         isDarkMode={isDarkMode}
+                        disabled={readOnly}
                       />
                     </div>
                   </div>
@@ -1987,17 +2001,21 @@ export default function GreyInformationModal({
             ))}
 
             {/* Add Entry Button */}
-            <button
-              type="button"
-              onClick={handleAddEntry}
-              className={`w-full py-4 px-6 rounded-xl border-2 border-dashed flex items-center justify-center gap-3 transition-all hover:scale-[1.02] ${isDarkMode
-                ? 'border-gray-600 text-gray-300 hover:border-gray-500 hover:bg-gray-700/50'
-                : 'border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50'
-                }`}
-            >
-              <PlusIcon className="h-6 w-6" />
-              <span className="text-base font-semibold">Add Another Entry</span>
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleAddEntry}
+                className={`w-full py-4 px-6 rounded-xl border-2 border-dashed flex items-center justify-center gap-3 transition-all hover:scale-[1.02] ${isDarkMode
+                  ? 'border-gray-600 text-gray-300 hover:border-gray-500 hover:bg-gray-700/50'
+                  : 'border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50'
+                  }`}
+              >
+                <PlusIcon className="h-6 w-6" />
+                <span className="text-base font-semibold">Add Another Entry</span>
+              </button>
+            )}
+
+            </fieldset>
 
             {/* Buttons */}
             <div className={`flex justify-end items-center space-x-4 pt-6 border-t sticky bottom-0 bg-inherit pb-4 mt-6 ${isDarkMode ? 'border-gray-700' : 'border-gray-200'
@@ -2014,11 +2032,11 @@ export default function GreyInformationModal({
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
               >
-                Cancel
+                {readOnly ? 'Close' : 'Cancel'}
               </button>
 
               {/* Delete All button - transparent bg, red text, red border */}
-              {isMaster && (() => {
+              {!readOnly && isMaster && (() => {
                 const greyInfoToCheck = fetchedGreyInfo !== null ? fetchedGreyInfo : existingGreyInfo;
                 return greyInfoToCheck && Array.isArray(greyInfoToCheck) && greyInfoToCheck.length > 0;
               })() && (
@@ -2039,16 +2057,18 @@ export default function GreyInformationModal({
                 )}
 
               {/* Save button */}
-              <button
-                type="submit"
-                disabled={loading}
-                className={`px-6 py-3 rounded-lg text-base font-semibold text-white transition-all ${loading
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
-                  }`}
-              >
-                {loading ? 'Saving...' : 'Save All'}
-              </button>
+              {!readOnly && (
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={`px-6 py-3 rounded-lg text-base font-semibold text-white transition-all ${loading
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
+                    }`}
+                >
+                  {loading ? 'Saving...' : 'Save All'}
+                </button>
+              )}
             </div>
           </form>
         </div>

@@ -33,6 +33,7 @@ interface EnhancedDropdownProps {
   error?: string;
   recentlyAddedId?: string;
   qualities?: any[];
+  disabled?: boolean;
 }
 
 const EnhancedDropdown: React.FC<EnhancedDropdownProps> = ({
@@ -48,7 +49,8 @@ const EnhancedDropdown: React.FC<EnhancedDropdownProps> = ({
   isDarkMode,
   error,
   recentlyAddedId,
-  qualities
+  qualities,
+  disabled = false
 }) => {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -86,7 +88,8 @@ const EnhancedDropdown: React.FC<EnhancedDropdownProps> = ({
           type="text"
           value={searchValue || (value && qualities ? qualities.find(q => getQualityId(q) === value)?.name || '' : '')}
           onChange={(e) => onSearchChange(e.target.value)}
-          onFocus={onToggleDropdown}
+          onFocus={() => !disabled && onToggleDropdown()}
+          disabled={disabled}
           placeholder={placeholder}
           className={`w-full px-4 py-3 pr-10 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${error
             ? isDarkMode
@@ -99,7 +102,7 @@ const EnhancedDropdown: React.FC<EnhancedDropdownProps> = ({
         />
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
           {/* Clear button */}
-          {(searchValue || (value && qualities ? qualities.find(q => getQualityId(q) === value)?.name : '')) && (
+          {!disabled && (searchValue || (value && qualities ? qualities.find(q => getQualityId(q) === value)?.name : '')) && (
             <button
               type="button"
               onClick={(e) => {
@@ -112,19 +115,20 @@ const EnhancedDropdown: React.FC<EnhancedDropdownProps> = ({
                   onToggleDropdown();
                 }
               }}
-              className={`p-1 rounded transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-gray-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              className={`p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${isDarkMode ? 'text-gray-400 hover:text-red-400' : 'text-gray-500 hover:text-red-500'
                 }`}
             >
-              <XMarkIcon className="w-4 h-4" />
+              <XMarkIcon className="h-4 w-4" />
             </button>
           )}
           {/* Dropdown toggle button */}
           <button
             type="button"
+            disabled={disabled}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onToggleDropdown();
+              !disabled && onToggleDropdown();
             }}
             className={`p-1 rounded transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -226,6 +230,7 @@ interface DispatchFormProps {
   isEditing?: boolean;
   existingDispatches?: any[];
   qualities?: any[];
+  readOnly?: boolean;
 }
 
 interface ValidationErrors {
@@ -237,12 +242,14 @@ function CustomDatePicker({
   value,
   onChange,
   placeholder,
-  isDarkMode
+  isDarkMode,
+  disabled = false
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   isDarkMode: boolean;
+  disabled?: boolean;
 }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -381,6 +388,7 @@ function CustomDatePicker({
           ref={dateInputRef}
           type="text"
           value={inputValue}
+          disabled={disabled}
           onChange={(e) => {
             const value = e.target.value;
             setInputValue(value);
@@ -396,7 +404,7 @@ function CustomDatePicker({
           }}
           onKeyDown={handleKeyDown}
           placeholder="dd/mm/yyyy"
-          onFocus={() => setShowCalendar(true)}
+          onFocus={() => !disabled && setShowCalendar(true)}
           required
           className={`w-full p-3 pr-12 rounded-lg border ${isDarkMode
             ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
@@ -404,7 +412,7 @@ function CustomDatePicker({
             } focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200`}
         />
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-          {value && (
+          {!disabled && value && (
             <button
               type="button"
               onClick={clearDate}
@@ -416,7 +424,8 @@ function CustomDatePicker({
           )}
           <button
             type="button"
-            onClick={() => setShowCalendar(!showCalendar)}
+            disabled={disabled}
+            onClick={() => !disabled && setShowCalendar(!showCalendar)}
             className={`p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${isDarkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-400 hover:text-blue-500'
               }`}
           >
@@ -618,7 +627,8 @@ export default function DispatchForm({
   isOpen = true, // Default to true for backward compatibility
   isEditing = false,
   existingDispatches = [],
-  qualities = []
+  qualities = [],
+  readOnly = false
 }: DispatchFormProps) {
   const { isDarkMode, mounted } = useDarkMode();
   const { isMaster } = useSession();
@@ -964,7 +974,7 @@ export default function DispatchForm({
 
   // Function to fetch qualities directly from API
   const fetchQualitiesDirectly = async () => {
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
 
     try {
       const token = localStorage.getItem('token');
@@ -1158,7 +1168,7 @@ export default function DispatchForm({
     // Show form immediately with loading state
     setHasExistingData(false);
 
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
 
     try {
       const token = localStorage.getItem('token');
@@ -2440,7 +2450,8 @@ export default function DispatchForm({
             ? 'scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800'
             : 'scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100'
             }`}>
-            <div className="p-6 space-y-8 pb-24">
+            <fieldset disabled={readOnly} className="space-y-8 contents">
+              <div className="p-6 space-y-8 pb-24">
               {/* Success Message */}
               {successMessage && (
                 <div className={`p-4 rounded-lg border ${isDarkMode
@@ -2476,7 +2487,7 @@ export default function DispatchForm({
                       }`}>
                       <div className="mb-6">
                         {/* ⚡ FIX: Item header with number and delete button - only show if multiple items */}
-                        {formData.dispatchItems.length > 1 && (
+                        {!readOnly && formData.dispatchItems.length > 1 && (
                           <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-300 dark:border-gray-600">
                             <h4 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'
                               }`}>
@@ -2515,6 +2526,7 @@ export default function DispatchForm({
                               onChange={(value) => updateDispatchItem(item.id, 'dispatchDate', value)}
                               placeholder="Select dispatch date"
                               isDarkMode={isDarkMode}
+                              disabled={readOnly}
                             />
                             {errors[`dispatchDate_${item.id}`] && (
                               <p className={`text-sm mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'
@@ -2537,6 +2549,7 @@ export default function DispatchForm({
                                 onChange={(e) => updateDispatchItem(item.id, 'billNo', e.target.value)}
                                 placeholder="Enter bill number"
                                 required
+                                disabled={readOnly}
                                 className={`w-full px-4 py-3 pl-12 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`billNo_${item.id}`]
                                   ? isDarkMode
                                     ? 'border-red-500 bg-gray-800 text-white'
@@ -2568,6 +2581,7 @@ export default function DispatchForm({
                               value={item.transportNo || ''}
                               onChange={(e) => updateDispatchItem(item.id, 'transportNo', e.target.value)}
                               placeholder="Enter transport"
+                              disabled={readOnly}
                               className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDarkMode
                                 ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
                                 : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
@@ -2586,6 +2600,7 @@ export default function DispatchForm({
                               value={item.lrNo || ''}
                               onChange={(e) => updateDispatchItem(item.id, 'lrNo', e.target.value)}
                               placeholder="Enter LR number"
+                              disabled={readOnly}
                               className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDarkMode
                                 ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
                                 : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
@@ -2637,6 +2652,7 @@ export default function DispatchForm({
                                       setQualitySearchStates(prev => ({ ...prev, [subItem.id]: value }));
                                     }
                                   }}
+                                  disabled={readOnly}
                                   showDropdown={activeQualityDropdown?.itemId === subItem.id}
                                   onToggleDropdown={() => handleQualityDropdownToggle(subItem.id)}
                                   onSelect={(quality) => handleSubItemQualitySelect(item.id, subItem.id, quality)}
@@ -2661,6 +2677,7 @@ export default function DispatchForm({
                                   step="0.01"
                                   min="0"
                                   required
+                                  disabled={readOnly}
                                   className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`finishMtr_${subItem.id}`]
                                     ? isDarkMode
                                       ? 'border-red-500 bg-gray-800 text-white'
@@ -2693,7 +2710,7 @@ export default function DispatchForm({
 
                                     removeSubItem(item.id, subItem.id);
                                   }}
-                                  disabled={(item.subItems || []).length <= 1}
+                                  disabled={readOnly || (item.subItems || []).length <= 1}
                                   className={`w-full px-3 py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${(item.subItems || []).length <= 1
                                     ? isDarkMode
                                       ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
@@ -2720,6 +2737,7 @@ export default function DispatchForm({
                                   placeholder="Enter chindi kg"
                                   step="0.01"
                                   min="0"
+                                  disabled={readOnly}
                                   className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`chindiKg_${subItem.id}`]
                                     ? isDarkMode
                                       ? 'border-red-500 bg-gray-800 text-white'
@@ -2747,6 +2765,7 @@ export default function DispatchForm({
                                   placeholder="Enter cut piece"
                                   step="0.01"
                                   min="0"
+                                  disabled={readOnly}
                                   className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`cutPieceMtr_${subItem.id}`]
                                     ? isDarkMode
                                       ? 'border-red-500 bg-gray-800 text-white'
@@ -2774,6 +2793,7 @@ export default function DispatchForm({
                                   placeholder="Enter rejected meters"
                                   step="0.01"
                                   min="0"
+                                  disabled={readOnly}
                                   className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`rejectedMtr_${subItem.id}`]
                                     ? isDarkMode
                                       ? 'border-red-500 bg-gray-800 text-white'
@@ -2800,6 +2820,7 @@ export default function DispatchForm({
                                   multiple
                                   capture="environment"
                                   onChange={(e) => handleDispatchSubItemPhotoChange(subItem.id, e.target.files)}
+                                  disabled={readOnly}
                                   className={`w-full text-sm text-gray-500 ${isDarkMode ? 'file:bg-gray-700 file:text-gray-200' : 'file:bg-gray-100 file:text-gray-800'}`}
                                 />
                                 <div className="mt-3 grid grid-cols-3 gap-2">
@@ -2808,14 +2829,16 @@ export default function DispatchForm({
                                       `relative rounded-lg overflow-hidden border ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`
                                     }>
                                       <img src={url} alt={`Dispatch photo ${index + 1}`} className="h-20 w-full object-cover" />
-                                      <button
-                                        type="button"
-                                        onClick={() => removeDispatchSubItemPhoto(subItem.id, 'existing', index)}
-                                        className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1"
-                                        title="Remove photo"
-                                      >
-                                        <XMarkIcon className="h-4 w-4" />
-                                      </button>
+                                      {!readOnly && (
+                                        <button
+                                          type="button"
+                                          onClick={() => removeDispatchSubItemPhoto(subItem.id, 'existing', index)}
+                                          className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1"
+                                          title="Remove photo"
+                                        >
+                                          <XMarkIcon className="h-4 w-4" />
+                                        </button>
+                                      )}
                                     </div>
                                   ))}
                                   {(pendingPhotoFiles[subItem.id] || []).map((entry, index) => (
@@ -2823,14 +2846,16 @@ export default function DispatchForm({
                                       `relative rounded-lg overflow-hidden border ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`
                                     }>
                                       <img src={entry.previewUrl} alt={`Pending dispatch photo ${index + 1}`} className="h-20 w-full object-cover" />
-                                      <button
-                                        type="button"
-                                        onClick={() => removeDispatchSubItemPhoto(subItem.id, 'pending', index)}
-                                        className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1"
-                                        title="Remove photo"
-                                      >
-                                        <XMarkIcon className="h-4 w-4" />
-                                      </button>
+                                      {!readOnly && (
+                                        <button
+                                          type="button"
+                                          onClick={() => removeDispatchSubItemPhoto(subItem.id, 'pending', index)}
+                                          className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1"
+                                          title="Remove photo"
+                                        >
+                                          <XMarkIcon className="h-4 w-4" />
+                                        </button>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
@@ -2843,19 +2868,21 @@ export default function DispatchForm({
                           ))}
 
                           {/* Add More Finished Meters Button - Full width horizontal design */}
-                          <div className="mt-4">
-                            <button
-                              type="button"
-                              onClick={() => addSubItem(item.id)}
-                              className={`w-full flex items-center justify-center px-4 py-3 rounded-lg border-2 transition-all duration-200 text-sm font-semibold ${isDarkMode
-                                ? 'bg-gray-800/70 border-gray-600 hover:bg-gray-700 hover:border-gray-500 text-gray-200 hover:text-white'
-                                : 'bg-gray-50 border-gray-300 hover:bg-gray-100 hover:border-gray-400 text-gray-700 hover:text-gray-900'
-                                }`}
-                            >
-                              <PlusIcon className="h-5 w-5 mr-2" />
-                              <span>Add More Finished Meters</span>
-                            </button>
-                          </div>
+                          {!readOnly && (
+                            <div className="mt-4">
+                              <button
+                                type="button"
+                                onClick={() => addSubItem(item.id)}
+                                className={`w-full flex items-center justify-center px-4 py-3 rounded-lg border-2 transition-all duration-200 text-sm font-semibold ${isDarkMode
+                                  ? 'bg-gray-800/70 border-gray-600 hover:bg-gray-700 hover:border-gray-500 text-gray-200 hover:text-white'
+                                  : 'bg-gray-50 border-gray-300 hover:bg-gray-100 hover:border-gray-400 text-gray-700 hover:text-gray-900'
+                                  }`}
+                              >
+                                <PlusIcon className="h-5 w-5 mr-2" />
+                                <span>Add More Finished Meters</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2879,29 +2906,32 @@ export default function DispatchForm({
                   ))}
 
                   {/* Add Item Card */}
-                  <div className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 hover:shadow-lg cursor-pointer ${isDarkMode
-                    ? 'border-gray-600 bg-gray-800/50 hover:border-blue-500 hover:bg-gray-800'
-                    : 'border-gray-300 bg-gray-50/50 hover:border-blue-400 hover:bg-gray-50'
-                    }`} onClick={addDispatchItem}>
-                    <div className="flex items-center justify-center space-x-3 py-4">
-                      <div className={`p-2 rounded-full ${isDarkMode
-                        ? 'bg-blue-600/20 text-blue-400'
-                        : 'bg-blue-100 text-blue-600'
-                        }`}>
-                        <PlusIcon className="h-5 w-5" />
-                      </div>
-                      <div className="text-center">
-                        <h4 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                  {!readOnly && (
+                    <div className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 hover:shadow-lg cursor-pointer ${isDarkMode
+                      ? 'border-gray-600 bg-gray-800/50 hover:border-blue-500 hover:bg-gray-800'
+                      : 'border-gray-300 bg-gray-50/50 hover:border-blue-400 hover:bg-gray-50'
+                      }`} onClick={addDispatchItem}>
+                      <div className="flex items-center justify-center space-x-3 py-4">
+                        <div className={`p-2 rounded-full ${isDarkMode
+                          ? 'bg-blue-600/20 text-blue-400'
+                          : 'bg-blue-100 text-blue-600'
                           }`}>
-                          Add New Dispatch Item
-                        </h4>
+                          <PlusIcon className="h-5 w-5" />
+                        </div>
+                        <div className="text-center">
+                          <h4 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                            Add New Dispatch Item
+                          </h4>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
-          </form>
+          </fieldset>
+        </form>
 
           {/* Sticky Submit Button */}
           <div className={`sticky bottom-0 left-0 right-0 p-6 border-t shadow-lg bg-inherit ${isDarkMode ? 'border-gray-700' : 'border-gray-200'
@@ -2915,11 +2945,11 @@ export default function DispatchForm({
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                   }`}
               >
-                Cancel
+                {readOnly ? 'Close' : 'Cancel'}
               </button>
 
               {/* Delete Button - Show only when has existing data */}
-              {isMaster && hasExistingData && (
+              {!readOnly && isMaster && hasExistingData && (
                 <button
                   type="button"
                   onClick={handleDeleteClick}
@@ -2936,23 +2966,25 @@ export default function DispatchForm({
                 </button>
               )}
 
-              <button
-                type="button"
-                disabled={saving}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSubmit(e);
-                }}
-                className={`px-10 py-3 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105 ${saving
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : isDarkMode
-                    ? 'bg-blue-600 hover:bg-blue-700 shadow-lg'
-                    : 'bg-blue-500 hover:bg-blue-600 shadow-lg'
-                  }`}
-              >
-                {saving ? 'Saving...' : loadingExistingData ? 'Loading...' : (hasExistingData ? 'Update' : 'Add')}
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSubmit(e);
+                  }}
+                  className={`px-10 py-3 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105 ${saving
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : isDarkMode
+                      ? 'bg-blue-600 hover:bg-blue-700 shadow-lg'
+                      : 'bg-blue-500 hover:bg-blue-600 shadow-lg'
+                    }`}
+                >
+                  {saving ? 'Saving...' : loadingExistingData ? 'Loading...' : (hasExistingData ? 'Update' : 'Add')}
+                </button>
+              )}
             </div>
           </div>
         </div>

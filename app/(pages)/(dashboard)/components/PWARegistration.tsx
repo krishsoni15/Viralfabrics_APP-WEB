@@ -115,7 +115,7 @@ export default function PWARegistration() {
 
           // Handle service worker updates - professional update notification
           let updateNotificationShown = false;
-          let reloadTimer: NodeJS.Timeout | null = null;
+          let reloadTimer: any = null;
 
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing;

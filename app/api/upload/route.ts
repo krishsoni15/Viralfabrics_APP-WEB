@@ -54,10 +54,10 @@ export async function POST(req: NextRequest) {
     
     try {
       // Parse form data (Next.js handles multipart/form-data automatically)
-      const formData = await req.formData();
+      const formData = await req.formData() as any;
       // Check for both 'file' and 'image' keys for compatibility
       const file = (formData.get('file') || formData.get('image')) as File;
-      const folder = formData.get('folder') as string || 'general';
+      const folder = (formData.get('folder') as string) || 'general';
       const weaverId = formData.get('weaverId') as string | null;
       const sampleId = formData.get('sampleId') as string | null;
       

@@ -37,7 +37,7 @@ export function applyTimeout<T>(query: any, timeout = DEFAULT_QUERY_TIMEOUT): an
  * Usage: applyLean(Order.find())
  */
 export function applyLean<T>(query: any): any {
-  return query.lean();
+  return query.lean() as any;
 }
 
 /**

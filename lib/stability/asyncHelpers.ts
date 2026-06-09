@@ -82,7 +82,7 @@ export async function retryAsync<T>(
  * Promise that resolves after delay (with cleanup support)
  */
 export function delay(ms: number): Promise<void> & { cancel: () => void } {
-  let timeoutId: NodeJS.Timeout;
+  let timeoutId: any;
   let rejectFn: () => void;
 
   const promise = new Promise<void>((resolve, reject) => {
@@ -141,7 +141,7 @@ export function debounceAsync<T extends (...args: any[]) => Promise<any>>(
   fn: T,
   delay: number
 ): T & { cancel: () => void } {
-  let timeoutId: NodeJS.Timeout | null = null;
+  let timeoutId: any = null;
   let latestResolve: ((value: any) => void)[] = [];
   let latestReject: ((error: any) => void)[] = [];
 

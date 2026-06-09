@@ -1,7 +1,7 @@
 import mongoose, { type Mongoose } from "mongoose";
 
 // Connection pool monitoring
-let poolMonitoringInterval: NodeJS.Timeout | null = null;
+let poolMonitoringInterval: any = null;
 
 function startPoolMonitoring() {
   if (poolMonitoringInterval) return;

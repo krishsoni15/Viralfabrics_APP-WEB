@@ -116,7 +116,7 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
   const [pendingImageFiles, setPendingImageFiles] = useState<Array<{ file: File; previewUrl: string }>>([]);
   const [showCamera, setShowCamera] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const validationTimeoutRef = useRef<any>(null);
   // ✨ Form validation states for strict gating
   const [isFormDirty, setIsFormDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -132,8 +132,8 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
   const [showTypeDropdown, setShowTypeDropdown] = useState<boolean>(false); // Control type dropdown open/close state
   const [typeSearch, setTypeSearch] = useState<string>(''); // Type search value
   const typeDropdownRef = useRef<HTMLDivElement>(null); // Ref for type dropdown
-  const qualityCodeDebounceRef = useRef<NodeJS.Timeout | null>(null); // Ref for quality code debounce
-  const dropdownBlurTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Ref for dropdown blur timeout
+  const qualityCodeDebounceRef = useRef<any>(null); // Ref for quality code debounce
+  const dropdownBlurTimeoutRef = useRef<any>(null); // Ref for dropdown blur timeout
   // Derived validity - keeps Save disabled until the required fields are present
   const isFormValid = (() => {
     const first = formData.items[0];
@@ -251,8 +251,8 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
     setHasAttemptedLoad(true);
     setLoadError(null);
     
-    let timeoutId: NodeJS.Timeout | null = null;
-    let countdownInterval: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
+    let countdownInterval: any = null;
     
     try {
       setLoadingData(true);
@@ -614,7 +614,7 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
     
     setCheckingQualityCode(true);
     
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
     try {
       // Use a more specific endpoint and add timeout
       const controller = new AbortController();
@@ -948,7 +948,7 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
     const timeoutDuration = 30000 + (retryCount * 10000); // 30s, 40s, 50s
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      let timeoutId: NodeJS.Timeout | null = null;
+      let timeoutId: any = null;
       try {
         const controller = new AbortController();
         timeoutId = setTimeout(() => controller.abort(), timeoutDuration);

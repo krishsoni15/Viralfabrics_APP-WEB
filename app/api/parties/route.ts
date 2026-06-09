@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         await dbConnect();
         const party = await Party.findById(session.partyId)
           .select('_id name contactName contactPhone address createdAt updatedAt')
-          .lean();
+          .lean() as any;
 
         if (!party) {
           return new Response(JSON.stringify({ success: false, message: 'Party not found' }), { status: 404 });

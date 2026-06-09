@@ -31,8 +31,8 @@ export function useAuthSession(): AuthSession {
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const logoutCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const refreshTimeoutRef = useRef<any>(null);
+  const logoutCheckIntervalRef = useRef<any>(null);
   const isRefreshingRef = useRef(false);
   const isValidatingRef = useRef(false);
   const lastValidateTimeRef = useRef(0);

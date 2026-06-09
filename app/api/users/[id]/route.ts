@@ -4,8 +4,7 @@ import { requireSuperAdmin } from "@/lib/session";
 import bcrypt from "bcryptjs";
 import { type NextRequest } from "next/server";
 import { logUpdate, logDelete } from "@/lib/logger";
-import { usersCache as usersCacheNormal } from "../route";
-import { usersCache as usersCacheInstant } from "../../users-instant/route";
+import { usersCacheNormal, usersCacheInstant } from "../cache";
 
 export async function GET(
   req: NextRequest,
@@ -103,7 +102,7 @@ export async function PUT(
     }
     
     // ⚡ SECURITY: Block non-master users from editing master user
-    const targetUser = await User.findById(id).select('role').lean();
+    const targetUser = await User.findById(id).select('role').lean() as any;
     if (targetUser && targetUser.role === 'master' && session.role !== 'master') {
       return new Response(JSON.stringify({ message: "Access denied - Cannot edit master account" }), { status: 403 });
     }
@@ -219,7 +218,7 @@ export async function DELETE(
     await dbConnect();
     
     // ⚡ SECURITY: Block deleting master accounts entirely
-    const targetUser = await User.findById(id).select('role').lean();
+    const targetUser = await User.findById(id).select('role').lean() as any;
     if (targetUser && targetUser.role === 'master') {
       return new Response(
         JSON.stringify({ success: false, message: "Cannot delete master account" }), 

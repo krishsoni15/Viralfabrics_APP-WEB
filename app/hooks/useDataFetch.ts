@@ -34,7 +34,7 @@ export function useDataFetch<T>({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const { getCache, setCache, clearCache: clearStoreCache } = useAppStore();
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<any>(null);
   const mountedRef = useRef(true);
   const fetchingRef = useRef(false);
 

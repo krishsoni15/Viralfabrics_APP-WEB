@@ -44,6 +44,7 @@ interface MillOutputFormProps {
   isOpen?: boolean; // Add isOpen prop like LabDataModal
   isEditing?: boolean;
   existingMillOutputs?: any[];
+  readOnly?: boolean;
 }
 
 interface ValidationErrors {
@@ -55,12 +56,14 @@ function CustomDatePicker({
   value,
   onChange,
   placeholder,
-  isDarkMode
+  isDarkMode,
+  disabled = false
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   isDarkMode: boolean;
+  disabled?: boolean;
 }) {
   const [showCalendar, setShowCalendar] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -199,6 +202,7 @@ function CustomDatePicker({
           ref={dateInputRef}
           type="text"
           value={inputValue}
+          disabled={disabled}
           onChange={(e) => {
             const value = e.target.value;
             setInputValue(value);
@@ -214,7 +218,7 @@ function CustomDatePicker({
           }}
           onKeyDown={handleKeyDown}
           placeholder="dd/mm/yyyy"
-          onFocus={() => setShowCalendar(true)}
+          onFocus={() => !disabled && setShowCalendar(true)}
           required
           className={`w-full p-3 pr-12 rounded-lg border ${isDarkMode
             ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
@@ -222,7 +226,7 @@ function CustomDatePicker({
             } focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200`}
         />
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-          {value && (
+          {!disabled && value && (
             <button
               type="button"
               onClick={clearDate}
@@ -234,7 +238,8 @@ function CustomDatePicker({
           )}
           <button
             type="button"
-            onClick={() => setShowCalendar(!showCalendar)}
+            disabled={disabled}
+            onClick={() => !disabled && setShowCalendar(!showCalendar)}
             className={`p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${isDarkMode ? 'text-gray-400 hover:text-blue-400' : 'text-gray-400 hover:text-blue-500'
               }`}
           >
@@ -441,7 +446,8 @@ function EnhancedDropdown({
   onSelect,
   isDarkMode,
   error,
-  recentlyAddedId
+  recentlyAddedId,
+  disabled = false
 }: {
   options: any[];
   value: string;
@@ -455,6 +461,7 @@ function EnhancedDropdown({
   isDarkMode: boolean;
   error?: string;
   recentlyAddedId?: string | null;
+  disabled?: boolean;
 }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -495,14 +502,15 @@ function EnhancedDropdown({
             // ⚡ FIX: Don't clear selection when typing - only clear when user explicitly clears or selects new item
             // This prevents quality from being cleared in other items when typing in one item
           }}
-          onFocus={() => onToggleDropdown()}
+          onFocus={() => !disabled && onToggleDropdown()}
+          disabled={disabled}
           className={`w-full p-3 rounded-lg border ${isDarkMode
             ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
             : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
             } ${error ? 'border-red-500' : ''} focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200`}
         />
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-          {searchValue && (
+          {!disabled && searchValue && (
             <button
               type="button"
               onClick={(e) => {
@@ -590,7 +598,8 @@ export default function MillOutputForm({
   onRefreshQualities,
   isOpen = true, // Default to true for backward compatibility
   isEditing = false,
-  existingMillOutputs = []
+  existingMillOutputs = [],
+  readOnly = false
 }: MillOutputFormProps) {
   const { isDarkMode, mounted } = useDarkMode();
   const { isMaster } = useSession();
@@ -857,7 +866,7 @@ export default function MillOutputForm({
 
   // Function to fetch qualities directly from API
   const fetchQualitiesDirectly = async () => {
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
 
     try {
       const token = localStorage.getItem('token');
@@ -916,7 +925,7 @@ export default function MillOutputForm({
     setLoadingData(true);
 
     // Fetch in background for smooth experience
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: any = null;
 
     try {
       const token = localStorage.getItem('token');
@@ -2018,7 +2027,8 @@ export default function MillOutputForm({
             ? 'scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800'
             : 'scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100'
             }`}>
-            <div className="p-6 space-y-8 pb-24">
+            <fieldset disabled={readOnly} className="space-y-8 contents">
+              <div className="p-6 space-y-8 pb-24">
               {/* Success Message */}
               {successMessage && (
                 <div className={`p-4 rounded-lg border ${isDarkMode
@@ -2059,7 +2069,7 @@ export default function MillOutputForm({
                             }`}>
                             Mill Output Item {itemIndex + 1}
                           </h4>
-                          {(!hasExistingData || item.id.startsWith('new-') || isMaster) && (
+                          {!readOnly && (!hasExistingData || item.id.startsWith('new-') || isMaster) && (
                             <button
                               type="button"
                               onClick={() => removeMillOutputItem(item.id)}
@@ -2088,6 +2098,7 @@ export default function MillOutputForm({
                             onChange={(value) => updateMillOutputItem(item.id, 'recdDate', value)}
                             placeholder="Select received date"
                             isDarkMode={isDarkMode}
+                            disabled={readOnly}
                           />
                           {errors[`recdDate_${item.id}`] && (
                             <p className={`text-sm mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'
@@ -2110,6 +2121,7 @@ export default function MillOutputForm({
                               onChange={(e) => updateMillOutputItem(item.id, 'millBillNo', e.target.value)}
                               placeholder="Enter mill bill number"
                               required
+                              disabled={readOnly}
                               className={`w-full px-4 py-3 pl-12 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`millBillNo_${item.id}`]
                                 ? isDarkMode
                                   ? 'border-red-500 bg-gray-800 text-white'
@@ -2169,6 +2181,7 @@ export default function MillOutputForm({
                                   }
                                 }}
                                 showDropdown={activeQualityDropdown?.itemId === item.id && activeQualityDropdown?.type === 'main'}
+                                disabled={readOnly}
                                 onToggleDropdown={async () => {
                                   if (activeQualityDropdown?.itemId === item.id && activeQualityDropdown?.type === 'main') {
                                     setActiveQualityDropdown(null);
@@ -2244,6 +2257,7 @@ export default function MillOutputForm({
                                 step="0.01"
                                 min="0"
                                 required
+                                disabled={readOnly}
                                 className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`finishedMtr_${item.id}`]
                                   ? isDarkMode
                                     ? 'border-red-500 bg-gray-800 text-white'
@@ -2277,7 +2291,7 @@ export default function MillOutputForm({
                                   // Delete only M1 (main entry) - M2 will move to M1
                                   removeMainFinishedMtr(item.id);
                                 }}
-                                disabled={item.additionalFinishedMtr.length === 0}
+                                disabled={readOnly || item.additionalFinishedMtr.length === 0}
                                 className={`w-full px-3 py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${item.additionalFinishedMtr.length === 0
                                   ? isDarkMode
                                     ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
@@ -2323,6 +2337,7 @@ export default function MillOutputForm({
                                     }
                                   }}
                                   showDropdown={activeQualityDropdown?.itemId === item.id && activeQualityDropdown?.type === 'additional' && activeQualityDropdown?.index === index}
+                                  disabled={readOnly}
                                   onToggleDropdown={async () => {
                                     if (activeQualityDropdown?.itemId === item.id && activeQualityDropdown?.type === 'additional' && activeQualityDropdown?.index === index) {
                                       setActiveQualityDropdown(null);
@@ -2387,6 +2402,7 @@ export default function MillOutputForm({
                                   step="0.01"
                                   min="0"
                                   required
+                                  disabled={readOnly}
                                   className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDarkMode
                                     ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
                                     : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
@@ -2411,7 +2427,7 @@ export default function MillOutputForm({
                                     // Remove additional meter (M2, M3, etc.)
                                     removeAdditionalFinishedMtr(item.id, index);
                                   }}
-                                  disabled={1 + (item.additionalFinishedMtr.length || 0) <= 1}
+                                  disabled={readOnly || 1 + (item.additionalFinishedMtr.length || 0) <= 1}
                                   className={`w-full px-3 py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${1 + (item.additionalFinishedMtr.length || 0) <= 1
                                     ? isDarkMode
                                       ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
@@ -2431,46 +2447,51 @@ export default function MillOutputForm({
                       </div>
 
                       {/* Add More Finished Meters & Rates Button - Full width horizontal design */}
-                      <div className="mt-4">
-                        <button
-                          type="button"
-                          onClick={() => addAdditionalFinishedMtr(item.id)}
-                          className={`w-full flex items-center justify-center px-4 py-3 rounded-lg border-2 transition-all duration-200 text-sm font-semibold ${isDarkMode
-                            ? 'bg-gray-800/70 border-gray-600 hover:bg-gray-700 hover:border-gray-500 text-gray-200 hover:text-white'
-                            : 'bg-gray-50 border-gray-300 hover:bg-gray-100 hover:border-gray-400 text-gray-700 hover:text-gray-900'
-                            }`}
-                        >
-                          <PlusIcon className="h-5 w-5 mr-2" />
-                          <span>Add More Finished Meters</span>
-                        </button>
-                      </div>
+                      {!readOnly && (
+                        <div className="mt-4">
+                          <button
+                            type="button"
+                            onClick={() => addAdditionalFinishedMtr(item.id)}
+                            className={`w-full flex items-center justify-center px-4 py-3 rounded-lg border-2 transition-all duration-200 text-sm font-semibold ${isDarkMode
+                              ? 'bg-gray-800/70 border-gray-600 hover:bg-gray-700 hover:border-gray-500 text-gray-200 hover:text-white'
+                              : 'bg-gray-50 border-gray-300 hover:bg-gray-100 hover:border-gray-400 text-gray-700 hover:text-gray-900'
+                              }`}
+                          >
+                            <PlusIcon className="h-5 w-5 mr-2" />
+                            <span>Add More Finished Meters</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
 
                   {/* Add Item Card */}
-                  <div className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 hover:shadow-lg cursor-pointer ${isDarkMode
-                    ? 'border-gray-600 bg-gray-800/50 hover:border-blue-500 hover:bg-gray-800'
-                    : 'border-gray-300 bg-gray-50/50 hover:border-blue-400 hover:bg-gray-50'
-                    }`} onClick={addMillOutputItem}>
-                    <div className="flex items-center justify-center space-x-3 py-4">
-                      <div className={`p-2 rounded-full ${isDarkMode
-                        ? 'bg-blue-600/20 text-blue-400'
-                        : 'bg-blue-100 text-blue-600'
-                        }`}>
-                        <PlusIcon className="h-5 w-5" />
-                      </div>
-                      <div className="text-center">
-                        <h4 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                  {!readOnly && (
+                    <div className={`p-4 rounded-xl border-2 border-dashed transition-all duration-200 hover:shadow-lg cursor-pointer ${isDarkMode
+                      ? 'border-gray-600 bg-gray-800/50 hover:border-blue-500 hover:bg-gray-800'
+                      : 'border-gray-300 bg-gray-50/50 hover:border-blue-400 hover:bg-gray-50'
+                      }`} onClick={addMillOutputItem}>
+                      <div className="flex items-center justify-center space-x-3 py-4">
+                        <div className={`p-2 rounded-full ${isDarkMode
+                          ? 'bg-blue-600/20 text-blue-400'
+                          : 'bg-blue-100 text-blue-600'
                           }`}>
-                          Add New Mill Output Item
-                        </h4>
+                          <PlusIcon className="h-5 w-5" />
+                        </div>
+                        <div className="text-center">
+                          <h4 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                            Add New Mill Output Item
+                          </h4>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
-          </form>
+          </fieldset>
+        </form>
 
           {/* Sticky Submit Button */}
           <div className={`sticky bottom-0 left-0 right-0 p-6 border-t shadow-lg bg-inherit ${isDarkMode ? 'border-gray-700' : 'border-gray-200'
@@ -2484,11 +2505,11 @@ export default function MillOutputForm({
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                   }`}
               >
-                Cancel
+                {readOnly ? 'Close' : 'Cancel'}
               </button>
 
               {/* Delete Button - Show only when has existing data */}
-              {isMaster && hasExistingData && (
+              {!readOnly && isMaster && hasExistingData && (
                 <button
                   type="button"
                   onClick={handleDeleteClick}
@@ -2505,23 +2526,25 @@ export default function MillOutputForm({
                 </button>
               )}
 
-              <button
-                type="button"
-                disabled={saving}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSubmit(e);
-                }}
-                className={`px-10 py-3 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105 ${saving
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : isDarkMode
-                    ? 'bg-blue-600 hover:bg-blue-700 shadow-lg'
-                    : 'bg-blue-500 hover:bg-blue-600 shadow-lg'
-                  }`}
-              >
-                {saving ? 'Saving...' : (hasExistingData ? 'Update' : 'Add')}
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSubmit(e);
+                  }}
+                  className={`px-10 py-3 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105 ${saving
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : isDarkMode
+                      ? 'bg-blue-600 hover:bg-blue-700 shadow-lg'
+                      : 'bg-blue-500 hover:bg-blue-600 shadow-lg'
+                    }`}
+                >
+                  {saving ? 'Saving...' : (hasExistingData ? 'Update' : 'Add')}
+                </button>
+              )}
             </div>
           </div>
         </div>
