@@ -4,6 +4,8 @@ import { requireSuperAdmin } from "@/lib/session";
 import bcrypt from "bcryptjs";
 import { type NextRequest } from "next/server";
 import { logUpdate, logDelete } from "@/lib/logger";
+import { usersCache as usersCacheNormal } from "../route";
+import { usersCache as usersCacheInstant } from "../../users-instant/route";
 
 export async function GET(
   req: NextRequest,
@@ -35,6 +37,11 @@ export async function GET(
     
     if (!user) return new Response("Not found", { status: 404 });
     
+    // ⚡ SECURITY: Block non-master users from accessing master user details
+    if (user.role === 'master' && session.role !== 'master') {
+      return new Response(JSON.stringify({ message: "Access denied" }), { status: 403 });
+    }
+    
     // If password is included, return it (it will be hashed)
     const userData = user.toObject ? user.toObject() : user;
     return new Response(JSON.stringify(userData), { status: 200 });
@@ -60,7 +67,7 @@ export async function PUT(
     // Require superadmin access
     const session = await requireSuperAdmin(req);
 
-    const { name, username, password, role, phoneNumber, address } = await req.json();
+    const { name, username, password, role, phoneNumber, address, partyId } = await req.json();
     
     // Validation
     const errors: string[] = [];
@@ -95,6 +102,12 @@ export async function PUT(
       );
     }
     
+    // ⚡ SECURITY: Block non-master users from editing master user
+    const targetUser = await User.findById(id).select('role').lean();
+    if (targetUser && targetUser.role === 'master' && session.role !== 'master') {
+      return new Response(JSON.stringify({ message: "Access denied - Cannot edit master account" }), { status: 403 });
+    }
+    
     // Check if username already exists (excluding current user)
     if (typeof username === "string" && username.trim()) {
       const existingUser = await User.findOne({ 
@@ -113,7 +126,17 @@ export async function PUT(
     const update: Record<string, unknown> = {};
     if (typeof name === "string" && name.trim()) update.name = name.trim();
     if (typeof username === "string" && username.trim()) update.username = username.trim();
-    if (role === "user" || role === "superadmin") update.role = role;
+    if (role === "user" || role === "admin" || role === "superadmin" || role === "party") {
+      update.role = role;
+    }
+    // Handle partyId settings
+    if (role === "party") {
+      update.partyId = partyId || null;
+    } else if (role) {
+      update.partyId = null; // Clear partyId if the role changed to something else
+    }
+    // Only master can assign master role (privilege escalation prevention)
+    if (role === "master" && session.role === "master") update.role = role;
     if (typeof phoneNumber === "string") update.phoneNumber = phoneNumber.trim();
     if (typeof address === "string") update.address = address.trim();
     if (typeof password === "string" && password.length > 0) {
@@ -127,6 +150,10 @@ export async function PUT(
     // Log the user update
     await logUpdate('user', id, update, updated.toObject(), req);
     
+    // Clear in-memory caches
+    usersCacheNormal.clear();
+    usersCacheInstant.clear();
+
     // ⚡ FIX: Properly invalidate Next.js cache
     const { revalidateTag, revalidatePath } = await import('next/cache');
     revalidateTag('users');
@@ -163,8 +190,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Require superadmin access
-    const session = await requireSuperAdmin(req);
+    // Require master access - only master can delete users
+    const { requireMaster } = await import('@/lib/session');
+    const session = await requireMaster(req);
     
     const { id } = await params;
     
@@ -189,6 +217,16 @@ export async function DELETE(
     }
     
     await dbConnect();
+    
+    // ⚡ SECURITY: Block deleting master accounts entirely
+    const targetUser = await User.findById(id).select('role').lean();
+    if (targetUser && targetUser.role === 'master') {
+      return new Response(
+        JSON.stringify({ success: false, message: "Cannot delete master account" }), 
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    
     const deleted = await User.findByIdAndDelete(id);
     if (!deleted) {
       return new Response(
@@ -203,6 +241,10 @@ export async function DELETE(
     // Log the user deletion
     logDelete('user', id, {}, req);
     
+    // Clear in-memory caches
+    usersCacheNormal.clear();
+    usersCacheInstant.clear();
+
     // ⚡ FIX: Properly invalidate Next.js cache
     const { revalidateTag, revalidatePath } = await import('next/cache');
     revalidateTag('users');

@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     if (rateLimitError) return rateLimitError;
 
     // Validate session
-    await requireAuth(request);
+    const session = await requireAuth(request);
 
     await dbConnect();
 
@@ -29,11 +29,24 @@ export async function GET(request: NextRequest) {
     }
 
     const { Dispatch, Order, Quality } = await import('@/models');
+
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      if (orderId) {
+        const order = await Order.findOne({ orderId }).select('party').lean().maxTimeMS(1000);
+        if (!order || !order.party || order.party.toString() !== session.partyId) {
+          return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
+        }
+      } else {
+        const partyOrders = await Order.find({ party: session.partyId }).select('orderId').lean().maxTimeMS(1000);
+        const orderIds = partyOrders.map((order: any) => order.orderId);
+        query.orderId = { $in: orderIds.length > 0 ? orderIds : ['__no_match__'] };
+      }
+    }
     
     // ⚡ ULTRA-FAST: Query without populate (fetch related data separately)
     const [dispatches, total] = await Promise.all([
       Dispatch.find(query)
-        .select('order orderId dispatchDate billNo transportNo lrNo finishMtr saleRate quality totalValue createdAt')
+        .select('order orderId dispatchDate billNo transportNo lrNo finishMtr saleRate quality totalValue photos chindiKg cutPieceMtr rejectedMtr createdAt')
         .sort({ dispatchDate: -1 })
         .skip(skip)
         .limit(limit)
@@ -100,10 +113,10 @@ export async function POST(request: NextRequest) {
     if (rateLimitError) return rateLimitError;
 
     // Validate session
-    await requireAuth(request);
+    const session = await requireAuth(request);
     await dbConnect();
     const body = await request.json();
-    const { orderId, dispatchDate, billNo, transportNo, lrNo, finishMtr, saleRate, quality } = body;
+    const { orderId, dispatchDate, billNo, transportNo, lrNo, finishMtr, saleRate, quality, photos, chindiKg, cutPieceMtr, rejectedMtr } = body;
 
     // Validate required fields
     if (!orderId || !dispatchDate || !billNo || !finishMtr) {
@@ -141,6 +154,31 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      const orderPartyId = order.party ? String(order.party) : undefined;
+      if (!orderPartyId || orderPartyId !== session.partyId) {
+        return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
+      }
+    }
+
+    // Validate optional numeric fields
+    const numericFields = [
+      { value: chindiKg, name: 'Chindi (kg)' },
+      { value: cutPieceMtr, name: 'Cut piece' },
+      { value: rejectedMtr, name: 'Rejected (m)' }
+    ];
+    for (const field of numericFields) {
+      if (field.value !== undefined && field.value !== null && String(field.value).trim() !== '') {
+        if (isNaN(Number(field.value)) || Number(field.value) < 0) {
+          return NextResponse.json(
+            { error: `${field.name} must be a valid non-negative number` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // Create new dispatch record
     const finishMtrNum = Number(finishMtr);
     const saleRateNum = saleRate !== undefined && saleRate !== null && saleRate !== '' ? Number(saleRate) : 0;
@@ -174,6 +212,18 @@ export async function POST(request: NextRequest) {
     if (typeof lrNo === 'string') {
       dispatchData.lrNo = lrNo.trim();
     }
+    if (Array.isArray(photos)) {
+      dispatchData.photos = photos.filter((url: any) => typeof url === 'string');
+    }
+    if (chindiKg !== undefined && chindiKg !== null && String(chindiKg).trim() !== '') {
+      dispatchData.chindiKg = Number(chindiKg);
+    }
+    if (cutPieceMtr !== undefined && cutPieceMtr !== null && String(cutPieceMtr).trim() !== '') {
+      dispatchData.cutPieceMtr = Number(cutPieceMtr);
+    }
+    if (rejectedMtr !== undefined && rejectedMtr !== null && String(rejectedMtr).trim() !== '') {
+      dispatchData.rejectedMtr = Number(rejectedMtr);
+    }
     
     const dispatch = await Dispatch.create(dispatchData);
     
@@ -201,6 +251,10 @@ export async function POST(request: NextRequest) {
         finishMtr: populatedDispatch?.finishMtr,
         saleRate: populatedDispatch?.saleRate,
         totalValue: populatedDispatch?.totalValue,
+        photos: populatedDispatch?.photos,
+        chindiKg: populatedDispatch?.chindiKg,
+        cutPieceMtr: populatedDispatch?.cutPieceMtr,
+        rejectedMtr: populatedDispatch?.rejectedMtr,
         quality: populatedDispatch?.quality,
         items: populatedDispatch?.items
       }, request);
@@ -235,8 +289,14 @@ export async function DELETE(request: NextRequest) {
 
     await dbConnect();
     
-    // Validate session
-    await requireAuth(request);
+    // Validate session - only master can delete
+    const session = await requireAuth(request);
+    if (session.role !== 'master') {
+      return NextResponse.json(
+        { success: false, error: 'Access denied - Only master can delete' },
+        { status: 403 }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get('orderId');

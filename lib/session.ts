@@ -10,14 +10,17 @@ export interface SessionUser {
   role: string;
   phoneNumber?: string;
   address?: string;
+  partyId?: string;
 }
 
 export async function getSession(req: NextRequest): Promise<SessionUser | null> {
   try {
     const authHeader = req.headers.get("authorization");
-    if (!authHeader) return null;
+    // Also support httpOnly cookie named 'auth-token' set by login
+    const cookieToken = (req as any).cookies?.get ? (req as any).cookies.get('auth-token')?.value : undefined;
+    if (!authHeader && !cookieToken) return null;
 
-    const token = authHeader.split(" ")[1];
+    const token = authHeader ? authHeader.split(" ")[1] : cookieToken;
     const JWT_SECRET = process.env.JWT_SECRET;
     
     if (!token || !JWT_SECRET) return null;
@@ -54,6 +57,7 @@ export async function getSession(req: NextRequest): Promise<SessionUser | null> 
       role: (payload as Record<string, unknown>).role as string,
       phoneNumber: (payload as Record<string, unknown>).phoneNumber as string | undefined,
       address: (payload as Record<string, unknown>).address as string | undefined,
+      partyId: (payload as Record<string, unknown>).partyId as string | undefined,
     };
 
     return sessionUser;
@@ -72,8 +76,16 @@ export async function requireAuth(req: NextRequest): Promise<SessionUser> {
 
 export async function requireSuperAdmin(req: NextRequest): Promise<SessionUser> {
   const session = await requireAuth(req);
-  if (session.role !== "superadmin") {
+  if (session.role !== "superadmin" && session.role !== "master") {
     throw new Error("Forbidden - Superadmin access required");
+  }
+  return session;
+}
+
+export async function requireMaster(req: NextRequest): Promise<SessionUser> {
+  const session = await requireAuth(req);
+  if (session.role !== "master") {
+    throw new Error("Forbidden - Master access required");
   }
   return session;
 }

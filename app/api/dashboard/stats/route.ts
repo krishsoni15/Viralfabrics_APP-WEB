@@ -76,6 +76,14 @@ export async function GET(request: NextRequest) {
       matchConditions.createdAt.$lte = fyEndDate;
     }
 
+    // Restrict to user's party if session has a partyId (applies to party users)
+    if (session && session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      const mongoose = await import('mongoose');
+      matchConditions.party = mongoose.default.Types.ObjectId.isValid(session.partyId)
+        ? new mongoose.default.Types.ObjectId(session.partyId)
+        : session.partyId;
+    }
+
     // ⚡ Use $facet for a single aggregation instead of multiple queries
     const [aggregateResult] = await Order.aggregate([
       { $match: matchConditions },

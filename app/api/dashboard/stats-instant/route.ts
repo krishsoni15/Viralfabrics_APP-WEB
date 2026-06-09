@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { successResponse } from '@/lib/response';
 import { Order } from '@/models';
 import dbConnect from '@/lib/dbConnect';
+import { getSession } from '@/lib/session';
 import { CACHE_TAGS, getCacheHeaders, CACHE_DURATIONS } from "@/lib/cacheConfig";
 
 // In-memory cache for ultra-fast loading
@@ -22,10 +23,10 @@ const getCacheMap = (): Map<string, { data: any; timestamp: number }> => {
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   
-  // Get cache map once at the start
-  const cacheMap = getCacheMap();
-  
   try {
+    // Validate session
+    const session = await getSession(request);
+
     // Get filter parameters from URL
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
@@ -59,6 +60,14 @@ export async function GET(request: NextRequest) {
 
     // Build match conditions based on filters
     const matchConditions: any = { softDeleted: { $ne: true } };
+
+    // Restrict to user's party if role is 'party'
+    if (session?.role === 'party' && session?.partyId) {
+      const mongoose = await import('mongoose');
+      matchConditions.party = mongoose.default.Types.ObjectId.isValid(session.partyId)
+        ? new mongoose.default.Types.ObjectId(session.partyId)
+        : session.partyId;
+    }
 
     // Add date filters
     if (startDate || endDate) {

@@ -28,6 +28,7 @@ interface User {
   address?: string;
   role: string;
   isActive: boolean;
+  partyId?: { _id: string; name: string } | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +40,7 @@ interface UserFormData {
   phoneNumber: string;
   address: string;
   role: string;
+  partyId?: string;
 }
 
 export default function UsersPage() {
@@ -69,17 +71,31 @@ export default function UsersPage() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [screenSize, setScreenSize] = useState<number>(0);
-  const [currentUser, setCurrentUser] = useState<{ _id: string; username: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ _id: string; username: string; role?: string } | null>(null);
   const [formData, setFormData] = useState<UserFormData>({
     name: '',
     username: '',
     password: '',
     phoneNumber: '',
     address: '',
-    role: 'user'
+    role: 'user',
+    partyId: ''
   });
   const [formErrors, setFormErrors] = useState<Partial<UserFormData>>({});
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Party state management for Party role user creation
+  const [parties, setParties] = useState<any[]>([]);
+  const [loadingParties, setLoadingParties] = useState(false);
+  const [showAddPartyModal, setShowAddPartyModal] = useState(false);
+  const [newPartyForm, setNewPartyForm] = useState({
+    name: '',
+    contactName: '',
+    contactPhone: '',
+    address: ''
+  });
+  const [savingParty, setSavingParty] = useState(false);
+  const [partyError, setPartyError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false); // ⚡ FIX: Track deleting state for button disable
@@ -123,7 +139,7 @@ export default function UsersPage() {
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
-        setCurrentUser({ _id: user._id, username: user.username });
+        setCurrentUser({ _id: user._id, username: user.username, role: user.role });
       } catch (error) {
         // Silent error handling
       }
@@ -426,11 +442,12 @@ export default function UsersPage() {
 
     // ⚡ FIX: Remove frontend validation - let backend handle it
     // Only basic checks to prevent unnecessary API calls
-    if (!formData.name.trim() || !formData.username.trim() || !formData.password.trim()) {
+    if (!formData.name.trim() || !formData.username.trim() || !formData.password.trim() || (formData.role === 'party' && !formData.partyId)) {
       setFormErrors({ 
         name: !formData.name.trim() ? 'Required' : undefined,
         username: !formData.username.trim() ? 'Required' : undefined,
-        password: !formData.password.trim() ? 'Required' : undefined
+        password: !formData.password.trim() ? 'Required' : undefined,
+        partyId: (formData.role === 'party' && !formData.partyId) ? 'Party selection is required' : undefined
       });
       return;
     }
@@ -560,6 +577,7 @@ export default function UsersPage() {
     if (!formData.name.trim()) errors.name = 'Required';
     if (!formData.username.trim()) errors.username = 'Required';
     if (!formData.role.trim()) errors.role = 'Required';
+    if (formData.role === 'party' && !formData.partyId) errors.partyId = 'Party selection is required';
     
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -807,6 +825,37 @@ export default function UsersPage() {
     }
   };
 
+  // Fetch parties list for party user dropdown
+  const fetchParties = useCallback(async () => {
+    setLoadingParties(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const response = await fetch('/api/parties?limit=100', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setParties(data.data || []);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch parties:', error);
+    } finally {
+      setLoadingParties(false);
+    }
+  }, []);
+
+  // Fetch parties automatically when role changes to 'party'
+  useEffect(() => {
+    if (formData.role === 'party' && parties.length === 0 && !loadingParties) {
+      fetchParties();
+    }
+  }, [formData.role, parties.length, loadingParties, fetchParties]);
+
   // Reset form
   const resetForm = () => {
     setFormData({
@@ -815,10 +864,60 @@ export default function UsersPage() {
       password: '',
       phoneNumber: '',
       address: '',
-      role: 'user'
+      role: 'user',
+      partyId: ''
     });
     setFormErrors({});
     setShowPassword(false);
+  };
+
+  // Save a new party created inline
+  const handleSaveParty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPartyForm.name.trim()) {
+      setPartyError('Party name is required');
+      return;
+    }
+    setSavingParty(true);
+    setPartyError(null);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/parties', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newPartyForm)
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        const createdParty = data.data;
+        setParties(prev => [createdParty, ...prev]);
+        
+        // Auto-select and autofill
+        setFormData(prev => ({
+          ...prev,
+          partyId: createdParty._id,
+          name: createdParty.name,
+          username: createdParty.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+        }));
+        
+        setNewPartyForm({
+          name: '',
+          contactName: '',
+          contactPhone: '',
+          address: ''
+        });
+        setShowAddPartyModal(false);
+      } else {
+        setPartyError(data.message || 'Failed to save party');
+      }
+    } catch (err: any) {
+      setPartyError(err.message || 'An error occurred while saving party');
+    } finally {
+      setSavingParty(false);
+    }
   };
 
   // Get user initials
@@ -1065,7 +1164,9 @@ export default function UsersPage() {
               >
                 <option value="all" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>All Roles</option>
                 <option value="superadmin" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Super Admin</option>
+                <option value="admin" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Admin</option>
                 <option value="user" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>User</option>
+                <option value="party" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Party</option>
               </select>
             </div>
 
@@ -1419,15 +1520,35 @@ export default function UsersPage() {
                   {isSmallScreen && (
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        user.role === 'superadmin'
+                        user.role === 'master'
                           ? isDarkMode
-                            ? 'bg-purple-900/20 text-purple-400'
-                            : 'bg-purple-100 text-purple-800'
-                          : isDarkMode
-                            ? 'bg-blue-900/20 text-blue-400'
-                            : 'bg-blue-100 text-blue-800'
+                            ? 'bg-red-900/20 text-red-400'
+                            : 'bg-red-100 text-red-800'
+                          : user.role === 'superadmin'
+                            ? isDarkMode
+                              ? 'bg-purple-900/20 text-purple-400'
+                              : 'bg-purple-100 text-purple-800'
+                            : user.role === 'admin'
+                              ? isDarkMode
+                                ? 'bg-amber-900/20 text-amber-400'
+                                : 'bg-amber-100 text-amber-800'
+                              : user.role === 'party'
+                                ? isDarkMode
+                                  ? 'bg-green-900/20 text-green-400'
+                                  : 'bg-green-100 text-green-800'
+                                : isDarkMode
+                                  ? 'bg-blue-900/20 text-blue-400'
+                                  : 'bg-blue-100 text-blue-800'
                       }`}>
-                        {user.role === 'superadmin' ? 'Super Admin' : 'User'}
+                        {user.role === 'master'
+                          ? 'Master'
+                          : user.role === 'superadmin'
+                            ? 'Super Admin'
+                            : user.role === 'admin'
+                              ? 'Admin'
+                              : user.role === 'party'
+                                ? `Party: ${typeof user.partyId === 'object' && user.partyId !== null ? user.partyId.name : (parties.find(p => p._id === user.partyId)?.name || 'Party User')}`
+                                : 'User'}
                       </span>
                     </td>
                   )}
@@ -1459,123 +1580,135 @@ export default function UsersPage() {
                   )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
-                      <button
-                        onClick={async () => {
-                          // ⚡ FIX: Always get the latest user data from the list
-                          const latestUser = users.find(u => String(u._id) === String(user._id));
-                          const userToEdit = latestUser || user;
-                          setSelectedUser(userToEdit);
-                          
-                          // Fetch user with password for editing
-                          try {
-                            const token = localStorage.getItem('token');
-                            if (token && userToEdit._id) {
-                              const response = await fetch(`/api/users/${userToEdit._id}?includePassword=true`, {
-                                headers: {
-                                  'Authorization': `Bearer ${token}`
-                                }
-                              });
-                              if (response.ok) {
-                                const userData = await response.json();
-                                setFormData({
-                                  name: userData.name || userToEdit.name,
-                                  username: userData.username || userToEdit.username,
-                                  password: userData.password || '', // This will be the hashed password
-                                  phoneNumber: userData.phoneNumber || userToEdit.phoneNumber || '',
-                                  address: userData.address || userToEdit.address || '',
-                                  role: userData.role || userToEdit.role
+                      {user.role !== 'master' && (
+                        <button
+                          onClick={async () => {
+                            // ⚡ FIX: Always get the latest user data from the list
+                            const latestUser = users.find(u => String(u._id) === String(user._id));
+                            const userToEdit = latestUser || user;
+                            setSelectedUser(userToEdit);
+                            
+                            // Fetch user with password for editing
+                            try {
+                              const token = localStorage.getItem('token');
+                              if (token && userToEdit._id) {
+                                const response = await fetch(`/api/users/${userToEdit._id}?includePassword=true`, {
+                                  headers: {
+                                    'Authorization': `Bearer ${token}`
+                                  }
                                 });
+                                if (response.ok) {
+                                  const userData = await response.json();
+                                  const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
+                                  setFormData({
+                                    name: userData.name || userToEdit.name,
+                                    username: userData.username || userToEdit.username,
+                                    password: userData.password || '', // This will be the hashed password
+                                    phoneNumber: userData.phoneNumber || userToEdit.phoneNumber || '',
+                                    address: userData.address || userToEdit.address || '',
+                                    role: userData.role || userToEdit.role,
+                                    partyId: getPartyId(userData.partyId) || getPartyId(userToEdit.partyId)
+                                  });
+                                } else {
+                                  // Fallback to user data without password
+                                  const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
+                                  setFormData({
+                                    name: userToEdit.name,
+                                    username: userToEdit.username,
+                                    password: '',
+                                    phoneNumber: userToEdit.phoneNumber || '',
+                                    address: userToEdit.address || '',
+                                    role: userToEdit.role,
+                                    partyId: getPartyId(userToEdit.partyId)
+                                  });
+                                }
                               } else {
                                 // Fallback to user data without password
+                                const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
                                 setFormData({
                                   name: userToEdit.name,
                                   username: userToEdit.username,
                                   password: '',
                                   phoneNumber: userToEdit.phoneNumber || '',
                                   address: userToEdit.address || '',
-                                  role: userToEdit.role
+                                  role: userToEdit.role,
+                                  partyId: getPartyId(userToEdit.partyId)
                                 });
                               }
-                            } else {
+                            } catch (error) {
                               // Fallback to user data without password
+                              const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
                               setFormData({
                                 name: userToEdit.name,
                                 username: userToEdit.username,
                                 password: '',
-                                phoneNumber: userToEdit.phoneNumber || '',
-                                address: userToEdit.address || '',
-                                role: userToEdit.role
-                              });
-                            }
-                          } catch (error) {
-                            // Fallback to user data without password
-                            setFormData({
-                              name: userToEdit.name,
-                              username: userToEdit.username,
-                              password: '',
-                              phoneNumber: userToEdit.phoneNumber || '',
-                              address: userToEdit.address || '',
-                              role: userToEdit.role
-                            });
-                          }
-                          
-                          setShowPassword(false); // Reset password visibility when opening edit modal
-                          setShowEditModal(true);
-                          setValidationAlert(null);
-                        }}
-                        className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
-                          isDarkMode
-                            ? 'text-blue-400 hover:bg-blue-500/20 hover:text-blue-300'
-                            : 'text-blue-600 hover:bg-blue-50 hover:text-blue-700'
-                        }`}
-                        title="Edit user"
-                      >
-                        <PencilIcon className="h-4 w-4" />
-                      </button>
-                      {canDeleteUser(user) ? (
-                        <button
-                          onClick={() => {
-                            // ⚡ FIX: Allow delete even if submitting from edit (but not if deleting)
-                            if (user._id && !isDeleting && !deleteInProgressRef.current) {
-                              // ⚡ FIX: Ensure we use the latest user data from the list
-                              const currentUserFromList = users.find(u => String(u._id) === String(user._id));
-                              if (currentUserFromList) {
-                                setSelectedUser(currentUserFromList);
-                                setShowDeleteModal(true);
-                                setValidationAlert(null);
-                              } else {
-                                setSelectedUser(user);
-                                setShowDeleteModal(true);
-                                setValidationAlert(null);
+                                  phoneNumber: userToEdit.phoneNumber || '',
+                                  address: userToEdit.address || '',
+                                  role: userToEdit.role,
+                                  partyId: getPartyId(userToEdit.partyId)
+                                });
                               }
-                            }
-                          }}
-                          disabled={isDeleting || deleteInProgressRef.current}
-                          className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
-                            (isDeleting || deleteInProgressRef.current)
-                              ? 'opacity-50 cursor-not-allowed'
-                              : ''
-                          } ${
-                            isDarkMode
-                              ? 'text-red-400 hover:bg-red-500/20 hover:text-red-300 active:bg-red-500/30'
-                              : 'text-red-600 hover:bg-red-50 hover:text-red-700 active:bg-red-100'
-                          }`}
-                          title="Delete user"
-                        >
-                          <TrashIcon className="h-4 w-4" />
+                              
+                              setShowPassword(false); // Reset password visibility when opening edit modal
+                              setShowEditModal(true);
+                              setValidationAlert(null);
+                            }}
+                            className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
+                              isDarkMode
+                                ? 'text-blue-400 hover:bg-blue-500/20 hover:text-blue-300'
+                                : 'text-blue-600 hover:bg-blue-50 hover:text-blue-700'
+                            }`}
+                            title="Edit user"
+                          >
+                          <PencilIcon className="h-4 w-4" />
                         </button>
-                      ) : (
-                        <button
-                          disabled
-                          className={`p-2 rounded-lg transition-all duration-200 cursor-not-allowed opacity-50 ${
-                            isDarkMode
-                              ? 'text-gray-500'
-                              : 'text-gray-400'
-                          }`}
-                          title="You cannot delete yourself - This would lock you out of the system"
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
+                      )}
+                      {currentUser?.role === 'master' && (
+                        canDeleteUser(user) ? (
+                          <button
+                            onClick={() => {
+                              // ⚡ FIX: Allow delete even if submitting from edit (but not if deleting)
+                              if (user._id && !isDeleting && !deleteInProgressRef.current) {
+                                // ⚡ FIX: Ensure we use the latest user data from the list
+                                const currentUserFromList = users.find(u => String(u._id) === String(user._id));
+                                if (currentUserFromList) {
+                                  setSelectedUser(currentUserFromList);
+                                  setShowDeleteModal(true);
+                                  setValidationAlert(null);
+                                } else {
+                                  setSelectedUser(user);
+                                  setShowDeleteModal(true);
+                                  setValidationAlert(null);
+                                }
+                              }
+                            }}
+                            disabled={isDeleting || deleteInProgressRef.current}
+                            className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
+                              (isDeleting || deleteInProgressRef.current)
+                                ? 'opacity-50 cursor-not-allowed'
+                                : ''
+                            } ${
+                              isDarkMode
+                                ? 'text-red-400 hover:bg-red-500/20 hover:text-red-300 active:bg-red-500/30'
+                                : 'text-red-600 hover:bg-red-50 hover:text-red-700 active:bg-red-100'
+                            }`}
+                            title="Delete user"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className={`p-2 rounded-lg transition-all duration-200 cursor-not-allowed opacity-50 ${
+                              isDarkMode
+                                ? 'text-gray-500'
+                                : 'text-gray-400'
+                            }`}
+                            title="You cannot delete yourself - This would lock you out of the system"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        )
                       )}
                     </div>
                   </td>
@@ -1890,45 +2023,53 @@ export default function UsersPage() {
                   });
                   if (response.ok) {
                     const userData = await response.json();
+                    const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
                     setFormData({
                       name: userData.name || userToEdit.name,
                       username: userData.username || userToEdit.username,
                       password: userData.password || '', // This will be the hashed password
                       phoneNumber: userData.phoneNumber || userToEdit.phoneNumber || '',
                       address: userData.address || userToEdit.address || '',
-                      role: userData.role || userToEdit.role
+                      role: userData.role || userToEdit.role,
+                      partyId: getPartyId(userData.partyId) || getPartyId(userToEdit.partyId)
                     });
                   } else {
                     // Fallback to user data without password
+                    const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
                     setFormData({
                       name: userToEdit.name,
                       username: userToEdit.username,
                       password: '',
                       phoneNumber: userToEdit.phoneNumber || '',
                       address: userToEdit.address || '',
-                      role: userToEdit.role
+                      role: userToEdit.role,
+                      partyId: getPartyId(userToEdit.partyId)
                     });
                   }
                 } else {
                   // Fallback to user data without password
+                  const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
                   setFormData({
                     name: userToEdit.name,
                     username: userToEdit.username,
                     password: '',
                     phoneNumber: userToEdit.phoneNumber || '',
                     address: userToEdit.address || '',
-                    role: userToEdit.role
+                    role: userToEdit.role,
+                    partyId: getPartyId(userToEdit.partyId)
                   });
                 }
               } catch (error) {
                 // Fallback to user data without password
+                const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
                 setFormData({
                   name: userToEdit.name,
                   username: userToEdit.username,
                   password: '',
                   phoneNumber: userToEdit.phoneNumber || '',
                   address: userToEdit.address || '',
-                  role: userToEdit.role
+                  role: userToEdit.role,
+                  partyId: getPartyId(userToEdit.partyId)
                 });
               }
               
@@ -2274,11 +2415,65 @@ export default function UsersPage() {
                     >
                       <option value="user" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>User</option>
                       <option value="superadmin" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Super Admin</option>
+                      <option value="party" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Party</option>
                     </select>
                     {formErrors.role && (
                       <p className="mt-1 text-xs text-red-500">{formErrors.role}</p>
                     )}
                   </div>
+
+                  {/* Party Dropdown */}
+                  {formData.role === 'party' && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className={`block text-sm font-medium ${
+                          isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          Select Party <span className="text-red-500">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPartyError(null);
+                            setShowAddPartyModal(true);
+                          }}
+                          className="text-xs font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+                        >
+                          + Add New Party
+                        </button>
+                      </div>
+                      <select
+                        value={formData.partyId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const selected = parties.find(p => p._id === val);
+                          setFormData(prev => ({
+                            ...prev,
+                            partyId: val,
+                            name: selected ? selected.name : prev.name,
+                            username: selected ? selected.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : prev.username
+                          }));
+                        }}
+                        className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${
+                          formErrors.partyId
+                            ? 'border-red-500'
+                            : isDarkMode
+                              ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                              : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                        }`}
+                      >
+                        <option value="">-- Choose Party --</option>
+                        {parties.map(p => (
+                          <option key={p._id} value={p._id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.partyId && (
+                        <p className="mt-1 text-xs text-red-500">{formErrors.partyId}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2544,8 +2739,62 @@ export default function UsersPage() {
                     >
                       <option value="user" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>User</option>
                       <option value="superadmin" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Super Admin</option>
+                      <option value="party" className={isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'}>Party</option>
                     </select>
                   </div>
+
+                  {/* Party Dropdown */}
+                  {formData.role === 'party' && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className={`block text-sm font-medium ${
+                          isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          Select Party <span className="text-red-500">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPartyError(null);
+                            setShowAddPartyModal(true);
+                          }}
+                          className="text-xs font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+                        >
+                          + Add New Party
+                        </button>
+                      </div>
+                      <select
+                        value={formData.partyId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const selected = parties.find(p => p._id === val);
+                          setFormData(prev => ({
+                            ...prev,
+                            partyId: val,
+                            name: selected ? selected.name : prev.name,
+                            username: selected ? selected.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : prev.username
+                          }));
+                        }}
+                        className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${
+                          formErrors.partyId
+                            ? 'border-red-500'
+                            : isDarkMode
+                              ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                              : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                        }`}
+                      >
+                        <option value="">-- Choose Party --</option>
+                        {parties.map(p => (
+                          <option key={p._id} value={p._id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.partyId && (
+                        <p className="mt-1 text-xs text-red-500">{formErrors.partyId}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2778,15 +3027,23 @@ export default function UsersPage() {
                     Role
                   </label>
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    selectedUser.role === 'superadmin'
+                    selectedUser.role === 'master'
                       ? isDarkMode
-                        ? 'bg-purple-900/20 text-purple-400'
-                        : 'bg-purple-100 text-purple-800'
-                      : isDarkMode
-                        ? 'bg-blue-900/20 text-blue-400'
-                        : 'bg-blue-100 text-blue-800'
+                        ? 'bg-red-900/20 text-red-400'
+                        : 'bg-red-100 text-red-800'
+                      : selectedUser.role === 'superadmin'
+                        ? isDarkMode
+                          ? 'bg-purple-900/20 text-purple-400'
+                          : 'bg-purple-100 text-purple-800'
+                        : selectedUser.role === 'admin'
+                          ? isDarkMode
+                            ? 'bg-amber-900/20 text-amber-400'
+                            : 'bg-amber-100 text-amber-800'
+                          : isDarkMode
+                            ? 'bg-blue-900/20 text-blue-400'
+                            : 'bg-blue-100 text-blue-800'
                   }`}>
-                    {selectedUser.role === 'superadmin' ? 'Super Admin' : 'User'}
+                    {selectedUser.role === 'master' ? 'Master' : selectedUser.role === 'superadmin' ? 'Super Admin' : selectedUser.role === 'admin' ? 'Admin' : 'User'}
                   </span>
                 </div>
 
@@ -2830,6 +3087,142 @@ export default function UsersPage() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Party Modal */}
+      {showAddPartyModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-lg shadow-xl overflow-hidden ${
+            isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-gray-200'
+          }`}>
+            <div className={`flex items-center justify-between p-6 border-b ${
+              isDarkMode ? 'border-slate-700' : 'border-gray-200'
+            }`}>
+              <h3 className={`text-lg font-semibold ${
+                isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                Add New Party
+              </h3>
+              <button
+                onClick={() => setShowAddPartyModal(false)}
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  isDarkMode ? 'text-gray-400 hover:bg-white/10' : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveParty}>
+              <div className="p-6 space-y-4">
+                {partyError && (
+                  <div className="p-3 bg-red-500/10 text-red-500 rounded-lg text-sm border border-red-500/20">
+                    {partyError}
+                  </div>
+                )}
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Party Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newPartyForm.name}
+                    onChange={(e) => setNewPartyForm({ ...newPartyForm, name: e.target.value })}
+                    placeholder="Enter party name"
+                    className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${
+                      isDarkMode
+                        ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                        : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Contact Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newPartyForm.contactName}
+                    onChange={(e) => setNewPartyForm({ ...newPartyForm, contactName: e.target.value })}
+                    placeholder="Enter contact person name"
+                    className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${
+                      isDarkMode
+                        ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                        : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Contact Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={newPartyForm.contactPhone}
+                    onChange={(e) => setNewPartyForm({ ...newPartyForm, contactPhone: e.target.value })}
+                    placeholder="Enter contact phone number"
+                    className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${
+                      isDarkMode
+                        ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                        : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Address
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={newPartyForm.address}
+                    onChange={(e) => setNewPartyForm({ ...newPartyForm, address: e.target.value })}
+                    placeholder="Enter party address"
+                    className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 resize-none ${
+                      isDarkMode
+                        ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                        : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className={`flex justify-end space-x-3 p-6 border-t ${
+                isDarkMode ? 'border-slate-700' : 'border-gray-200'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddPartyModal(false)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
+                    isDarkMode
+                      ? 'text-gray-300 hover:bg-white/10'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingParty}
+                  className={`px-4 py-2 rounded-lg font-medium text-white transition-all duration-300 bg-blue-600 hover:bg-blue-700 disabled:opacity-50`}
+                >
+                  {savingParty ? 'Saving...' : 'Save Party'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

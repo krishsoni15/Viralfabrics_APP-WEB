@@ -169,6 +169,15 @@ export async function DELETE(
   try {
     const { id } = await params;
     
+    const { getSession } = await import('@/lib/session');
+    const session = await getSession(req);
+    if (!session) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+    if (session.role !== 'master') {
+      return NextResponse.json({ success: false, message: 'Access denied - Only master can delete' }, { status: 403 });
+    }
+
     await dbConnect();
     
     const process = await Process.findById(id);

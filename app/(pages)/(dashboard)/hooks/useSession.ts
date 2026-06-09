@@ -29,12 +29,16 @@ export function useSession() {
 
   const isSuperAdmin = user?.role === 'superadmin';
   const isUser = user?.role === 'user';
+  const isMaster = user?.role === 'master';
+  const isParty = user?.role === 'party';
 
   return {
     user,
     isLoading,
     isSuperAdmin,
     isUser,
+    isMaster,
+    isParty,
     isAuthenticated: !!user,
   };
 }

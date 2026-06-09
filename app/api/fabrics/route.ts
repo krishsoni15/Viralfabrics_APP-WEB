@@ -546,10 +546,13 @@ export async function DELETE(req: NextRequest) {
     const rateLimitError = await checkRateLimitOrError(req, writeRateLimiter);
     if (rateLimitError) return rateLimitError;
 
-    // Validate session first (security check)
+    // Validate session - only master can delete
     const session = await getSession(req);
     if (!session) {
       return Response.json(unauthorizedResponse('Unauthorized'), { status: 401 });
+    }
+    if (session.role !== 'master') {
+      return Response.json({ success: false, message: 'Access denied - Only master can delete fabrics' }, { status: 403 });
     }
 
     await dbConnect();

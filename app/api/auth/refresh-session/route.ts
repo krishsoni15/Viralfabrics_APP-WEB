@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the user to ensure they still exist
-    const user = await User.findById(decoded.id).select('_id username name role');
+    const user = await User.findById(decoded.id).select('_id username name role partyId');
     if (!user) {
       return unauthorized('User not found');
     }
@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
       role: user.role,
       username: user.username || user.name,
       name: user.name,
+      partyId: user.partyId ? user.partyId.toString() : undefined,
       loginTime: decoded.loginTime || decoded.iat || Math.floor(Date.now() / 1000) // Preserve original login time
     })
       .setProtectedHeader({ alg: "HS256" })
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
         name: user.name,
         username: user.username,
         role: user.role,
+        partyId: user.partyId ? user.partyId.toString() : undefined,
         exp: exp // Include expiration time
       }
     }), { 

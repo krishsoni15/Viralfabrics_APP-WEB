@@ -159,23 +159,28 @@ export default function Sidebar({
       }
     ];
 
-    // Only show Users, Fabrics, and Sampling for superadmin
-    if (user?.role !== 'superadmin') {
-      items.splice(1, 1); // Remove Users item for non-superadmin
-      // Remove Fabrics item for non-superadmin (users)
+    // Only show Orders for party users - one page only
+    if (user?.role === 'party') {
+      return items.filter(item => item.name === 'Orders');
+    }
+
+    // Only show Users, Fabrics, and Sampling for superadmin and master
+    if (user?.role !== 'superadmin' && user?.role !== 'master') {
+      items.splice(1, 1); // Remove Users item for non-admin
+      // Remove Fabrics item for non-admin
       const fabricsIndex = items.findIndex(item => item.name === 'Fabrics');
       if (fabricsIndex !== -1) {
         items.splice(fabricsIndex, 1);
       }
-      // Remove Sampling item for non-superadmin (users)
+      // Remove Sampling item for non-admin
       const samplingIndex = items.findIndex(item => item.name === 'Sampling');
       if (samplingIndex !== -1) {
         items.splice(samplingIndex, 1);
       }
     }
     
-    // Add Logs only for superadmin
-    if (user?.role === 'superadmin') {
+    // Add Logs for superadmin and master
+    if (user?.role === 'superadmin' || user?.role === 'master') {
       items.push({
         name: 'Logs',
         href: '/logs',
@@ -481,7 +486,7 @@ export default function Sidebar({
                     <span className={`block text-xs transition-colors duration-300 ${
                       isDarkMode ? 'text-purple-400' : 'text-purple-600'
                     }`}>
-                      {user?.role === 'superadmin' ? 'Super Admin' : 'User'}
+                      {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                     </span>
                   </div>
                 )}
@@ -509,7 +514,7 @@ export default function Sidebar({
                         <p className={`text-xs transition-colors duration-300 ${
                           isDarkMode ? 'text-purple-400' : 'text-purple-600'
                         }`}>
-                          {user?.role === 'superadmin' ? 'Super Admin' : 'User'}
+                          {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                         </p>
                       </div>
                     )}

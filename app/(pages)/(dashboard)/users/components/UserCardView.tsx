@@ -11,13 +11,14 @@ interface User {
   address?: string;
   role: string;
   isActive: boolean;
+  partyId?: { _id: string; name: string } | string;
   createdAt: string;
   updatedAt: string;
 }
 
 interface UserCardViewProps {
   users: User[];
-  currentUser: { _id: string; username: string } | null;
+  currentUser: { _id: string; username: string; role?: string } | null;
   isDarkMode: boolean;
   onEditUser: (user: User) => void;
   onDeleteUser: (user: User) => void;
@@ -89,18 +90,37 @@ export default function UserCardView({
               </div>
             </div>
 
-            {/* Role Badge */}
             <div className="mb-3">
               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                user.role === 'superadmin'
+                user.role === 'master'
                   ? isDarkMode
-                    ? 'bg-purple-900/20 text-purple-400'
-                    : 'bg-purple-100 text-purple-800'
-                  : isDarkMode
-                    ? 'bg-blue-900/20 text-blue-400'
-                    : 'bg-blue-100 text-blue-800'
+                    ? 'bg-red-900/20 text-red-400'
+                    : 'bg-red-100 text-red-800'
+                  : user.role === 'superadmin'
+                    ? isDarkMode
+                      ? 'bg-purple-900/20 text-purple-400'
+                      : 'bg-purple-100 text-purple-800'
+                    : user.role === 'admin'
+                      ? isDarkMode
+                        ? 'bg-amber-900/20 text-amber-400'
+                        : 'bg-amber-100 text-amber-800'
+                      : user.role === 'party'
+                        ? isDarkMode
+                          ? 'bg-green-900/20 text-green-400'
+                          : 'bg-green-100 text-green-800'
+                        : isDarkMode
+                          ? 'bg-blue-900/20 text-blue-400'
+                          : 'bg-blue-100 text-blue-800'
               }`}>
-                {user.role === 'superadmin' ? 'Super Admin' : 'User'}
+                {user.role === 'master'
+                  ? 'Master'
+                  : user.role === 'superadmin'
+                    ? 'Super Admin'
+                    : user.role === 'admin'
+                      ? 'Admin'
+                      : user.role === 'party'
+                        ? `Party: ${typeof user.partyId === 'object' && user.partyId !== null ? user.partyId.name : 'Party User'}`
+                        : 'User'}
               </span>
             </div>
 
@@ -147,41 +167,45 @@ export default function UserCardView({
               </button>
               
               <div className="flex items-center space-x-1">
-                <button
-                  onClick={() => onEditUser(user)}
-                  className={`p-1.5 rounded-md transition-all duration-200 hover:scale-110 ${
-                    isDarkMode
-                      ? 'text-blue-400 hover:bg-blue-500/20'
-                      : 'text-blue-600 hover:bg-blue-50'
-                  }`}
-                  title="Edit user"
-                >
-                  <PencilIcon className="h-3 w-3" />
-                </button>
-                {canDeleteUser(user) ? (
+                {user.role !== 'master' && (
                   <button
-                    onClick={() => onDeleteUser(user)}
+                    onClick={() => onEditUser(user)}
                     className={`p-1.5 rounded-md transition-all duration-200 hover:scale-110 ${
                       isDarkMode
-                        ? 'text-red-400 hover:bg-red-500/20'
-                        : 'text-red-600 hover:bg-red-50'
+                        ? 'text-blue-400 hover:bg-blue-500/20'
+                        : 'text-blue-600 hover:bg-blue-50'
                     }`}
-                    title="Delete user"
+                    title="Edit user"
                   >
-                    <TrashIcon className="h-3 w-3" />
+                    <PencilIcon className="h-3 w-3" />
                   </button>
-                ) : (
-                  <button
-                    disabled
-                    className={`p-1.5 rounded-md transition-all duration-200 cursor-not-allowed opacity-50 ${
-                      isDarkMode
-                        ? 'text-gray-500'
-                        : 'text-gray-400'
-                    }`}
-                    title="You cannot delete yourself - This would lock you out of the system"
-                  >
-                    <TrashIcon className="h-3 w-3" />
-                  </button>
+                )}
+                {currentUser?.role === 'master' && (
+                  canDeleteUser(user) ? (
+                    <button
+                      onClick={() => onDeleteUser(user)}
+                      className={`p-1.5 rounded-md transition-all duration-200 hover:scale-110 ${
+                        isDarkMode
+                          ? 'text-red-400 hover:bg-red-500/20'
+                          : 'text-red-600 hover:bg-red-50'
+                      }`}
+                      title="Delete user"
+                    >
+                      <TrashIcon className="h-3 w-3" />
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className={`p-1.5 rounded-md transition-all duration-200 cursor-not-allowed opacity-50 ${
+                        isDarkMode
+                          ? 'text-gray-500'
+                          : 'text-gray-400'
+                      }`}
+                      title="You cannot delete yourself - This would lock you out of the system"
+                    >
+                      <TrashIcon className="h-3 w-3" />
+                    </button>
+                  )
                 )}
               </div>
             </div>

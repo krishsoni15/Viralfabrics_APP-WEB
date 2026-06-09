@@ -61,7 +61,7 @@ export default function FabricsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const { isUser } = useSession();
+  const { isUser, isMaster, user } = useSession();
   
   // useTransition for non-urgent updates (search, filters) - matches sampling page pattern
   const [isPending, startTransition] = useTransition();
@@ -4447,18 +4447,20 @@ export default function FabricsPage() {
                                         </button>
                                         
                                         {/* Delete Button */}
-                                        <button
-                                            onClick={() => handleDelete(fabric)}
-                                            disabled={false}
-                                            className={`p-1 sm:p-1.5 rounded-md transition-all duration-150 hover:scale-110 active:scale-95 hover-lift disabled:opacity-50 disabled:cursor-not-allowed ${
-                                              isDarkMode 
-                                                ? 'text-red-400 hover:bg-red-900/20' 
-                                                : 'text-red-600 hover:bg-red-50'
-                                            }`}
-                                            title={`Delete Weaver ${index + 1}`}
-                                          >
-                                            <TrashIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                          </button>
+                                        {isMaster && (
+                                          <button
+                                              onClick={() => handleDelete(fabric)}
+                                              disabled={false}
+                                              className={`p-1 sm:p-1.5 rounded-md transition-all duration-150 hover:scale-110 active:scale-95 hover-lift disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                isDarkMode 
+                                                  ? 'text-red-400 hover:bg-red-900/20' 
+                                                  : 'text-red-600 hover:bg-red-50'
+                                              }`}
+                                              title={`Delete Weaver ${index + 1}`}
+                                            >
+                                              <TrashIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                            </button>
+                                         )}
                                       </div>
                                     </div>
                                     
@@ -4651,7 +4653,7 @@ export default function FabricsPage() {
                               <span className="sm:hidden">Edit</span>
                             </button>
                             
-                            {false ? (
+                            {isMaster && (false ? (
                               <button
                                 disabled
                                 className={`flex-1 px-1.5 sm:px-2 lg:px-3 py-1 sm:py-1.5 lg:py-2 rounded-lg transition-all duration-150 text-xs sm:text-sm font-medium shadow-sm flex items-center justify-center space-x-1 bg-transparent opacity-50 cursor-not-allowed ${
@@ -4682,7 +4684,7 @@ export default function FabricsPage() {
                                 <span className="hidden sm:inline lg:hidden">Delete</span>
                                 <span className="sm:hidden">Del</span>
                               </button>
-                            )}
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -5210,18 +5212,20 @@ export default function FabricsPage() {
                               </button>
                               
                               {/* Delete Button - Second Row */}
-                              <button
-                                onClick={() => handleDelete(fabric)}
-                                disabled={false}
-                                className={`p-1 xs:p-1.5 sm:p-2 rounded transition-all duration-150 hover:scale-110 active:scale-95 hover-lift disabled:opacity-50 disabled:cursor-not-allowed ${
-                                  isDarkMode 
-                                    ? 'text-red-400 border border-red-500/30 hover:bg-red-500/20' 
-                                    : 'text-red-600 border border-red-300 hover:bg-red-50'
-                                }`}
-                                title={`Delete Weaver ${weaverIndex + 1}`}
-                              >
-                                <TrashIcon className="h-3 w-3 xs:h-3.5 xs:w-3.5 sm:h-4 sm:w-4" />
-                              </button>
+                              {isMaster && (
+                                <button
+                                  onClick={() => handleDelete(fabric)}
+                                  disabled={false}
+                                  className={`p-1 xs:p-1.5 sm:p-2 rounded transition-all duration-150 hover:scale-110 active:scale-95 hover-lift disabled:opacity-50 disabled:cursor-not-allowed ${
+                                    isDarkMode 
+                                      ? 'text-red-400 border border-red-500/30 hover:bg-red-500/20' 
+                                      : 'text-red-600 border border-red-300 hover:bg-red-50'
+                                  }`}
+                                  title={`Delete Weaver ${weaverIndex + 1}`}
+                                >
+                                  <TrashIcon className="h-3 w-3 xs:h-3.5 xs:w-3.5 sm:h-4 sm:w-4" />
+                                </button>
+                              )}
                             </div>
                           </td>
                           
@@ -5257,7 +5261,7 @@ export default function FabricsPage() {
                                   <span className="hidden sm:inline">Edit</span>
                                 </button>
                                 
-                                {false ? (
+                                {isMaster && (false ? (
                                   <button
                                     disabled
                                     className={`w-full px-1.5 xs:px-2 sm:px-2.5 md:px-3 py-1 xs:py-1.5 sm:py-2 rounded-lg text-[9px] xs:text-[10px] sm:text-xs md:text-sm font-medium flex items-center justify-center space-x-1 transition-colors opacity-50 cursor-not-allowed ${
@@ -5284,7 +5288,7 @@ export default function FabricsPage() {
                                     <TrashIcon className="h-3 w-3 xs:h-3.5 xs:w-3.5 sm:h-4 sm:w-4" />
                                     <span className="hidden sm:inline">Delete</span>
                                   </button>
-                                )}
+                                ))}
                               </div>
                             </td>
                           )}

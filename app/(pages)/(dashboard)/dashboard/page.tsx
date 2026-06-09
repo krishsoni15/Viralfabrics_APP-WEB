@@ -1,12 +1,19 @@
 import { Metadata } from 'next';
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
-import { fetchDashboardStatsAction } from '@/app/actions/dataActions';
+import { cookies, headers } from 'next/headers';
+import { verifyToken } from '@/lib/auth';
+import { fetchDashboardStatsAction, fetchOrdersAction, fetchPartiesAction, fetchQualitiesAction, fetchMillsAction } from '@/app/actions/dataActions';
 import DashboardSkeleton from './components/DashboardSkeleton';
+import OrdersTableSkeleton from '../orders/components/OrdersTableSkeleton';
 
 // Lazy load client component (must be in client component, not server)
 const DashboardClient = dynamic(() => import('./DashboardClient'), {
   loading: () => <DashboardSkeleton />,
+});
+
+const OrdersClient = dynamic(() => import('../orders/OrdersClient'), {
+  loading: () => <OrdersTableSkeleton />,
 });
 
 export const metadata: Metadata = {
@@ -27,6 +34,59 @@ export default async function DashboardPage({
 }) {
   const params = await searchParams;
   
+  // Determine current user role from token so we can render a simplified party view
+  const cookieStore = await cookies();
+  const headersList = await headers();
+  const authHeader = headersList.get('authorization') || cookieStore.get('auth-token')?.value;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+  const payload = token ? await verifyToken(token) : null;
+  const isPartyUser = payload?.role === 'party';
+
+  if (isPartyUser) {
+    let initialOrders: any[] = [];
+    let initialParties: any[] = [];
+    let initialQualities: any[] = [];
+    let initialMills: any[] = [];
+
+    try {
+      const [ordersResult, partiesResult, qualitiesResult, millsResult] = await Promise.allSettled([
+        fetchOrdersAction({ limit: 25, page: 1 }),
+        fetchPartiesAction({ limit: 100 }),
+        fetchQualitiesAction({ limit: 100 }),
+        fetchMillsAction({ limit: 100 }),
+      ]);
+
+      if (ordersResult.status === 'fulfilled' && ordersResult.value.success) {
+        initialOrders = ordersResult.value.data || [];
+      }
+      if (partiesResult.status === 'fulfilled' && partiesResult.value.success) {
+        initialParties = partiesResult.value.data || [];
+      }
+      if (qualitiesResult.status === 'fulfilled' && qualitiesResult.value.success) {
+        initialQualities = qualitiesResult.value.data || [];
+      }
+      if (millsResult.status === 'fulfilled' && millsResult.value.success) {
+        initialMills = millsResult.value.data || [];
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.error('Failed to fetch party order view data:', error);
+      }
+    }
+
+    return (
+      <Suspense fallback={<OrdersTableSkeleton />}>
+        <OrdersClient
+          initialOrders={initialOrders}
+          initialParties={initialParties}
+          initialQualities={initialQualities}
+          initialMills={initialMills}
+        />
+      </Suspense>
+    );
+  }
+
   // Fetch dashboard stats on server using server action (direct DB access)
   let initialStats = null;
   try {

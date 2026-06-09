@@ -12,6 +12,10 @@ export interface IDispatch extends Document {
   saleRate?: number;
   quality?: mongoose.Types.ObjectId;
   totalValue: number;
+  photos?: string[];
+  chindiKg?: number;
+  cutPieceMtr?: number;
+  rejectedMtr?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -73,6 +77,29 @@ const DispatchSchema = new Schema<IDispatch>({
     index: true
   },
   totalValue: {
+    type: Number,
+    required: false,
+    min: 0,
+    default: 0
+  },
+  photos: {
+    type: [String],
+    required: false,
+    default: []
+  },
+  chindiKg: {
+    type: Number,
+    required: false,
+    min: 0,
+    default: 0
+  },
+  cutPieceMtr: {
+    type: Number,
+    required: false,
+    min: 0,
+    default: 0
+  },
+  rejectedMtr: {
     type: Number,
     required: false,
     min: 0,

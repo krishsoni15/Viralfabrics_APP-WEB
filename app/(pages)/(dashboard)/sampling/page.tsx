@@ -58,7 +58,7 @@ export default function SamplingPage() {
       // Ignore preload failures; modal will lazy-load normally
     });
   }, []);
-  const { isSuperAdmin, isLoading: authLoading, isAuthenticated } = useAuthSession();
+  const { isSuperAdmin, isMaster, isLoading: authLoading, isAuthenticated } = useAuthSession();
   
   // useTransition for non-urgent updates (search, filters)
   const [isPending, startTransition] = useTransition();
@@ -2640,24 +2640,26 @@ export default function SamplingPage() {
                             <BeakerIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                             <span className="font-medium whitespace-nowrap">Add Sample</span>
                           </button>
-                          {/* Delete Button - Show for all users */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeleteWeaver(weaver._id, weaver.name);
-                            }}
-                            className={`w-full col-span-1 max-[899px]:col-span-1 min-[900px]:col-span-2 max-[1023px]:col-span-2 lg:col-span-1 xl:col-span-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
-                              isDarkMode
-                                ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
-                                : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
-                            }`}
-                            title="Delete Weaver"  
-                          >
-                            <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                            <span className="font-medium whitespace-nowrap">Delete All</span>
-                          </button>
+                          {/* Delete Button - Show for master only */}
+                          {isMaster && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeleteWeaver(weaver._id, weaver.name);
+                              }}
+                              className={`w-full col-span-1 max-[899px]:col-span-1 min-[900px]:col-span-2 max-[1023px]:col-span-2 lg:col-span-1 xl:col-span-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
+                                isDarkMode
+                                  ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
+                                  : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
+                              }`}
+                              title="Delete Weaver"  
+                            >
+                              <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                              <span className="font-medium whitespace-nowrap">Delete All</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2895,24 +2897,26 @@ export default function SamplingPage() {
                             <EyeIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                             <span className="font-medium whitespace-nowrap">View</span>
                           </button>
-                          {/* Delete Button - Show for all users */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeleteWeaver(weaver._id, weaver.name);
-                            }}
-                            className={`w-full px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
-                              isDarkMode
-                                ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
-                                : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
-                            }`}
-                            title="Delete Weaver"
-                          >
-                            <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                            <span className="font-medium whitespace-nowrap flex-shrink-0">Delete All</span>
-                          </button>
+                          {/* Delete Button - Show for master only */}
+                          {isMaster && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeleteWeaver(weaver._id, weaver.name);
+                              }}
+                              className={`w-full px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
+                                isDarkMode
+                                  ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
+                                  : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
+                              }`}
+                              title="Delete Weaver"
+                            >
+                              <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                              <span className="font-medium whitespace-nowrap flex-shrink-0">Delete All</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                       );
@@ -3220,23 +3224,25 @@ export default function SamplingPage() {
                   <span className="whitespace-nowrap">Add Sample</span>
                 </button>
                 {/* Delete Button */}
-                <button
-                  onClick={() => {
-                    if (viewingSample) {
-                      handleDeleteSample(viewingSample._id, viewingSample.qualityName);
-                      setViewingSample(null);
-                    }
-                  }}
-                  className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${
-                    isDarkMode
-                      ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
-                      : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
-                  }`}
-                  title="Delete Sample"
-                >
-                  <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                  <span className="whitespace-nowrap">Delete</span>
-                </button>
+                {isMaster && (
+                  <button
+                    onClick={() => {
+                      if (viewingSample) {
+                        handleDeleteSample(viewingSample._id, viewingSample.qualityName);
+                        setViewingSample(null);
+                      }
+                    }}
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${
+                      isDarkMode
+                        ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
+                        : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
+                    }`}
+                    title="Delete Sample"
+                  >
+                    <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                    <span className="whitespace-nowrap">Delete</span>
+                  </button>
+                )}
                 {/* Close Button */}
                 <button
                   onClick={() => setViewingSample(null)}

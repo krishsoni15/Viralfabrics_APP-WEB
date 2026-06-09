@@ -166,6 +166,18 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Validate session - only master can delete qualities
+    const session = await requireAuth(req);
+    if (session.role !== 'master') {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: "Access denied - Only master can delete qualities" 
+        }), 
+        { status: 403 }
+      );
+    }
+
     await dbConnect();
     
     const { id } = await params;

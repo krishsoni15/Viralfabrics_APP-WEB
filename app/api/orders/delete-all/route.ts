@@ -7,6 +7,15 @@ import { logDelete } from '@/lib/logger';
 
 export async function DELETE(request: NextRequest) {
   try {
+    const { getSession } = await import('@/lib/session');
+    const session = await getSession(request);
+    if (!session) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+    if (session.role !== 'master') {
+      return NextResponse.json({ success: false, message: 'Access denied - Only master can delete all orders' }, { status: 403 });
+    }
+
     await dbConnect();
 
     // Get the count of orders before deletion

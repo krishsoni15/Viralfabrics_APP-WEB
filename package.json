@@ -13,7 +13,8 @@
     "format-check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "lint:fix": "next lint --fix",
     "health-check": "curl -f http://localhost:3000/api/health || exit 1",
-    "test-api": "curl http://localhost:3000/api/health"
+    "test-api": "curl http://localhost:3000/api/health",
+    "create-master": "node scripts/createMaster.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",

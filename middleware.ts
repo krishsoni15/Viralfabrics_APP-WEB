@@ -6,7 +6,7 @@ import { jwtVerify } from "jose";
  */
 interface JWTPayload {
   id: string;
-  role: 'superadmin' | 'user';
+  role: 'master' | 'superadmin' | 'admin' | 'user' | 'party';
   username: string;
   name?: string;
   iat?: number;
@@ -152,7 +152,7 @@ export async function middleware(req: NextRequest) {
 
     // Check superadmin routes
     if (matchesRoute(pathname, SUPERADMIN_ROUTES)) {
-      if (payload.role !== "superadmin") {
+      if (payload.role !== "superadmin" && payload.role !== "master") {
         // For API routes, return 403 JSON
         if (pathname.startsWith('/api/')) {
           return NextResponse.json(

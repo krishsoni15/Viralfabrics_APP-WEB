@@ -706,7 +706,7 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    // Validate session first (security check)
+    // Validate session - only master can delete
     const { getSession } = await import('@/lib/session');
     const session = await getSession(req);
     if (!session) {
@@ -714,6 +714,12 @@ export async function DELETE(
         success: false, 
         message: "Unauthorized" 
       }), { status: 401 });
+    }
+    if (session.role !== 'master') {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: "Access denied - Only master can delete fabrics" 
+      }), { status: 403 });
     }
     
     await dbConnect();

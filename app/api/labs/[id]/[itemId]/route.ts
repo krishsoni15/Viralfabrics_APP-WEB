@@ -165,6 +165,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
+    const { getSession } = await import('@/lib/session');
+    const session = await getSession(request);
+    if (!session) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+    if (session.role !== 'master') {
+      return NextResponse.json({ success: false, message: 'Access denied - Only master can delete' }, { status: 403 });
+    }
+
     await dbConnect();  
     
     const { id: orderId, itemId } = await params;

@@ -15,6 +15,7 @@ import {
   PlusIcon,
   PencilIcon
 } from '@heroicons/react/24/outline';
+import { useSession } from '../../hooks/useSession';
 import CameraModal from '../../components/CameraModal';
 import type { Weaver, Sample } from '../types';
 
@@ -38,6 +39,7 @@ const typeOptions = [
 ];
 
 export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, isDarkMode, onOptimisticSave }: SampleFormProps) {
+  const { isMaster } = useSession();
   const [formData, setFormData] = useState({
     qualityName: '',
     type: '',
@@ -1243,7 +1245,7 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
 
           {/* Submit Buttons */}
           <div className="flex items-center justify-between pt-4 border-t">
-            {sample && sample._id && onDelete && (
+            {isMaster && sample && sample._id && onDelete && (
               <button
                 type="button"
                 onClick={() => {

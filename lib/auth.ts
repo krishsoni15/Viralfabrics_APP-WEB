@@ -9,6 +9,7 @@ export interface TokenPayload {
   name?: string;
   phoneNumber?: string;
   address?: string;
+  partyId?: string;
   iat?: number; // Issued at timestamp
   loginTime?: number; // Original login timestamp (for logout-all check)
 }
@@ -76,6 +77,7 @@ export async function verifyToken(token: string, checkLogoutAll: boolean = true)
       name: (payload as Record<string, unknown>).name as string | undefined,
       phoneNumber: (payload as Record<string, unknown>).phoneNumber as string | undefined,
       address: (payload as Record<string, unknown>).address as string | undefined,
+      partyId: (payload as Record<string, unknown>).partyId as string | undefined,
       iat: payload.iat as number | undefined,
       loginTime: (payload as Record<string, unknown>).loginTime as number | undefined,
     };

@@ -5,6 +5,7 @@ import { XMarkIcon, ChevronDownIcon, PlusIcon, TrashIcon, CalendarIcon, Document
 import { getDisplayOrderId } from '@/utils/orders';
 import { Order, Quality } from '@/types';
 import { useDarkMode } from '../../hooks/useDarkMode';
+import { useSession } from '../../hooks/useSession';
 
 // Date parsing function for custom date picker
 const parseDateFromInput = (displayValue: string) => {
@@ -456,6 +457,7 @@ export default function GreyInformationModal({
   onRefreshQualities
 }: GreyInformationModalProps) {
   const { isDarkMode } = useDarkMode();
+  const { isMaster } = useSession();
   const [entries, setEntries] = useState<GreyInfoEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -2016,7 +2018,7 @@ export default function GreyInformationModal({
               </button>
 
               {/* Delete All button - transparent bg, red text, red border */}
-              {(() => {
+              {isMaster && (() => {
                 const greyInfoToCheck = fetchedGreyInfo !== null ? fetchedGreyInfo : existingGreyInfo;
                 return greyInfoToCheck && Array.isArray(greyInfoToCheck) && greyInfoToCheck.length > 0;
               })() && (

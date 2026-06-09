@@ -548,6 +548,9 @@ export default function LogsPage() {
   const getUserRoleIcon = useCallback((userRole: string) => {
     const roleLower = userRole.toLowerCase();
     
+    if (roleLower.includes('master')) {
+      return <Shield className="w-4 h-4 text-red-600 dark:text-red-400" />;
+    }
     if (roleLower.includes('superadmin') || roleLower.includes('admin')) {
       return <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400" />;
     }
@@ -560,6 +563,9 @@ export default function LogsPage() {
   const getUserRoleBgColor = useCallback((userRole: string) => {
     const roleLower = userRole.toLowerCase();
     
+    if (roleLower.includes('master')) {
+      return isDarkMode ? 'bg-red-900/30' : 'bg-red-100';
+    }
     if (roleLower.includes('superadmin') || roleLower.includes('admin')) {
       return isDarkMode ? 'bg-purple-900/30' : 'bg-purple-100';
     }
@@ -870,8 +876,9 @@ export default function LogsPage() {
                   }`}
                 >
                   <option value="all">All Users</option>
-                  <option value="user">User</option>
+                  <option value="master">Master</option>
                   <option value="superadmin">Super Admin</option>
+                  <option value="user">User</option>
                 </select>
               </div>
 

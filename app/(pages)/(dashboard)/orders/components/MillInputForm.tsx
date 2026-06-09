@@ -18,6 +18,7 @@ import {
 import { FileText } from 'lucide-react';
 import { Order, Mill, Quality } from '@/types';
 import { useDarkMode } from '../../hooks/useDarkMode';
+import { useSession } from '../../hooks/useSession';
 import { createPortal } from 'react-dom';
 import { getDisplayOrderId } from '@/utils/orders';
 
@@ -493,6 +494,7 @@ function EnhancedDropdown({
   deletingItems?: string[];
 }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { isMaster } = useSession();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -629,7 +631,7 @@ function EnhancedDropdown({
                     {value === (option._id || (option as any).id) && (
                       <CheckIcon className="h-4 w-4 text-blue-500" />
                     )}
-                    {onDelete && (
+                    {isMaster && onDelete && (
                       <div
                         onClick={(e) => {
                           e.stopPropagation();
@@ -706,6 +708,7 @@ export default function MillInputForm({
   existingMillInputs = []
 }: MillInputFormProps) {
   const { isDarkMode, mounted } = useDarkMode();
+  const { isMaster } = useSession();
 
   console.log('MillInputForm props:', {
     order: order?.orderId,
@@ -3400,17 +3403,19 @@ export default function MillInputForm({
                             }`}>
                             Mill Item {itemIndex + 1}
                           </h4>
-                          <button
-                            type="button"
-                            onClick={() => removeMillItem(item.id)}
-                            className={`p-2 rounded-lg transition-colors ${isDarkMode
-                              ? 'text-red-400 hover:bg-red-900/20 hover:text-red-300'
-                              : 'text-red-600 hover:bg-red-50 hover:text-red-700'
-                              }`}
-                            title="Remove this mill item"
-                          >
-                            <TrashIcon className="h-5 w-5" />
-                          </button>
+                          {(!hasExistingData || item.id.startsWith('new-') || isMaster) && (
+                            <button
+                              type="button"
+                              onClick={() => removeMillItem(item.id)}
+                              className={`p-2 rounded-lg transition-colors ${isDarkMode
+                                ? 'text-red-400 hover:bg-red-900/20 hover:text-red-300'
+                                : 'text-red-600 hover:bg-red-50 hover:text-red-700'
+                                }`}
+                              title="Remove this mill item"
+                            >
+                              <TrashIcon className="h-5 w-5" />
+                            </button>
+                          )}
                         </div>
                       )}
 
@@ -4046,7 +4051,7 @@ export default function MillInputForm({
               </button>
 
               {/* Delete Button - Show only when has existing data */}
-              {hasExistingData && (
+              {isMaster && hasExistingData && (
                 <button
                   type="button"
                   onClick={handleDeleteClick}

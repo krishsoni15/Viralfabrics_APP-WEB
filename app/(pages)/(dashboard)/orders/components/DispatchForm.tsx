@@ -14,6 +14,7 @@ import {
 import { FileText } from 'lucide-react';
 import { Order } from '@/types';
 import { useDarkMode } from '../../hooks/useDarkMode';
+import { useSession } from '../../hooks/useSession';
 import { createPortal } from 'react-dom';
 import { getDisplayOrderId } from '@/utils/orders';
 
@@ -194,6 +195,10 @@ interface DispatchSubItem {
   _id?: string; // Database ID for existing records
   finishMtr: string;
   quality: string;
+  photos?: string[];
+  chindiKg?: string;
+  cutPieceMtr?: string;
+  rejectedMtr?: string;
 }
 
 interface DispatchFormData {
@@ -616,6 +621,7 @@ export default function DispatchForm({
   qualities = []
 }: DispatchFormProps) {
   const { isDarkMode, mounted } = useDarkMode();
+  const { isMaster } = useSession();
 
   // Refresh qualities when form is opened
   useEffect(() => {
@@ -652,7 +658,11 @@ export default function DispatchForm({
       subItems: [{
         id: '1_1',
         finishMtr: '',
-        quality: ''
+        quality: '',
+        photos: [],
+        chindiKg: '',
+        cutPieceMtr: '',
+        rejectedMtr: ''
       }]
     }]
   });
@@ -692,6 +702,10 @@ export default function DispatchForm({
 
   // ⚡ FIX: Local qualities state to include newly added qualities
   const [localQualities, setLocalQualities] = useState<any[]>([]);
+
+  // Pending photo uploads for dispatch sub-items
+  const [pendingPhotoFiles, setPendingPhotoFiles] = useState<Record<string, { file: File; previewUrl: string }[]>>({});
+  const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
 
   // Sync local qualities with prop qualities
   useEffect(() => {
@@ -833,6 +847,121 @@ export default function DispatchForm({
     }
   }, [qualities, formData.dispatchItems]);
 
+  const uploadFileToS3 = async (file: File, folder: string = 'dispatch'): Promise<string> => {
+    if (!file || !(file instanceof File)) {
+      throw new Error('Invalid file provided for upload');
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication token not found. Please log in again.');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', folder);
+
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `Upload failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.success && (data.url || data.imageUrl)) {
+      return data.url || data.imageUrl;
+    }
+
+    throw new Error(data.message || 'Upload failed: no URL returned');
+  };
+
+  const handleDispatchSubItemPhotoChange = (subItemId: string, files: FileList | null) => {
+    if (!files) return;
+    const newFiles = Array.from(files).map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
+    setPendingPhotoFiles(prev => ({
+      ...prev,
+      [subItemId]: [...(prev[subItemId] || []), ...newFiles]
+    }));
+  };
+
+  const removeDispatchSubItemPhoto = (subItemId: string, type: 'pending' | 'existing', index: number) => {
+    if (type === 'pending') {
+      setPendingPhotoFiles(prev => {
+        const pending = prev[subItemId] || [];
+        if (!pending[index]) return prev;
+        URL.revokeObjectURL(pending[index].previewUrl);
+        const updated = pending.filter((_, i) => i !== index);
+        return { ...prev, [subItemId]: updated };
+      });
+      return;
+    }
+
+    setFormData(prevFormData => ({
+      ...prevFormData,
+      dispatchItems: prevFormData.dispatchItems.map(item => ({
+        ...item,
+        subItems: item.subItems?.map(sub => {
+          if (sub.id !== subItemId) return sub;
+          return {
+            ...sub,
+            photos: (sub.photos || []).filter((_, i) => i !== index)
+          };
+        })
+      }))
+    }));
+  };
+
+  const prepareDispatchPhotosForSubmission = async (formDataToUse: DispatchFormData): Promise<DispatchFormData> => {
+    const pending = { ...pendingPhotoFiles };
+    if (Object.keys(pending).length === 0) {
+      return formDataToUse;
+    }
+
+    const uploadedUrlsBySubItem: Record<string, string[]> = {};
+    for (const subItemId of Object.keys(pending)) {
+      if (pending[subItemId].length === 0) continue;
+      setPhotoUploading(prev => ({ ...prev, [subItemId]: true }));
+      try {
+        const urls: string[] = [];
+        for (const { file, previewUrl } of pending[subItemId]) {
+          const url = await uploadFileToS3(file);
+          urls.push(url);
+          URL.revokeObjectURL(previewUrl);
+        }
+        uploadedUrlsBySubItem[subItemId] = urls;
+      } finally {
+        setPhotoUploading(prev => ({ ...prev, [subItemId]: false }));
+      }
+    }
+
+    const updatedFormData = {
+      ...formDataToUse,
+      dispatchItems: formDataToUse.dispatchItems.map(item => ({
+        ...item,
+        subItems: item.subItems?.map(sub => {
+          const uploaded = uploadedUrlsBySubItem[sub.id] || [];
+          if (uploaded.length > 0) {
+            return {
+              ...sub,
+              photos: [...(sub.photos || []), ...uploaded]
+            };
+          }
+          return sub;
+        })
+      }))
+    };
+
+    setPendingPhotoFiles({});
+    return updatedFormData;
+  };
+
   // Function to fetch qualities directly from API
   const fetchQualitiesDirectly = async () => {
     let timeoutId: NodeJS.Timeout | null = null;
@@ -926,7 +1055,11 @@ export default function DispatchForm({
           _id: dispatch._id, // Store database ID for updates
           id: '', // Will be set when creating form data
           finishMtr: (dispatch.finishMtr || 0).toString(),
-          quality: dispatch.quality?._id || dispatch.quality || ''
+          quality: dispatch.quality?._id || dispatch.quality || '',
+          photos: dispatch.photos || [],
+          chindiKg: dispatch.chindiKg !== undefined && dispatch.chindiKg !== null ? String(dispatch.chindiKg) : '',
+          cutPieceMtr: dispatch.cutPieceMtr !== undefined && dispatch.cutPieceMtr !== null ? String(dispatch.cutPieceMtr) : '',
+          rejectedMtr: dispatch.rejectedMtr !== undefined && dispatch.rejectedMtr !== null ? String(dispatch.rejectedMtr) : ''
         });
         return groups;
       }, {});
@@ -1348,7 +1481,11 @@ export default function DispatchForm({
           _id: dispatch._id, // Store database ID for updates
           id: '', // Will be set when creating form data
           finishMtr: (dispatch.finishMtr || 0).toString(),
-          quality: dispatch.quality?._id || dispatch.quality || ''
+          quality: dispatch.quality?._id || dispatch.quality || '',
+          photos: dispatch.photos || [],
+          chindiKg: dispatch.chindiKg !== undefined && dispatch.chindiKg !== null ? String(dispatch.chindiKg) : '',
+          cutPieceMtr: dispatch.cutPieceMtr !== undefined && dispatch.cutPieceMtr !== null ? String(dispatch.cutPieceMtr) : '',
+          rejectedMtr: dispatch.rejectedMtr !== undefined && dispatch.rejectedMtr !== null ? String(dispatch.rejectedMtr) : ''
         });
         return groups;
       }, {});
@@ -1423,16 +1560,13 @@ export default function DispatchForm({
         subItems: [{
           id: newSubItemId,
           finishMtr: '',
-          quality: '' // ⚡ FIX: Empty quality - no auto-fill
+          quality: '', // ⚡ FIX: Empty quality - no auto-fill
+          photos: [],
+          chindiKg: '',
+          cutPieceMtr: '',
+          rejectedMtr: ''
         }]
       };
-
-      console.log(`➕ Adding new dispatch item:`, {
-        newId,
-        newSubItemId,
-        currentItemsCount: prevFormData.dispatchItems.length,
-        newItemsCount: prevFormData.dispatchItems.length + 1
-      });
 
       return {
         ...prevFormData,
@@ -1521,7 +1655,11 @@ export default function DispatchForm({
             const newSubItem = {
               id: newSubId,
               finishMtr: '',
-              quality: ''
+              quality: '',
+              photos: [],
+              chindiKg: '',
+              cutPieceMtr: '',
+              rejectedMtr: ''
             };
 
             console.log(`➕ Adding new sub-item to item ${itemId}:`, {
@@ -1782,6 +1920,17 @@ export default function DispatchForm({
           newErrors[`finishMtr_${subItem.id}`] = 'Valid finish meters is required';
         }
 
+        if (subItem.chindiKg && subItem.chindiKg.trim() !== '' && (isNaN(Number(subItem.chindiKg)) || Number(subItem.chindiKg) < 0)) {
+          newErrors[`chindiKg_${subItem.id}`] = 'Chindi (kg) must be a valid non-negative number';
+        }
+
+        if (subItem.cutPieceMtr && subItem.cutPieceMtr.trim() !== '' && (isNaN(Number(subItem.cutPieceMtr)) || Number(subItem.cutPieceMtr) < 0)) {
+          newErrors[`cutPieceMtr_${subItem.id}`] = 'Cut piece must be a valid non-negative number';
+        }
+
+        if (subItem.rejectedMtr && subItem.rejectedMtr.trim() !== '' && (isNaN(Number(subItem.rejectedMtr)) || Number(subItem.rejectedMtr) < 0)) {
+          newErrors[`rejectedMtr_${subItem.id}`] = 'Rejected (m) must be a valid non-negative number';
+        }
 
         if (!subItem.quality || subItem.quality.trim() === '') {
           newErrors[`quality_${subItem.id}`] = 'Quality is required';
@@ -1820,16 +1969,18 @@ export default function DispatchForm({
     setErrors({});
 
     try {
+      const submissionFormData = await prepareDispatchPhotosForSubmission(currentFormData);
       if (hasExistingData) {
         // Update existing dispatches (delete-then-create pattern)
         console.log('🔄 Updating existing dispatches...');
         // ⚡ 100% FIX: Use captured formData to ensure we use the exact state at submission time
-        await updateExistingDispatchesWithData(currentFormData);
+        await updateExistingDispatchesWithData(submissionFormData);
       } else {
         // Create new dispatches
         console.log('➕ Creating new dispatches...');
-        await createNewDispatchesWithData(currentFormData);
+        await createNewDispatchesWithData(submissionFormData);
       }
+      setFormData(submissionFormData);
 
       setSuccessMessage('Dispatch data saved successfully!');
 
@@ -1946,7 +2097,11 @@ export default function DispatchForm({
             transportNo: (item.transportNo || '').trim(),
             lrNo: (item.lrNo || '').trim(),
             finishMtr: finishMtrValue,
-            quality: String(subItem.quality).trim()
+            quality: String(subItem.quality).trim(),
+            photos: Array.isArray(subItem.photos) ? subItem.photos.filter((url) => typeof url === 'string') : [],
+            chindiKg: subItem.chindiKg && subItem.chindiKg.trim() !== '' ? Number(subItem.chindiKg) : 0,
+            cutPieceMtr: subItem.cutPieceMtr && subItem.cutPieceMtr.trim() !== '' ? Number(subItem.cutPieceMtr) : 0,
+            rejectedMtr: subItem.rejectedMtr && subItem.rejectedMtr.trim() !== '' ? Number(subItem.rejectedMtr) : 0
           };
           allDispatches.push(subDispatch);
           console.log(`✅ Added sub-item (M${validIndex + 1}) for item ${itemIndex + 1}:`, {
@@ -2327,21 +2482,23 @@ export default function DispatchForm({
                               }`}>
                               Dispatch Item {itemIndex + 1}
                             </h4>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                removeDispatchItem(item.id);
-                              }}
-                              className={`px-3 py-2 rounded-lg border transition-all duration-150 flex items-center justify-center ${isDarkMode
-                                ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
-                                : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
-                                }`}
-                              title="Delete this dispatch item"
-                            >
-                              <TrashIcon className="h-5 w-5" />
-                            </button>
+                            {(!hasExistingData || item.id.startsWith('new-') || isMaster) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  removeDispatchItem(item.id);
+                                }}
+                                className={`px-3 py-2 rounded-lg border transition-all duration-150 flex items-center justify-center ${isDarkMode
+                                  ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
+                                  : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
+                                  }`}
+                                title="Delete this dispatch item"
+                              >
+                                <TrashIcon className="h-5 w-5" />
+                              </button>
+                            )}
                           </div>
                         )}
 
@@ -2452,8 +2609,9 @@ export default function DispatchForm({
                         <div className="space-y-4">
                           {/* ⚡ FIX: Quality & Finish Items - 3 columns with delete button in same row (like Mill Output) */}
                           {(item.subItems || []).map((subItem, subIndex) => (
-                            <div key={subItem.id} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              {/* Sub-item Quality */}
+                            <div key={subItem.id} className="space-y-4">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {/* Sub-item Quality */}
                               <div>
                                 <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
                                   }`}>
@@ -2550,6 +2708,138 @@ export default function DispatchForm({
                                 </button>
                               </div>
                             </div>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                              <div>
+                                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Chindi (kg)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={subItem.chindiKg || ''}
+                                  onChange={(e) => updateSubItem(item.id, subItem.id, 'chindiKg', e.target.value)}
+                                  placeholder="Enter chindi kg"
+                                  step="0.01"
+                                  min="0"
+                                  className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`chindiKg_${subItem.id}`]
+                                    ? isDarkMode
+                                      ? 'border-red-500 bg-gray-800 text-white'
+                                      : 'border-red-500 bg-white text-gray-900'
+                                    : isDarkMode
+                                      ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
+                                      : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
+                                    }`}
+                                />
+                                {errors[`chindiKg_${subItem.id}`] && (
+                                  <p className={`text-sm mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                                    {errors[`chindiKg_${subItem.id}`]}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Cut Piece (m²)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={subItem.cutPieceMtr || ''}
+                                  onChange={(e) => updateSubItem(item.id, subItem.id, 'cutPieceMtr', e.target.value)}
+                                  placeholder="Enter cut piece"
+                                  step="0.01"
+                                  min="0"
+                                  className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`cutPieceMtr_${subItem.id}`]
+                                    ? isDarkMode
+                                      ? 'border-red-500 bg-gray-800 text-white'
+                                      : 'border-red-500 bg-white text-gray-900'
+                                    : isDarkMode
+                                      ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
+                                      : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
+                                    }`}
+                                />
+                                {errors[`cutPieceMtr_${subItem.id}`] && (
+                                  <p className={`text-sm mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                                    {errors[`cutPieceMtr_${subItem.id}`]}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Rejected (m)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={subItem.rejectedMtr || ''}
+                                  onChange={(e) => updateSubItem(item.id, subItem.id, 'rejectedMtr', e.target.value)}
+                                  placeholder="Enter rejected meters"
+                                  step="0.01"
+                                  min="0"
+                                  className={`w-full px-4 py-3 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors[`rejectedMtr_${subItem.id}`]
+                                    ? isDarkMode
+                                      ? 'border-red-500 bg-gray-800 text-white'
+                                      : 'border-red-500 bg-white text-gray-900'
+                                    : isDarkMode
+                                      ? 'bg-gray-800 border-gray-600 text-white hover:border-gray-500'
+                                      : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400'
+                                    }`}
+                                />
+                                {errors[`rejectedMtr_${subItem.id}`] && (
+                                  <p className={`text-sm mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                                    {errors[`rejectedMtr_${subItem.id}`]}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Photos
+                                </label>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  capture="environment"
+                                  onChange={(e) => handleDispatchSubItemPhotoChange(subItem.id, e.target.files)}
+                                  className={`w-full text-sm text-gray-500 ${isDarkMode ? 'file:bg-gray-700 file:text-gray-200' : 'file:bg-gray-100 file:text-gray-800'}`}
+                                />
+                                <div className="mt-3 grid grid-cols-3 gap-2">
+                                  {(subItem.photos || []).map((url, index) => (
+                                    <div key={`existing-photo-${subItem.id}-${index}`} className={
+                                      `relative rounded-lg overflow-hidden border ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`
+                                    }>
+                                      <img src={url} alt={`Dispatch photo ${index + 1}`} className="h-20 w-full object-cover" />
+                                      <button
+                                        type="button"
+                                        onClick={() => removeDispatchSubItemPhoto(subItem.id, 'existing', index)}
+                                        className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1"
+                                        title="Remove photo"
+                                      >
+                                        <XMarkIcon className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  {(pendingPhotoFiles[subItem.id] || []).map((entry, index) => (
+                                    <div key={`pending-photo-${subItem.id}-${index}`} className={
+                                      `relative rounded-lg overflow-hidden border ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`
+                                    }>
+                                      <img src={entry.previewUrl} alt={`Pending dispatch photo ${index + 1}`} className="h-20 w-full object-cover" />
+                                      <button
+                                        type="button"
+                                        onClick={() => removeDispatchSubItemPhoto(subItem.id, 'pending', index)}
+                                        className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1"
+                                        title="Remove photo"
+                                      >
+                                        <XMarkIcon className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                                {photoUploading[subItem.id] && (
+                                  <p className="text-xs mt-2 text-blue-500">Uploading photos…</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                           ))}
 
                           {/* Add More Finished Meters Button - Full width horizontal design */}
@@ -2629,7 +2919,7 @@ export default function DispatchForm({
               </button>
 
               {/* Delete Button - Show only when has existing data */}
-              {hasExistingData && (
+              {isMaster && hasExistingData && (
                 <button
                   type="button"
                   onClick={handleDeleteClick}

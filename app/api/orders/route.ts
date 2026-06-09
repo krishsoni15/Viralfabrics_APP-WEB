@@ -58,6 +58,14 @@ export async function GET(request: NextRequest) {
       return Response.json(unauthorizedResponse('Unauthorized'), { status: 401 });
     }
 
+    // 🔍 DEBUG: Log session info for debugging party scoping
+    console.log('🔍 Orders API Session:', {
+      userId: session.id,
+      role: session.role,
+      partyId: session.partyId,
+      hasPartyId: !!session.partyId
+    });
+
     // Connect to database with timeout (increased for reliability)
     try {
       await Promise.race([
@@ -126,6 +134,26 @@ export async function GET(request: NextRequest) {
         }
       ]
     };
+
+    // Restrict orders to the user's party if session has a partyId (applies to party users)
+    if (session && session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      const mongoose = await import('mongoose');
+      if (mongoose.default.Types.ObjectId.isValid(session.partyId)) {
+        query.$and.push({ party: new mongoose.default.Types.ObjectId(session.partyId) });
+      } else {
+        query.$and.push({ party: session.partyId });
+      }
+      // 🔍 DEBUG: Confirm party filter was applied
+      console.log('🔍 Party filter applied:', session.partyId);
+    } else if (session) {
+      // 🔍 DEBUG: Log why filter was NOT applied
+      console.log('🔍 Party filter NOT applied - reason:', {
+        hasPartyId: !!session.partyId,
+        isMaster: session.role === 'master',
+        isSuperAdmin: session.role === 'superadmin',
+        role: session.role
+      });
+    }
 
     // If mill filter provided, prefetch order IDs that have mill inputs for that mill
     if (millId) {

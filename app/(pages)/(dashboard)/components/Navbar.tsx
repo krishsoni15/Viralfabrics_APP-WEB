@@ -533,7 +533,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                         <p className={`text-xs transition-colors duration-300 ${
                           isDarkMode ? 'text-purple-400' : 'text-purple-600'
                         }`}>
-                          {user?.role === 'superadmin' ? 'Super Admin' : 'User'}
+                          {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                         </p>
                       </div>
                       
@@ -842,7 +842,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                         <p className={`text-xs transition-colors duration-300 ${
                           isDarkMode ? 'text-purple-400' : 'text-purple-600'
                         }`}>
-                          {user?.role === 'superadmin' ? 'Super Admin' : 'User'}
+                          {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                         </p>
                       </div>
                       
@@ -1063,15 +1063,23 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                     {user?.username || 'username'}
                   </p>
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full mt-1 ${
-                    user?.role === 'superadmin'
+                    user?.role === 'master'
                       ? isDarkMode
-                        ? 'bg-purple-900/20 text-purple-400'
-                        : 'bg-purple-100 text-purple-800'
-                      : isDarkMode
-                        ? 'bg-blue-900/20 text-blue-400'
-                        : 'bg-blue-100 text-blue-800'
+                        ? 'bg-red-900/20 text-red-400'
+                        : 'bg-red-100 text-red-800'
+                      : user?.role === 'superadmin'
+                        ? isDarkMode
+                          ? 'bg-purple-900/20 text-purple-400'
+                          : 'bg-purple-100 text-purple-800'
+                        : user?.role === 'admin'
+                          ? isDarkMode
+                            ? 'bg-amber-900/20 text-amber-400'
+                            : 'bg-amber-100 text-amber-800'
+                          : isDarkMode
+                            ? 'bg-blue-900/20 text-blue-400'
+                            : 'bg-blue-100 text-blue-800'
                   }`}>
-                    {user?.role === 'superadmin' ? 'Super Admin' : 'User'}
+                    {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                   </span>
                 </div>
               </div>

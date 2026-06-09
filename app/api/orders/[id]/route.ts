@@ -4,7 +4,7 @@ import Party from "@/models/Party";
 import Quality from "@/models/Quality";
 import Lab from "@/models/Lab";
 import mongoose from "mongoose";
-import { requireAuth } from "@/lib/session";
+import { requireAuth, getSession } from "@/lib/session";
 import { type NextRequest } from "next/server";
 import { logOrderChange, logView } from "@/lib/logger";
 import { CACHE_TAGS, getCacheHeaders, CACHE_DURATIONS } from "@/lib/cacheConfig";
@@ -40,13 +40,22 @@ export async function GET(
 
     // Validate session
     await requireAuth(req);
+    const session = await getSession(req);
 
     await dbConnect();
     
     const { id } = await params;
     
+    const query: any = { _id: id };
+    if (session && session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      const mongoose = await import('mongoose');
+      query.party = mongoose.default.Types.ObjectId.isValid(session.partyId)
+        ? new mongoose.default.Types.ObjectId(session.partyId)
+        : session.partyId;
+    }
+    
     // ⚡ OPTIMIZED: Use lean() and fetch related data separately (much faster than populate)
-    const order = await Order.findById(id)
+    const order = await Order.findOne(query)
       .select('_id orderId orderType arrivalDate party contactName contactPhone poNumber styleNo poDate deliveryDate items status labData createdAt updatedAt')
       .lean()
       .maxTimeMS(2000);
@@ -458,7 +467,13 @@ export async function PUT(
     if (rateLimitError) return rateLimitError;
 
     // Validate session
-    await requireAuth(req);
+    const session = await requireAuth(req);
+    if (session.role === 'party') {
+      return new Response(
+        JSON.stringify({ success: false, message: "Access denied - Party users cannot modify orders" }),
+        { status: 403 }
+      );
+    }
 
     const requestData = await req.json();
     
@@ -1254,8 +1269,17 @@ export async function DELETE(
     const rateLimitError = await checkRateLimitOrError(req, writeRateLimiter);
     if (rateLimitError) return rateLimitError;
 
-    // Validate session
-    await requireAuth(req);
+    // Validate session - only master can delete orders
+    const session = await requireAuth(req);
+    if (session.role !== 'master') {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: "Access denied - Only master can delete orders" 
+        }), 
+        { status: 403 }
+      );
+    }
 
     await dbConnect();
     

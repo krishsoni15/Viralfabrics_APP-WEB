@@ -50,23 +50,37 @@ export async function GET(request: NextRequest) {
     nextWeek.setDate(today.getDate() + 7);
     nextWeek.setHours(23, 59, 59, 999);
 
-    // ⚡ ULTRA-FAST: Optimized query with minimal fields and no populate
-    const upcomingOrders = await Order.find({
-      $and: [
-        {
-          $or: [
-            { softDeleted: false },
-            { softDeleted: { $exists: false } }
-          ]
-        },
-        {
-          deliveryDate: {
-            $gte: startDate,
-            $lte: nextWeek
-          }
+    const queryConditions: any[] = [
+      {
+        $or: [
+          { softDeleted: false },
+          { softDeleted: { $exists: false } }
+        ]
+      },
+      {
+        deliveryDate: {
+          $gte: startDate,
+          $lte: nextWeek
         }
-      ]
-    })
+      }
+    ];
+
+    // Restrict to user's party if role is 'party'
+    let session: any = null;
+    try {
+      session = await getSession(request);
+    } catch (e) {}
+    if (session?.role === 'party' && session?.partyId) {
+      const mongoose = await import('mongoose');
+      queryConditions.push({
+        party: mongoose.default.Types.ObjectId.isValid(session.partyId)
+          ? new mongoose.default.Types.ObjectId(session.partyId)
+          : session.partyId
+      });
+    }
+
+    // ⚡ ULTRA-FAST: Optimized query with minimal fields and no populate
+    const upcomingOrders = await Order.find({ $and: queryConditions })
     .select('orderId orderType deliveryDate party status priority items createdAt')
     .sort({ deliveryDate: 1 })
     .limit(50) // ⚡ Limit to 50 for speed

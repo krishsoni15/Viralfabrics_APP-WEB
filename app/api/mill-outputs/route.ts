@@ -242,8 +242,14 @@ export async function DELETE(request: NextRequest) {
     const rateLimitError = await checkRateLimitOrError(request, writeRateLimiter);
     if (rateLimitError) return rateLimitError;
 
-    // Validate session
-    await requireAuth(request);
+    // Validate session - only master can delete
+    const session = await requireAuth(request);
+    if (session.role !== 'master') {
+      return NextResponse.json(
+        { success: false, error: 'Access denied - Only master can delete' },
+        { status: 403 }
+      );
+    }
     
     await dbConnect();
 

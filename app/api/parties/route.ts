@@ -1,6 +1,6 @@
 import dbConnect from "@/lib/dbConnect";
 import Party from "@/models/Party";
-import { requireAuth } from "@/lib/session";
+import { requireAuth, getSession } from "@/lib/session";
 import { type NextRequest } from "next/server";
 import { logCreate } from "@/lib/logger";
 import { partiesCache, CACHE_TTL, clearPartiesCache } from "@/lib/partiesCache";
@@ -16,9 +16,11 @@ export async function GET(req: NextRequest) {
     const rateLimitError = await checkRateLimitOrError(req, apiRateLimiter);
     if (rateLimitError) return rateLimitError;
 
-    // Validate session - handle auth errors gracefully
+    // Validate session and obtain it - handle auth errors gracefully
+    let session = null;
     try {
       await requireAuth(req);
+      session = await getSession(req);
     } catch (authError) {
       return new Response(JSON.stringify({ 
         success: false, 
@@ -28,6 +30,31 @@ export async function GET(req: NextRequest) {
         status: 401,
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    // If user is tied to a party (has partyId), only return their own party (skip global cache)
+    if (session && session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      try {
+        await dbConnect();
+        const party = await Party.findById(session.partyId)
+          .select('_id name contactName contactPhone address createdAt updatedAt')
+          .lean();
+
+        if (!party) {
+          return new Response(JSON.stringify({ success: false, message: 'Party not found' }), { status: 404 });
+        }
+
+        return new Response(JSON.stringify({ success: true, data: [party], pagination: { currentPage: 1, totalPages: 1, totalCount: 1, hasNextPage: false, hasPrevPage: false, limit: 1 }, message: 'Party loaded' }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            ...getCacheHeaders(CACHE_DURATIONS.PARTIES)
+          }
+        });
+      } catch (err) {
+        // Fall through to normal behavior on error
+        if (process.env.NODE_ENV === 'development') console.error('Error loading party for party-role user:', err);
+      }
     }
 
     // ⚡ OPTIMIZED: Check cache first with pagination support

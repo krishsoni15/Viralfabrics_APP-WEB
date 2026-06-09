@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { X, Calendar, Hash, CheckCircle, Trash2, Plus, Edit3, BeakerIcon, Clock, FileText } from 'lucide-react';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { useDarkMode } from '../../hooks/useDarkMode';
+import { useSession } from '../../hooks/useSession';
 import { OrderItem } from '@/types';
 import { ChevronDownIcon, CalendarIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { getDisplayOrderId } from '@/utils/orders';
@@ -479,6 +480,7 @@ function CustomDatePicker({
 
 export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }: LabDataModalProps) {
   const { isDarkMode, mounted } = useDarkMode();
+  const { isMaster } = useSession();
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [labData, setLabData] = useState<LabData>({
     labSendDate: '',
@@ -1139,7 +1141,7 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }
 
 
               {/* Delete All Lab Data Button */}
-              {hasLabData && (
+              {isMaster && hasLabData && (
                 <button
                   onClick={handleDeleteAllClick}
                   disabled={isLoading}
@@ -1242,16 +1244,18 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate }
                               </p>
                             </div>
                           )}
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleDeleteClick(item._id || '')}
-                              disabled={isLoading}
-                              className="flex items-center gap-1 px-2 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-xs transition-colors disabled:opacity-50"
-                            >
-                              <Trash2 size={12} />
-                              Delete
-                            </button>
-                          </div>
+                          {isMaster && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleDeleteClick(item._id || '')}
+                                disabled={isLoading}
+                                className="flex items-center gap-1 px-2 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-xs transition-colors disabled:opacity-50"
+                              >
+                                <Trash2 size={12} />
+                                Delete
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

@@ -286,9 +286,9 @@ export async function DELETE(request: NextRequest) {
       return unauthorized('Authentication required');
     }
     
-         // Allow both users and superadmins to delete logs
-     if (session.role !== 'superadmin' && session.role !== 'user') {
-       return unauthorized('Authentication required');
+     // Only master can delete logs
+     if (session.role !== 'master') {
+       return new Response(JSON.stringify({ success: false, message: 'Access denied - Only master can delete logs' }), { status: 403 });
      }
     
     const { searchParams } = new URL(request.url);

@@ -16,6 +16,7 @@ import {
 import { FileText } from 'lucide-react';
 import { Order } from '@/types';
 import { useDarkMode } from '../../hooks/useDarkMode';
+import { useSession } from '../../hooks/useSession';
 import { createPortal } from 'react-dom';
 import { getDisplayOrderId } from '@/utils/orders';
 
@@ -592,6 +593,7 @@ export default function MillOutputForm({
   existingMillOutputs = []
 }: MillOutputFormProps) {
   const { isDarkMode, mounted } = useDarkMode();
+  const { isMaster } = useSession();
 
   console.log('MillOutputForm props:', {
     order: order?.orderId,
@@ -2057,17 +2059,19 @@ export default function MillOutputForm({
                             }`}>
                             Mill Output Item {itemIndex + 1}
                           </h4>
-                          <button
-                            type="button"
-                            onClick={() => removeMillOutputItem(item.id)}
-                            className={`p-2 rounded-lg transition-colors ${isDarkMode
-                              ? 'text-red-400 hover:bg-red-900/20 hover:text-red-300'
-                              : 'text-red-600 hover:bg-red-50 hover:text-red-700'
-                              }`}
-                            title="Remove this mill output item"
-                          >
-                            <TrashIcon className="h-5 w-5" />
-                          </button>
+                          {(!hasExistingData || item.id.startsWith('new-') || isMaster) && (
+                            <button
+                              type="button"
+                              onClick={() => removeMillOutputItem(item.id)}
+                              className={`p-2 rounded-lg transition-colors ${isDarkMode
+                                ? 'text-red-400 hover:bg-red-900/20 hover:text-red-300'
+                                : 'text-red-600 hover:bg-red-50 hover:text-red-700'
+                                }`}
+                              title="Remove this mill output item"
+                            >
+                              <TrashIcon className="h-5 w-5" />
+                            </button>
+                          )}
                         </div>
                       )}
 
@@ -2484,7 +2488,7 @@ export default function MillOutputForm({
               </button>
 
               {/* Delete Button - Show only when has existing data */}
-              {hasExistingData && (
+              {isMaster && hasExistingData && (
                 <button
                   type="button"
                   onClick={handleDeleteClick}

@@ -10,6 +10,7 @@
 import { revalidateTag } from 'next/cache';
 import dbConnect from '@/lib/dbConnect';
 import { getSession } from '@/lib/session';
+import { verifyToken } from '@/lib/auth';
 import { cookies, headers } from 'next/headers';
 import { CACHE_TAGS, CACHE_DURATIONS } from '@/lib/cacheConfig';
 import { Order, Party, Quality, Mill, MillInput, MillOutput, Dispatch, GreyInfo } from '@/models';
@@ -140,6 +141,18 @@ export async function fetchOrdersAction(params: FetchOrdersParams = {}): Promise
             hasPrev: false,
           },
         };
+      }
+    }
+
+    // Restrict to user's party if role is 'party'
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+    const payload = await verifyToken(token);
+    if (payload?.role === 'party' && payload?.partyId) {
+      const mongoose = await import('mongoose');
+      if (mongoose.default.Types.ObjectId.isValid(payload.partyId)) {
+        query.party = new mongoose.default.Types.ObjectId(payload.partyId);
+      } else {
+        query.party = payload.partyId;
       }
     }
 
@@ -366,6 +379,23 @@ export async function fetchDashboardStatsAction(params?: {
       }
     }
 
+    // Restrict to user's party if role is 'party'
+    const cookieStore = await cookies();
+    const headersList = await headers();
+    const authHeader = headersList.get('authorization') || cookieStore.get('auth-token')?.value;
+    if (authHeader) {
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+      const payload = await verifyToken(token);
+      if (payload?.role === 'party' && payload?.partyId) {
+        const mongoose = await import('mongoose');
+        if (mongoose.default.Types.ObjectId.isValid(payload.partyId)) {
+          query.party = new mongoose.default.Types.ObjectId(payload.partyId);
+        } else {
+          query.party = payload.partyId;
+        }
+      }
+    }
+
     // Execute all queries in parallel
     const [
       totalOrders,
@@ -493,6 +523,18 @@ export async function fetchPartiesAction(params?: { search?: string; limit?: num
     const query: any = { isActive: true };
     if (params?.search) {
       query.name = { $regex: params.search, $options: 'i' };
+    }
+
+    // Restrict to user's own party if role is 'party'
+    const cookieStore = await cookies();
+    const headersList = await headers();
+    const authHeader = headersList.get('authorization') || cookieStore.get('auth-token')?.value;
+    if (authHeader) {
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+      const payload = await verifyToken(token);
+      if (payload?.role === 'party' && payload?.partyId) {
+        query._id = payload.partyId;
+      }
     }
 
     const limit = Math.min(params?.limit || 100, 1000);

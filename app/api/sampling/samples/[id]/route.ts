@@ -241,6 +241,9 @@ export async function DELETE(
     if (!session) {
       return Response.json(unauthorizedResponse('Unauthorized'), { status: 401 });
     }
+    if (session.role !== 'master') {
+      return Response.json({ success: false, message: 'Access denied - Only master can delete' }, { status: 403 });
+    }
 
     // Rate limiting
     const clientId = getClientIdentifier(req);

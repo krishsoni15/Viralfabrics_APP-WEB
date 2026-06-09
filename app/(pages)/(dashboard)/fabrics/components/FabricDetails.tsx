@@ -11,6 +11,7 @@ import {
   EyeIcon
 } from '@heroicons/react/24/outline';
 import { useDarkMode } from '../../hooks/useDarkMode';
+import { useSession } from '../../hooks/useSession';
 import { Fabric } from '@/types/fabric';
 import { Z_INDEX } from '../constants';
 
@@ -32,6 +33,7 @@ export default function FabricDetails({
   allFabricsInGroup = [] 
 }: FabricDetailsProps) {
   const { isDarkMode, mounted } = useDarkMode();
+  const { isMaster } = useSession();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
@@ -132,7 +134,7 @@ export default function FabricDetails({
                 <span>Edit</span>
               </button>
               
-              {onBulkDelete && allFabricsInGroup.length > 1 && (
+              {isMaster && onBulkDelete && allFabricsInGroup.length > 1 && (
                 <button
                   onClick={() => onBulkDelete(allFabricsInGroup)}
                   className={`px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 text-sm font-medium shadow-sm hover:shadow-md flex items-center space-x-2 bg-transparent ${
@@ -384,7 +386,7 @@ export default function FabricDetails({
                     </div>
                     
                     {/* Delete button only - no edit */}
-                    {onDelete && (
+                    {isMaster && onDelete && (
                       <div className="flex space-x-2 mt-3">
                         <button
                           onClick={() => onDelete(item)}

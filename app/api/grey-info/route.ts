@@ -219,6 +219,9 @@ export async function DELETE(request: NextRequest) {
     if (!session) {
       return NextResponse.json(errorResponse('Unauthorized'), { status: 401 });
     }
+    if (session.role !== 'master') {
+      return NextResponse.json(errorResponse('Access denied - Only master can delete'), { status: 403 });
+    }
 
     await dbConnect();
 

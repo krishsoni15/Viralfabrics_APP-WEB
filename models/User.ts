@@ -9,7 +9,8 @@ export interface IUser extends Document {
   email?: string;
   phoneNumber?: string;
   address?: string;
-  role: "superadmin" | "user";
+  role: "master" | "superadmin" | "admin" | "user" | "party";
+  partyId?: mongoose.Types.ObjectId;
   isActive: boolean;
   lastLogin?: Date;
   loginCount: number;
@@ -117,10 +118,15 @@ const UserSchema = new Schema<IUser>({
   role: {
     type: String,
     enum: {
-      values: ["superadmin", "user"],
-      message: "Role must be either 'superadmin' or 'user'"
+      values: ["master", "superadmin", "admin", "user", "party"],
+      message: "Role must be one of 'master', 'superadmin', 'admin', 'user', or 'party'"
     },
     default: "user",
+    index: true
+  },
+  partyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Party",
     index: true
   },
   isActive: {
@@ -481,6 +487,7 @@ UserSchema.virtual('fullProfile').get(function() {
     accountLocked: this.accountLocked,
     preferences: this.preferences,
     metadata: this.metadata,
+    partyId: this.partyId,
     createdAt: this.createdAt
   };
 });
@@ -503,17 +510,17 @@ UserSchema.post('save', function(error: any, doc: any, next: any) {
 });
 
 // **QUERY OPTIMIZATION MIDDLEWARE**
-UserSchema.pre('find', function() {
-  if (!this.getQuery().password) {
-    this.lean();
-  }
-});
+// UserSchema.pre('find', function() {
+//   if (!this.getQuery().password) {
+//     this.lean();
+//   }
+// });
 
-UserSchema.pre('findOne', function() {
-  if (!this.getQuery().password) {
-    this.lean();
-  }
-});
+// UserSchema.pre('findOne', function() {
+//   if (!this.getQuery().password) {
+//     this.lean();
+//   }
+// });
 
 // **EXACT INDEXES TO ADD**
 // Primary indexes
@@ -544,6 +551,10 @@ UserSchema.index({
   },
   name: "idx_user_text_search"
 });
+
+if (mongoose.models.User && !mongoose.models.User.schema.paths.partyId) {
+  delete mongoose.models.User;
+}
 
 const User = mongoose.models.User || mongoose.model<IUser, IUserModel>("User", UserSchema);
 

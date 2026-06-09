@@ -55,22 +55,32 @@ export async function GET(request: NextRequest) {
     nextWeek.setHours(23, 59, 59, 999);
 
     // ⚡ OPTIMIZED: Query without populate (fetch related data separately - MUCH faster)
-    const upcomingOrders = await Order.find({
-      $and: [
-        {
-          $or: [
-            { softDeleted: false },
-            { softDeleted: { $exists: false } }
-          ]
-        },
-        {
-          deliveryDate: {
-            $gte: startDate,
-            $lte: nextWeek
-          }
+    const queryConditions: any[] = [
+      {
+        $or: [
+          { softDeleted: false },
+          { softDeleted: { $exists: false } }
+        ]
+      },
+      {
+        deliveryDate: {
+          $gte: startDate,
+          $lte: nextWeek
         }
-      ]
-    })
+      }
+    ];
+
+    // Restrict to user's party if session has a partyId (applies to party users)
+    if (session && session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      const mongoose = await import('mongoose');
+      queryConditions.push({
+        party: mongoose.default.Types.ObjectId.isValid(session.partyId)
+          ? new mongoose.default.Types.ObjectId(session.partyId)
+          : session.partyId
+      });
+    }
+
+    const upcomingOrders = await Order.find({ $and: queryConditions })
     .select('orderId orderType deliveryDate party status priority items')
     .sort({ deliveryDate: 1 })
     .lean()

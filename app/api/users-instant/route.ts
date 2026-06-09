@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { successResponse } from '@/lib/response';
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
+import Party from "@/models/Party";
 import { getSession } from "@/lib/session";
 import { checkRateLimitOrError, apiRateLimiter } from '@/lib/rateLimit';
 import { serializeMongoDocs } from '@/lib/serialize';
 
 // Professional in-memory cache for users data
-const usersCache = new Map<string, { data: unknown; timestamp: number }>();
+export const usersCache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes for better performance
 
 export async function GET(request: NextRequest) {
@@ -27,8 +28,8 @@ export async function GET(request: NextRequest) {
       }, { status: 401 });
     }
     
-    // Check for superadmin role
-    if (session.role !== 'superadmin') {
+    // Check for superadmin or master role
+    if (session.role !== 'superadmin' && session.role !== 'master') {
       return NextResponse.json({ 
         success: false,
         message: "Access denied - Superadmin access required" 
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '25');
     const page = parseInt(searchParams.get('page') || '1');
-    const cacheKey = `users-instant-${limit}-${page}`;
+    const cacheKey = `users-instant-${limit}-${page}-${session.role}`;
     
     const cached = usersCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
@@ -59,8 +60,10 @@ export async function GET(request: NextRequest) {
     
     const skip = (page - 1) * limit;
     
+    const query = session.role === 'master' ? {} : { role: { $ne: 'master' } };
+
     // Super simple and fast query - no complex operations
-    const users = await User.find({}, {
+    const users = await User.find(query, {
       _id: 1,
       name: 1,
       username: 1,
@@ -68,8 +71,10 @@ export async function GET(request: NextRequest) {
       address: 1,
       role: 1,
       isActive: 1,
+      partyId: 1,
       createdAt: 1
     })
+    .populate('partyId', 'name')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
@@ -77,7 +82,7 @@ export async function GET(request: NextRequest) {
     .maxTimeMS(3000); // 3 second timeout to prevent timeouts
     
     // Simple count - no parallel needed
-    const totalCount = await User.countDocuments().maxTimeMS(3000);
+    const totalCount = await User.countDocuments(query).maxTimeMS(3000);
 
     // Calculate pagination info
     const totalPages = Math.ceil(totalCount / limit);

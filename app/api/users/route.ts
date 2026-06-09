@@ -1,13 +1,14 @@
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
-import { requireSuperAdmin } from "@/lib/session";
+import Party from "@/models/Party";
+import { requireSuperAdmin, getSession } from "@/lib/session";
 import bcrypt from "bcryptjs";
 import { type NextRequest } from "next/server";
 import { logCreate } from "@/lib/logger";
 import { apiRateLimiter, writeRateLimiter, checkRateLimitOrError } from "@/lib/rateLimit";
 
 // Professional in-memory cache for users data
-const usersCache = new Map<string, { data: any; timestamp: number }>();
+export const usersCache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes for better performance
 
 export async function GET(req: NextRequest) {
@@ -18,6 +19,10 @@ export async function GET(req: NextRequest) {
     const rateLimitError = await checkRateLimitOrError(req, apiRateLimiter);
     if (rateLimitError) return rateLimitError;
 
+    // Log the session info
+    const session = await getSession(req);
+    console.log("DEBUG: GET /api/users session:", session);
+
     // Require superadmin access
     await requireSuperAdmin(req);
 
@@ -25,7 +30,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '25'), 1), 100); // Enforce max 100
     const page = Math.max(parseInt(searchParams.get('page') || '1'), 1); // Enforce min page 1
-    const cacheKey = `users-${limit}-${page}`;
+    const cacheKey = `users-${limit}-${page}-${session?.role}`;
     
     const cached = usersCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
@@ -48,8 +53,11 @@ export async function GET(req: NextRequest) {
     
     const skip = (page - 1) * limit;
     
+    const query = session?.role === 'master' ? {} : { role: { $ne: 'master' } };
+
     // Super simple and fast query - no complex operations
-    const users = await User.find({}, {
+    // ⚡ SECURITY: Exclude master users from the list only if requested by non-master account
+    const users = await User.find(query, {
       _id: 1,
       name: 1,
       username: 1,
@@ -57,16 +65,18 @@ export async function GET(req: NextRequest) {
       address: 1,
       role: 1,
       isActive: 1,
+      partyId: 1,
       createdAt: 1
     })
+    .populate('partyId', 'name')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
     .lean()
     .maxTimeMS(3000); // 3 second timeout to prevent timeouts
     
-    // Simple count - no parallel needed
-    const totalCount = await User.countDocuments().maxTimeMS(3000);
+    // Simple count - exclude master role if not requested by master
+    const totalCount = await User.countDocuments(query).maxTimeMS(3000);
 
     // No need to map since we're already selecting only needed fields
 
@@ -138,10 +148,9 @@ export async function POST(req: NextRequest) {
     const rateLimitError = await checkRateLimitOrError(req, writeRateLimiter);
     if (rateLimitError) return rateLimitError;
 
-    // Require superadmin access
-    await requireSuperAdmin(req);
+    const session = await requireSuperAdmin(req);
 
-    const { name, username, password, role: newUserRole, phoneNumber, address } = await req.json();
+    const { name, username, password, role: newUserRole, phoneNumber, address, partyId } = await req.json();
 
     // Validation
     const errors: string[] = [];
@@ -173,15 +182,31 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ message: "Username already exists" }), { status: 400 });
     }
 
+    // Determine final role to be saved
+    let targetRole = "user";
+    if (newUserRole === "superadmin") {
+      targetRole = "superadmin";
+    } else if (newUserRole === "admin") {
+      targetRole = "admin";
+    } else if (newUserRole === "party") {
+      targetRole = "party";
+    } else if (newUserRole === "master" && session.role === "master") {
+      targetRole = "master";
+    }
+
     // Don't hash password here - let the User model pre-save middleware handle it
-    const userData = {
+    const userData: Record<string, any> = {
       name: name.trim(),
       username: username.trim(),
       password: password, // Plain password - will be hashed by model middleware
-      role: newUserRole === "superadmin" ? "superadmin" : "user",
+      role: targetRole,
       phoneNumber: phoneNumber ? phoneNumber.trim() : undefined,
       address: address ? address.trim() : undefined,
     };
+
+    if (targetRole === "party" && partyId) {
+      userData.partyId = partyId;
+    }
     
     const created = await User.create(userData);
 
@@ -198,6 +223,9 @@ export async function POST(req: NextRequest) {
 
     // Log user creation
     await logCreate('user', created._id.toString(), { username: created.username, role: created.role }, req);
+
+    // Clear in-memory users cache
+    usersCache.clear();
 
     // ⚡ FIX: Properly invalidate Next.js cache
     const { revalidateTag, revalidatePath } = await import('next/cache');

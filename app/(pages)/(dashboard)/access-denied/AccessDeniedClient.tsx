@@ -31,7 +31,7 @@ export default function AccessDeniedClient() {
         <span className="font-medium">Current User:</span> {user.name}
       </p>
       <p className="text-sm text-gray-700 dark:text-gray-300">
-        <span className="font-medium">Role:</span> {user.role === 'superadmin' ? 'Super Admin' : 'User'}
+        <span className="font-medium">Role:</span> {user.role === 'master' ? 'Master' : user.role === 'superadmin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : 'User'}
       </p>
     </div>
   );
