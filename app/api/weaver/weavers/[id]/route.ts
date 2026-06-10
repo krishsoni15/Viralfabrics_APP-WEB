@@ -1,9 +1,7 @@
 import dbConnect from "@/lib/dbConnect";
-import SamplingWeaver from "@/models/SamplingWeaver";
 import { getSession } from "@/lib/session";
 import { unauthorizedResponse } from "@/lib/response";
 import { type NextRequest } from "next/server";
-import { sanitizeString } from "@/lib/sanitize";
 import { weaverRateLimiter, getClientIdentifier, rateLimit } from "@/lib/rateLimiter";
 import { logger } from "@/lib/logger";
 import { weaverCache } from "@/lib/cache/weaverCache";
@@ -83,14 +81,14 @@ export async function PUT(
     let requestData;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch {
       return Response.json({
         success: false,
         message: "Invalid request data"
       }, { status: 400 });
     }
     
-    const { name, phone, address } = requestData || {};
+    const { name, phone, address } = requestData ?? {};
     
     if (!name?.trim()) {
       return Response.json({
@@ -108,7 +106,7 @@ export async function PUT(
     }
     
     // Validate phone number - only numbers allowed
-    if (phone && phone.trim()) {
+    if (phone?.trim()) {
       const phoneNumber = phone.trim();
       if (!/^\d+$/.test(phoneNumber)) {
         return Response.json({
@@ -229,7 +227,7 @@ export async function DELETE(
       
       return Response.json({
         success: true,
-        message: message
+        message
       });
     } catch (error) {
       if (error instanceof Error) {

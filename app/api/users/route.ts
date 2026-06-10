@@ -1,8 +1,6 @@
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
-import Party from "@/models/Party";
 import { requireSuperAdmin } from "@/lib/session";
-import bcrypt from "bcryptjs";
 import { type NextRequest } from "next/server";
 import { logCreate } from "@/lib/logger";
 import { apiRateLimiter, writeRateLimiter, checkRateLimitOrError } from "@/lib/rateLimit";
@@ -23,8 +21,8 @@ export async function GET(req: NextRequest) {
 
     // Check cache first
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '25'), 1), 100);
-    const page = Math.max(parseInt(searchParams.get('page') || '1'), 1);
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') ?? '25'), 1), 100);
+    const page = Math.max(parseInt(searchParams.get('page') ?? '1'), 1);
     const cacheKey = `users-${limit}-${page}-${session?.role}`;
     
     const cached = usersCache.get(cacheKey);
@@ -75,10 +73,7 @@ export async function GET(req: NextRequest) {
 
     // No need to map since we're already selecting only needed fields
 
-    // Minimal headers for speed
-    const headers = {
-      'Content-Type': 'application/json',
-    };
+
 
     // Calculate pagination info
     const totalPages = Math.ceil(totalCount / limit);
@@ -87,9 +82,9 @@ export async function GET(req: NextRequest) {
       users,
       pagination: {
         currentPage: page,
-        totalPages: totalPages,
-        totalCount: totalCount,
-        limit: limit,
+        totalPages,
+        totalCount,
+        limit,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1
       }
@@ -150,11 +145,11 @@ export async function POST(req: NextRequest) {
     // Validation
     const errors: string[] = [];
     
-    if (!name || !name.trim()) {
+    if (!name?.trim()) {
       errors.push("Name is required");
     }
     
-    if (!username || !username.trim()) {
+    if (!username?.trim()) {
       errors.push("Username is required");
     }
     
@@ -197,11 +192,18 @@ export async function POST(req: NextRequest) {
       targetRole = "master";
     }
 
-    // Don't hash password here - let the User model pre-save middleware handle it
-    const userData: Record<string, any> = {
+    const userData: {
+      name: string;
+      username: string;
+      password: string;
+      role: string;
+      phoneNumber?: string;
+      address?: string;
+      partyId?: string;
+    } = {
       name: name.trim(),
       username: username.trim(),
-      password: password, // Plain password - will be hashed by model middleware
+      password, // Plain password - will be hashed by model middleware
       role: targetRole,
       phoneNumber: phoneNumber ? phoneNumber.trim() : undefined,
       address: address ? address.trim() : undefined,

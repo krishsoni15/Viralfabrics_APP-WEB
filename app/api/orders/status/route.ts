@@ -14,11 +14,12 @@ export async function PATCH(req: NextRequest) {
     const { orderId, status } = await req.json();
 
     // Validate status
-    if (!['pending', 'delivered'].includes(status)) {
+    const allowedStatuses = ['pending', 'in_progress', 'completed', 'delivered', 'cancelled', 'Not set', 'Not selected'];
+    if (!allowedStatuses.includes(status)) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Invalid status" 
+          message: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}` 
         }), 
         { status: 400 }
       );

@@ -13,7 +13,7 @@ function isObjectId(value: any): boolean {
   if ('_bsontype' in value && value._bsontype === 'ObjectId') return true;
   
   // Check for mongoose ObjectId
-  if (value.constructor && value.constructor.name === 'ObjectId') return true;
+  if (value.constructor?.name === 'ObjectId') return true;
   
   // Check if it has toString and toHexString methods (common ObjectId pattern)
   if (typeof value.toString === 'function' && typeof value.toHexString === 'function') {

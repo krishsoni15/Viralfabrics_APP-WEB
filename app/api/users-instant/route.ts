@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { successResponse } from '@/lib/response';
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
-import Party from "@/models/Party";
 import { getSession } from "@/lib/session";
 import { checkRateLimitOrError, apiRateLimiter } from '@/lib/rateLimit';
 import { serializeMongoDocs } from '@/lib/serialize';
@@ -37,8 +36,8 @@ export async function GET(request: NextRequest) {
 
     // Check cache first
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '25');
-    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') ?? '25');
+    const page = parseInt(searchParams.get('page') ?? '1');
     const cacheKey = `users-instant-${limit}-${page}-${session.role}`;
     
     const cached = usersCache.get(cacheKey);
@@ -93,9 +92,9 @@ export async function GET(request: NextRequest) {
       users: serializedUsers,
       pagination: {
         currentPage: page,
-        totalPages: totalPages,
-        totalCount: totalCount,
-        limit: limit,
+        totalPages,
+        totalCount,
+        limit,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1
       }

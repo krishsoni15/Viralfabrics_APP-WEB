@@ -1,17 +1,13 @@
 import dbConnect from "@/lib/dbConnect";
-import Sample, { ISample } from "@/models/Sample";
-import SamplingWeaver from "@/models/SamplingWeaver";
 import { getSession } from "@/lib/session";
 import { unauthorizedResponse } from "@/lib/response";
 import { type NextRequest } from "next/server";
 import { sanitizeString } from "@/lib/sanitize";
-import type { FilterQuery } from "mongoose";
 import { weaverRateLimiter, getClientIdentifier, rateLimit } from "@/lib/rateLimiter";
 import { logger } from "@/lib/logger";
 import { weaverCache, CACHE_TTL } from "@/lib/cache/weaverCache";
 // Service layer (optional - can use for consistency)
 import { getSamples as getSamplesService, createSample as createSampleService } from "@/app/(pages)/(dashboard)/weaver/lib/services/sampleService";
-import { FABRIC_TYPES } from "@/app/(pages)/(dashboard)/weaver/constants";
 
 export async function GET(req: NextRequest) {
   const startTime = Date.now();
@@ -41,17 +37,17 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const weaverId = searchParams.get('weaverId') || undefined; // Convert null to undefined
-    const search = sanitizeString(searchParams.get('search') || '', { maxLength: 100 });
+    const weaverId = searchParams.get('weaverId') ?? undefined; // Convert null to undefined
+    const search = sanitizeString(searchParams.get('search') ?? '', { maxLength: 100 });
     const force = searchParams.get('force') === 'true';
     // When fetching by weaverId, use reasonable limit (reduced from 1000 to 100 for performance)
     // Otherwise use default pagination
     const defaultLimit = weaverId ? 100 : 50;
-    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || defaultLimit.toString()), 1), 1000);
-    const page = Math.max(parseInt(searchParams.get('page') || '1'), 1);
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') ?? defaultLimit.toString()), 1), 1000);
+    const page = Math.max(parseInt(searchParams.get('page') ?? '1'), 1);
     
     // Create cache key
-    const cacheKey = `samples:${weaverId || 'all'}:${search}:${page}:${limit}`;
+    const cacheKey = `samples:${weaverId ?? 'all'}:${search}:${page}:${limit}`;
     
     // Check cache (skip if force refresh)
     if (!force) {
@@ -172,7 +168,7 @@ export async function POST(req: NextRequest) {
         greighRate: greighRate ? parseFloat(String(greighRate)) : undefined,
         label: label?.trim(),
         note: note?.trim(),
-        images: images || []
+        images: images ?? []
       });
       
       // Invalidate cache

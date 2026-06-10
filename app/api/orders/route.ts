@@ -568,18 +568,31 @@ export async function GET(request: NextRequest) {
       if (fy === 'legacy') {
         // Show old orders that don't have the FY prefix
         query.$and.push({ orderId: { $not: /^FY/ } });
-      } else if (fy === '2526') {
-        // Special case for FY 25-26: show both prefixed (FY2526-) AND orders without FY prefix
-        // Since app starts from FY 25-26, all non-prefixed orders belong to this period.
-        query.$and.push({
-          $or: [
-            { orderId: { $regex: /^FY2526-/ } },
-            { orderId: { $not: /^FY/ } }
-          ]
-        });
       } else {
-        // Filter by specific FY (e.g., fy=2627 → match orderId starting with "FY2627-")
-        query.$and.push({ orderId: { $regex: `^FY${fy}-` } });
+        const startYear = `20${fy.slice(0, 2)}`;
+        const endYear = `20${fy.slice(2, 4)}`;
+        const fyStartDate = new Date(`${startYear}-04-01T00:00:00.000Z`);
+        const fyEndDate = new Date(`${endYear}-03-31T23:59:59.999Z`);
+
+        if (fy === '2526') {
+          // Special case for FY 25-26: show both prefixed (FY2526-) AND orders without FY prefix OR created in that range
+          query.$and.push({
+            $or: [
+              { orderId: { $regex: '^FY-?25-?26-', $options: 'i' } },
+              { orderId: { $not: /^FY/ } },
+              { createdAt: { $gte: fyStartDate, $lte: fyEndDate } }
+            ]
+          });
+        } else {
+          const startCode = fy.slice(0, 2);
+          const endCode = fy.slice(2, 4);
+          query.$and.push({
+            $or: [
+              { orderId: { $regex: `^FY-?${startCode}-?${endCode}-`, $options: 'i' } },
+              { createdAt: { $gte: fyStartDate, $lte: fyEndDate } }
+            ]
+          });
+        }
       }
     }
 

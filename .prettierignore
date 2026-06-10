@@ -9,4 +9,5 @@ package-lock.json
 tsconfig.tsbuildinfo
 .env*.local
 public/sw.js
+mobile-app/
 

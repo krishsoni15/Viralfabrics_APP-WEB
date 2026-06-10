@@ -49,7 +49,7 @@ export async function GET(
     
     const sample = await Sample.findById(id)
       .populate('weaverId', 'name phone address')
-      .lean() as any;
+      .lean();
     
     if (!sample) {
       return Response.json({
@@ -149,7 +149,7 @@ export async function PUT(
           message: "Invalid weaver ID format"
         }, { status: 400 });
       }
-      const weaver = await SamplingWeaver.findById(weaverId).lean() as any;
+      const weaver = await SamplingWeaver.findById(weaverId).lean();
       if (!weaver) {
         return Response.json({
           success: false,
@@ -161,7 +161,7 @@ export async function PUT(
     // Normalize and validate type (case-insensitive)
     const validTypes = ['Polyester', 'Blend', 'Viscose', 'Cotton', 'Rayon', 'Other'];
     let normalizedType = '';
-    if (type && type.trim()) {
+    if (type?.trim()) {
       const trimmedType = type.trim();
       // Find matching type (case-insensitive)
       const matchedType = validTypes.find(
@@ -193,7 +193,7 @@ export async function PUT(
       greighRate: greighRate ? parseFloat(greighRate) : 0,
       label: label ? sanitizeString(label.trim(), { maxLength: 500 }) : '',
       note: note ? sanitizeString(note.trim(), { maxLength: 1000 }) : '',
-      images: images || []
+      images: images ?? []
     };
     
     if (weaverId) {
@@ -206,7 +206,7 @@ export async function PUT(
       { new: true, runValidators: true }
     )
       .populate('weaverId', 'name phone address')
-      .lean() as any;
+      .lean();
     
     if (!sample) {
       return Response.json({
@@ -266,7 +266,7 @@ export async function DELETE(
     await dbConnect();
     const { id } = await params;
     
-    const sample = await Sample.findByIdAndDelete(id).lean() as any;
+    const sample = await Sample.findByIdAndDelete(id).lean();
     
     if (!sample) {
       return Response.json({

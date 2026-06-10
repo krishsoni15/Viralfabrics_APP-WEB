@@ -1,10 +1,8 @@
 import dbConnect from "@/lib/dbConnect";
-import SamplingWeaver, { ISamplingWeaver } from "@/models/SamplingWeaver";
 import { getSession } from "@/lib/session";
 import { unauthorizedResponse } from "@/lib/response";
 import { type NextRequest } from "next/server";
 import { sanitizeString } from "@/lib/sanitize";
-import type { FilterQuery } from "mongoose";
 import { weaverRateLimiter, getClientIdentifier, rateLimit } from "@/lib/rateLimiter";
 import { logger } from "@/lib/logger";
 import { weaverCache, CACHE_TTL } from "@/lib/cache/weaverCache";
@@ -39,10 +37,10 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const search = sanitizeString(searchParams.get('search') || '', { maxLength: 100 });
-    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '25'), 1), 100);
-    const page = Math.max(parseInt(searchParams.get('page') || '1'), 1);
-    const sort = searchParams.get('sort') || 'newest';
+    const search = sanitizeString(searchParams.get('search') ?? '', { maxLength: 100 });
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') ?? '25'), 1), 100);
+    const page = Math.max(parseInt(searchParams.get('page') ?? '1'), 1);
+    const sort = searchParams.get('sort') ?? 'newest';
     const force = searchParams.get('force') === 'true';
     
     // Create cache key
@@ -130,14 +128,14 @@ export async function POST(req: NextRequest) {
     let requestData;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch {
       return Response.json({
         success: false,
         message: "Invalid request data"
       }, { status: 400 });
     }
     
-    const { name, phone, address } = requestData || {};
+    const { name, phone, address } = requestData ?? {};
     
     if (!name?.trim()) {
       return Response.json({
@@ -155,7 +153,7 @@ export async function POST(req: NextRequest) {
     }
     
     // Validate phone number - only numbers allowed
-    if (phone && phone.trim()) {
+    if (phone?.trim()) {
       const phoneNumber = phone.trim();
       if (!/^\d+$/.test(phoneNumber)) {
         return Response.json({

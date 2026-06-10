@@ -225,7 +225,7 @@ export function buildSearchQuery(
   fields: string[],
   searchTerm: string
 ): any {
-  if (!searchTerm || !searchTerm.trim()) {
+  if (!searchTerm?.trim()) {
     return {};
   }
 

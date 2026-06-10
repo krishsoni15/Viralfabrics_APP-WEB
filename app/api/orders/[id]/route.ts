@@ -541,8 +541,9 @@ export async function PUT(
       }
     }
     
-    if (status !== undefined && !['pending', 'delivered'].includes(status)) {
-      errors.push("Status must be one of: pending, delivered");
+    const allowedStatuses = ['pending', 'in_progress', 'completed', 'delivered', 'cancelled', 'Not set', 'Not selected'];
+    if (status !== undefined && !allowedStatuses.includes(status)) {
+      errors.push(`Status must be one of: ${allowedStatuses.join(', ')}`);
     }
     
     // Validate items if provided
@@ -1416,7 +1417,8 @@ export async function PATCH(
     }
 
     // Fast status change - minimal validation but WITH logging
-    if (status && ['pending', 'delivered'].includes(status)) {
+    const allowedStatuses = ['pending', 'in_progress', 'completed', 'delivered', 'cancelled', 'Not set', 'Not selected'];
+    if (status && allowedStatuses.includes(status)) {
       // Get old status before update
       const existingOrder = await Order.findById(id).select('status orderId').lean() as any;
       const oldStatus = existingOrder?.status || 'Not set';
@@ -1467,12 +1469,11 @@ export async function PATCH(
     }
 
     // Fallback for other status values
-    const validStatuses = ['Not selected', 'pending', 'delivered'];
-    if (status && !validStatuses.includes(status)) {
+    if (status && !allowedStatuses.includes(status)) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: "Invalid status. Must be one of: Not selected, pending, delivered" 
+          message: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}` 
         }), 
         { status: 400 }
       );

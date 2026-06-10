@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { checkBodySizeLimit } from "@/lib/bodySizeLimit";
 
 /**
  * JWT Payload interface for type safety
@@ -76,7 +77,6 @@ export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   // Check request body size limit
-  const { checkBodySizeLimit } = await import('@/lib/bodySizeLimit');
   const sizeLimitError = checkBodySizeLimit(req);
   if (sizeLimitError) {
     return sizeLimitError;

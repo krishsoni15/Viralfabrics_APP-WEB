@@ -10,6 +10,8 @@ interface PartyDashboardProps {
     username: string;
     role: string;
     name?: string;
+    phoneNumber?: string;
+    address?: string;
   };
 }
 

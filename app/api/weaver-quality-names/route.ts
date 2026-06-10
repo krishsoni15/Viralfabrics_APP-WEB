@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const weaverId = searchParams.get('weaverId');
     
-    const query: any = {};
+    const query: Record<string, string> = {};
     if (weaverId) {
       query.weaverId = weaverId;
     }
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       data: weaverQualityNames 
     }), { status: 200 });
     
-  } catch (error) {
+  } catch {
     return new Response(JSON.stringify({ 
       success: false, 
       message: "Failed to fetch weaver quality names" 
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       data: weaverQualityName 
     }), { status: 201 });
     
-  } catch (error) {
+  } catch {
     return new Response(JSON.stringify({ 
       success: false, 
       message: "Failed to create weaver quality name" 

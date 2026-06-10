@@ -44,36 +44,65 @@ export async function GET(request: NextRequest) {
     // Connect to database with optimized settings
     await dbConnect();
 
-    // Build match conditions based on filters
+    // Build match conditions based on filters with nested $and to prevent property overwriting
     const matchConditions: any = {
-      $or: [
-        { softDeleted: false },
-        { softDeleted: { $exists: false } }
+      $and: [
+        {
+          $or: [
+            { softDeleted: false },
+            { softDeleted: { $exists: false } }
+          ]
+        }
       ]
     };
 
     // Add date filters
     if (startDate || endDate) {
-      matchConditions.createdAt = {};
-      if (startDate) {
-        matchConditions.createdAt.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        matchConditions.createdAt.$lte = new Date(endDate + 'T23:59:59.999Z');
-      }
+      const dateCond: any = {};
+      if (startDate) dateCond.$gte = new Date(startDate);
+      if (endDate) dateCond.$lte = new Date(endDate + 'T23:59:59.999Z');
+      matchConditions.$and.push({ createdAt: dateCond });
     }
 
     // Add financial year filter
     if (financialYear && financialYear !== 'all') {
-      const [startYear, endYear] = financialYear.split('-');
-      const fyStartDate = new Date(`${startYear}-04-01`);
-      const fyEndDate = new Date(`${endYear}-03-31T23:59:59.999Z`);
-      
-      if (!matchConditions.createdAt) {
-        matchConditions.createdAt = {};
+      if (financialYear.includes('-') && financialYear.split('-')[0].length === 4) {
+        const [startYear, endYear] = financialYear.split('-');
+        const fyStartDate = new Date(`${startYear}-04-01T00:00:00.000Z`);
+        const fyEndDate = new Date(`${endYear}-03-31T23:59:59.999Z`);
+        matchConditions.$and.push({
+          createdAt: {
+            $gte: fyStartDate,
+            $lte: fyEndDate
+          }
+        });
+      } else {
+        // It's a code like "2526" or "2627"
+        const startYear = `20${financialYear.slice(0, 2)}`;
+        const endYear = `20${financialYear.slice(2, 4)}`;
+        const fyStartDate = new Date(`${startYear}-04-01T00:00:00.000Z`);
+        const fyEndDate = new Date(`${endYear}-03-31T23:59:59.999Z`);
+
+        if (financialYear === '2526') {
+          // Special case for FY 25-26: show both prefixed (FY2526-) AND orders without FY prefix OR created in that range
+          matchConditions.$and.push({
+            $or: [
+              { orderId: { $regex: '^FY-?25-?26-', $options: 'i' } },
+              { orderId: { $not: /^FY/ } },
+              { createdAt: { $gte: fyStartDate, $lte: fyEndDate } }
+            ]
+          });
+        } else {
+          const startCode = financialYear.slice(0, 2);
+          const endCode = financialYear.slice(2, 4);
+          matchConditions.$and.push({
+            $or: [
+              { orderId: { $regex: `^FY-?${startCode}-?${endCode}-`, $options: 'i' } },
+              { createdAt: { $gte: fyStartDate, $lte: fyEndDate } }
+            ]
+          });
+        }
       }
-      matchConditions.createdAt.$gte = fyStartDate;
-      matchConditions.createdAt.$lte = fyEndDate;
     }
 
     // Restrict to user's party if session has a partyId (applies to party users)

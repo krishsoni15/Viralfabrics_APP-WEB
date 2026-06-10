@@ -83,6 +83,45 @@ export default function OrderDetailsPage() {
   const searchParams = useSearchParams();
   const orderMongoId = searchParams?.get('id');
 
+  // ALL hooks must be declared before any conditional returns (React Rules of Hooks)
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [successMessage, setSuccessMessage] = useState<string>('');
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [millInputs, setMillInputs] = useState<any[]>([]);
+  const [millOutputs, setMillOutputs] = useState<any[]>([]);
+  const [dispatches, setDispatches] = useState<any[]>([]);
+  const [greyInformation, setGreyInformation] = useState<any[]>([]);
+  const [processDataByQuality, setProcessDataByQuality] = useState<{ [key: string]: string[] }>({});
+  const [showMillInputModal, setShowMillInputModal] = useState(false);
+  const [isEditingMillInput, setIsEditingMillInput] = useState(false);
+  const [showMillOutputModal, setShowMillOutputModal] = useState(false);
+  const [isEditingMillOutput, setIsEditingMillOutput] = useState(false);
+  const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [isEditingDispatch, setIsEditingDispatch] = useState(false);
+  const [mills, setMills] = useState<Mill[]>([]);
+  const [qualities, setQualities] = useState<Quality[]>([]);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
+
+  // ⚡ FIX: Prevent modal flickering - refs to track if modal is opening/closing
+  const modalOperationRef = useRef({
+    millInput: false,
+    millOutput: false,
+    dispatch: false
+  });
+  const [loadingSections, setLoadingSections] = useState({
+    millInputs: true,
+    millOutputs: true,
+    dispatches: true,
+    greyInformation: true,
+    mills: true,
+    qualities: true
+  });
+
+  // Party users see a "Coming Soon" page
   if (isParty) {
     return (
       <div className={`flex flex-col items-center justify-center min-h-[70vh] p-6 text-center transition-colors duration-300 ${
@@ -109,41 +148,6 @@ export default function OrderDetailsPage() {
       </div>
     );
   }
-
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [successMessage, setSuccessMessage] = useState<string>('');
-  const [showImagePreview, setShowImagePreview] = useState(false);
-  const [previewImages, setPreviewImages] = useState<string[]>([]);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [millInputs, setMillInputs] = useState<any[]>([]);
-  const [millOutputs, setMillOutputs] = useState<any[]>([]);
-  const [dispatches, setDispatches] = useState<any[]>([]);
-  const [greyInformation, setGreyInformation] = useState<any[]>([]);
-  const [processDataByQuality, setProcessDataByQuality] = useState<{ [key: string]: string[] }>({});
-  const [showMillInputModal, setShowMillInputModal] = useState(false);
-  const [isEditingMillInput, setIsEditingMillInput] = useState(false);
-  const [showMillOutputModal, setShowMillOutputModal] = useState(false);
-  const [isEditingMillOutput, setIsEditingMillOutput] = useState(false);
-  const [showDispatchModal, setShowDispatchModal] = useState(false);
-  const [isEditingDispatch, setIsEditingDispatch] = useState(false);
-  const [mills, setMills] = useState<Mill[]>([]);
-  const [qualities, setQualities] = useState<Quality[]>([]);
-
-  // ⚡ FIX: Prevent modal flickering - refs to track if modal is opening/closing
-  const modalOperationRef = useRef({
-    millInput: false,
-    millOutput: false,
-    dispatch: false
-  });
-  const [loadingSections, setLoadingSections] = useState({
-    millInputs: true,
-    millOutputs: true,
-    dispatches: true,
-    greyInformation: true,
-    mills: true,
-    qualities: true
-  });
 
   // Ultra-fast progressive loading - show data as it arrives
   useEffect(() => {
@@ -729,9 +733,6 @@ export default function OrderDetailsPage() {
       navigateImage('prev');
     }
   };
-
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [touchEndX, setTouchEndX] = useState<number | null>(null);
 
   // Loading logic moved below to prevent "Order not found" flash
 

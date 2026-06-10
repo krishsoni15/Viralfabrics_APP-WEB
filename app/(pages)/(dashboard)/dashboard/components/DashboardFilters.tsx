@@ -314,6 +314,20 @@ export default function DashboardFilters({ onFiltersChange, loading = false }: D
   const [showFilters, setShowFilters] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
 
+  const [showFYDropdown, setShowFYDropdown] = useState(false);
+  const [fyOptions, setFyOptions] = useState<Array<{ value: string; label: string; isCurrent?: boolean }>>([]);
+  const fyDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [showPresetDropdown, setShowPresetDropdown] = useState(false);
+  const presetDropdownRef = useRef<HTMLDivElement>(null);
+
+  const getActivePresetLabel = () => {
+    const active = getQuickPresets().find(
+      p => p.startDate === startDate && p.endDate === endDate
+    );
+    return active ? active.label : (startDate || endDate ? 'Custom Range' : 'Select Preset');
+  };
+
   // Get initial theme to prevent flash
   const [initialTheme] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -325,25 +339,56 @@ export default function DashboardFilters({ onFiltersChange, loading = false }: D
   // Use mounted state to prevent flickering
   const effectiveDarkMode = mounted ? isDarkMode : initialTheme;
 
-  // Generate financial year options
-  const getFinancialYearOptions = () => {
-    const currentYear = new Date().getFullYear();
-    const options = [];
+  // Fetch financial years on mount
+  useEffect(() => {
+    const fetchFYOptions = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const res = await fetch('/api/orders/financial-years', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const json = await res.json();
+          if (json.success && json.data?.options) {
+            setFyOptions(json.data.options);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch FY options:', e);
+      }
+    };
+    fetchFYOptions();
+  }, []);
 
-    // Generate last 5 financial years and next 2
-    for (let i = 5; i >= -2; i--) {
-      const year = currentYear - i;
-      const fyStart = `${year}-04-01`;
-      const fyEnd = `${year + 1}-03-31`;
-      options.push({
-        value: `${year}-${year + 1}`,
-        label: `FY ${year}-${(year + 1).toString().slice(-2)}`,
-        startDate: fyStart,
-        endDate: fyEnd
-      });
+  // Handle click outside for FY dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (fyDropdownRef.current && !fyDropdownRef.current.contains(event.target as Node)) {
+        setShowFYDropdown(false);
+      }
+    };
+    if (showFYDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
     }
-    return options;
-  };
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showFYDropdown]);
+
+  // Handle click outside for Preset dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (presetDropdownRef.current && !presetDropdownRef.current.contains(event.target as Node)) {
+        setShowPresetDropdown(false);
+      }
+    };
+    if (showPresetDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPresetDropdown]);
 
   const handleApplyFilters = () => {
     // Validate date range
@@ -357,21 +402,9 @@ export default function DashboardFilters({ onFiltersChange, loading = false }: D
     }
     setDateError(null);
 
-    let finalStartDate = startDate;
-    let finalEndDate = endDate;
-
-    // If financial year is selected, use its dates
-    if (financialYear !== 'all') {
-      const fyOption = getFinancialYearOptions().find(opt => opt.value === financialYear);
-      if (fyOption) {
-        finalStartDate = fyOption.startDate;
-        finalEndDate = fyOption.endDate;
-      }
-    }
-
     onFiltersChange({
-      startDate: finalStartDate,
-      endDate: finalEndDate,
+      startDate,
+      endDate,
       financialYear
     });
   };
@@ -498,24 +531,60 @@ export default function DashboardFilters({ onFiltersChange, loading = false }: D
       {showFilters && (
         <>
           {/* Quick Filter Presets */}
-          <div className="mb-4">
-            <label className={`block text-sm font-medium mb-2 transition-colors duration-0 ${effectiveDarkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}>
+          <div className="mb-4" ref={presetDropdownRef}>
+            <label className={`block text-sm font-medium mb-2 transition-colors duration-0 ${effectiveDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               Quick Filters
             </label>
-            <div className="flex flex-wrap gap-2">
-              {getQuickPresets().map((preset) => (
-                <button
-                  key={preset.label}
-                  onClick={() => handlePresetClick(preset)}
-                  className={`px-3 py-1.5 text-sm rounded-md border transition-colors duration-0 ${effectiveDarkMode
-                      ? 'border-slate-600 text-gray-300 hover:bg-slate-700 hover:border-slate-500'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-gray-400'
-                    }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
+            <div className="relative w-full sm:w-64">
+              <button
+                type="button"
+                onClick={() => setShowPresetDropdown(!showPresetDropdown)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 flex items-center justify-between gap-2 text-sm ${effectiveDarkMode
+                    ? 'bg-slate-700 border-slate-500 text-gray-100'
+                    : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+              >
+                <span>{getActivePresetLabel()}</span>
+                <svg className={`h-4 w-4 transition-transform duration-200 ${showPresetDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {showPresetDropdown && (
+                <div className={`absolute left-0 mt-1 w-full rounded-lg border shadow-xl z-[100] dropdown-enter overflow-hidden ${effectiveDarkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-gray-200'}`}>
+                  {getQuickPresets().map((preset) => {
+                    const isActive = startDate === preset.startDate && endDate === preset.endDate;
+                    return (
+                      <button
+                        type="button"
+                        key={preset.label}
+                        onClick={() => {
+                          handlePresetClick(preset);
+                          setShowPresetDropdown(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors ${isActive
+                          ? effectiveDarkMode ? 'bg-blue-600/20 text-blue-400 font-semibold' : 'bg-blue-100 text-blue-700 font-semibold'
+                          : effectiveDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                  {(startDate || endDate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleClearFilters();
+                        setShowPresetDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors border-t ${effectiveDarkMode ? 'border-slate-700' : 'border-gray-100'}`}
+                    >
+                      Clear Dates
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -555,26 +624,85 @@ export default function DashboardFilters({ onFiltersChange, loading = false }: D
 
 
             {/* Financial Year */}
-            <div className="space-y-2">
-              <label className={`block text-sm font-medium transition-colors duration-0 ${effectiveDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}>
+            <div className="space-y-2" ref={fyDropdownRef}>
+              <label className={`block text-sm font-medium transition-colors duration-0 ${effectiveDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                 Financial Year
               </label>
-              <select
-                value={financialYear}
-                onChange={(e) => setFinancialYear(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-0 ${effectiveDarkMode
-                    ? 'bg-slate-700 border-slate-500 text-gray-100'
-                    : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-              >
-                <option value="all">All Financial Years</option>
-                {getFinancialYearOptions().map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <div className="relative w-full">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowFYDropdown(!showFYDropdown);
+                    if (fyOptions.length === 0) {
+                      try {
+                        const token = localStorage.getItem('token');
+                        if (token) {
+                          const res = await fetch('/api/orders/financial-years', {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                          });
+                          const json = await res.json();
+                          if (json.success && json.data?.options) {
+                            setFyOptions(json.data.options);
+                          }
+                        }
+                      } catch (e) {
+                        console.error('Failed to fetch FY options:', e);
+                      }
+                    }
+                  }}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 flex items-center justify-between gap-2 text-sm ${effectiveDarkMode
+                      ? 'bg-slate-700 border-slate-500 text-gray-100'
+                      : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                >
+                  <span>
+                    {financialYear === 'all'
+                      ? 'All Financial Years'
+                      : fyOptions.find(o => o.value === financialYear)?.label || `FY ${financialYear.slice(0, 2)}-${financialYear.slice(2, 4)}`
+                    }
+                  </span>
+                  <svg className={`h-4 w-4 transition-transform duration-200 ${showFYDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {showFYDropdown && (
+                  <div className={`absolute left-0 mt-1 w-full rounded-lg border shadow-xl z-[100] dropdown-enter overflow-hidden ${effectiveDarkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-gray-200'}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFinancialYear('all');
+                        setShowFYDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors ${financialYear === 'all'
+                        ? effectiveDarkMode ? 'bg-blue-600/20 text-blue-400 font-semibold' : 'bg-blue-100 text-blue-700 font-semibold'
+                        : effectiveDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                    >
+                      All Financial Years
+                    </button>
+                    {fyOptions.map((option) => (
+                      <button
+                        type="button"
+                        key={option.value}
+                        onClick={() => {
+                          setFinancialYear(option.value);
+                          setShowFYDropdown(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors flex items-center gap-2 ${financialYear === option.value
+                          ? effectiveDarkMode ? 'bg-blue-600/20 text-blue-400 font-semibold' : 'bg-blue-100 text-blue-700 font-semibold'
+                          : effectiveDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                      >
+                        {option.label}
+                        {option.isCurrent && (
+                          <span className={`inline-block w-2 h-2 rounded-full ${effectiveDarkMode ? 'bg-green-400' : 'bg-green-500'}`} title="Current FY"></span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
