@@ -582,7 +582,7 @@ const DeliveredSoonTable: React.FC<DeliveredSoonTableProps> = ({ isDarkMode }) =
         // Check if this is from the dedicated endpoint (pre-processed) or fallback (needs processing)
         if (orders.length > 0 && orders[0].daysUntilDelivery !== undefined) {
           // Data is already processed by the dedicated API, just use it directly
-          validUpcoming = orders.filter((order: any) => order && order.orderId);
+          validUpcoming = orders.filter((order: any) => order && order.orderId && order.daysUntilDelivery >= 0);
 
         } else {
           // Fallback: process orders from the general orders API
@@ -603,7 +603,7 @@ const DeliveredSoonTable: React.FC<DeliveredSoonTableProps> = ({ isDarkMode }) =
               // Normalize delivery date to start of day for accurate comparison
               deliveryDate.setHours(0, 0, 0, 0);
 
-              const daysUntil = Math.ceil((deliveryDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+              const daysUntil = Math.round((deliveryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
               return {
                 id: order._id || order.id,
@@ -619,8 +619,8 @@ const DeliveredSoonTable: React.FC<DeliveredSoonTableProps> = ({ isDarkMode }) =
             })
             .filter((order: UpcomingOrder | null) => {
               if (!order) return false;
-              // Include orders from yesterday (-1 day) to 7 days from now to handle timezone issues
-              return order.daysUntilDelivery >= -1 && order.daysUntilDelivery <= 7;
+              // Include orders from today to 7 days from now
+              return order.daysUntilDelivery >= 0 && order.daysUntilDelivery <= 7;
             })
             .sort((a: UpcomingOrder | null, b: UpcomingOrder | null) => {
               if (!a || !b) return 0;
@@ -910,7 +910,7 @@ const DeliveredSoonTable: React.FC<DeliveredSoonTableProps> = ({ isDarkMode }) =
   };
 
   const getDaysUntilColor = (days: number) => {
-    if (days === 0) return isDarkMode ? 'text-red-400' : 'text-red-600';
+    if (days <= 0) return isDarkMode ? 'text-red-400' : 'text-red-600';
     if (days <= 2) return isDarkMode ? 'text-orange-400' : 'text-orange-600';
     return isDarkMode ? 'text-green-400' : 'text-green-600';
   };
@@ -1131,12 +1131,16 @@ const DeliveredSoonTable: React.FC<DeliveredSoonTableProps> = ({ isDarkMode }) =
                               ? 'Today'
                               : order.daysUntilDelivery === 1
                                 ? 'Tomorrow'
-                                : `${order.daysUntilDelivery} days`
+                                : order.daysUntilDelivery === -1
+                                  ? 'Yesterday'
+                                  : order.daysUntilDelivery < -1
+                                    ? `${Math.abs(order.daysUntilDelivery)} days ago`
+                                    : `${order.daysUntilDelivery} days`
                             }
                           </div>
                         </div>
                         {order.daysUntilDelivery <= 2 && (
-                          <ClockIcon className={`w-4 h-4 ${order.daysUntilDelivery === 0
+                          <ClockIcon className={`w-4 h-4 ${order.daysUntilDelivery <= 0
                             ? (isDarkMode ? 'text-red-400' : 'text-red-600')
                             : (isDarkMode ? 'text-orange-400' : 'text-orange-600')
                             }`} />

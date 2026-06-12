@@ -102,11 +102,11 @@ export async function GET(request: NextRequest) {
       ...order,
       party: order.party ? partyMap.get(order.party.toString()) || { name: 'Unknown Party' } : { name: 'Unknown Party' }
     }));
-
     // Process and format the data
     const processedOrders = ordersWithParties.map((order: any) => {
       const deliveryDate = new Date(order.deliveryDate);
-      const daysUntil = Math.ceil((deliveryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      deliveryDate.setHours(0, 0, 0, 0);
+      const daysUntil = Math.round((deliveryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       
       return {
         id: order._id,
@@ -117,10 +117,10 @@ export async function GET(request: NextRequest) {
         status: order.status,
         priority: order.priority || 5,
         items: order.items || [],
-        daysUntilDelivery: Math.max(0, daysUntil), // Ensure non-negative
+        daysUntilDelivery: daysUntil,
         createdAt: order.createdAt
       };
-    });
+    }).filter((order: any) => order.daysUntilDelivery >= 0);
 
     // Cache the result
     upcomingCache.set(cacheKey, { data: processedOrders, timestamp: Date.now() });
