@@ -95,7 +95,7 @@ interface OrderData {
   }>;
 }
 
-export const generateOrderPDF = (order: OrderData): void => {
+export const generateOrderPDF = (order: OrderData): any => {
   try {
     // Debug: Log the complete order object
     console.log('PDF Generator - Starting PDF generation for order:', order.orderId);
@@ -1556,13 +1556,19 @@ export const generateOrderPDF = (order: OrderData): void => {
 
     // Download the PDF
     const fileName = `FABRIC_PURCHASE_ORDER_SHEET_${(order.orderId || '').toUpperCase()}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
-    doc.save(fileName);
+    if (typeof window !== 'undefined') {
+      doc.save(fileName);
+    }
 
     console.log('PDF Generator - PDF generated successfully:', fileName);
+    return doc;
 
   } catch (error) {
     console.error('PDF Generator - Error generating PDF:', error);
-    alert('Failed to generate PDF. Please check the console for details.');
+    if (typeof window !== 'undefined') {
+      alert('Failed to generate PDF. Please check the console for details.');
+    }
+    throw error;
   }
 };
 
