@@ -204,13 +204,13 @@ export async function DELETE(
     const rateLimitError = await checkRateLimitOrError(request, writeRateLimiter);
     if (rateLimitError) return rateLimitError;
 
-    // Validate session
     const session = await getSession(request);
     if (!session) {
       return NextResponse.json(errorResponse('Unauthorized'), { status: 401 });
     }
-    if (session.role !== 'master') {
-      return NextResponse.json(errorResponse('Access denied - Only master can delete'), { status: 403 });
+    const allowedRoles = ['master', 'superadmin', 'admin', 'user'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json(errorResponse('Access denied - Unauthorized role for deletion'), { status: 403 });
     }
 
     await dbConnect();
