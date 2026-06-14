@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ISampling extends Document {
   qualityName: string;
+  whereToPut?: string;
   images?: string[];
   notes?: string;
   meter?: number;
@@ -16,6 +17,12 @@ const SamplingSchema = new Schema<ISampling>({
     required: true,
     trim: true,
     maxlength: 100
+  },
+  whereToPut: {
+    type: String,
+    required: false,
+    trim: true,
+    maxlength: 200
   },
   images: {
     type: [String],
@@ -49,11 +56,13 @@ SamplingSchema.index({ createdAt: -1 });
 // Text search index
 SamplingSchema.index({ 
   qualityName: "text",
-  notes: "text"
+  notes: "text",
+  whereToPut: "text"
 }, {
   weights: {
     qualityName: 10,
-    notes: 5
+    notes: 5,
+    whereToPut: 3
   },
   name: "sampling_text_search"
 });

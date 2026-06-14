@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
     if (search) {
       const or: any[] = [
         { qualityName: { $regex: search, $options: 'i' } },
-        { notes: { $regex: search, $options: 'i' } }
+        { notes: { $regex: search, $options: 'i' } },
+        { whereToPut: { $regex: search, $options: 'i' } }
       ];
       if (mongoose.Types.ObjectId.isValid(search)) {
         or.push({ _id: new mongoose.Types.ObjectId(search) });
@@ -119,6 +120,7 @@ export async function POST(req: NextRequest) {
     const data = await req.json();
     const {
       qualityName,
+      whereToPut,
       images,
       notes,
       meter,
@@ -134,6 +136,7 @@ export async function POST(req: NextRequest) {
     
     const sampling = new Sampling({
       qualityName: qualityName.trim(),
+      whereToPut: whereToPut?.trim() || '',
       images: images || [],
       notes: notes || '',
       piece: piece ? Number(piece) : 0,
