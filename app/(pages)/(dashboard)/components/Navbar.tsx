@@ -40,7 +40,7 @@ const sunGlowStyles = `
   }
 `;
 import Link from 'next/link';
-import { 
+import {
   CogIcon,
   UserIcon,
   SunIcon,
@@ -102,7 +102,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
   // Track screen size with debouncing
   useEffect(() => {
     let timeoutId: any;
-    
+
     const handleResize = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
@@ -112,7 +112,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
 
     // Set initial size
     setScreenSize(window.innerWidth);
-    
+
     window.addEventListener('resize', handleResize, { passive: true });
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -143,7 +143,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      
+
       // Check if click is outside the profile dropdown
       if (isProfileDropdownOpen && !target.closest('[data-profile-dropdown]')) {
         setIsProfileDropdownOpen(false);
@@ -218,22 +218,22 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
         await document.exitFullscreen();
       }
     } catch (error) {
-      }
+    }
   }, []);
 
   const handleThemeToggle = useCallback(() => {
     // Show loading state immediately for instant feedback
     setIsThemeTransitioning(true);
-    
+
     // Add transition class to html for smooth page transition
     document.documentElement.classList.add('dark-transitioning');
-    
+
     // Small delay to show loading state, then toggle
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-    // Toggle dark mode with smooth animation
-    toggleDarkMode();
-        
+        // Toggle dark mode with smooth animation
+        toggleDarkMode();
+
         // Clear loading state and transition class after premium animation completes
         setTimeout(() => {
           setIsThemeTransitioning(false);
@@ -279,9 +279,9 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
         setEditingField(null);
         // Show success message or update UI
       } else {
-        }
-    } catch (error) {
       }
+    } catch (error) {
+    }
   }, [user, updateUser]);
 
   const startEditing = useCallback((field: string) => {
@@ -313,8 +313,8 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
         }
       }
     } catch (error) {
-      }
-    
+    }
+
     setShowProfileModal(true);
     closeProfileDropdown();
   }, [user, updateUser, closeProfileDropdown]);
@@ -326,30 +326,28 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
       return (
         <button
           onClick={handleToggleSidebar}
-          className={`p-2 rounded-lg transition-all duration-300 cursor-pointer hamburger-hover ${
-            isDarkMode 
-              ? 'bg-white/10 text-white hover:bg-white/20' 
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          } shadow-lg backdrop-blur-sm`}
+          className={`p-2 rounded-xl transition-all duration-200 cursor-pointer hamburger-hover ${isDarkMode
+            ? 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 border border-white/10'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent'
+            }`}
           aria-label="Toggle sidebar"
         >
-          <Bars3Icon className="h-6 w-6 transition-transform duration-300 hover:scale-110" />
+          <Bars3Icon className="h-6 w-6 transition-transform duration-200 hover:scale-110" />
         </button>
       );
     } else {
       // Desktop: Toggle collapse button with responsive text
       const isLargeScreen = screenSize >= 1900; // Changed to 1900px
-      
+
       return (
         <button
           onClick={(e) => {
             handleToggleCollapse(e);
           }}
-          className={`p-2 rounded-lg transition-all duration-300 cursor-pointer ${
-            isDarkMode 
-              ? 'bg-white/10 text-white hover:bg-white/20' 
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          } shadow-lg backdrop-blur-sm`}
+          className={`p-2 rounded-xl transition-all duration-200 cursor-pointer ${isDarkMode
+            ? 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 border border-white/10'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent'
+            }`}
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
@@ -380,18 +378,16 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
     <>
       {/* Inject custom CSS */}
       <style dangerouslySetInnerHTML={{ __html: sunGlowStyles }} />
-      
+
       {/* Desktop Navbar */}
-      <nav className={`hidden min-[800px]:block sticky top-0 z-30 transition-all duration-300 ${
-        isDarkMode 
-          ? 'bg-white/10 backdrop-blur-sm border-b border-white/10' 
-          : 'bg-white/80 backdrop-blur-sm border-b border-gray-200/50'
-      } ${isLoading ? 'scale-95 opacity-80' : 'scale-100 opacity-100'}`}>
-        <div className={`transition-all duration-300 ${
-          screenSize >= 1350 ? 'px-4 lg:px-6' :
+      <nav className={`hidden min-[800px]:block sticky top-0 z-30 transition-all duration-300 ${isDarkMode
+        ? 'bg-[#343E51]/80 backdrop-blur-md border-b border-slate-800'
+        : 'bg-white/80 backdrop-blur-sm border-b border-gray-200/50'
+        } ${isLoading ? 'scale-95 opacity-80' : 'scale-100 opacity-100'}`}>
+        <div className={`transition-all duration-300 ${screenSize >= 1350 ? 'px-4 lg:px-6' :
           screenSize >= 1200 ? 'px-3 lg:px-4' :
-          'px-3 sm:px-4'
-        }`}>
+            'px-3 sm:px-4'
+          }`}>
           <div className="flex justify-between items-center py-3">
             {/* Left: Sidebar Toggle */}
             <div className="flex items-center">
@@ -406,11 +402,10 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
               {/* Fullscreen Toggle */}
               <button
                 onClick={toggleFullscreen}
-                className={`p-3 rounded-lg transition-all duration-300 cursor-pointer ${
-                  isDarkMode 
-                    ? 'bg-white/10 text-white hover:bg-white/20' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                } shadow-lg backdrop-blur-sm`}
+                 className={`p-3 rounded-xl transition-all duration-300 cursor-pointer ${isDarkMode
+                   ? 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 border border-white/10'
+                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent'
+                   } shadow-lg backdrop-blur-sm`}
                 aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               >
                 {isFullscreen ? <ArrowsPointingInIcon className="h-5 w-5" /> : <ArrowsPointingOutIcon className="h-5 w-5" />}
@@ -421,15 +416,13 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                 ref={themeSwitchRef}
                 onClick={handleThemeToggle}
                 disabled={isThemeTransitioning}
-                className={`p-3 rounded-lg transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer relative overflow-hidden ${
-                  isThemeTransitioning 
-                    ? 'opacity-80 cursor-wait scale-95 theme-transition' 
-                    : 'hover:scale-105 active:scale-95'
-                } ${
-                  isDarkMode 
-                    ? 'bg-white/10 text-white hover:bg-white/20 shadow-[0_4px_14px_0_rgba(255,255,255,0.1)]' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 shadow-[0_4px_14px_0_rgba(0,0,0,0.1)]'
-                } backdrop-blur-sm group`}
+                className={`p-3 rounded-xl transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer relative overflow-hidden ${isThemeTransitioning
+                  ? 'opacity-80 cursor-wait scale-95 theme-transition'
+                  : 'hover:scale-105 active:scale-95'
+                  } ${isDarkMode
+                    ? 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 border border-white/10 shadow-[0_4px_14px_0_rgba(255,255,255,0.1)]'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent shadow-[0_4px_14px_0_rgba(0,0,0,0.1)]'
+                  } backdrop-blur-sm group`}
                 aria-label="Toggle dark mode"
               >
                 {/* Premium gradient overlay during transition */}
@@ -438,78 +431,68 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 dark:from-yellow-500/20 dark:via-orange-500/20 dark:to-red-500/20 rounded-lg animate-pulse z-10"></div>
                     <div className="absolute inset-0 flex items-center justify-center rounded-lg z-20">
                       <div className="relative">
-                        <ArrowPathIcon className={`h-5 w-5 animate-spin transition-all duration-300 ${
-                          isDarkMode ? 'text-yellow-300' : 'text-blue-600'
-                        }`} style={{ animationDuration: '0.6s' }} />
+                        <ArrowPathIcon className={`h-5 w-5 animate-spin transition-all duration-300 ${isDarkMode ? 'text-yellow-300' : 'text-blue-600'
+                          }`} style={{ animationDuration: '0.6s' }} />
                         {/* Glow effect */}
-                        <div className={`absolute inset-0 blur-md opacity-50 ${
-                          isDarkMode ? 'bg-yellow-300' : 'bg-blue-600'
-                        }`}></div>
+                        <div className={`absolute inset-0 blur-md opacity-50 ${isDarkMode ? 'bg-yellow-300' : 'bg-blue-600'
+                          }`}></div>
                       </div>
                     </div>
                   </>
                 )}
-                
+
                 {/* Icon with premium rotation and scale animation */}
-                <div className={`relative transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
-                  isThemeTransitioning 
-                    ? 'opacity-30 scale-90 blur-sm' 
-                    : 'opacity-100 scale-100 blur-0'
-                } ${
-                  isDarkMode ? 'rotate-180' : 'rotate-0'
-                }`}>
+                <div className={`relative transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isThemeTransitioning
+                  ? 'opacity-30 scale-90 blur-sm'
+                  : 'opacity-100 scale-100 blur-0'
+                  } ${isDarkMode ? 'rotate-180' : 'rotate-0'
+                  }`}>
                   {isDarkMode ? (
                     <SunIcon className="h-5 w-5 animate-[sunGlow_3s_ease-in-out_infinite] drop-shadow-[0_0_8px_rgba(255,255,0,0.5)]" />
                   ) : (
                     <MoonIcon className="h-5 w-5 drop-shadow-[0_0_8px_rgba(59,130,246,0.3)]" />
                   )}
                 </div>
-                
+
                 {/* Premium ripple effect with multiple layers */}
-                <div className={`absolute inset-0 rounded-lg transition-all duration-500 ease-out ${
-                  isDarkMode 
-                    ? 'bg-gradient-to-br from-white/10 via-white/5 to-transparent scale-0 group-hover:scale-100 opacity-0 group-hover:opacity-100' 
-                    : 'bg-gradient-to-br from-gray-400/20 via-gray-300/10 to-transparent scale-0 group-hover:scale-100 opacity-0 group-hover:opacity-100'
-                }`}></div>
-                
+                <div className={`absolute inset-0 rounded-lg transition-all duration-500 ease-out ${isDarkMode
+                  ? 'bg-gradient-to-br from-white/10 via-white/5 to-transparent scale-0 group-hover:scale-100 opacity-0 group-hover:opacity-100'
+                  : 'bg-gradient-to-br from-gray-400/20 via-gray-300/10 to-transparent scale-0 group-hover:scale-100 opacity-0 group-hover:opacity-100'
+                  }`}></div>
+
                 {/* Shine effect on hover */}
-                <div className={`absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${
-                  isDarkMode
-                    ? 'bg-gradient-to-r from-transparent via-white/10 to-transparent'
-                    : 'bg-gradient-to-r from-transparent via-white/30 to-transparent'
-                }`} style={{
-                  backgroundSize: '200% 100%',
-                  animation: isThemeTransitioning ? 'none' : 'shimmer 3s infinite'
-                }}></div>
+                <div className={`absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${isDarkMode
+                  ? 'bg-gradient-to-r from-transparent via-white/10 to-transparent'
+                  : 'bg-gradient-to-r from-transparent via-white/30 to-transparent'
+                  }`} style={{
+                    backgroundSize: '200% 100%',
+                    animation: isThemeTransitioning ? 'none' : 'shimmer 3s infinite'
+                  }}></div>
               </button>
 
               {/* Profile Dropdown */}
               <div className="relative" data-profile-dropdown>
                 <button
                   onClick={toggleProfileDropdown}
-                  className={`flex items-center space-x-3 p-2 rounded-lg transition-all duration-300 cursor-pointer ${
-                    isDarkMode 
-                      ? 'bg-white/10 text-white hover:bg-white/20' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  } shadow-lg backdrop-blur-sm`}
+                  className={`flex items-center space-x-3 p-1.5 rounded-xl transition-all duration-200 cursor-pointer ${isDarkMode
+                    ? 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 border border-white/10 shadow-lg'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent'
+                    }`}
                   aria-label="User profile menu"
                 >
-                  <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-all duration-300 ${
-                    isDarkMode 
-                      ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white' 
-                      : 'bg-gradient-to-br from-purple-600 to-purple-700 text-white'
-                  } ${
-                    sessionStatus === 'active' 
-                      ? 'border-green-500' 
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-all duration-300 ${isDarkMode
+                    ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white'
+                    : 'bg-gradient-to-br from-purple-600 to-purple-700 text-white'
+                    } ${sessionStatus === 'active'
+                      ? 'border-green-500'
                       : sessionStatus === 'refreshing'
-                      ? 'border-yellow-500 animate-pulse'
-                      : 'border-red-500'
-                  }`} title={`Session: ${sessionStatus}`}>
+                        ? 'border-yellow-500 animate-pulse'
+                        : 'border-red-500'
+                    }`} title={`Session: ${sessionStatus}`}>
                     {user ? getUserInitials(user.name) : 'U'}
                   </div>
-                  <span className={`hidden min-[800px]:block font-medium transition-colors duration-300 ${
-                    isDarkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
+                  <span className={`hidden min-[800px]:block font-medium transition-colors duration-300 ${isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}>
                     {user?.name || 'User'}
                   </span>
                 </button>
@@ -517,32 +500,27 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                 {/* Dropdown Menu */}
                 {isProfileDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-56 rounded-xl transition-all duration-300 z-50 dropdown-enter">
-                    <div className={`py-2 transition-all duration-300 ${
-                      isDarkMode 
-                        ? 'bg-slate-800 border border-slate-700 shadow-2xl shadow-slate-900/50' 
-                        : 'bg-white border border-gray-200 shadow-2xl shadow-gray-900/20'
-                    } rounded-xl`}>
-                      <div className={`px-4 py-3 border-b transition-colors duration-300 ${
-                        isDarkMode ? 'border-slate-700' : 'border-gray-200'
-                      }`}>
-                        <p className={`text-sm font-medium transition-colors duration-300 ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
+                    <div className={`py-2 transition-all duration-300 ${isDarkMode
+                      ? 'bg-slate-800 border border-slate-700 shadow-2xl shadow-slate-900/50'
+                      : 'bg-white border border-gray-200 shadow-2xl shadow-gray-900/20'
+                      } rounded-xl`}>
+                      <div className={`px-4 py-3 border-b transition-colors duration-300 ${isDarkMode ? 'border-slate-700' : 'border-gray-200'
                         }`}>
+                        <p className={`text-sm font-medium transition-colors duration-300 ${isDarkMode ? 'text-white' : 'text-gray-900'
+                          }`}>
                           {user?.name || 'User'}
                         </p>
-                        <p className={`text-xs transition-colors duration-300 ${
-                          isDarkMode ? 'text-purple-400' : 'text-purple-600'
-                        }`}>
+                        <p className={`text-xs transition-colors duration-300 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'
+                          }`}>
                           {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                         </p>
                       </div>
-                      
+
                       <button
-                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-1 ${
-                          isDarkMode 
-                            ? 'text-gray-300 hover:bg-slate-700' 
-                            : 'text-gray-700 hover:bg-gray-50'
-                        }`}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-1 ${isDarkMode
+                          ? 'text-gray-300 hover:bg-slate-700'
+                          : 'text-gray-700 hover:bg-gray-50'
+                          }`}
                         onClick={openProfileModal}
                       >
                         <div className="flex items-center space-x-2">
@@ -550,14 +528,13 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                           <span>Profile</span>
                         </div>
                       </button>
-                      
+
                       <button
 
-                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-2 ${
-                          isDarkMode 
-                            ? 'text-orange-300 hover:bg-orange-500/10' 
-                            : 'text-orange-600 hover:bg-orange-50'
-                        }`}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-2 ${isDarkMode
+                          ? 'text-orange-300 hover:bg-orange-500/10'
+                          : 'text-orange-600 hover:bg-orange-50'
+                          }`}
                         onClick={() => {
                           closeProfileDropdown();
                           setShowThemeModal(true);
@@ -568,13 +545,12 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                           <span>Theme</span>
                         </div>
                       </button>
-                      
+
                       <button
-                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-3 ${
-                          isDarkMode 
-                            ? 'text-blue-300 hover:bg-blue-500/10' 
-                            : 'text-blue-600 hover:bg-blue-50'
-                        }`}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-3 ${isDarkMode
+                          ? 'text-blue-300 hover:bg-blue-500/10'
+                          : 'text-blue-600 hover:bg-blue-50'
+                          }`}
                         onClick={() => {
                           closeProfileDropdown();
                           toggleFullscreen();
@@ -585,15 +561,14 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                           <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
                         </div>
                       </button>
-                      
+
                       {/* Install App / Open in App Button */}
                       {isInstalled ? (
                         <button
-                          className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-4 ${
-                            isDarkMode 
-                              ? 'text-green-300 hover:bg-green-500/10' 
-                              : 'text-green-600 hover:bg-green-500/10'
-                          }`}
+                          className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-4 ${isDarkMode
+                            ? 'text-green-300 hover:bg-green-500/10'
+                            : 'text-green-600 hover:bg-green-500/10'
+                            }`}
                           onClick={() => {
                             closeProfileDropdown();
                             onOpenInApp?.();
@@ -606,37 +581,34 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                         </button>
                       ) : (
                         <div className="dropdown-item-enter dropdown-item-4">
-                              <button
-                                onClick={() => {
-                                  closeProfileDropdown();
-                            onInstallClick?.();
-                                }}
-                                disabled={isInstalling}
-                          className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${
-                            isDarkMode 
-                              ? 'text-purple-300 hover:bg-purple-500/10' 
+                          <button
+                            onClick={() => {
+                              closeProfileDropdown();
+                              onInstallClick?.();
+                            }}
+                            disabled={isInstalling}
+                            className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${isDarkMode
+                              ? 'text-purple-300 hover:bg-purple-500/10'
                               : 'text-purple-600 hover:bg-purple-50'
-                          }`}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <DevicePhoneMobileIcon className="h-4 w-4" />
-                            <span>{isInstalling ? 'Installing...' : `Install ${BRAND_NAME}`}</span>
-                          </div>
-                              </button>
+                              }`}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <DevicePhoneMobileIcon className="h-4 w-4" />
+                              <span>{isInstalling ? 'Installing...' : `Install ${BRAND_NAME}`}</span>
+                            </div>
+                          </button>
                           {/* Simple reason why install button exists */}
                           <div className="px-4 pb-2">
-                            <p className={`text-xs transition-colors duration-300 ${
-                              isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                            }`}>
+                            <p className={`text-xs transition-colors duration-300 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                              }`}>
                               Get quick access to viral fabrics
                             </p>
                           </div>
                         </div>
                       )}
-                      
-                      <div className={`border-t transition-colors duration-300 ${
-                        isDarkMode ? 'border-slate-700' : 'border-gray-200'
-                      }`}>
+
+                      <div className={`border-t transition-colors duration-300 ${isDarkMode ? 'border-slate-700' : 'border-gray-200'
+                        }`}>
                         <button
                           onClick={() => {
                             closeProfileDropdown();
@@ -645,11 +617,10 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                             localStorage.removeItem('user');
                             window.location.href = '/login';
                           }}
-                          className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-5 ${
-                            isDarkMode 
-                              ? 'text-indigo-400 hover:bg-indigo-500/10' 
-                              : 'text-indigo-600 hover:bg-indigo-50'
-                          }`}
+                          className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-5 ${isDarkMode
+                            ? 'text-indigo-400 hover:bg-indigo-500/10'
+                            : 'text-indigo-600 hover:bg-indigo-50'
+                            }`}
                         >
                           <div className="flex items-center space-x-2">
                             <UserIcon className="h-4 w-4" />
@@ -662,15 +633,14 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                             onLogout();
                           }}
                           disabled={isLoggingOut}
-                          className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-6 ${
-                            isLoggingOut
-                              ? isDarkMode 
-                                ? 'text-gray-500 cursor-not-allowed' 
-                                : 'text-gray-400 cursor-not-allowed'
-                              : isDarkMode 
-                                ? 'text-red-400 hover:bg-red-500/10' 
-                                : 'text-red-600 hover:bg-red-50'
-                          }`}
+                          className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-6 ${isLoggingOut
+                            ? isDarkMode
+                              ? 'text-gray-500 cursor-not-allowed'
+                              : 'text-gray-400 cursor-not-allowed'
+                            : isDarkMode
+                              ? 'text-red-400 hover:bg-red-500/10'
+                              : 'text-red-600 hover:bg-red-50'
+                            }`}
                         >
                           <div className="flex items-center space-x-2">
                             {isLoggingOut ? (
@@ -692,21 +662,19 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
       </nav>
 
       {/* Mobile Navbar */}
-      <nav className={`max-[799px]:block hidden sticky top-0 z-30 transition-all duration-300 ${
-        isDarkMode 
-          ? 'bg-white/10 backdrop-blur-sm border-b border-white/10' 
-          : 'bg-white/80 backdrop-blur-sm border-b border-gray-200/50'
-      } ${isLoading ? 'scale-95 opacity-80' : 'scale-100 opacity-100'}`}>
+      <nav className={`max-[799px]:block hidden sticky top-0 z-30 transition-all duration-300 ${isDarkMode
+        ? 'bg-[#343E51]/80 backdrop-blur-md border-b border-slate-800'
+        : 'bg-white/80 backdrop-blur-sm border-b border-gray-200/50'
+        } ${isLoading ? 'scale-95 opacity-80' : 'scale-100 opacity-100'}`}>
         <div className="px-3 py-3">
           <div className="flex justify-between items-center">
             {/* Mobile Menu Button */}
             <button
               onClick={onToggleSidebar}
-              className={`p-2 rounded-lg transition-all duration-300 cursor-pointer hamburger-hover ${
-                isDarkMode 
-                  ? 'bg-white/10 text-white hover:bg-white/20' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              } shadow-lg backdrop-blur-sm`}
+              className={`p-2 rounded-xl transition-all duration-200 cursor-pointer hamburger-hover ${isDarkMode
+                ? 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 border border-white/10'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent'
+                }`}
               aria-label="Toggle sidebar"
             >
               <Bars3Icon className="h-6 w-6 transition-transform duration-300 hover:scale-110" />
@@ -714,9 +682,8 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
 
             {/* Mobile App Name */}
             <div className="flex items-center">
-              <span className={`text-lg font-bold transition-colors duration-300 ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
-              }`}>
+              <span className={`text-lg font-bold transition-colors duration-300 ${isDarkMode ? 'text-white' : 'text-gray-900'
+                }`}>
                 {BRAND_NAME}
               </span>
             </div>
@@ -726,11 +693,10 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
               {/* Fullscreen Toggle */}
               <button
                 onClick={toggleFullscreen}
-                className={`p-2 rounded-lg transition-all duration-300 cursor-pointer ${
-                  isDarkMode 
-                    ? 'bg-white/10 text-white hover:bg-white/20' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                } shadow-lg backdrop-blur-sm`}
+                 className={`p-2 rounded-xl transition-all duration-200 cursor-pointer ${isDarkMode
+                  ? 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 border border-white/10'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent'
+                  }`}
                 aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               >
                 {isFullscreen ? <ArrowsPointingInIcon className="h-5 w-5" /> : <ArrowsPointingOutIcon className="h-5 w-5" />}
@@ -741,15 +707,13 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                 ref={themeSwitchRef}
                 onClick={handleThemeToggle}
                 disabled={isThemeTransitioning}
-                className={`p-2 rounded-lg transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer relative overflow-hidden ${
-                  isThemeTransitioning 
-                    ? 'opacity-80 cursor-wait scale-95 theme-transition' 
-                    : 'hover:scale-105 active:scale-95'
-                } ${
-                  isDarkMode 
-                    ? 'bg-white/10 text-white hover:bg-white/20 shadow-[0_4px_14px_0_rgba(255,255,255,0.1)]' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 shadow-[0_4px_14px_0_rgba(0,0,0,0.1)]'
-                } backdrop-blur-sm group`}
+                className={`p-2 rounded-xl transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer relative overflow-hidden ${isThemeTransitioning
+                  ? 'opacity-80 cursor-wait scale-95 theme-transition'
+                  : 'hover:scale-105 active:scale-95'
+                  } ${isDarkMode
+                    ? 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 border border-white/10'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent shadow-[0_4px_14px_0_rgba(0,0,0,0.1)]'
+                  } group`}
                 aria-label="Toggle dark mode"
               >
                 {/* Premium gradient overlay during transition */}
@@ -758,67 +722,59 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 dark:from-yellow-500/20 dark:via-orange-500/20 dark:to-red-500/20 rounded-lg animate-pulse z-10"></div>
                     <div className="absolute inset-0 flex items-center justify-center rounded-lg z-20">
                       <div className="relative">
-                        <ArrowPathIcon className={`h-4 w-4 animate-spin transition-all duration-300 ${
-                          isDarkMode ? 'text-yellow-300' : 'text-blue-600'
-                        }`} style={{ animationDuration: '0.6s' }} />
+                        <ArrowPathIcon className={`h-4 w-4 animate-spin transition-all duration-300 ${isDarkMode ? 'text-yellow-300' : 'text-blue-600'
+                          }`} style={{ animationDuration: '0.6s' }} />
                         {/* Glow effect */}
-                        <div className={`absolute inset-0 blur-md opacity-50 ${
-                          isDarkMode ? 'bg-yellow-300' : 'bg-blue-600'
-                        }`}></div>
+                        <div className={`absolute inset-0 blur-md opacity-50 ${isDarkMode ? 'bg-yellow-300' : 'bg-blue-600'
+                          }`}></div>
                       </div>
                     </div>
                   </>
                 )}
-                
+
                 {/* Icon with premium rotation and scale animation */}
-                <div className={`relative transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
-                  isThemeTransitioning 
-                    ? 'opacity-30 scale-90 blur-sm' 
-                    : 'opacity-100 scale-100 blur-0'
-                } ${
-                  isDarkMode ? 'rotate-180' : 'rotate-0'
-                }`}>
+                <div className={`relative transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isThemeTransitioning
+                  ? 'opacity-30 scale-90 blur-sm'
+                  : 'opacity-100 scale-100 blur-0'
+                  } ${isDarkMode ? 'rotate-180' : 'rotate-0'
+                  }`}>
                   {isDarkMode ? (
                     <SunIcon className="h-5 w-5 animate-[sunGlow_3s_ease-in-out_infinite] drop-shadow-[0_0_8px_rgba(255,255,0,0.5)]" />
                   ) : (
                     <MoonIcon className="h-5 w-5 drop-shadow-[0_0_8px_rgba(59,130,246,0.3)]" />
                   )}
                 </div>
-                
+
                 {/* Premium ripple effect */}
-                <div className={`absolute inset-0 rounded-lg transition-all duration-500 ease-out ${
-                  isDarkMode 
-                    ? 'bg-gradient-to-br from-white/10 via-white/5 to-transparent scale-0 group-hover:scale-100 opacity-0 group-hover:opacity-100' 
-                    : 'bg-gradient-to-br from-gray-400/20 via-gray-300/10 to-transparent scale-0 group-hover:scale-100 opacity-0 group-hover:opacity-100'
-                }`}></div>
-                
+                <div className={`absolute inset-0 rounded-lg transition-all duration-500 ease-out ${isDarkMode
+                  ? 'bg-gradient-to-br from-white/10 via-white/5 to-transparent scale-0 group-hover:scale-100 opacity-0 group-hover:opacity-100'
+                  : 'bg-gradient-to-br from-gray-400/20 via-gray-300/10 to-transparent scale-0 group-hover:scale-100 opacity-0 group-hover:opacity-100'
+                  }`}></div>
+
                 {/* Shine effect on hover */}
-                <div className={`absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${
-                  isDarkMode
-                    ? 'bg-gradient-to-r from-transparent via-white/10 to-transparent'
-                    : 'bg-gradient-to-r from-transparent via-white/30 to-transparent'
-                }`} style={{
-                  backgroundSize: '200% 100%',
-                  animation: isThemeTransitioning ? 'none' : 'shimmer 3s infinite'
-                }}></div>
+                <div className={`absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${isDarkMode
+                  ? 'bg-gradient-to-r from-transparent via-white/10 to-transparent'
+                  : 'bg-gradient-to-r from-transparent via-white/30 to-transparent'
+                  }`} style={{
+                    backgroundSize: '200% 100%',
+                    animation: isThemeTransitioning ? 'none' : 'shimmer 3s infinite'
+                  }}></div>
               </button>
 
               {/* Mobile Profile Button */}
               <div className="relative" data-profile-dropdown>
                 <button
                   onClick={toggleProfileDropdown}
-                  className={`p-2 rounded-lg transition-all duration-300 cursor-pointer ${
-                    isDarkMode 
-                      ? 'bg-white/10 text-white hover:bg-white/20' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  } shadow-lg backdrop-blur-sm`}
+                  className={`p-1.5 rounded-xl transition-all duration-200 cursor-pointer ${isDarkMode
+                    ? 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 border border-white/10'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent'
+                    }`}
                   aria-label="User profile menu"
                 >
-                  <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-semibold ${
-                    isDarkMode 
-                      ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white' 
-                      : 'bg-gradient-to-br from-purple-600 to-purple-700 text-white'
-                  }`}>
+                  <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-semibold ${isDarkMode
+                    ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white'
+                    : 'bg-gradient-to-br from-purple-600 to-purple-700 text-white'
+                    }`}>
                     {user ? getUserInitials(user.name) : 'U'}
                   </div>
                 </button>
@@ -826,32 +782,27 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                 {/* Mobile Dropdown Menu */}
                 {isProfileDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-48 rounded-xl shadow-lg transition-all duration-300 z-50 dropdown-enter">
-                    <div className={`py-2 transition-all duration-300 ${
-                      isDarkMode 
-                        ? 'bg-slate-800 border border-slate-700' 
-                        : 'bg-white border border-gray-200'
-                    } rounded-xl shadow-xl`}>
-                      <div className={`px-3 py-2 border-b transition-colors duration-300 ${
-                        isDarkMode ? 'border-slate-700' : 'border-gray-200'
-                      }`}>
-                        <p className={`text-sm font-medium transition-colors duration-300 ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
+                    <div className={`py-2 transition-all duration-300 ${isDarkMode
+                      ? 'bg-slate-800 border border-slate-700'
+                      : 'bg-white border border-gray-200'
+                      } rounded-xl shadow-xl`}>
+                      <div className={`px-3 py-2 border-b transition-colors duration-300 ${isDarkMode ? 'border-slate-700' : 'border-gray-200'
                         }`}>
+                        <p className={`text-sm font-medium transition-colors duration-300 ${isDarkMode ? 'text-white' : 'text-gray-900'
+                          }`}>
                           {user?.name || 'User'}
                         </p>
-                        <p className={`text-xs transition-colors duration-300 ${
-                          isDarkMode ? 'text-purple-400' : 'text-purple-600'
-                        }`}>
+                        <p className={`text-xs transition-colors duration-300 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'
+                          }`}>
                           {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                         </p>
                       </div>
-                      
+
                       <button
-                        className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-1 ${
-                          isDarkMode 
-                            ? 'text-gray-300 hover:bg-slate-700' 
-                            : 'text-gray-700 hover:bg-gray-50'
-                        }`}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-1 ${isDarkMode
+                          ? 'text-gray-300 hover:bg-slate-700'
+                          : 'text-gray-700 hover:bg-gray-50'
+                          }`}
                         onClick={openProfileModal}
                       >
                         <div className="flex items-center space-x-2">
@@ -859,13 +810,12 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                           <span>Profile</span>
                         </div>
                       </button>
-                      
+
                       <button
-                        className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-2 ${
-                          isDarkMode 
-                            ? 'text-orange-300 hover:bg-orange-500/10' 
-                            : 'text-orange-600 hover:bg-orange-50'
-                        }`}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-2 ${isDarkMode
+                          ? 'text-orange-300 hover:bg-orange-500/10'
+                          : 'text-orange-600 hover:bg-orange-50'
+                          }`}
                         onClick={() => {
                           closeProfileDropdown();
                           setShowThemeModal(true);
@@ -876,13 +826,12 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                           <span>Theme</span>
                         </div>
                       </button>
-                      
+
                       <button
-                        className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-3 ${
-                          isDarkMode 
-                            ? 'text-blue-300 hover:bg-blue-500/10' 
-                            : 'text-blue-600 hover:bg-blue-50'
-                        }`}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-3 ${isDarkMode
+                          ? 'text-blue-300 hover:bg-blue-500/10'
+                          : 'text-blue-600 hover:bg-blue-50'
+                          }`}
                         onClick={() => {
                           closeProfileDropdown();
                           toggleFullscreen();
@@ -893,15 +842,14 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                           <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
                         </div>
                       </button>
-                      
+
                       {/* Install App / Open in App Button */}
                       {isInstalled ? (
                         <button
-                          className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-4 ${
-                            isDarkMode 
-                              ? 'text-green-300 hover:bg-green-500/10' 
-                              : 'text-green-600 hover:bg-green-50'
-                          }`}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-4 ${isDarkMode
+                            ? 'text-green-300 hover:bg-green-500/10'
+                            : 'text-green-600 hover:bg-green-50'
+                            }`}
                           onClick={() => {
                             closeProfileDropdown();
                             onOpenInApp?.();
@@ -913,43 +861,38 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                           </div>
                         </button>
                       ) : (
-                        <div className={`px-3 py-2 rounded-lg transition-colors duration-200 dropdown-item-enter dropdown-item-4 ${
-                          isDarkMode 
-                            ? 'bg-purple-500/10 border border-purple-500/20' 
-                            : 'bg-purple-50 border border-purple-200'
-                        }`}>
+                        <div className={`px-3 py-2 rounded-lg transition-colors duration-200 dropdown-item-enter dropdown-item-4 ${isDarkMode
+                          ? 'bg-purple-500/10 border border-purple-500/20'
+                          : 'bg-purple-50 border border-purple-200'
+                          }`}>
                           <div className="flex items-start space-x-2">
-                            <div className={`p-1.5 rounded-lg ${
-                              isDarkMode ? 'bg-purple-500/20' : 'bg-purple-100'
-                            }`}>
+                            <div className={`p-1.5 rounded-lg ${isDarkMode ? 'bg-purple-500/20' : 'bg-purple-100'
+                              }`}>
                               <DevicePhoneMobileIcon className="h-4 w-4 text-purple-600" />
                             </div>
-                            
+
                             <div className="flex-1 min-w-0">
-                              <h4 className={`text-xs font-semibold ${
-                                isDarkMode ? 'text-white' : 'text-gray-900'
-                              }`}>
+                              <h4 className={`text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                                }`}>
                                 Install {BRAND_NAME}
                               </h4>
-                              <p className={`text-xs mt-0.5 ${
-                                isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                              }`}>
+                              <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                                }`}>
                                 Get quick access to viral fabrics
                               </p>
-                              
+
                               <button
                                 onClick={() => {
                                   closeProfileDropdown();
                                   onInstallClick?.();
                                 }}
                                 disabled={isInstalling}
-                                className={`mt-1.5 px-2 py-1 text-xs font-medium rounded transition-colors ${
-                                  isInstalling
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : isDarkMode
-                                      ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                                      : 'bg-purple-600 hover:bg-purple-700 text-white'
-                                }`}
+                                className={`mt-1.5 px-2 py-1 text-xs font-medium rounded transition-colors ${isInstalling
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : isDarkMode
+                                    ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                                    : 'bg-purple-600 hover:bg-purple-700 text-white'
+                                  }`}
                               >
                                 {isInstalling ? 'Installing...' : 'Install'}
                               </button>
@@ -957,10 +900,9 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                           </div>
                         </div>
                       )}
-                      
-                      <div className={`border-t transition-colors duration-300 ${
-                        isDarkMode ? 'border-slate-700' : 'border-gray-200'
-                      }`}>
+
+                      <div className={`border-t transition-colors duration-300 ${isDarkMode ? 'border-slate-700' : 'border-gray-200'
+                        }`}>
                         <button
                           onClick={() => {
                             closeProfileDropdown();
@@ -969,11 +911,10 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                             localStorage.removeItem('user');
                             window.location.href = '/login';
                           }}
-                          className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-5 ${
-                            isDarkMode 
-                              ? 'text-indigo-400 hover:bg-indigo-500/10' 
-                              : 'text-indigo-600 hover:bg-indigo-50'
-                          }`}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-5 ${isDarkMode
+                            ? 'text-indigo-400 hover:bg-indigo-500/10'
+                            : 'text-indigo-600 hover:bg-indigo-50'
+                            }`}
                         >
                           <div className="flex items-center space-x-2">
                             <UserIcon className="h-4 w-4" />
@@ -986,15 +927,14 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                             onLogout();
                           }}
                           disabled={isLoggingOut}
-                          className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-6 ${
-                            isLoggingOut
-                              ? isDarkMode 
-                                ? 'text-gray-500 cursor-not-allowed' 
-                                : 'text-gray-400 cursor-not-allowed'
-                              : isDarkMode 
-                                ? 'text-red-400 hover:bg-red-500/10' 
-                                : 'text-red-600 hover:bg-red-50'
-                          }`}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-6 ${isLoggingOut
+                            ? isDarkMode
+                              ? 'text-gray-500 cursor-not-allowed'
+                              : 'text-gray-400 cursor-not-allowed'
+                            : isDarkMode
+                              ? 'text-red-400 hover:bg-red-500/10'
+                              : 'text-red-600 hover:bg-red-50'
+                            }`}
                         >
                           <div className="flex items-center space-x-2">
                             {isLoggingOut ? (
@@ -1018,24 +958,20 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
       {/* Profile Modal */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 backdrop-enter">
-          <div className={`w-full max-w-md rounded-lg shadow-xl modal-enter ${
-            isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-gray-200'
-          }`}>
-            <div className={`flex items-center justify-between p-6 border-b ${
-              isDarkMode ? 'border-slate-700' : 'border-gray-200'
+          <div className={`w-full max-w-md rounded-lg shadow-xl modal-enter ${isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-gray-200'
             }`}>
-              <h3 className={`text-lg font-semibold ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
+            <div className={`flex items-center justify-between p-6 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'
               }`}>
+              <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                }`}>
                 Profile
               </h3>
               <button
                 onClick={() => setShowProfileModal(false)}
-                className={`p-2 rounded-lg transition-all duration-300 close-button-hover ${
-                  isDarkMode
-                    ? 'text-gray-400 hover:bg-white/10'
-                    : 'text-gray-500 hover:bg-gray-100'
-                }`}
+                className={`p-2 rounded-lg transition-all duration-300 close-button-hover ${isDarkMode
+                  ? 'text-gray-400 hover:bg-white/10'
+                  : 'text-gray-500 hover:bg-gray-100'
+                  }`}
               >
                 <XMarkIcon className="h-5 w-5" />
               </button>
@@ -1044,41 +980,37 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
             <div className="p-6">
               {/* User Avatar and Basic Info */}
               <div className="flex items-center mb-6">
-                <div className={`h-16 w-16 rounded-full flex items-center justify-center text-xl font-semibold ${
-                  isDarkMode 
-                    ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white' 
-                    : 'bg-gradient-to-br from-purple-600 to-purple-700 text-white'
-                }`}>
+                <div className={`h-16 w-16 rounded-full flex items-center justify-center text-xl font-semibold ${isDarkMode
+                  ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white'
+                  : 'bg-gradient-to-br from-purple-600 to-purple-700 text-white'
+                  }`}>
                   {user ? getUserInitials(user.name) : 'U'}
                 </div>
                 <div className="ml-4">
-                  <h4 className={`text-lg font-semibold ${
-                    isDarkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
+                  <h4 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}>
                     {user?.name || 'User'}
                   </h4>
-                  <p className={`text-sm ${
-                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                  }`}>
+                  <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                    }`}>
                     {user?.username || 'username'}
                   </p>
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full mt-1 ${
-                    user?.role === 'master'
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full mt-1 ${user?.role === 'master'
+                    ? isDarkMode
+                      ? 'bg-red-900/20 text-red-400'
+                      : 'bg-red-100 text-red-800'
+                    : user?.role === 'superadmin'
                       ? isDarkMode
-                        ? 'bg-red-900/20 text-red-400'
-                        : 'bg-red-100 text-red-800'
-                      : user?.role === 'superadmin'
+                        ? 'bg-purple-900/20 text-purple-400'
+                        : 'bg-purple-100 text-purple-800'
+                      : user?.role === 'admin'
                         ? isDarkMode
-                          ? 'bg-purple-900/20 text-purple-400'
-                          : 'bg-purple-100 text-purple-800'
-                        : user?.role === 'admin'
-                          ? isDarkMode
-                            ? 'bg-amber-900/20 text-amber-400'
-                            : 'bg-amber-100 text-amber-800'
-                          : isDarkMode
-                            ? 'bg-blue-900/20 text-blue-400'
-                            : 'bg-blue-100 text-blue-800'
-                  }`}>
+                          ? 'bg-amber-900/20 text-amber-400'
+                          : 'bg-amber-100 text-amber-800'
+                        : isDarkMode
+                          ? 'bg-blue-900/20 text-blue-400'
+                          : 'bg-blue-100 text-blue-800'
+                    }`}>
                     {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                   </span>
                 </div>
@@ -1089,19 +1021,17 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                 {/* Name */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className={`block text-sm font-medium ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
+                    <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
                       Name
                     </label>
                     {user?.role === 'superadmin' && (
                       <button
                         onClick={() => startEditing('name')}
-                        className={`p-1 rounded transition-all duration-300 ${
-                          isDarkMode
-                            ? 'text-gray-400 hover:bg-white/10'
-                            : 'text-gray-500 hover:bg-gray-100'
-                        }`}
+                        className={`p-1 rounded transition-all duration-300 ${isDarkMode
+                          ? 'text-gray-400 hover:bg-white/10'
+                          : 'text-gray-500 hover:bg-gray-100'
+                          }`}
                       >
                         <PencilIcon className="h-4 w-4" />
                       </button>
@@ -1113,11 +1043,10 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                         type="text"
                         value={editValues.name}
                         onChange={(e) => setEditValues({ ...editValues, name: e.target.value })}
-                        className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${
-                          isDarkMode
-                            ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
-                            : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
-                        }`}
+                        className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${isDarkMode
+                          ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                          }`}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             handleSaveField('name', e.currentTarget.value);
@@ -1127,29 +1056,26 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       />
                       <button
                         onClick={() => handleSaveField('name', editValues.name)}
-                        className={`p-2 rounded-lg transition-all duration-300 ${
-                          isDarkMode
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
+                        className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
                       >
                         <CheckIcon className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setEditingField(null)}
-                        className={`p-2 rounded-lg transition-all duration-300 ${
-                          isDarkMode
-                            ? 'bg-gray-600 text-white hover:bg-gray-700'
-                            : 'bg-gray-600 text-white hover:bg-gray-700'
-                        }`}
+                        className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                          ? 'bg-gray-600 text-white hover:bg-gray-700'
+                          : 'bg-gray-600 text-white hover:bg-gray-700'
+                          }`}
                       >
                         <XMarkIcon className="h-4 w-4" />
                       </button>
                     </div>
                   ) : (
-                    <p className={`text-sm ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                    }`}>
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
                       {user?.name || 'Not provided'}
                     </p>
                   )}
@@ -1158,19 +1084,17 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                 {/* Username */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className={`block text-sm font-medium ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
+                    <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
                       Username
                     </label>
                     {user?.role === 'superadmin' && (
                       <button
                         onClick={() => startEditing('username')}
-                        className={`p-1 rounded transition-all duration-300 ${
-                          isDarkMode
-                            ? 'text-gray-400 hover:bg-white/10'
-                            : 'text-gray-500 hover:bg-gray-100'
-                        }`}
+                        className={`p-1 rounded transition-all duration-300 ${isDarkMode
+                          ? 'text-gray-400 hover:bg-white/10'
+                          : 'text-gray-500 hover:bg-gray-100'
+                          }`}
                       >
                         <PencilIcon className="h-4 w-4" />
                       </button>
@@ -1182,11 +1106,10 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                         type="text"
                         value={editValues.username}
                         onChange={(e) => setEditValues({ ...editValues, username: e.target.value })}
-                        className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${
-                          isDarkMode
-                            ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
-                            : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
-                        }`}
+                        className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${isDarkMode
+                          ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                          }`}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             handleSaveField('username', e.currentTarget.value);
@@ -1196,29 +1119,26 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       />
                       <button
                         onClick={() => handleSaveField('username', editValues.username)}
-                        className={`p-2 rounded-lg transition-all duration-300 ${
-                          isDarkMode
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
+                        className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
                       >
                         <CheckIcon className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setEditingField(null)}
-                        className={`p-2 rounded-lg transition-all duration-300 ${
-                          isDarkMode
-                            ? 'bg-gray-600 text-white hover:bg-gray-700'
-                            : 'bg-gray-600 text-white hover:bg-gray-700'
-                        }`}
+                        className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                          ? 'bg-gray-600 text-white hover:bg-gray-700'
+                          : 'bg-gray-600 text-white hover:bg-gray-700'
+                          }`}
                       >
                         <XMarkIcon className="h-4 w-4" />
                       </button>
                     </div>
                   ) : (
-                    <p className={`text-sm ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                    }`}>
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
                       {user?.username || 'Not provided'}
                     </p>
                   )}
@@ -1227,19 +1147,17 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                 {/* Phone Number */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className={`block text-sm font-medium ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
+                    <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
                       Phone Number
                     </label>
                     {user?.role === 'superadmin' && (
                       <button
                         onClick={() => startEditing('phoneNumber')}
-                        className={`p-1 rounded transition-all duration-300 ${
-                          isDarkMode
-                            ? 'text-gray-400 hover:bg-white/10'
-                            : 'text-gray-500 hover:bg-gray-100'
-                        }`}
+                        className={`p-1 rounded transition-all duration-300 ${isDarkMode
+                          ? 'text-gray-400 hover:bg-white/10'
+                          : 'text-gray-500 hover:bg-gray-100'
+                          }`}
                       >
                         <PencilIcon className="h-4 w-4" />
                       </button>
@@ -1251,11 +1169,10 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                         type="tel"
                         value={editValues.phoneNumber}
                         onChange={(e) => setEditValues({ ...editValues, phoneNumber: e.target.value })}
-                        className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${
-                          isDarkMode
-                            ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
-                            : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
-                        }`}
+                        className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${isDarkMode
+                          ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                          }`}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             handleSaveField('phoneNumber', e.currentTarget.value);
@@ -1265,29 +1182,26 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       />
                       <button
                         onClick={() => handleSaveField('phoneNumber', editValues.phoneNumber)}
-                        className={`p-2 rounded-lg transition-all duration-300 ${
-                          isDarkMode
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
+                        className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
                       >
                         <CheckIcon className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setEditingField(null)}
-                        className={`p-2 rounded-lg transition-all duration-300 ${
-                          isDarkMode
-                            ? 'bg-gray-600 text-white hover:bg-gray-700'
-                            : 'bg-gray-600 text-white hover:bg-gray-700'
-                        }`}
+                        className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                          ? 'bg-gray-600 text-white hover:bg-gray-700'
+                          : 'bg-gray-600 text-white hover:bg-gray-700'
+                          }`}
                       >
                         <XMarkIcon className="h-4 w-4" />
                       </button>
                     </div>
                   ) : (
-                    <p className={`text-sm ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                    }`}>
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
                       {user?.phoneNumber || 'Not provided'}
                     </p>
                   )}
@@ -1296,19 +1210,17 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                 {/* Address */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className={`block text-sm font-medium ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
+                    <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
                       Address
                     </label>
                     {user?.role === 'superadmin' && (
                       <button
                         onClick={() => startEditing('address')}
-                        className={`p-1 rounded transition-all duration-300 ${
-                          isDarkMode
-                            ? 'text-gray-400 hover:bg-white/10'
-                            : 'text-gray-500 hover:bg-gray-100'
-                        }`}
+                        className={`p-1 rounded transition-all duration-300 ${isDarkMode
+                          ? 'text-gray-400 hover:bg-white/10'
+                          : 'text-gray-500 hover:bg-gray-100'
+                          }`}
                       >
                         <PencilIcon className="h-4 w-4" />
                       </button>
@@ -1320,11 +1232,10 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                         value={editValues.address}
                         onChange={(e) => setEditValues({ ...editValues, address: e.target.value })}
                         rows={3}
-                        className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 resize-none ${
-                          isDarkMode
-                            ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
-                            : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
-                        }`}
+                        className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 resize-none ${isDarkMode
+                          ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                          }`}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && e.ctrlKey) {
                             handleSaveField('address', e.currentTarget.value);
@@ -1335,30 +1246,27 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       <div className="flex flex-col space-y-1">
                         <button
                           onClick={() => handleSaveField('address', editValues.address)}
-                          className={`p-2 rounded-lg transition-all duration-300 ${
-                            isDarkMode
-                              ? 'bg-blue-600 text-white hover:bg-blue-700'
-                              : 'bg-blue-600 text-white hover:bg-blue-700'
-                          }`}
+                          className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
                         >
                           <CheckIcon className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => setEditingField(null)}
-                          className={`p-2 rounded-lg transition-all duration-300 ${
-                            isDarkMode
-                              ? 'bg-gray-600 text-white hover:bg-gray-700'
-                              : 'bg-gray-600 text-white hover:bg-gray-700'
-                          }`}
+                          className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                            ? 'bg-gray-600 text-white hover:bg-gray-700'
+                            : 'bg-gray-600 text-white hover:bg-gray-700'
+                            }`}
                         >
                           <XMarkIcon className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <p className={`text-sm ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                    }`}>
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
                       {user?.address || 'Not provided'}
                     </p>
                   )}
@@ -1368,18 +1276,16 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                 {user?.role === 'superadmin' && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <label className={`block text-sm font-medium ${
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                      }`}>
+                      <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
                         Password
                       </label>
                       <button
                         onClick={() => startEditing('password')}
-                        className={`p-1 rounded transition-all duration-300 ${
-                          isDarkMode
-                            ? 'text-gray-400 hover:bg-white/10'
-                            : 'text-gray-500 hover:bg-gray-100'
-                        }`}
+                        className={`p-1 rounded transition-all duration-300 ${isDarkMode
+                          ? 'text-gray-400 hover:bg-white/10'
+                          : 'text-gray-500 hover:bg-gray-100'
+                          }`}
                       >
                         <PencilIcon className="h-4 w-4" />
                       </button>
@@ -1390,11 +1296,10 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                           type="password"
                           value={editValues.password}
                           onChange={(e) => setEditValues({ ...editValues, password: e.target.value })}
-                          className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${
-                            isDarkMode
-                              ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
-                              : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
-                          }`}
+                          className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${isDarkMode
+                            ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                            }`}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               handleSaveField('password', e.currentTarget.value);
@@ -1405,29 +1310,26 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                         />
                         <button
                           onClick={() => handleSaveField('password', editValues.password)}
-                          className={`p-2 rounded-lg transition-all duration-300 ${
-                            isDarkMode
-                              ? 'bg-blue-600 text-white hover:bg-blue-700'
-                              : 'bg-blue-600 text-white hover:bg-blue-700'
-                          }`}
+                          className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
                         >
                           <CheckIcon className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => setEditingField(null)}
-                          className={`p-2 rounded-lg transition-all duration-300 ${
-                            isDarkMode
-                              ? 'bg-gray-600 text-white hover:bg-gray-700'
-                              : 'bg-gray-600 text-white hover:bg-gray-700'
-                          }`}
+                          className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                            ? 'bg-gray-600 text-white hover:bg-gray-700'
+                            : 'bg-gray-600 text-white hover:bg-gray-700'
+                            }`}
                         >
                           <XMarkIcon className="h-4 w-4" />
                         </button>
                       </div>
                     ) : (
-                      <p className={`text-sm ${
-                        isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                      }`}>
+                      <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                        }`}>
                         ••••••••
                       </p>
                     )}
@@ -1436,9 +1338,8 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
               </div>
             </div>
 
-            <div className={`flex justify-between items-center p-6 border-t ${
-              isDarkMode ? 'border-slate-700' : 'border-gray-200'
-            }`}>
+            <div className={`flex justify-between items-center p-6 border-t ${isDarkMode ? 'border-slate-700' : 'border-gray-200'
+              }`}>
               {/* Left: Logout Button */}
               <button
                 onClick={() => {
@@ -1446,15 +1347,14 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                   onLogout();
                 }}
                 disabled={isLoggingOut}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                  isLoggingOut
-                    ? isDarkMode
-                      ? 'text-gray-500 cursor-not-allowed'
-                      : 'text-gray-400 cursor-not-allowed'
-                    : isDarkMode
-                      ? 'text-red-400 hover:bg-red-500/10'
-                      : 'text-red-600 hover:bg-red-50'
-                }`}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 ${isLoggingOut
+                  ? isDarkMode
+                    ? 'text-gray-500 cursor-not-allowed'
+                    : 'text-gray-400 cursor-not-allowed'
+                  : isDarkMode
+                    ? 'text-red-400 hover:bg-red-500/10'
+                    : 'text-red-600 hover:bg-red-50'
+                  }`}
               >
                 {isLoggingOut ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
@@ -1467,11 +1367,10 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
               {/* Right: Close Button */}
               <button
                 onClick={() => setShowProfileModal(false)}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                  isDarkMode
-                    ? 'text-gray-300 hover:bg-white/10'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${isDarkMode
+                  ? 'text-gray-300 hover:bg-white/10'
+                  : 'text-gray-700 hover:bg-gray-100'
+                  }`}
               >
                 Close
               </button>
@@ -1483,24 +1382,20 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
       {/* Theme Modal */}
       {showThemeModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className={`w-full max-w-md rounded-lg shadow-xl ${
-            isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-gray-200'
-          }`}>
-            <div className={`flex items-center justify-between p-6 border-b ${
-              isDarkMode ? 'border-slate-700' : 'border-gray-200'
+          <div className={`w-full max-w-md rounded-lg shadow-xl ${isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-gray-200'
             }`}>
-              <h3 className={`text-lg font-semibold ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
+            <div className={`flex items-center justify-between p-6 border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'
               }`}>
+              <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                }`}>
                 Theme Settings
               </h3>
               <button
                 onClick={() => setShowThemeModal(false)}
-                className={`p-2 rounded-lg transition-all duration-300 ${
-                  isDarkMode
-                    ? 'text-gray-400 hover:bg-white/10'
-                    : 'text-gray-500 hover:bg-gray-100'
-                }`}
+                className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                  ? 'text-gray-400 hover:bg-white/10'
+                  : 'text-gray-500 hover:bg-gray-100'
+                  }`}
               >
                 <XMarkIcon className="h-5 w-5" />
               </button>
@@ -1508,9 +1403,8 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
 
             <div className="p-6">
               <div className="mb-6">
-                <label className={`block text-sm font-medium mb-3 ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}>
+                <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
                   Theme Mode
                 </label>
                 <div className="space-y-2">
@@ -1520,51 +1414,48 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       if (!isDarkMode) toggleDarkMode();
                       setShowThemeModal(false);
                     }}
-                    className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all duration-300 ${
-                      isDarkMode
-                        ? 'bg-blue-600 text-white'
-                        : isDarkMode
-                          ? 'bg-slate-700 text-white hover:bg-slate-600'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all duration-300 ${isDarkMode
+                      ? 'bg-blue-600 text-white'
+                      : isDarkMode
+                        ? 'bg-slate-700 text-white hover:bg-slate-600'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
                   >
                     <div className="flex items-center space-x-3">
                       <MoonIcon className="h-5 w-5" />
                       <span>Dark</span>
                     </div>
                   </button>
-                  
+
                   <button
                     onClick={() => {
                       // Set light mode
                       if (isDarkMode) toggleDarkMode();
                       setShowThemeModal(false);
                     }}
-                    className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all duration-300 ${
-                      !isDarkMode
-                        ? 'bg-blue-600 text-white'
-                        : isDarkMode
-                          ? 'bg-slate-700 text-white hover:bg-slate-600'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all duration-300 ${!isDarkMode
+                      ? 'bg-blue-600 text-white'
+                      : isDarkMode
+                        ? 'bg-slate-700 text-white hover:bg-slate-600'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
                   >
                     <div className="flex items-center space-x-3">
                       <SunIcon className="h-5 w-5" />
                       <span>White</span>
                     </div>
                   </button>
-                  
+
                   <button
                     onClick={() => {
                       // Set system default (detect system preference)
                       setSystemTheme();
                       setShowThemeModal(false);
                     }}
-                    className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all duration-300 ${
-                      isDarkMode
-                        ? 'bg-slate-700 text-white hover:bg-slate-600'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all duration-300 ${isDarkMode
+                      ? 'bg-slate-700 text-white hover:bg-slate-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
                   >
                     <div className="flex items-center space-x-3">
                       <CogIcon className="h-5 w-5" />
@@ -1575,16 +1466,14 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
               </div>
             </div>
 
-            <div className={`flex justify-end space-x-3 p-6 border-t ${
-              isDarkMode ? 'border-slate-700' : 'border-gray-200'
-            }`}>
+            <div className={`flex justify-end space-x-3 p-6 border-t ${isDarkMode ? 'border-slate-700' : 'border-gray-200'
+              }`}>
               <button
                 onClick={() => setShowThemeModal(false)}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                  isDarkMode
-                    ? 'text-gray-300 hover:bg-white/10'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${isDarkMode
+                  ? 'text-gray-300 hover:bg-white/10'
+                  : 'text-gray-700 hover:bg-gray-100'
+                  }`}
               >
                 Close
               </button>

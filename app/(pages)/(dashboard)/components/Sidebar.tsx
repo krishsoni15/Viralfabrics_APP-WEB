@@ -3,21 +3,24 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  HomeIcon, 
-  UsersIcon, 
-  BuildingOfficeIcon, 
-  XMarkIcon, 
-  ShoppingBagIcon, 
+import {
+  HomeIcon,
+  UsersIcon,
+  BuildingOfficeIcon,
+  XMarkIcon,
+  ShoppingBagIcon,
   DocumentTextIcon,
-  CubeIcon, 
-  UserIcon, 
-  SunIcon, 
-  ArrowsPointingOutIcon, 
-  ArrowsPointingInIcon, 
-  DevicePhoneMobileIcon, 
+  CubeIcon,
+  UserIcon,
+  SunIcon,
+  ArrowsPointingOutIcon,
+  ArrowsPointingInIcon,
+  DevicePhoneMobileIcon,
   ArrowRightOnRectangleIcon,
-  MoonIcon
+  MoonIcon,
+  CircleStackIcon,
+  SwatchIcon,
+  ArchiveBoxIcon
 } from '@heroicons/react/24/outline';
 import WeaverIcon from './WeaverIcon';
 import { useDarkMode } from '../hooks/useDarkMode';
@@ -49,11 +52,11 @@ interface NavItem {
   badge?: string;
 }
 
-export default function Sidebar({ 
-  isOpen, 
-  onClose, 
-  isCollapsed, 
-  onToggleCollapse, 
+export default function Sidebar({
+  isOpen,
+  onClose,
+  isCollapsed,
+  onToggleCollapse,
   user,
   onLogout,
   isLoggingOut = false,
@@ -129,7 +132,7 @@ export default function Sidebar({
     }
   }, [isOpen]);
 
-    // Memoize nav items to prevent recalculation on every render
+  // Memoize nav items to prevent recalculation on every render
   const navItems = useMemo(() => {
     const items: NavItem[] = [
       {
@@ -156,6 +159,21 @@ export default function Sidebar({
         name: 'Weaver',
         href: '/weaver',
         icon: WeaverIcon
+      },
+      {
+        name: 'Grey Material Stock',
+        href: '/grey-materials',
+        icon: CircleStackIcon
+      },
+      {
+        name: 'Sampling',
+        href: '/sampling',
+        icon: SwatchIcon
+      },
+      {
+        name: 'Finish Lot Stock',
+        href: '/finish-lot-stocks',
+        icon: ArchiveBoxIcon
       }
     ];
 
@@ -164,21 +182,29 @@ export default function Sidebar({
       return items.filter(item => item.name === 'Dashboard');
     }
 
-    // Only show Users, Fabrics, and Weaver for superadmin and master
+    // Only show Users, Fabrics, Grey Material, Finish Lot Stock, and Weaver for superadmin and master
     if (user?.role !== 'superadmin' && user?.role !== 'master') {
-      items.splice(1, 1); // Remove Users item for non-admin
+      const usersIndex = items.findIndex(item => item.name === 'Users');
+      if (usersIndex !== -1) items.splice(usersIndex, 1);
       // Remove Fabrics item for non-admin
       const fabricsIndex = items.findIndex(item => item.name === 'Fabrics');
-      if (fabricsIndex !== -1) {
-        items.splice(fabricsIndex, 1);
-      }
+      if (fabricsIndex !== -1) items.splice(fabricsIndex, 1);
+
+      const greyIndex = items.findIndex(item => item.name === 'Grey Material Stock');
+      if (greyIndex !== -1) items.splice(greyIndex, 1);
+
+      const finishIndex = items.findIndex(item => item.name === 'Finish Lot Stock');
+      if (finishIndex !== -1) items.splice(finishIndex, 1);
+
       // Remove Weaver item for non-admin
       const weaverIndex = items.findIndex(item => item.name === 'Weaver');
-      if (weaverIndex !== -1) {
-        items.splice(weaverIndex, 1);
-      }
+      if (weaverIndex !== -1) items.splice(weaverIndex, 1);
+
+      // Remove Sampling item for non-admin
+      const samplingIndex = items.findIndex(item => item.name === 'Sampling');
+      if (samplingIndex !== -1) items.splice(samplingIndex, 1);
     }
-    
+
     // Add Logs for superadmin and master
     if (user?.role === 'superadmin' || user?.role === 'master') {
       items.push({
@@ -194,7 +220,7 @@ export default function Sidebar({
   // Optimized screen size tracking with debouncing
   useEffect(() => {
     let timeoutId: any;
-    
+
     const handleResize = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
@@ -204,7 +230,7 @@ export default function Sidebar({
 
     // Set initial size
     setScreenSize(window.innerWidth);
-    
+
     window.addEventListener('resize', handleResize, { passive: true });
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -216,7 +242,7 @@ export default function Sidebar({
   useEffect(() => {
     if (screenSize > 0 && !hasSetInitialState) {
       const isLargeScreen = screenSize >= 2100; // 2100px+
-      
+
       // Set the correct default state based on screen size
       if (isLargeScreen && isCollapsed) {
         // Large screen (2100px+) should show text with icons (not collapsed)
@@ -225,7 +251,7 @@ export default function Sidebar({
         // Below 2100px should show icons only (collapsed)
         onToggleCollapse();
       }
-      
+
       // Initialize the threshold ref
       previousThresholdRef.current = isLargeScreen;
       setHasSetInitialState(true);
@@ -238,7 +264,7 @@ export default function Sidebar({
     if (hasSetInitialState && screenSize > 0 && !userManuallyToggledRef.current) {
       const isLargeScreen = screenSize >= 2100; // 2100px+
       const previousIsLargeScreen = previousThresholdRef.current;
-      
+
       // Only adjust if we actually crossed the threshold
       if (previousIsLargeScreen !== null && previousIsLargeScreen !== isLargeScreen) {
         // Threshold crossed: adjust sidebar state
@@ -255,7 +281,7 @@ export default function Sidebar({
           isAutoAdjustingRef.current = false;
         }, 100);
       }
-      
+
       // Update the ref for next comparison
       previousThresholdRef.current = isLargeScreen;
     }
@@ -352,39 +378,34 @@ export default function Sidebar({
   return (
     <>
       {/* Desktop Sidebar - Large and Medium Screens */}
-      <aside className={`hidden min-[800px]:block fixed left-0 top-0 h-full z-40 transition-all duration-300 ${sidebarWidth} ${
-        mounted && isDarkMode 
-          ? 'bg-slate-800 border-r border-slate-700' 
+      <aside className={`hidden min-[800px]:block fixed left-0 top-0 h-full z-40 transition-all duration-300 ${sidebarWidth} ${mounted && isDarkMode
+          ? 'bg-[#343E51] border-r border-slate-800'
           : 'bg-white/80 backdrop-blur-sm border-r border-gray-200/50'
-      }`}>
+        }`}>
         <div className="flex flex-col h-full">
           {/* Logo Section */}
-          <div className={`border-b transition-colors duration-300 ${
-            mounted && isDarkMode ? 'border-white/10' : 'border-gray-200'
-          } ${shouldShowText ? 'p-6' : 'p-4'}`}>
-            <Link 
-              href="/dashboard" 
+          <div className={`border-b transition-colors duration-300 ${mounted && isDarkMode ? 'border-white/10' : 'border-gray-200'
+            } ${shouldShowText ? 'p-6' : 'p-4'}`}>
+            <Link
+              href="/dashboard"
               onClick={() => {
-                }}
+              }}
               className={`group cursor-pointer ${shouldShowText ? 'flex items-center space-x-3' : 'flex justify-center'}`}
             >
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-lg transition-all duration-300 ${
-                mounted && isDarkMode 
-                  ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/25' 
-                  : 'bg-gradient-to-br from-blue-600 to-indigo-700 shadow-blue-500/25'
-              } group-hover:scale-105`}>
+              <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-lg transition-all duration-300 ${mounted && isDarkMode
+                ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/25'
+                : 'bg-gradient-to-br from-blue-600 to-indigo-700 shadow-blue-500/25'
+                } group-hover:scale-105`}>
                 <BuildingOfficeIcon className="h-5 w-5 text-white" />
               </div>
               {shouldShowText && (
                 <div className="min-w-0">
-                  <h1 className={`text-lg font-bold transition-colors duration-300 ${
-                    mounted && isDarkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
+                  <h1 className={`text-lg font-bold transition-colors duration-300 ${mounted && isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}>
                     {BRAND_NAME}
                   </h1>
-                  <p className={`text-xs transition-colors duration-300 ${
-                    mounted && isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                  }`}>
+                  <p className={`text-xs transition-colors duration-300 ${mounted && isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                    }`}>
                     {BRAND_TAGLINE}
                   </p>
                 </div>
@@ -393,44 +414,39 @@ export default function Sidebar({
           </div>
 
           {/* Navigation */}
-          <nav className={`flex-1 overflow-y-auto max-h-[calc(100vh-140px)] ${
-            mounted && isDarkMode 
-              ? 'scrollbar-thin scrollbar-track-slate-800 scrollbar-thumb-slate-500 hover:scrollbar-thumb-slate-400' 
-              : 'scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400'
-          } ${shouldShowText ? 'px-4 py-6 space-y-2' : 'px-3 py-4 space-y-1'}`}>
+          <nav className={`flex-1 overflow-y-auto max-h-[calc(100vh-140px)] ${mounted && isDarkMode
+            ? 'scrollbar-thin scrollbar-track-slate-800 scrollbar-thumb-slate-500 hover:scrollbar-thumb-slate-400'
+            : 'scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400'
+            } ${shouldShowText ? 'px-4 py-6 space-y-2' : 'px-3 py-4 space-y-1'}`}>
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
-              
+
               return (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`group flex items-center transition-all duration-300 cursor-pointer rounded-xl ${
-                    shouldShowText 
-                      ? 'space-x-3 px-4 py-3 justify-start' 
-                      : 'justify-center p-3'
-                  } ${
-                    active
+                  className={`group flex items-center transition-all duration-300 cursor-pointer rounded-xl ${shouldShowText
+                    ? 'space-x-3 px-4 py-3 justify-start'
+                    : 'justify-center p-3'
+                    } ${active
                       ? mounted && isDarkMode
                         ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                         : 'bg-blue-50 text-blue-600 border border-blue-200'
                       : mounted && isDarkMode
                         ? 'text-gray-300 hover:bg-white/10 hover:text-white'
                         : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
+                    }`}
                   title={!shouldShowText ? item.name : undefined}
                 >
                   <div className="relative">
-                    <Icon className={`h-6 w-6 transition-colors duration-300 ${
-                      active
-                        ? mounted && isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                        : mounted && isDarkMode ? 'text-gray-400 group-hover:text-white' : 'text-gray-500 group-hover:text-gray-700'
-                    }`} />
+                    <Icon className={`h-6 w-6 transition-colors duration-300 ${active
+                      ? mounted && isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                      : mounted && isDarkMode ? 'text-gray-400 group-hover:text-white' : 'text-gray-500 group-hover:text-gray-700'
+                      }`} />
                     {!shouldShowText && item.badge && (
-                      <span className={`absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium ${
-                        mounted && isDarkMode ? 'text-white' : 'text-white'
-                      }`}>
+                      <span className={`absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium ${mounted && isDarkMode ? 'text-white' : 'text-white'
+                        }`}>
                         {item.badge === 'New' ? 'N' : item.badge}
                       </span>
                     )}
@@ -439,11 +455,10 @@ export default function Sidebar({
                     <>
                       <span className="font-medium">{item.name}</span>
                       {item.badge && (
-                        <span className={`ml-auto px-2 py-1 text-xs font-medium rounded-full ${
-                          mounted && isDarkMode 
-                            ? 'bg-blue-500/20 text-blue-400' 
-                            : 'bg-blue-100 text-blue-600'
-                        }`}>
+                        <span className={`ml-auto px-2 py-1 text-xs font-medium rounded-full ${mounted && isDarkMode
+                          ? 'bg-blue-500/20 text-blue-400'
+                          : 'bg-blue-100 text-blue-600'
+                          }`}>
                           {item.badge}
                         </span>
                       )}
@@ -455,18 +470,16 @@ export default function Sidebar({
           </nav>
 
           {/* Footer with Profile Dropdown */}
-          <div className={`border-t transition-colors duration-300 ${
-            mounted && isDarkMode ? 'border-white/10' : 'border-gray-200'
-          }`}>
+          <div className={`border-t transition-colors duration-300 ${mounted && isDarkMode ? 'border-white/10' : 'border-gray-200'
+            }`}>
             {/* Profile Section */}
             <div className="relative p-4" data-profile-dropdown>
               <button
                 onClick={toggleProfileDropdown}
-                className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-all duration-300 cursor-pointer ${
-                  isDarkMode 
-                    ? 'bg-white/10 text-white hover:bg-white/20' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                } shadow-lg backdrop-blur-sm`}
+                className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-all duration-300 cursor-pointer ${isDarkMode
+                  ? 'bg-white/10 text-white hover:bg-white/20'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  } shadow-lg backdrop-blur-sm`}
                 aria-label="User profile menu"
               >
                 <div className="h-8 w-8 flex items-center justify-center text-lg font-semibold transition-all duration-300 ${
@@ -478,56 +491,48 @@ export default function Sidebar({
                 </div>
                 {shouldShowText && (
                   <div className="flex-1 min-w-0 text-left">
-                    <span className={`block font-medium transition-colors duration-300 ${
-                      isDarkMode ? 'text-white' : 'text-gray-900'
-                    }`}>
+                    <span className={`block font-medium transition-colors duration-300 ${isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
                       {user?.name || 'User'}
                     </span>
-                    <span className={`block text-xs transition-colors duration-300 ${
-                      isDarkMode ? 'text-purple-400' : 'text-purple-600'
-                    }`}>
+                    <span className={`block text-xs transition-colors duration-300 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'
+                      }`}>
                       {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                     </span>
                   </div>
                 )}
               </button>
 
-                              {/* Dropdown Menu */}
-                {isProfileDropdownOpen && (
-                  <div className={`absolute bottom-full left-3 mb-2 rounded-xl shadow-2xl transition-all duration-300 z-50 dropdown-slide-down ${
-                    shouldShowText ? 'w-56' : 'w-48'
+              {/* Dropdown Menu */}
+              {isProfileDropdownOpen && (
+                <div className={`absolute bottom-full left-3 mb-2 rounded-xl shadow-2xl transition-all duration-300 z-50 dropdown-slide-down ${shouldShowText ? 'w-56' : 'w-48'
                   }`}>
-                    <div className={`py-2 transition-all duration-300 ${
-                      isDarkMode 
-                        ? 'bg-slate-800 border border-slate-700 shadow-slate-900/50' 
-                        : 'bg-white border border-gray-200 shadow-gray-900/20'
+                  <div className={`py-2 transition-all duration-300 ${isDarkMode
+                    ? 'bg-slate-800 border border-slate-700 shadow-slate-900/50'
+                    : 'bg-white border border-gray-200 shadow-gray-900/20'
                     } rounded-xl`}>
                     {shouldShowText && (
-                      <div className={`px-4 py-3 border-b transition-colors duration-300 ${
-                        isDarkMode ? 'border-slate-700' : 'border-gray-200'
-                      }`}>
-                        <p className={`text-sm font-medium transition-colors duration-300 ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
+                      <div className={`px-4 py-3 border-b transition-colors duration-300 ${isDarkMode ? 'border-slate-700' : 'border-gray-200'
                         }`}>
+                        <p className={`text-sm font-medium transition-colors duration-300 ${isDarkMode ? 'text-white' : 'text-gray-900'
+                          }`}>
                           {user?.name || 'User'}
                         </p>
-                        <p className={`text-xs transition-colors duration-300 ${
-                          isDarkMode ? 'text-purple-400' : 'text-purple-600'
-                        }`}>
+                        <p className={`text-xs transition-colors duration-300 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'
+                          }`}>
                           {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                         </p>
                       </div>
                     )}
-                    
+
                     {/* Dark/White Mode Toggle Button */}
                     <button
                       ref={themeSwitchRef}
                       disabled={false}
-                      className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-1 theme-transition ${
-                        isDarkMode 
-                          ? 'text-yellow-300 hover:bg-yellow-500/10' 
-                          : 'text-gray-600 hover:bg-gray-50'
-                      }`}
+                      className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-1 theme-transition ${isDarkMode
+                        ? 'text-yellow-300 hover:bg-yellow-500/10'
+                        : 'text-gray-600 hover:bg-gray-50'
+                        }`}
                       onClick={() => {
                         closeProfileDropdown();
                         toggleDarkMode();
@@ -542,22 +547,21 @@ export default function Sidebar({
                           <MoonIcon className="h-4 w-4" />
                         )}
                         <span>
-                          {false 
-                            ? 'Switching...' 
-                            : isDarkMode 
-                              ? 'Switch to Light Mode' 
+                          {false
+                            ? 'Switching...'
+                            : isDarkMode
+                              ? 'Switch to Light Mode'
                               : 'Switch to Dark Mode'
                           }
                         </span>
                       </div>
                     </button>
-                    
+
                     <button
-                      className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-2 ${
-                        isDarkMode 
-                          ? 'text-blue-300 hover:bg-blue-500/10' 
-                          : 'text-blue-600 hover:bg-blue-50'
-                      }`}
+                      className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-2 ${isDarkMode
+                        ? 'text-blue-300 hover:bg-blue-500/10'
+                        : 'text-blue-600 hover:bg-blue-50'
+                        }`}
                       onClick={() => {
                         closeProfileDropdown();
                         onFullscreenToggle?.();
@@ -568,15 +572,14 @@ export default function Sidebar({
                         <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
                       </div>
                     </button>
-                    
+
                     {/* Install App / Open in App Button */}
                     {isInstalled ? (
                       <button
-                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-3 ${
-                          isDarkMode 
-                            ? 'text-green-300 hover:bg-green-500/10' 
-                            : 'text-green-600 hover:bg-green-50'
-                        }`}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-3 ${isDarkMode
+                          ? 'text-green-300 hover:bg-green-500/10'
+                          : 'text-green-600 hover:bg-green-50'
+                          }`}
                         onClick={() => {
                           closeProfileDropdown();
                           onOpenInApp?.();
@@ -595,11 +598,10 @@ export default function Sidebar({
                             onInstallClick?.();
                           }}
                           disabled={isInstalling}
-                          className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${
-                            isDarkMode 
-                              ? 'text-purple-300 hover:bg-purple-500/10' 
-                              : 'text-purple-600 hover:bg-purple-50'
-                          }`}
+                          className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${isDarkMode
+                            ? 'text-purple-300 hover:bg-purple-500/10'
+                            : 'text-purple-600 hover:bg-purple-50'
+                            }`}
                         >
                           <div className="flex items-center space-x-2">
                             <DevicePhoneMobileIcon className="h-4 w-4" />
@@ -608,18 +610,16 @@ export default function Sidebar({
                         </button>
                         {/* Simple reason why install button exists */}
                         <div className="px-4 pb-2">
-                          <p className={`text-xs transition-colors duration-300 ${
-                            mounted && isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                          }`}>
+                          <p className={`text-xs transition-colors duration-300 ${mounted && isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                            }`}>
                             Get quick access to viral fabrics
                           </p>
                         </div>
                       </div>
                     )}
-                    
-                    <div className={`border-t transition-colors duration-300 ${
-                      isDarkMode ? 'border-slate-700' : 'border-gray-200'
-                    }`}>
+
+                    <div className={`border-t transition-colors duration-300 ${isDarkMode ? 'border-slate-700' : 'border-gray-200'
+                      }`}>
                       <button
                         onClick={() => {
                           closeProfileDropdown();
@@ -628,11 +628,10 @@ export default function Sidebar({
                           localStorage.removeItem('user');
                           window.location.href = '/login';
                         }}
-                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-4 ${
-                          isDarkMode 
-                            ? 'text-indigo-400 hover:bg-indigo-500/10' 
-                            : 'text-indigo-600 hover:bg-indigo-50'
-                        }`}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-4 ${isDarkMode
+                          ? 'text-indigo-400 hover:bg-indigo-500/10'
+                          : 'text-indigo-600 hover:bg-indigo-50'
+                          }`}
                       >
                         <div className="flex items-center space-x-2">
                           <UserIcon className="h-4 w-4" />
@@ -645,15 +644,14 @@ export default function Sidebar({
                           onLogout?.();
                         }}
                         disabled={isLoggingOut}
-                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-5 ${
-                          isLoggingOut
-                            ? isDarkMode 
-                              ? 'text-gray-500 cursor-not-allowed' 
-                              : 'text-gray-400 cursor-not-allowed'
-                            : isDarkMode 
-                              ? 'text-red-400 hover:bg-red-500/10' 
-                              : 'text-red-600 hover:bg-red-50'
-                        }`}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-5 ${isLoggingOut
+                          ? isDarkMode
+                            ? 'text-gray-500 cursor-not-allowed'
+                            : 'text-gray-400 cursor-not-allowed'
+                          : isDarkMode
+                            ? 'text-red-400 hover:bg-red-500/10'
+                            : 'text-red-600 hover:bg-red-50'
+                          }`}
                       >
                         <div className="flex items-center space-x-2">
                           {isLoggingOut ? (
@@ -673,9 +671,8 @@ export default function Sidebar({
             {/* Copyright */}
             {shouldShowText && (
               <div className="px-4 pb-4">
-                <div className={`text-xs text-center transition-colors duration-300 ${
-                  mounted && isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                }`}>
+                <div className={`text-xs text-center transition-colors duration-300 ${mounted && isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
                   {BRAND_COPYRIGHT}
                 </div>
               </div>
@@ -686,61 +683,53 @@ export default function Sidebar({
 
       {/* Mobile Sidebar Overlay */}
       {isOpen && screenConfig.isSmallScreen && (
-        <div 
-          className={`fixed inset-0 bg-black/20 backdrop-blur-sm z-40 backdrop-enter ${
-            isOpen ? 'backdrop-enter' : 'backdrop-exit'
-          }`}
+        <div
+          className={`fixed inset-0 bg-black/20 backdrop-blur-sm z-40 backdrop-enter ${isOpen ? 'backdrop-enter' : 'backdrop-exit'
+            }`}
           onClick={handleMobileClose}
         />
       )}
 
       {/* Mobile Sidebar */}
-      <aside className={`fixed left-0 top-0 h-full w-80 z-50 transition-transform duration-300 ${
-        screenConfig.isSmallScreen ? (isOpen ? 'translate-x-0 sidebar-enter' : '-translate-x-full sidebar-exit') : 'hidden'
-      } ${
-        mounted && isDarkMode 
-          ? 'bg-slate-800 border-r border-slate-700' 
+      <aside className={`fixed left-0 top-0 h-full w-80 z-50 transition-transform duration-300 ${screenConfig.isSmallScreen ? (isOpen ? 'translate-x-0 sidebar-enter' : '-translate-x-full sidebar-exit') : 'hidden'
+        } ${mounted && isDarkMode
+          ? 'bg-[#343E51] border-r border-slate-800'
           : 'bg-white/80 backdrop-blur-sm border-r border-gray-200/50'
-      }`}>
+        }`}>
         <div className="flex flex-col h-full">
           {/* Mobile Header */}
-          <div className={`flex items-center justify-between p-6 border-b transition-colors duration-300 ${
-            mounted && isDarkMode ? 'border-white/10' : 'border-gray-200'
-          }`}>
-            <Link 
-              href="/dashboard" 
+          <div className={`flex items-center justify-between p-6 border-b transition-colors duration-300 ${mounted && isDarkMode ? 'border-white/10' : 'border-gray-200'
+            }`}>
+            <Link
+              href="/dashboard"
               onClick={() => {
-                }}
+              }}
               className="flex items-center space-x-3 group cursor-pointer"
             >
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-lg transition-all duration-300 ${
-                mounted && isDarkMode 
-                  ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/25' 
-                  : 'bg-gradient-to-br from-blue-600 to-indigo-700 shadow-blue-500/25'
-              } group-hover:scale-105`}>
+              <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-lg transition-all duration-300 ${mounted && isDarkMode
+                ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/25'
+                : 'bg-gradient-to-br from-blue-600 to-indigo-700 shadow-blue-500/25'
+                } group-hover:scale-105`}>
                 <BuildingOfficeIcon className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h1 className={`text-lg font-bold transition-colors duration-300 ${
-                  mounted && isDarkMode ? 'text-white' : 'text-gray-900'
-                }`}>
+                <h1 className={`text-lg font-bold transition-colors duration-300 ${mounted && isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
                   {BRAND_NAME}
                 </h1>
-                <p className={`text-xs transition-colors duration-300 ${
-                  mounted && isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                }`}>
+                <p className={`text-xs transition-colors duration-300 ${mounted && isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                  }`}>
                   {BRAND_TAGLINE}
                 </p>
               </div>
             </Link>
-            
+
             <button
               onClick={handleMobileClose}
-              className={`p-2 rounded-lg transition-all duration-300 cursor-pointer ${
-                mounted && isDarkMode 
-                  ? 'bg-white/10 text-white hover:bg-white/20' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              } shadow-lg backdrop-blur-sm`}
+              className={`p-2 rounded-lg transition-all duration-300 cursor-pointer ${mounted && isDarkMode
+                ? 'bg-white/10 text-white hover:bg-white/20'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                } shadow-lg backdrop-blur-sm`}
               aria-label="Close sidebar"
             >
               <XMarkIcon className="h-5 w-5" />
@@ -748,15 +737,14 @@ export default function Sidebar({
           </div>
 
           {/* Mobile Navigation */}
-          <nav className={`flex-1 px-4 py-6 space-y-2 overflow-y-auto max-h-[calc(100vh-140px)] ${
-            mounted && isDarkMode 
-              ? 'scrollbar-thin scrollbar-track-slate-800 scrollbar-thumb-slate-500 hover:scrollbar-thumb-slate-400' 
-              : 'scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400'
-          }`}>
+          <nav className={`flex-1 px-4 py-6 space-y-2 overflow-y-auto max-h-[calc(100vh-140px)] ${mounted && isDarkMode
+            ? 'scrollbar-thin scrollbar-track-slate-800 scrollbar-thumb-slate-500 hover:scrollbar-thumb-slate-400'
+            : 'scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400'
+            }`}>
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
-              
+
               return (
                 <Link
                   key={item.name}
@@ -765,28 +753,25 @@ export default function Sidebar({
                     // Close sidebar manually
                     onClose();
                   }}
-                  className={`group flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 cursor-pointer ${
-                    active
-                      ? mounted && isDarkMode
-                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                        : 'bg-blue-50 text-blue-600 border border-blue-200'
-                      : mounted && isDarkMode
-                        ? 'text-gray-300 hover:bg-white/10 hover:text-white'
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
+                  className={`group flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 cursor-pointer ${active
+                    ? mounted && isDarkMode
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-blue-50 text-blue-600 border border-blue-200'
+                    : mounted && isDarkMode
+                      ? 'text-gray-300 hover:bg-white/10 hover:text-white'
+                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
                 >
-                  <Icon className={`h-5 w-5 transition-colors duration-300 ${
-                    active
-                      ? mounted && isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                      : mounted && isDarkMode ? 'text-gray-400 group-hover:text-white' : 'text-gray-500 group-hover:text-gray-700'
-                  }`} />
+                  <Icon className={`h-5 w-5 transition-colors duration-300 ${active
+                    ? mounted && isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                    : mounted && isDarkMode ? 'text-gray-400 group-hover:text-white' : 'text-gray-500 group-hover:text-gray-700'
+                    }`} />
                   <span className="font-medium">{item.name}</span>
                   {item.badge && (
-                    <span className={`ml-auto px-2 py-1 text-xs font-medium rounded-full ${
-                      mounted && isDarkMode 
-                        ? 'bg-blue-500/20 text-blue-400' 
-                        : 'bg-blue-100 text-blue-600'
-                    }`}>
+                    <span className={`ml-auto px-2 py-1 text-xs font-medium rounded-full ${mounted && isDarkMode
+                      ? 'bg-blue-500/20 text-blue-400'
+                      : 'bg-blue-100 text-blue-600'
+                      }`}>
                       {item.badge}
                     </span>
                   )}
@@ -796,12 +781,10 @@ export default function Sidebar({
           </nav>
 
           {/* Mobile Footer */}
-          <div className={`p-4 border-t transition-colors duration-300 ${
-            mounted && isDarkMode ? 'border-white/10' : 'border-gray-200'
-          }`}>
-            <div className={`text-xs text-center transition-colors duration-300 ${
-              mounted && isDarkMode ? 'text-gray-400' : 'text-gray-500'
+          <div className={`p-4 border-t transition-colors duration-300 ${mounted && isDarkMode ? 'border-white/10' : 'border-gray-200'
             }`}>
+            <div className={`text-xs text-center transition-colors duration-300 ${mounted && isDarkMode ? 'text-gray-400' : 'text-gray-500'
+              }`}>
               {BRAND_COPYRIGHT}
             </div>
           </div>

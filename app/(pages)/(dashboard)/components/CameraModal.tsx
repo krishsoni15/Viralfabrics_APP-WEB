@@ -991,7 +991,7 @@ export default function CameraModal({ isOpen, onClose, onCapture, isDarkMode }: 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[80] p-0 sm:p-4 modal-enter">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[10000] p-0 sm:p-4 modal-enter">
       <div className={`relative w-full h-full sm:max-w-4xl sm:h-auto sm:rounded-xl overflow-hidden modal-enter flex flex-col ${
         isDarkMode ? 'bg-gray-800' : 'bg-white'
       }`}>

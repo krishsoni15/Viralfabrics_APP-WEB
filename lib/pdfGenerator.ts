@@ -2248,6 +2248,276 @@ interface SampleStickerData {
   count?: number;
   rxP?: string; // e.g., "112/80"
   danier?: string;
+}
+
+export interface GreyMaterialStickerData {
+  qualityCode: string;
+  qualityName: string;
+  piece?: number;
+  meter?: number;
+  challanNumber?: string;
+  weaver?: string;
+}
+
+export const generateGreyMaterialStickerPDF = (data: GreyMaterialStickerData): string => {
+  try {
+    const widthMM = 100;
+    const heightMM = 50;
+
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: [widthMM, heightMM]
+    });
+
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, widthMM, heightMM, 'F');
+
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.6);
+    const margin = 1.5;
+
+    doc.setLineJoin('round');
+    doc.setLineCap('round');
+    doc.rect(margin, margin, widthMM - (margin * 2), heightMM - (margin * 2), 'S');
+
+    let yPos = margin + 4.0;
+    const brandText = 'VIRAL FABRICS';
+    const availableBrandWidth = widthMM - (margin * 2) - 1;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    const originalTextWidth = doc.getTextWidth(brandText);
+    const scaleFactor = Math.min(1, availableBrandWidth / originalTextWidth);
+    
+    if (scaleFactor < 1) {
+      doc.setFontSize(14 * scaleFactor);
+    }
+    
+    const finalBrandWidth = doc.getTextWidth(brandText);
+    const xPos = margin + ((widthMM - (margin * 2) - finalBrandWidth) / 2);
+    
+    doc.text(brandText, xPos, yPos);
+    
+    doc.setLineWidth(0.5);
+    doc.line(margin, yPos + 1.5, widthMM - margin, yPos + 1.5);
+    
+    let currentY = yPos + 1.5;
+    const rowHeight = 7.5;
+    const labelFontSize = 7;
+    const valueFontSize = 9;
+    
+    const addTableRowWithRight = (leftLabel: string, leftValue: string, rightLabel: string, rightValue: string) => {
+      doc.setLineWidth(0.3);
+      doc.line(margin, currentY + rowHeight, widthMM - margin, currentY + rowHeight);
+      
+      const textY = currentY + (rowHeight / 2) + 1.5;
+      const leftValueColX = margin + 18;
+      const rightLabelColX = widthMM - margin - 35;
+      const rightValueColX = widthMM - margin - 15;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(labelFontSize);
+      doc.text(leftLabel, margin + 1, textY);
+      
+      doc.setLineWidth(0.3);
+      doc.line(leftValueColX, currentY, leftValueColX, currentY + rowHeight);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFontSize);
+      doc.text(leftValue, leftValueColX + 1, textY);
+      
+      doc.setLineWidth(0.3);
+      doc.line(rightLabelColX, currentY, rightLabelColX, currentY + rowHeight);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(labelFontSize);
+      doc.text(rightLabel, rightLabelColX + 1, textY);
+      
+      doc.setLineWidth(0.3);
+      doc.line(rightValueColX, currentY, rightValueColX, currentY + rowHeight);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFontSize);
+      doc.text(rightValue, rightValueColX + 1, textY);
+      
+      currentY += rowHeight;
+    };
+    
+    const addTableRow = (label: string, value: string) => {
+      doc.setLineWidth(0.3);
+      doc.line(margin, currentY + rowHeight, widthMM - margin, currentY + rowHeight);
+      
+      const textY = currentY + (rowHeight / 2) + 1.5;
+      const valueColX = margin + 18;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(labelFontSize);
+      doc.text(label, margin + 1, textY);
+      
+      doc.setLineWidth(0.3);
+      doc.line(valueColX, currentY, valueColX, currentY + rowHeight);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFontSize);
+      doc.text(value, valueColX + 1, textY);
+      
+      currentY += rowHeight;
+    };
+
+    addTableRow('Quality Code', data.qualityCode || '-');
+    addTableRow('Quality Name', data.qualityName || '-');
+    addTableRowWithRight('Weaver', data.weaver || '-', 'Challan', data.challanNumber || '-');
+    addTableRowWithRight('Piece', data.piece ? data.piece.toString() : '-', 'Meter', data.meter ? data.meter.toString() : '-');
+    addTableRow('Remarks', '');
+
+    return doc.output('datauristring');
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const downloadGreyMaterialStickerPDFDirect = (data: GreyMaterialStickerData): void => {
+  try {
+    const widthMM = 100;
+    const heightMM = 50;
+
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: [widthMM, heightMM]
+    });
+
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, widthMM, heightMM, 'F');
+
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.6);
+    const margin = 1.5;
+
+    doc.setLineJoin('round');
+    doc.setLineCap('round');
+    doc.rect(margin, margin, widthMM - (margin * 2), heightMM - (margin * 2), 'S');
+
+    let yPos = margin + 4.0;
+    const brandText = 'VIRAL FABRICS';
+    const availableBrandWidth = widthMM - (margin * 2) - 1;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    const originalTextWidth = doc.getTextWidth(brandText);
+    const scaleFactor = Math.min(1, availableBrandWidth / originalTextWidth);
+    
+    if (scaleFactor < 1) {
+      doc.setFontSize(14 * scaleFactor);
+    }
+    
+    const finalBrandWidth = doc.getTextWidth(brandText);
+    const xPos = margin + ((widthMM - (margin * 2) - finalBrandWidth) / 2);
+    
+    doc.text(brandText, xPos, yPos);
+    
+    doc.setLineWidth(0.5);
+    doc.line(margin, yPos + 1.5, widthMM - margin, yPos + 1.5);
+    
+    let currentY = yPos + 1.5;
+    const rowHeight = 7.5;
+    const labelFontSize = 7;
+    const valueFontSize = 9;
+    
+    const addTableRowWithRight = (leftLabel: string, leftValue: string, rightLabel: string, rightValue: string) => {
+      doc.setLineWidth(0.3);
+      doc.line(margin, currentY + rowHeight, widthMM - margin, currentY + rowHeight);
+      
+      const textY = currentY + (rowHeight / 2) + 1.5;
+      const leftValueColX = margin + 18;
+      const rightLabelColX = widthMM - margin - 35;
+      const rightValueColX = widthMM - margin - 15;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(labelFontSize);
+      doc.text(leftLabel, margin + 1, textY);
+      
+      doc.setLineWidth(0.3);
+      doc.line(leftValueColX, currentY, leftValueColX, currentY + rowHeight);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFontSize);
+      doc.text(leftValue, leftValueColX + 1, textY);
+      
+      doc.setLineWidth(0.3);
+      doc.line(rightLabelColX, currentY, rightLabelColX, currentY + rowHeight);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(labelFontSize);
+      doc.text(rightLabel, rightLabelColX + 1, textY);
+      
+      doc.setLineWidth(0.3);
+      doc.line(rightValueColX, currentY, rightValueColX, currentY + rowHeight);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFontSize);
+      doc.text(rightValue, rightValueColX + 1, textY);
+      
+      currentY += rowHeight;
+    };
+    
+    const addTableRow = (label: string, value: string) => {
+      doc.setLineWidth(0.3);
+      doc.line(margin, currentY + rowHeight, widthMM - margin, currentY + rowHeight);
+      
+      const textY = currentY + (rowHeight / 2) + 1.5;
+      const valueColX = margin + 18;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(labelFontSize);
+      doc.text(label, margin + 1, textY);
+      
+      doc.setLineWidth(0.3);
+      doc.line(valueColX, currentY, valueColX, currentY + rowHeight);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFontSize);
+      doc.text(value, valueColX + 1, textY);
+      
+      currentY += rowHeight;
+    };
+
+    addTableRow('Quality Code', data.qualityCode || '-');
+    addTableRow('Quality Name', data.qualityName || '-');
+    addTableRowWithRight('Weaver', data.weaver || '-', 'Challan', data.challanNumber || '-');
+    addTableRowWithRight('Piece', data.piece ? data.piece.toString() : '-', 'Meter', data.meter ? data.meter.toString() : '-');
+    addTableRow('Remarks', '');
+
+    const fileName = `GREY_MATERIAL_STICKER_${data.qualityCode || 'STICKER'}_${new Date().toISOString().split('T')[0]}.pdf`;
+    const pdfBlob = doc.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => { URL.revokeObjectURL(url); }, 100);
+
+  } catch (error) {
+    if (typeof window !== 'undefined') {
+      alert('Failed to generate sticker PDF. Please try again.');
+    }
+    throw error;
+  }
+};
+
+interface SampleStickerData {
+  qualityName: string;
+  weaverName?: string;
+  width?: number; // Finish width in inches
+  gsm?: number;
+  content?: string;
+  count?: number;
+  rxP?: string; // e.g., "112/80"
+  danier?: string;
   moq?: number;
   rack?: string;
 }

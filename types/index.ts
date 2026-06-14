@@ -8,6 +8,7 @@ import type {
 } from '@/constants/enums';
 
 export type { User } from './user';
+export type * from './greyMaterial';
 
 export interface Party {
   _id: string;

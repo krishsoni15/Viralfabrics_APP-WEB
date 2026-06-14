@@ -17,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useSession } from '../../hooks/useSession';
 import CameraModal from '../../components/CameraModal';
+import ImagePreviewModal from '../../components/ImagePreviewModal';
 import type { Weaver, Sample } from '../types';
 
 interface SampleFormProps {
@@ -162,6 +163,25 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [selectedImageIndex, pendingImageFiles, formData.images]);
+
+  // Listen for Escape key to close the form / camera modal / type dropdown (when lightbox is closed)
+  useEffect(() => {
+    if (selectedImageIndex !== null) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showCamera) {
+          setShowCamera(false);
+        } else if (showTypeDropdown) {
+          setShowTypeDropdown(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, selectedImageIndex, showCamera, showTypeDropdown]);
 
   // Prevent body scroll when lightbox is open
   useEffect(() => {
@@ -1308,68 +1328,16 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
       )}
 
       {/* Image Lightbox Modal */}
-      {selectedImageIndex !== null && (() => {
-        const allImages = [
+      <ImagePreviewModal
+        isOpen={selectedImageIndex !== null}
+        onClose={() => setSelectedImageIndex(null)}
+        images={[
           ...pendingImageFiles.map(f => f.previewUrl),
           ...formData.images
-        ];
-        const currentImage = allImages[selectedImageIndex];
-        const totalImages = allImages.length;
-
-        return (
-          <div 
-            className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 p-4"
-            onClick={() => setSelectedImageIndex(null)}
-          >
-            <button
-              onClick={() => setSelectedImageIndex(null)}
-              className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all z-10"
-            >
-              <XMarkIcon className="h-6 w-6" />
-            </button>
-            
-            <div className="relative max-w-7xl max-h-[90vh] w-full h-full flex items-center justify-center">
-              <img
-                src={currentImage}
-                alt={`Image ${selectedImageIndex + 1}`}
-                className="max-w-full max-h-full object-contain"
-                onClick={(e) => e.stopPropagation()}
-              />
-              
-              {totalImages > 1 && (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const prevIndex = selectedImageIndex === 0 
-                        ? totalImages - 1 
-                        : selectedImageIndex - 1;
-                      setSelectedImageIndex(prevIndex);
-                    }}
-                    className="absolute left-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all"
-                  >
-                    <ChevronLeftIcon className="h-8 w-8" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const nextIndex = (selectedImageIndex + 1) % totalImages;
-                      setSelectedImageIndex(nextIndex);
-                    }}
-                    className="absolute right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all"
-                  >
-                    <ChevronRightIcon className="h-8 w-8" />
-                  </button>
-                </>
-              )}
-              
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-full bg-white/10 text-white text-sm">
-                {selectedImageIndex + 1} / {totalImages}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+        ]}
+        initialIndex={selectedImageIndex !== null ? selectedImageIndex : 0}
+        isDarkMode={isDarkMode}
+      />
 
     </div>
   );

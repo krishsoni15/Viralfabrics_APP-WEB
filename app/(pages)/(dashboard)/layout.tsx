@@ -470,7 +470,7 @@ export default function SuperAdminLayout({
   return (
     <div className={`min-h-screen transition-colors duration-300 theme-switch-root ${
       isDarkMode 
-        ? 'bg-slate-800' 
+        ? 'bg-gray-950' 
         : 'bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'
     }`}>
       {/* PWA Registration - Handles service worker and PWA setup */}

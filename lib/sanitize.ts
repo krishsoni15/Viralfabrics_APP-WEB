@@ -148,16 +148,19 @@ export function sanitizeUsername(username: string): string {
 }
 
 /**
- * Sanitize search query - prevent NoSQL injection
+ * Sanitize search query - prevent NoSQL injection and regex crashes
  */
 export function sanitizeSearchQuery(query: string): string {
   if (!query || typeof query !== 'string') return '';
   
   // Remove MongoDB operators
-  return query
+  const cleaned = query
     .trim()
     .replace(/[${}]/g, '')
     .substring(0, 200);
+
+  // Escape regex special characters to prevent crashes in regex filters
+  return cleaned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

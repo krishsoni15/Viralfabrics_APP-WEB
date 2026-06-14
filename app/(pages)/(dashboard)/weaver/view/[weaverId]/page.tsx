@@ -22,13 +22,15 @@ import {
   XMarkIcon,
   PlusIcon,
   CheckIcon,
-  ArrowUpIcon
+  ArrowUpIcon,
+  SwatchIcon
 } from '@heroicons/react/24/outline';
 import { useDarkMode } from '../../../hooks/useDarkMode';
 import { useAuthSession } from '../../../hooks/useAuthSession';
 import { generateSampleStickerPDF, downloadSampleStickerPDFDirect } from '@/lib/pdfGenerator';
 import SampleForm from '../../components/SampleForm';
 import WeaverSamplesSkeleton from './WeaverSamplesSkeleton';
+import ImagePreviewModal from '../../../components/ImagePreviewModal';
 import UnauthorizedMessage from '../../components/UnauthorizedMessage';
 import { SearchBar } from '../../components/SearchBar';
 import type { Weaver, Sample } from '../../types';
@@ -45,8 +47,6 @@ export default function WeaverSamplesViewPage() {
   const [samples, setSamples] = useState<Sample[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedImageIndex, setSelectedImageIndex] = useState<{sampleIndex: number, imageIndex: number} | null>(null);
-  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
-  const [touchEnd, setTouchEnd] = useState<{ x: number; y: number } | null>(null);
   
   // Sticker download states
   const [showStickerPreview, setShowStickerPreview] = useState(false);
@@ -373,42 +373,7 @@ export default function WeaverSamplesViewPage() {
     };
   }, [stickerPreviewUrl]);
 
-  // Keyboard navigation for image lightbox
-  useEffect(() => {
-    if (!selectedImageIndex) return;
 
-    const handleKeyPress = (e: KeyboardEvent) => {
-      const sample = samples[selectedImageIndex.sampleIndex];
-      if (!sample?.images) return;
-
-      if (e.key === 'ArrowRight') {
-        const nextImageIndex = (selectedImageIndex.imageIndex + 1) % sample.images.length;
-        setSelectedImageIndex({ ...selectedImageIndex, imageIndex: nextImageIndex });
-      } else if (e.key === 'ArrowLeft') {
-        const prevImageIndex = selectedImageIndex.imageIndex === 0 
-          ? sample.images.length - 1 
-          : selectedImageIndex.imageIndex - 1;
-        setSelectedImageIndex({ ...selectedImageIndex, imageIndex: prevImageIndex });
-      } else if (e.key === 'Escape') {
-        setSelectedImageIndex(null);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [selectedImageIndex, samples]);
-
-  // Prevent body scroll when lightbox is open
-  useEffect(() => {
-    if (selectedImageIndex) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [selectedImageIndex]);
 
   // Sticker download handlers - optimized with useCallback
   const handleStickerDownload = useCallback(async (sample: Sample) => {
@@ -1261,7 +1226,7 @@ export default function WeaverSamplesViewPage() {
                 }`}
                 title="Add Sample"
               >
-                <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                <SwatchIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                 <span className="whitespace-nowrap">Add Sample</span>
               </button>
             </div>
@@ -1319,7 +1284,7 @@ export default function WeaverSamplesViewPage() {
               }`}
               title="Add Sample"
             >
-              <PlusIcon className="h-5 w-5 flex-shrink-0" />
+              <SwatchIcon className="h-5 w-5 flex-shrink-0" />
               <span className="whitespace-nowrap">Add Sample</span>
             </button>
           </div>
@@ -1366,7 +1331,7 @@ export default function WeaverSamplesViewPage() {
               }`}
               title="Add Sample"
             >
-              <PlusIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+              <SwatchIcon className="h-5 w-5 sm:h-6 sm:w-6" />
               <span className="whitespace-nowrap">Add Sample</span>
             </button>
           </div>
@@ -1973,142 +1938,13 @@ export default function WeaverSamplesViewPage() {
       </div>
 
       {/* Image Lightbox Modal */}
-      {selectedImageIndex && samples[selectedImageIndex.sampleIndex]?.images && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-fade-in backdrop-blur-sm"
-          onClick={() => setSelectedImageIndex(null)}
-        >
-          <button
-            onClick={() => setSelectedImageIndex(null)}
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all duration-200 hover:rotate-90 hover:scale-110 active:scale-95 z-10"
-          >
-            <XMarkIcon className="h-6 w-6" />
-          </button>
-          
-          <div 
-            className="relative max-w-7xl max-h-[90vh] w-full h-full flex items-center justify-center animate-scale-in"
-            onTouchStart={(e) => {
-              const touch = e.touches[0];
-              setTouchStart({ x: touch.clientX, y: touch.clientY });
-            }}
-            onTouchMove={(e) => {
-              const touch = e.touches[0];
-              setTouchEnd({ x: touch.clientX, y: touch.clientY });
-            }}
-            onTouchEnd={() => {
-              if (!touchStart || !touchEnd || !selectedImageIndex) return;
-              
-              const distanceX = touchStart.x - touchEnd.x;
-              const distanceY = touchStart.y - touchEnd.y;
-              const isLeftSwipe = distanceX > 50;
-              const isRightSwipe = distanceX < -50;
-              const isVerticalSwipe = Math.abs(distanceY) > Math.abs(distanceX);
-              
-              // Only handle horizontal swipes (ignore vertical scrolling)
-              if (isVerticalSwipe) {
-                setTouchStart(null);
-                setTouchEnd(null);
-                return;
-              }
-              
-              if (isLeftSwipe || isRightSwipe) {
-                const sample = samples[selectedImageIndex.sampleIndex];
-                if (sample?.images && sample.images.length > 1) {
-                  if (isLeftSwipe) {
-                    // Swipe left - next image
-                    const nextImageIndex = (selectedImageIndex.imageIndex + 1) % sample.images.length;
-                    setSelectedImageIndex({ ...selectedImageIndex, imageIndex: nextImageIndex });
-                  } else if (isRightSwipe) {
-                    // Swipe right - previous image
-                    const prevImageIndex = selectedImageIndex.imageIndex === 0 
-                      ? sample.images.length - 1 
-                      : selectedImageIndex.imageIndex - 1;
-                    setSelectedImageIndex({ ...selectedImageIndex, imageIndex: prevImageIndex });
-                  }
-                }
-              }
-              
-              setTouchStart(null);
-              setTouchEnd(null);
-            }}
-          >
-            {(() => {
-              const currentImage = samples[selectedImageIndex.sampleIndex].images![selectedImageIndex.imageIndex];
-              const isPreviewUrl = currentImage.startsWith('blob:');
-              const sampleId = samples[selectedImageIndex.sampleIndex]._id;
-              const uploadingSet = uploadingImagesRef.current.get(sampleId);
-              const isUploading = uploadingSet?.has(currentImage);
-              
-              return (
-                <>
-                  <img
-                    src={currentImage}
-                    alt={`${samples[selectedImageIndex.sampleIndex].qualityName} ${selectedImageIndex.imageIndex + 1}`}
-                    className="max-w-full max-h-full object-contain animate-fade-in select-none"
-                    onClick={(e) => e.stopPropagation()}
-                    draggable={false}
-                    onError={(e) => {
-                      // Show placeholder on error
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent) {
-                        const placeholder = document.createElement('div');
-                        placeholder.className = 'flex flex-col items-center justify-center text-white';
-                        placeholder.innerHTML = `
-                          <svg class="w-24 h-24 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                          </svg>
-                          <p class="text-lg opacity-75">Image not available</p>
-                        `;
-                        parent.appendChild(placeholder);
-                      }
-                    }}
-                  />
-                  {isUploading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                      <div className="w-full h-full skeleton-shimmer opacity-50"></div>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-            
-            {samples[selectedImageIndex.sampleIndex].images!.length > 1 && (
-              <>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const sample = samples[selectedImageIndex.sampleIndex];
-                    const prevImageIndex = selectedImageIndex.imageIndex === 0 
-                      ? sample.images!.length - 1 
-                      : selectedImageIndex.imageIndex - 1;
-                    setSelectedImageIndex({ ...selectedImageIndex, imageIndex: prevImageIndex });
-                  }}
-                  className="absolute left-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all duration-200 hover:scale-110 active:scale-95"
-                >
-                  <ChevronLeftIcon className="h-8 w-8" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const sample = samples[selectedImageIndex.sampleIndex];
-                    const nextImageIndex = (selectedImageIndex.imageIndex + 1) % sample.images!.length;
-                    setSelectedImageIndex({ ...selectedImageIndex, imageIndex: nextImageIndex });
-                  }}
-                  className="absolute right-4 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all duration-200 hover:scale-110 active:scale-95"
-                >
-                  <ChevronRightIcon className="h-8 w-8" />
-                </button>
-              </>
-            )}
-            
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-full bg-white/10 text-white text-sm">
-              {selectedImageIndex.imageIndex + 1} / {samples[selectedImageIndex.sampleIndex].images!.length}
-            </div>
-          </div>
-        </div>
-      )}
+      <ImagePreviewModal
+        isOpen={selectedImageIndex !== null}
+        onClose={() => setSelectedImageIndex(null)}
+        images={selectedImageIndex && samples[selectedImageIndex.sampleIndex]?.images ? samples[selectedImageIndex.sampleIndex].images : []}
+        initialIndex={selectedImageIndex ? selectedImageIndex.imageIndex : 0}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Sticker PDF Preview Modal */}
       {showStickerPreview && (

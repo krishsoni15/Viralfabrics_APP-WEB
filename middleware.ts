@@ -21,6 +21,8 @@ interface JWTPayload {
 const PUBLIC_ROUTES = [
   '/api/auth/login',
   '/api/health',
+  '/api/fix-grey-materials',
+  '/api/copy-fabrics',
   '/login',
   '/_next',
   '/icons',

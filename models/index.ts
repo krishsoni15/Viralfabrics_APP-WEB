@@ -11,6 +11,9 @@ export { default as MillOutput } from './MillOutput';
 export { default as Dispatch } from './Dispatch';
 export { default as Process } from './Process';
 export { default as GreyInfo } from './GreyInfo';
+export { default as GreyMaterial } from './GreyMaterial';
+export { default as FinishLotStock } from './FinishLotStock';
+
 
 // Export TypeScript interfaces for all models
 export type { 
@@ -75,6 +78,15 @@ export type {
   IGreyInfo, 
   IGreyInfoModel
 } from './GreyInfo';
+
+export type {
+  IGreyMaterial
+} from './GreyMaterial';
+
+export type {
+  IFinishLotStock
+} from './FinishLotStock';
+
 
 // Export common types and utilities
 export type { Document, Model, Schema } from 'mongoose';
