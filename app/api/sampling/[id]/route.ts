@@ -17,6 +17,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     
     const {
       qualityName,
+      whereToPut,
       images,
       notes,
       meter,
@@ -32,6 +33,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const updateData = {
       qualityName: qualityName.trim(),
+      whereToPut: whereToPut?.trim() || '',
       images: images || [],
       notes: notes || '',
       piece: piece ? Number(piece) : 0,

@@ -25,7 +25,8 @@ import {
   TagIcon,
   DocumentTextIcon,
   ScaleIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  MapPinIcon
 } from '@heroicons/react/24/outline';
 import { useDarkMode } from '../hooks/useDarkMode';
 import CameraModal from '../components/CameraModal';
@@ -34,6 +35,7 @@ import ImagePreviewModal from '../components/ImagePreviewModal';
 interface Sampling {
   _id: string;
   qualityName: string;
+  whereToPut?: string;
   images: string[];
   notes: string;
   meter: number;
@@ -70,6 +72,7 @@ export default function SamplingPage() {
   const [selectedItem, setSelectedItem] = useState<Sampling | null>(null);
   const [formData, setFormData] = useState({
     qualityName: '',
+    whereToPut: '',
     images: [] as string[],
     notes: '',
     meter: '' as string | number,
@@ -332,6 +335,7 @@ export default function SamplingPage() {
       setSelectedItem(item);
       setFormData({
         qualityName: item.qualityName,
+        whereToPut: item.whereToPut || '',
         images: item.images || [],
         notes: item.notes || '',
         meter: item.meter,
@@ -342,6 +346,7 @@ export default function SamplingPage() {
       setSelectedItem(null);
       setFormData({
         qualityName: '',
+        whereToPut: '',
         images: [],
         notes: '',
         meter: '',
@@ -401,6 +406,7 @@ export default function SamplingPage() {
 
       const payload = {
         qualityName: formData.qualityName.trim(),
+        whereToPut: formData.whereToPut.trim(),
         images: uploadedUrls,
         notes: formData.notes.trim(),
         meter: formData.meter === '' ? 0 : Number(formData.meter),
@@ -752,6 +758,7 @@ export default function SamplingPage() {
                     <div key={idx} className={`rounded-2xl border p-4 flex flex-col h-72 animate-pulse ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200'}`}>
                       <div className={`w-full h-36 rounded-xl mb-4 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`} />
                       <div className={`h-5 w-3/4 rounded-md mb-2 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                      <div className={`h-4.5 w-1/4 rounded-md mb-2 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
                       <div className="mt-auto flex justify-between">
                         <div className={`h-4 w-1/3 rounded-md ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`} />
                         <div className={`h-4 w-1/3 rounded-md ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`} />
@@ -774,6 +781,12 @@ export default function SamplingPage() {
                           <div className="flex items-center space-x-2">
                             <TagIcon className="h-4 w-4" />
                             <span>Quality Name</span>
+                          </div>
+                        </th>
+                        <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="flex items-center space-x-2">
+                            <MapPinIcon className="h-4 w-4" />
+                            <span>Where to Put</span>
                           </div>
                         </th>
                         <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -810,6 +823,9 @@ export default function SamplingPage() {
                           </td>
                           <td className="px-6 py-4">
                             <div className={`h-4 rounded w-32 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className={`h-4 rounded w-24 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
                           </td>
                           <td className="px-6 py-4">
                             <div className={`h-4 rounded w-48 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
@@ -885,7 +901,13 @@ export default function SamplingPage() {
                       </div>
                       <div className="p-4 flex flex-col flex-grow">
                         <h3 className="font-bold text-lg line-clamp-1 group-hover:text-blue-500 transition-colors" title={item.qualityName}>{item.qualityName}</h3>
-                        {item.notes && <p className="text-sm mt-1 line-clamp-2 text-gray-500 dark:text-gray-400" title={item.notes}>{item.notes}</p>}
+                        {item.whereToPut && (
+                          <div className="flex items-center space-x-1 mt-1 text-xs text-blue-500 font-semibold bg-blue-500/10 px-2 py-0.5 rounded-md w-fit">
+                            <span>Loc:</span>
+                            <span className="truncate max-w-[150px]" title={item.whereToPut}>{item.whereToPut}</span>
+                          </div>
+                        )}
+                        {item.notes && <p className="text-sm mt-2 line-clamp-2 text-gray-500 dark:text-gray-400" title={item.notes}>{item.notes}</p>}
                         <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-dashed dark:border-slate-700/80 border-slate-200">
                           <div className="text-left">
                             <span className={`text-[10px] uppercase font-bold tracking-wider ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Meters</span>
@@ -924,6 +946,12 @@ export default function SamplingPage() {
                         <div className="flex items-center space-x-2">
                           <TagIcon className="h-4 w-4" />
                           <span>Quality Name</span>
+                        </div>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <div className="flex items-center space-x-2">
+                          <MapPinIcon className="h-4 w-4" />
+                          <span>Where to Put</span>
                         </div>
                       </th>
                       <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -977,8 +1005,9 @@ export default function SamplingPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap font-semibold">{item.qualityName}</td>
-                          <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={item.notes}>{item.notes || '-'}</td>
+                           <td className="px-6 py-4 whitespace-nowrap font-semibold">{item.qualityName}</td>
+                           <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.whereToPut || '-'}</td>
+                           <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={item.notes}>{item.notes || '-'}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-blue-500">{item.meter} M</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-purple-500">{item.piece}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -1069,6 +1098,17 @@ export default function SamplingPage() {
                     setFormErrors(prev => ({ ...prev, qualityName: false }));
                   }}
                   className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.qualityName ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30' : isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Where to put</label>
+                <input
+                  type="text"
+                  placeholder="Enter storage location..."
+                  value={formData.whereToPut}
+                  onChange={(e) => setFormData(prev => ({ ...prev, whereToPut: e.target.value }))}
+                  className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
                 />
               </div>
 
