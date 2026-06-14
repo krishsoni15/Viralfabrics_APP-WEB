@@ -22,24 +22,24 @@ export async function getSession(req: NextRequest): Promise<SessionUser | null> 
 
     const token = authHeader ? authHeader.split(" ")[1] : cookieToken;
     const JWT_SECRET = process.env.JWT_SECRET;
-    
+
     if (!token || !JWT_SECRET) return null;
 
     const secretKey = new TextEncoder().encode(JWT_SECRET);
     const { payload } = await jwtVerify(token, secretKey);
-    
+
     if (!payload || typeof payload !== "object") return null;
 
     // Check if token was issued before logout all timestamp
     try {
       await dbConnect();
       const logoutAllTimestamp = await (SystemConfig as ISystemConfigModel).getLogoutAllTimestamp();
-      
+
       if (logoutAllTimestamp) {
         // Use loginTime if available (original login), otherwise use iat (token issue time)
         const loginTime = (payload as any).loginTime ? (payload as any).loginTime * 1000 : (payload.iat ? payload.iat * 1000 : 0);
         const logoutAllTime = logoutAllTimestamp.getTime();
-        
+
         // If original login was before logout all, token is invalid
         if (loginTime < logoutAllTime) {
           return null;

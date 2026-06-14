@@ -29,7 +29,8 @@ import {
   BarsArrowDownIcon,
   ArrowUpIcon,
   Squares2X2Icon,
-  ListBulletIcon
+  ListBulletIcon,
+  SwatchIcon
 } from '@heroicons/react/24/outline';
 import WeaverIcon from '../components/WeaverIcon';
 import { useDarkMode } from '../hooks/useDarkMode';
@@ -59,10 +60,10 @@ export default function WeaverPage() {
     });
   }, []);
   const { isSuperAdmin, isMaster, isLoading: authLoading, isAuthenticated } = useAuthSession();
-  
+
   // useTransition for non-urgent updates (search, filters)
   const [isPending, startTransition] = useTransition();
-  
+
   // Get initial theme synchronously to prevent white flash
   const [initialTheme] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -75,14 +76,14 @@ export default function WeaverPage() {
     try {
       const saved = localStorage.getItem('darkMode');
       if (saved !== null) return saved === 'true';
-    } catch {}
+    } catch { }
     // Check system preference
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
-  
+
   // Use initial theme until mounted, then use hook value
   const currentTheme = darkModeMounted ? isDarkMode : initialTheme;
-  
+
   // Initialize state with persisted data if available
   const [weavers, setWeavers] = useState<Weaver[]>(() => {
     if (typeof window !== 'undefined') {
@@ -221,7 +222,7 @@ export default function WeaverPage() {
   const isFetchingRef = useRef(false); // Prevent duplicate concurrent fetches
   const abortControllerRef = useRef<AbortController | null>(null); // Store AbortController for cleanup
   const lastFetchParamsRef = useRef<{ page: number; limit: number; search: string; sort: string } | null>(null); // Track last fetch to prevent duplicates
-  
+
   // Helper function to update weavers and persist to sessionStorage
   const updateWeavers = useCallback((updater: (prev: Weaver[]) => Weaver[]) => {
     setWeavers(prevWeavers => {
@@ -237,7 +238,7 @@ export default function WeaverPage() {
       return newWeavers;
     });
   }, []);
-  
+
   // Helper function to update pagination and persist to sessionStorage
   const updatePaginationInfo = useCallback((updater: (prev: PaginationInfo) => PaginationInfo) => {
     setPaginationInfo((prevPagination: PaginationInfo) => {
@@ -302,7 +303,7 @@ export default function WeaverPage() {
   const [sortFlipDirection, setSortFlipDirection] = useState<'top-to-bottom' | 'bottom-to-top' | null>(null);
   // Store fetchWeavers in a ref to avoid initialization issues
   const fetchWeaversRef = useRef<((page: number, limit: number, search: string, sort: 'newest' | 'oldest') => Promise<void>) | null>(null);
-  
+
   // Retry function with exponential backoff
   const retryApiCall = async <T,>(
     apiCall: () => Promise<T>,
@@ -310,13 +311,13 @@ export default function WeaverPage() {
     baseDelay: number = 1000
   ): Promise<T> => {
     let lastError: Error | null = null;
-    
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await apiCall();
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        
+
         // Don't retry on client errors (4xx) except 429 (rate limit)
         if (error instanceof Error && 'status' in error) {
           const status = (error as any).status;
@@ -324,18 +325,18 @@ export default function WeaverPage() {
             throw error;
           }
         }
-        
+
         // If this was the last attempt, throw the error
         if (attempt === maxRetries) {
           throw lastError;
         }
-        
+
         // Calculate delay with exponential backoff
         const delay = baseDelay * Math.pow(2, attempt);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-    
+
     throw lastError || new Error('Unknown error');
   };
 
@@ -345,32 +346,32 @@ export default function WeaverPage() {
     if (isFetchingRef.current) {
       return;
     }
-    
+
     // Check if this exact fetch was already made (but allow initial mount to always fetch)
     const fetchKey = `${page}-${limit}-${search}-${sort}`;
-    const lastKey = lastFetchParamsRef.current 
+    const lastKey = lastFetchParamsRef.current
       ? `${lastFetchParamsRef.current.page}-${lastFetchParamsRef.current.limit}-${lastFetchParamsRef.current.search}-${lastFetchParamsRef.current.sort}`
       : null;
-    
+
     // Allow fetch on initial mount, if params changed, or if lastFetchParamsRef was reset (for search)
     if (fetchKey === lastKey && !isInitialMountRef.current && hasInitialLoadRef.current && lastFetchParamsRef.current !== null) {
       return; // Same fetch, skip (but only after initial load is complete)
     }
-    
+
     // Abort previous request if still pending
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    
+
     isFetchingRef.current = true;
     setIsChangingPage(true);
-    
+
     // Store fetch parameters
     lastFetchParamsRef.current = { page, limit, search, sort };
-    
+
     let controller: AbortController | null = null;
     let timeoutId: any = null;
-    
+
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -384,7 +385,7 @@ export default function WeaverPage() {
         }
         return;
       }
-      
+
       // Create AbortController for request cancellation
       controller = new AbortController();
       abortControllerRef.current = controller; // Store for cleanup
@@ -393,7 +394,7 @@ export default function WeaverPage() {
           controller.abort();
         }
       }, 10000); // 10 second timeout
-      
+
       const url = new URL('/api/weaver/weavers', window.location.origin);
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
@@ -401,20 +402,20 @@ export default function WeaverPage() {
       if (search.trim()) {
         url.searchParams.append('search', search.trim());
       }
-      
+
       const response = await fetch(url.toString(), {
         headers: {
           'Authorization': `Bearer ${token}`
         },
         signal: controller.signal
       });
-      
+
       // Clear timeout on successful response
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -428,7 +429,7 @@ export default function WeaverPage() {
               // Ignore storage errors
             }
           }
-          
+
           if (data.pagination) {
             const paginationPage = data.pagination.page || 1;
             const paginationData = {
@@ -484,11 +485,11 @@ export default function WeaverPage() {
     const isValidMongoId = (id: string): boolean => {
       return /^[0-9a-fA-F]{24}$/.test(id);
     };
-    
+
     const isEdit = !!editingWeaver && editingWeaver._id && isValidMongoId(editingWeaver._id);
     const editingId = editingWeaver?._id || '';
     const tempId = isEdit ? editingId : `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
     // Create optimistic weaver
     const optimisticWeaver: Weaver = {
       _id: tempId,
@@ -496,7 +497,7 @@ export default function WeaverPage() {
       phone: formData.phone?.trim() || '',
       address: formData.address?.trim() || ''
     };
-    
+
     // Store original state for rollback
     if (isEdit) {
       const originalWeaver = weavers.find(w => w._id === editingId);
@@ -506,7 +507,7 @@ export default function WeaverPage() {
     } else {
       optimisticUpdatesRef.current.set(tempId, { isNew: true });
     }
-    
+
     // Update UI immediately (optimistic update) with animation
     updateWeavers(prevWeavers => {
       if (isEdit) {
@@ -519,7 +520,7 @@ export default function WeaverPage() {
         setTimeout(() => {
           newlyAddedWeaversRef.current.delete(tempId);
         }, TIMEOUTS.ANIMATION_DELAY);
-        
+
         // Add new weaver at the beginning (if sorting by newest) or end (if sorting by oldest)
         if (sortOrder === 'newest') {
           return [optimisticWeaver, ...prevWeavers];
@@ -528,41 +529,41 @@ export default function WeaverPage() {
         }
       }
     });
-    
+
     // Update pagination for new weavers
     if (!isEdit) {
       updatePaginationInfo(prev => ({
         ...prev,
         totalCount: prev.totalCount + 1
       }));
-      
+
       // If sorting by newest, go to page 1 to see the new weaver
       if (sortOrder === 'newest') {
         setCurrentPage(1);
       }
     }
-    
+
     // Close modal immediately
     setShowWeaverModal(false);
     setEditingWeaver(null);
-    
+
     // Make API call in background with retry logic
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
       }
-      
+
       // Only use PUT if we have a valid MongoDB ObjectId, otherwise use POST
       const url = isEdit && editingId && isValidMongoId(editingId)
         ? `/api/weaver/weavers/${editingId}`
         : '/api/weaver/weavers';
       const method = isEdit && editingId && isValidMongoId(editingId) ? 'PUT' : 'POST';
-      
+
       // Add timeout to fetch request
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.OPTIMISTIC_SAVE);
-      
+
       const response = await retryApiCall(async () => {
         try {
           const res = await fetch(url, {
@@ -574,9 +575,9 @@ export default function WeaverPage() {
             body: JSON.stringify(formData),
             signal: controller.signal
           });
-          
+
           clearTimeout(timeoutId);
-          
+
           if (!res.ok) {
             let errorData;
             try {
@@ -588,7 +589,7 @@ export default function WeaverPage() {
             (error as any).status = res.status;
             throw error;
           }
-          
+
           return res;
         } catch (error) {
           clearTimeout(timeoutId);
@@ -606,13 +607,13 @@ export default function WeaverPage() {
           throw error;
         }
       });
-      
+
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.message || 'Failed to save weaver');
       }
-      
+
       // Replace optimistic weaver with real data from server
       const realWeaver: Weaver = {
         _id: data.data._id,
@@ -620,7 +621,7 @@ export default function WeaverPage() {
         phone: data.data.phone || '',
         address: data.data.address || ''
       };
-      
+
       updateWeavers(prevWeavers => {
         if (isEdit) {
           // Mark as edited for animation
@@ -628,25 +629,25 @@ export default function WeaverPage() {
           setTimeout(() => {
             editedWeaversRef.current.delete(realWeaver._id);
           }, 600);
-          
+
           return prevWeavers.map(w => w._id === tempId ? realWeaver : w);
         } else {
           // Replace temp weaver with real one
           return prevWeavers.map(w => w._id === tempId ? realWeaver : w);
         }
       });
-      
+
       // Clean up optimistic update tracking
       optimisticUpdatesRef.current.delete(tempId);
       // Remove from newly added set (animation already completed)
       newlyAddedWeaversRef.current.delete(tempId);
-      
+
       // Don't show success message - UI already updated, no need for popup
       // Only show errors if something goes wrong
-      
+
       // No need to refresh - optimistic update already shows the correct data
       // The server data will be synced on next natural refresh (pagination, search, etc.)
-      
+
     } catch (error) {
       // Rollback optimistic update
       const updateInfo = optimisticUpdatesRef.current.get(tempId);
@@ -661,7 +662,7 @@ export default function WeaverPage() {
           }
           return prevWeavers;
         });
-        
+
         // Rollback pagination
         if (updateInfo.isNew) {
           updatePaginationInfo(prev => ({
@@ -670,37 +671,37 @@ export default function WeaverPage() {
           }));
         }
       }
-      
+
       // Clean up
       optimisticUpdatesRef.current.delete(tempId);
-      
+
       // Show error message
       const errorMessage = error instanceof Error ? error.message : 'Failed to save weaver. Please try again.';
       showMessage('error', errorMessage);
-      
+
       logger.error('Error saving weaver (after retries)', error instanceof Error ? error : new Error(String(error)));
     }
   }, [editingWeaver, weavers, sortOrder, currentPage, itemsPerPage, searchQuery, showMessage]);
 
   // Store AbortController for samples fetch
   const samplesAbortControllerRef = useRef<AbortController | null>(null);
-  
+
   // Fetch samples - only when needed (not on every mount)
   const fetchSamples = useCallback(async (weaverId?: string) => {
     // Abort previous request if still pending
     if (samplesAbortControllerRef.current) {
       samplesAbortControllerRef.current.abort();
     }
-    
+
     let controller: AbortController | null = null;
     let timeoutId: any = null;
-    
+
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         return;
       }
-      
+
       // Create AbortController for request cancellation
       controller = new AbortController();
       samplesAbortControllerRef.current = controller; // Store for cleanup
@@ -709,8 +710,8 @@ export default function WeaverPage() {
           controller.abort();
         }
       }, 10000); // 10 second timeout
-      
-      const url = weaverId 
+
+      const url = weaverId
         ? `/api/weaver/samples?weaverId=${weaverId}`
         : '/api/weaver/samples';
       const response = await fetch(url, {
@@ -719,13 +720,13 @@ export default function WeaverPage() {
         },
         signal: controller.signal
       });
-      
+
       // Clear timeout on successful response
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -753,7 +754,7 @@ export default function WeaverPage() {
   useEffect(() => {
     // Check sessionStorage to see if we just navigated back (component persisted)
     const wasNavigatingBack = typeof window !== 'undefined' && sessionStorage.getItem('weaverNavigatedBack') === 'true';
-    
+
     // If weavers are already loaded from persisted state (e.g., navigating back), skip initial load
     if (weavers.length > 0 && paginationInfo.totalCount > 0) {
       hasInitialLoadRef.current = true;
@@ -765,7 +766,7 @@ export default function WeaverPage() {
       }
       return;
     }
-    
+
     // If we just navigated back but data is empty, it means component remounted
     // In this case, we should still skip if we're just viewing (no data changed)
     if (wasNavigatingBack) {
@@ -802,10 +803,10 @@ export default function WeaverPage() {
       // Data changed, we'll fetch below
       sessionStorage.removeItem('weaverNavigatedBack');
     }
-    
+
     if (hasInitialLoadRef.current) return; // Prevent duplicate initial loads
     if (authLoading) return; // Wait for auth to finish loading
-    
+
     const loadData = async (retryCount = 0) => {
       // Double check token is available before fetching
       const token = localStorage.getItem('token');
@@ -826,13 +827,13 @@ export default function WeaverPage() {
         }
         return;
       }
-      
+
       setLoading(true);
       try {
         // Reset fetch state to ensure initial fetch happens
         isFetchingRef.current = false;
         lastFetchParamsRef.current = null;
-        
+
         // Store initial fetch params to prevent duplicate calls
         lastFetchParamsRef.current = { page: currentPage, limit: itemsPerPage, search: searchQuery, sort: sortOrder };
         await fetchWeavers(currentPage, itemsPerPage, searchQuery, sortOrder);
@@ -880,7 +881,7 @@ export default function WeaverPage() {
     if (loading || isChangingPage) return;
     // Skip if already fetching (prevents duplicate concurrent calls)
     if (isFetchingRef.current) return;
-    
+
     // Check if we just navigated back - if so, skip unless data changed
     const wasNavigatingBack = typeof window !== 'undefined' && sessionStorage.getItem('weaverNavigatedBack') === 'true';
     if (wasNavigatingBack) {
@@ -893,17 +894,17 @@ export default function WeaverPage() {
       // Data changed, continue with fetch below
       sessionStorage.removeItem('weaverNavigatedBack');
     }
-    
+
     // Check if this is the same fetch as the last one (prevents duplicate calls)
     const fetchKey = `${currentPage}-${itemsPerPage}-${searchQuery}-${sortOrder}`;
-    const lastKey = lastFetchParamsRef.current 
+    const lastKey = lastFetchParamsRef.current
       ? `${lastFetchParamsRef.current.page}-${lastFetchParamsRef.current.limit}-${lastFetchParamsRef.current.search}-${lastFetchParamsRef.current.sort}`
       : null;
-    
+
     if (fetchKey === lastKey) {
       return; // Same parameters, skip fetch
     }
-    
+
     // Only fetch if weavers are already loaded (pagination/item change)
     // This prevents fetching when weavers array is empty on initial load
     // Note: searchQuery changes are handled by the debounced handleSearchChange, not here
@@ -927,7 +928,7 @@ export default function WeaverPage() {
       if (typeof window !== 'undefined') {
         const dataChanged = sessionStorage.getItem('weaverDataChanged');
         const wasNavigatingBack = sessionStorage.getItem('weaverNavigatedBack') === 'true';
-        
+
         if (dataChanged === 'true') {
           // Clear both flags
           sessionStorage.removeItem('weaverDataChanged');
@@ -993,7 +994,7 @@ export default function WeaverPage() {
     const isValidMongoId = (id: string): boolean => {
       return /^[0-9a-fA-F]{24}$/.test(id);
     };
-    
+
     if (weaver._id && !isValidMongoId(weaver._id)) {
       // This is a temp ID - wait for the real ID to be available
       logger.warn('Cannot edit weaver with temp ID, waiting for real ID', {
@@ -1003,7 +1004,7 @@ export default function WeaverPage() {
       showMessage('error', 'Please wait for the weaver to be saved before editing.');
       return;
     }
-    
+
     setEditingWeaver(weaver);
     // Close any open dropdowns when opening modal
     setShowSortDropdown(false);
@@ -1026,17 +1027,17 @@ export default function WeaverPage() {
 
   const confirmDeleteWeaver = async () => {
     if (!deleteConfirmation) return;
-    
+
     const weaverId = deleteConfirmation.id;
     const weaverToDelete = weavers.find(w => w._id === weaverId);
-    
+
     // Close confirmation modal immediately
     setDeleteConfirmation(null);
     setIsDeleting(false);
-    
+
     // Optimistic delete - start animation immediately
     deletingWeaversRef.current.add(weaverId);
-    
+
     // Remove from UI after animation completes
     setTimeout(() => {
       updateWeavers(prevWeavers => prevWeavers.filter(w => w._id !== weaverId));
@@ -1044,24 +1045,24 @@ export default function WeaverPage() {
         ...prev,
         totalCount: Math.max(0, prev.totalCount - 1)
       }));
-      
+
       // Check if we need to go to previous page if current page becomes empty
       const remainingCount = weavers.length - 1;
       if (remainingCount === 0 && currentPage > 1) {
         setCurrentPage(currentPage - 1);
       }
-      
+
       // Clean up animation tracking
       deletingWeaversRef.current.delete(weaverId);
     }, 650);
-    
+
     // Clear selected weaver if it's the one being deleted
     if (selectedWeaverId === weaverId) {
       setSelectedWeaverId(null);
       setSelectedWeaver(null);
       setSamples([]);
     }
-    
+
     // Make API call in background
     try {
       const token = localStorage.getItem('token');
@@ -1084,14 +1085,14 @@ export default function WeaverPage() {
         showMessage('error', 'Authentication required');
         return;
       }
-      
+
       const response = await fetch(`/api/weaver/weavers/${weaverId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       const data = await response.json();
       if (!data.success) {
         // Rollback on API error
@@ -1138,7 +1139,7 @@ export default function WeaverPage() {
     // Reset fetch params to force refresh
     lastFetchParamsRef.current = null;
     isFetchingRef.current = false;
-    
+
     // If adding a new weaver (not editing) and sorting by newest, go to page 1 to see the new weaver
     if (!editingWeaver && sortOrder === 'newest') {
       setCurrentPage(1);
@@ -1166,7 +1167,7 @@ export default function WeaverPage() {
       return;
     }
     const weaverId = typeof weaver === 'object' && weaver !== null && '_id' in weaver ? weaver._id : '';
-    
+
     setSelectedWeaver({
       _id: typeof weaver === 'object' && weaver !== null && '_id' in weaver ? weaver._id : '',
       name: typeof weaver === 'object' && weaver !== null && 'name' in weaver ? weaver.name : '',
@@ -1190,13 +1191,13 @@ export default function WeaverPage() {
 
   const confirmDeleteSample = async () => {
     if (!deleteConfirmation) return;
-    
+
     setIsDeleting(true);
-    
+
     // Ensure form is closed before deleting
     setShowSampleForm(false);
     setEditingSample(null);
-    
+
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -1211,7 +1212,7 @@ export default function WeaverPage() {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       const data = await response.json();
       if (data.success) {
         showMessage('success', 'Sample deleted successfully');
@@ -1235,7 +1236,7 @@ export default function WeaverPage() {
     if (!selectedWeaverId || !selectedWeaver) {
       throw new Error('No weaver selected');
     }
-    
+
     // Update UI immediately - form already closed
     // Mark weaver as having new sample (for green glow animation)
     if (!wasEdit) {
@@ -1244,7 +1245,7 @@ export default function WeaverPage() {
       setTimeout(() => {
         weaversWithNewSamplesRef.current.delete(selectedWeaverId);
       }, 2000);
-      
+
       // Mark View button to glow purple
       weaversWithPurpleViewRef.current.add(selectedWeaverId);
       // Remove purple glow after 2 seconds
@@ -1252,14 +1253,14 @@ export default function WeaverPage() {
         weaversWithPurpleViewRef.current.delete(selectedWeaverId);
       }, 2000);
     }
-    
+
     // Upload images in background, then make API call
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
       }
-      
+
       // Upload images in background (if any)
       let uploadedUrls: string[] = [];
       if (filesToUpload && filesToUpload.length > 0) {
@@ -1272,26 +1273,26 @@ export default function WeaverPage() {
             if (selectedWeaver?._id) {
               formData.append('weaverId', selectedWeaver._id);
             }
-            
+
             const response = await fetch('/api/upload', {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${token}` },
               body: formData
             });
-            
+
             if (!response.ok) {
               throw new Error('Upload failed');
             }
-            
+
             const data = await response.json();
             if (data.success && (data.url || data.imageUrl)) {
               return data.url || data.imageUrl;
             }
             throw new Error('Upload failed: No URL received');
           };
-          
+
           // Upload all images in parallel
-          const uploadPromises = filesToUpload.map(pendingFile => 
+          const uploadPromises = filesToUpload.map(pendingFile =>
             uploadFileToS3(pendingFile.file).catch(error => {
               logger.error('Error uploading image', error instanceof Error ? error : new Error(String(error)));
               return null; // Return null for failed uploads
@@ -1303,19 +1304,19 @@ export default function WeaverPage() {
           logger.error('Error during image uploads', error instanceof Error ? error : new Error(String(error)));
         }
       }
-      
+
       // Combine existing images with newly uploaded ones
       const allImages = [...sampleData.images, ...uploadedUrls];
-      
+
       const url = wasEdit && editingSample
         ? `/api/weaver/samples/${editingSample._id}`
         : '/api/weaver/samples';
       const method = wasEdit && editingSample ? 'PUT' : 'POST';
-      
+
       // Add timeout to fetch request
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.LONG_REQUEST);
-      
+
       const response = await retryApiCall(async () => {
         try {
           const res = await fetch(url, {
@@ -1327,9 +1328,9 @@ export default function WeaverPage() {
             body: JSON.stringify({ ...sampleData, images: allImages }),
             signal: controller.signal
           });
-          
+
           clearTimeout(timeoutId);
-          
+
           if (!res.ok) {
             let errorData;
             try {
@@ -1341,7 +1342,7 @@ export default function WeaverPage() {
             (error as any).status = res.status;
             throw error;
           }
-          
+
           return res;
         } catch (error) {
           clearTimeout(timeoutId);
@@ -1359,15 +1360,15 @@ export default function WeaverPage() {
           throw error;
         }
       });
-      
+
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.message || 'Failed to save sample');
       }
-      
+
       // Success - UI already updated, no need to do anything else
-      
+
     } catch (error) {
       // Show error popup if API fails
       const errorMessage = error instanceof Error ? error.message : 'Failed to save sample. Please try again.';
@@ -1381,7 +1382,7 @@ export default function WeaverPage() {
     // This is the fallback for non-optimistic saves
     setShowSampleForm(false);
     setEditingSample(null);
-    
+
     // Mark weaver as having new sample (for green glow animation)
     if (!wasEdit && selectedWeaverId) {
       weaversWithNewSamplesRef.current.add(selectedWeaverId);
@@ -1390,14 +1391,14 @@ export default function WeaverPage() {
         weaversWithNewSamplesRef.current.delete(selectedWeaverId);
       }, 2000);
     }
-    
+
     if (selectedWeaverId) {
       await fetchSamples(selectedWeaverId);
     }
-    
+
     // Refresh weavers list to get updated counts
     await fetchWeavers(currentPage, itemsPerPage, searchQuery, sortOrder);
-    
+
     showMessage('success', wasEdit ? 'Sample updated successfully' : 'Sample created successfully');
   };
 
@@ -1406,10 +1407,10 @@ export default function WeaverPage() {
     if (newPage === currentPage || isChangingPage || newPage < 1 || newPage > paginationInfo.totalPages) {
       return;
     }
-    
+
     setIsChangingPage(true);
     setCurrentPage(newPage);
-    
+
     try {
       // Reset fetch params to force refresh
       lastFetchParamsRef.current = null;
@@ -1428,12 +1429,12 @@ export default function WeaverPage() {
     if (newItemsPerPage === itemsPerPage || isChangingPage) {
       return;
     }
-    
+
     setIsChangingPage(true);
     setItemsPerPage(newItemsPerPage);
     setCookie('weaverItemsPerPage', newItemsPerPage.toString(), 365);
     setCurrentPage(1);
-    
+
     try {
       await fetchWeavers(1, newItemsPerPage, searchQuery, sortOrder);
     } catch (error) {
@@ -1449,32 +1450,32 @@ export default function WeaverPage() {
     // Urgent: Update input immediately for instant UI feedback
     setSearchQuery(value);
     setCurrentPage(1); // Reset to first page on search
-    
+
     // Clear existing timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
       searchTimeoutRef.current = null;
     }
-    
+
     // Cancel previous search request if still pending
     if (searchAbortControllerRef.current) {
       searchAbortControllerRef.current.abort();
       searchAbortControllerRef.current = null;
     }
-    
+
     // Reset fetch params to force new fetch
     lastFetchParamsRef.current = null;
     isFetchingRef.current = false;
-    
+
     // Debounce search - wait for user to stop typing (500ms)
     // After debounce, fetch with the latest value
     searchTimeoutRef.current = setTimeout(() => {
       setIsChangingPage(true);
-      
+
       // Create new AbortController for this search
       const searchController = new AbortController();
       searchAbortControllerRef.current = searchController;
-      
+
       // Fetch with all parameters including sortOrder
       fetchWeavers(1, itemsPerPage, value, sortOrder)
         .then(() => {
@@ -1504,19 +1505,19 @@ export default function WeaverPage() {
     // Determine flip direction based on sort change
     const previousSort = sortOrder;
     let flipDirection: 'top-to-bottom' | 'bottom-to-top' | null = null;
-    
+
     if (previousSort !== sort) {
       // Newest: flip from top to bottom (items move down)
       // Oldest: flip from bottom to top (items move up)
       flipDirection = sort === 'newest' ? 'top-to-bottom' : 'bottom-to-top';
       setSortFlipDirection(flipDirection);
-      
+
       // Clear animation after it completes
       setTimeout(() => {
         setSortFlipDirection(null);
       }, TIMEOUTS.SORT_ANIMATION);
     }
-    
+
     setSortOrder(sort);
     setCookie('weaverSortOrder', sort, 365); // Save to cookie
     setCurrentPage(1); // Reset to first page on sort change
@@ -1570,7 +1571,7 @@ export default function WeaverPage() {
   useEffect(() => {
     const handleScroll = () => {
       const scrollPosition = window.scrollY || document.documentElement.scrollTop;
-      
+
       // Show scroll to top button when scrolled more than 300px
       setShowScrollToTop(scrollPosition > 300);
     };
@@ -1579,6 +1580,32 @@ export default function WeaverPage() {
     handleScroll(); // Check initial position
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Listen for Escape key to close modals/dropdowns
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showStickerPreview) {
+          if (stickerPreviewUrl && stickerPreviewUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(stickerPreviewUrl);
+          }
+          setShowStickerPreview(false);
+          setStickerPreviewUrl(null);
+          setCurrentStickerSample(null);
+        } else if (deleteConfirmation) {
+          setDeleteConfirmation(null);
+        } else if (showSortDropdown) {
+          setShowSortDropdown(false);
+        } else if (showItemsPerPageDropdown) {
+          setShowItemsPerPageDropdown(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showStickerPreview, stickerPreviewUrl, currentStickerSample, deleteConfirmation, showSortDropdown, showItemsPerPageDropdown]);
 
   // Scroll to top function
   const scrollToTop = useCallback(() => {
@@ -1605,7 +1632,7 @@ export default function WeaverPage() {
     const total = paginationInfo.totalCount || 0;
     const currentPageNum = paginationInfo.currentPage || currentPage || 1;
     const itemsPerPageValue = itemsPerPage;
-    
+
     if (total === 0) {
       return {
         showing: 0,
@@ -1614,7 +1641,7 @@ export default function WeaverPage() {
         end: 0
       };
     }
-    
+
     const start = total > 0 ? (currentPageNum - 1) * itemsPerPageValue + 1 : 0;
     const end = Math.min(currentPageNum * itemsPerPageValue, total);
     return {
@@ -1633,8 +1660,8 @@ export default function WeaverPage() {
   const handleStickerDownload = async (sample: Sample) => {
     try {
       // Prepare sample data for sticker
-      const weaverName = typeof sample.weaverId === 'object' && sample.weaverId !== null && 'name' in sample.weaverId 
-        ? sample.weaverId.name 
+      const weaverName = typeof sample.weaverId === 'object' && sample.weaverId !== null && 'name' in sample.weaverId
+        ? sample.weaverId.name
         : undefined;
       const stickerData = {
         qualityName: sample.qualityName || '-',
@@ -1648,7 +1675,7 @@ export default function WeaverPage() {
         moq: undefined, // MOQ not stored in database, always empty for sticker
         rack: sample.rack || undefined
       };
-      
+
       // On mobile devices, download directly without preview
       if (isMobileDevice) {
         try {
@@ -1660,13 +1687,13 @@ export default function WeaverPage() {
         }
         return;
       }
-      
+
       // Desktop: Show preview first
       setIsLoadingStickerPreview(true);
-      
+
       // Generate PDF preview
       const pdfDataUrl = generateSampleStickerPDF(stickerData);
-      
+
       // Convert data URL to blob URL for better CSP compatibility
       try {
         const base64Data = pdfDataUrl.split(',')[1] || pdfDataUrl.split('base64,')[1];
@@ -1679,11 +1706,11 @@ export default function WeaverPage() {
           const byteArray = new Uint8Array(byteNumbers);
           const blob = new Blob([byteArray], { type: 'application/pdf' });
           const blobUrl = URL.createObjectURL(blob);
-          
+
           setStickerPreviewUrl(blobUrl);
           setCurrentStickerSample(sample);
           setShowStickerPreview(true);
-          
+
           setTimeout(() => {
             setIsLoadingStickerPreview(false);
           }, TIMEOUTS.SEARCH_DEBOUNCE);
@@ -1714,7 +1741,7 @@ export default function WeaverPage() {
   // Handle final PDF download from preview
   const handleFinalStickerDownload = () => {
     if (!currentStickerSample) return;
-    
+
     try {
       // Prepare sample data for sticker
       const weaverName = typeof currentStickerSample.weaverId === 'object' && currentStickerSample.weaverId !== null && 'name' in currentStickerSample.weaverId
@@ -1732,10 +1759,10 @@ export default function WeaverPage() {
         moq: undefined, // MOQ not stored in database, always empty for sticker
         rack: currentStickerSample.rack || undefined
       };
-      
+
       // Use direct download method
       downloadSampleStickerPDFDirect(stickerData);
-      
+
       // Clean up blob URL if it exists
       if (stickerPreviewUrl && stickerPreviewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(stickerPreviewUrl);
@@ -1744,7 +1771,7 @@ export default function WeaverPage() {
       setShowStickerPreview(false);
       setStickerPreviewUrl(null);
       setCurrentStickerSample(null);
-      
+
       showMessage('success', 'Sticker PDF downloaded successfully!');
     } catch (error) {
       logger.error('Error downloading sticker PDF', error instanceof Error ? error : new Error(String(error)));
@@ -1777,66 +1804,59 @@ export default function WeaverPage() {
 
   return (
     <ErrorBoundary>
-      <div 
+      <div
         id="weaver-page"
-        className={`min-h-screen w-full transition-colors duration-500 ${
-          isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'
-        }`}
+        className={`min-h-screen w-full transition-colors duration-500 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'
+          }`}
         suppressHydrationWarning
       >
-      {/* Message Toast */}
-      {message && (
-        <div className={`fixed top-4 right-4 z-50 min-w-80 max-w-md p-4 rounded-lg shadow-2xl border-l-4 backdrop-blur-sm transform transition-all duration-300 animate-fade-in ${
-          message.type === 'success'
+        {/* Message Toast */}
+        {message && (
+          <div className={`fixed top-4 right-4 z-50 min-w-80 max-w-md p-4 rounded-lg shadow-2xl border-l-4 backdrop-blur-sm transform transition-all duration-300 animate-fade-in ${message.type === 'success'
             ? isDarkMode
               ? 'bg-green-900/90 border-green-500 text-green-100'
               : 'bg-green-50 border-green-500 text-green-800'
             : isDarkMode
               ? 'bg-red-900/90 border-red-500 text-red-100'
               : 'bg-red-50 border-red-500 text-red-800'
-        }`}>
-          <div className="flex items-center space-x-3">
-            {message.type === 'success' ? (
-              <CheckIcon className={`h-6 w-6 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`} />
-            ) : (
-              <XMarkIcon className={`h-6 w-6 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`} />
-            )}
-            <p className="font-medium flex-1">{message.text}</p>
-            <button
-              onClick={() => setMessage(null)}
-              className={`shrink-0 p-1 rounded-full transition-all hover:scale-110 active:scale-95 ${
-                isDarkMode ? 'hover:bg-white/10' : 'hover:bg-black/10'
-              }`}
-              aria-label="Close message"
-            >
-              <XMarkIcon className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content */}
-      <div className="w-full pb-6">
-        <div className={`border-2 shadow-xl overflow-hidden ${
-          isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-        }`}>
-            {/* Search and Action Bar - Top Row */}
-            <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-col gap-2 max-[900px]:gap-2 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3 ${
-              isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
             }`}>
+            <div className="flex items-center space-x-3">
+              {message.type === 'success' ? (
+                <CheckIcon className={`h-6 w-6 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`} />
+              ) : (
+                <XMarkIcon className={`h-6 w-6 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`} />
+              )}
+              <p className="font-medium flex-1">{message.text}</p>
+              <button
+                onClick={() => setMessage(null)}
+                className={`shrink-0 p-1 rounded-full transition-all hover:scale-110 active:scale-95 ${isDarkMode ? 'hover:bg-white/10' : 'hover:bg-black/10'
+                  }`}
+                aria-label="Close message"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content */}
+        <div className="w-full pb-6">
+          <div className={`border-2 shadow-xl overflow-hidden ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-white'
+            }`}>
+            {/* Search and Action Bar - Top Row */}
+            <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-col gap-2 max-[900px]:gap-2 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3 ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'
+              }`}>
               {/* Search Bar and Sort - Same row on all screens */}
               <div className="flex flex-row items-center gap-2 min-[900px]:flex-1 min-[900px]:gap-3">
                 {/* Search Bar */}
                 <div className="flex-1 relative">
                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none z-10">
                     {isChangingPage && searchQuery ? (
-                      <ArrowPathIcon className={`h-5 w-5 animate-spin ${
-                        isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                      }`} />
+                      <ArrowPathIcon className={`h-5 w-5 animate-spin ${isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                        }`} />
                     ) : (
-                      <MagnifyingGlassIcon className={`h-5 w-5 ${
-                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                      }`} />
+                      <MagnifyingGlassIcon className={`h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                        }`} />
                     )}
                   </div>
                   <input
@@ -1844,11 +1864,10 @@ export default function WeaverPage() {
                     placeholder="Search by name or phone..."
                     value={searchQuery}
                     onChange={(e) => handleSearchChange(e.target.value)}
-                    className={`w-full pl-10 ${searchQuery ? 'pr-10' : 'pr-4'} py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                      isDarkMode 
-                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
-                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                    } ${isChangingPage && searchQuery ? (isDarkMode ? 'border-blue-500/50' : 'border-blue-400/50') : ''}`}
+                    className={`w-full pl-10 ${searchQuery ? 'pr-10' : 'pr-4'} py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      } ${isChangingPage && searchQuery ? (isDarkMode ? 'border-blue-500/50' : 'border-blue-400/50') : ''}`}
                   />
                   {searchQuery && (
                     <button
@@ -1873,11 +1892,10 @@ export default function WeaverPage() {
                         // Fetch immediately with empty search
                         fetchWeavers(1, itemsPerPage, '', sortOrder);
                       }}
-                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 z-10 p-1 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 ${
-                        isDarkMode
-                          ? 'text-gray-400 hover:text-white hover:bg-gray-600'
-                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
-                      }`}
+                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 z-10 p-1 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 ${isDarkMode
+                        ? 'text-gray-400 hover:text-white hover:bg-gray-600'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
+                        }`}
                       title="Clear search"
                       aria-label="Clear search"
                     >
@@ -1887,71 +1905,65 @@ export default function WeaverPage() {
                 </div>
 
                 {/* Sort Filter */}
-                <div className="flex items-center gap-2 relative flex-shrink-0 z-[101]">
-                <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Sort:</span>
-                <div className="relative sort-dropdown-container z-[101]">
-                  <button
-                    onClick={() => {
-                      setShowSortDropdown(!showSortDropdown);
-                      setShowItemsPerPageDropdown(false); // Close other dropdown
-                    }}
-                    disabled={isChangingPage || loading}
-                    className={`px-2 py-1.5 text-[11px] sm:text-xs font-medium rounded-lg border-2 transition-all duration-200 flex items-center gap-1.5 min-w-[70px] ${
-                      isDarkMode
+                <div className="flex items-center gap-2 relative flex-shrink-0 z-[40]">
+                  <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Sort:</span>
+                  <div className="relative sort-dropdown-container z-[40]">
+                    <button
+                      onClick={() => {
+                        setShowSortDropdown(!showSortDropdown);
+                        setShowItemsPerPageDropdown(false); // Close other dropdown
+                      }}
+                      disabled={isChangingPage || loading}
+                      className={`px-2 py-1.5 text-[11px] sm:text-xs font-medium rounded-lg border-2 transition-all duration-200 flex items-center gap-1.5 min-w-[70px] ${isDarkMode
                         ? 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20 hover:border-white/40'
                         : 'bg-gray-50 border-gray-400 text-gray-600 hover:bg-gray-100 hover:border-gray-500'
-                    } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    aria-label={`Sort by ${sortOrder === 'newest' ? 'newest' : 'oldest'}`}
-                    aria-expanded={showSortDropdown}
-                    aria-haspopup="true"
-                  >
-                    {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
-                    <svg className={`h-3 w-3 transition-transform duration-300 ease-out ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  <div 
-                    className={`fixed inset-0 z-[10099] transition-opacity duration-300 ${
-                      showSortDropdown ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                    }`}
-                    onClick={() => setShowSortDropdown(false)}
-                  />
-                  <div className={`absolute top-full left-0 mt-1 w-32 rounded-lg border shadow-xl z-[10100] transition-all duration-300 ease-out ${
-                    showSortDropdown 
-                      ? 'opacity-100 translate-y-0 scale-100' 
+                        } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      aria-label={`Sort by ${sortOrder === 'newest' ? 'newest' : 'oldest'}`}
+                      aria-expanded={showSortDropdown}
+                      aria-haspopup="true"
+                    >
+                      {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+                      <svg className={`h-3 w-3 transition-transform duration-300 ease-out ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <div
+                      className={`fixed inset-0 z-[40] transition-opacity duration-300 ${showSortDropdown ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                        }`}
+                      onClick={() => setShowSortDropdown(false)}
+                    />
+                    <div className={`absolute top-full left-0 mt-1 w-32 rounded-lg border shadow-xl z-[40] transition-all duration-300 ease-out ${showSortDropdown
+                      ? 'opacity-100 translate-y-0 scale-100'
                       : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'
-                  } ${
-                    isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'
-                  }`}>
-                    <button
-                      onClick={() => {
-                        handleSortChange('newest');
-                        setShowSortDropdown(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg ${
-                        sortOrder === 'newest'
+                      } ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'
+                      }`}>
+                      <button
+                        onClick={() => {
+                          handleSortChange('newest');
+                          setShowSortDropdown(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg ${sortOrder === 'newest'
                           ? isDarkMode ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-700'
                           : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      Newest
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleSortChange('oldest');
-                        setShowSortDropdown(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg ${
-                        sortOrder === 'oldest'
+                          }`}
+                      >
+                        Newest
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleSortChange('oldest');
+                          setShowSortDropdown(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg ${sortOrder === 'oldest'
                           ? isDarkMode ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-700'
                           : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      Oldest
-                    </button>
+                          }`}
+                      >
+                        Oldest
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
               </div>
 
               {/* View Toggle */}
@@ -1959,20 +1971,18 @@ export default function WeaverPage() {
                 {/* View Mode Toggle */}
                 <div className="flex items-center gap-2">
                   <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>View:</span>
-                  <div className={`flex rounded-lg border-2 overflow-hidden shadow-sm ${
-                    isDarkMode ? 'border-gray-600' : 'border-gray-300'
-                  }`}>
+                  <div className={`flex rounded-lg border-2 overflow-hidden shadow-sm ${isDarkMode ? 'border-gray-600' : 'border-gray-300'
+                    }`}>
                     <button
                       onClick={() => handleViewModeChange('table')}
-                      className={`min-[400px]:px-1.5 sm:px-2 px-2 py-1.5 sm:py-2 text-xs font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center min-[400px]:space-x-1 ${
-                        viewMode === 'table'
-                          ? isDarkMode
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-blue-500 text-white shadow-md'
-                          : isDarkMode
-                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border-r border-gray-600'
-                            : 'bg-white text-gray-700 hover:bg-blue-50 border-r border-gray-300'
-                      }`}
+                      className={`min-[400px]:px-1.5 sm:px-2 px-2 py-1.5 sm:py-2 text-xs font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center min-[400px]:space-x-1 ${viewMode === 'table'
+                        ? isDarkMode
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-blue-500 text-white shadow-md'
+                        : isDarkMode
+                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border-r border-gray-600'
+                          : 'bg-white text-gray-700 hover:bg-blue-50 border-r border-gray-300'
+                        }`}
                       title="Table View"
                       aria-label="Switch to table view"
                       aria-pressed={viewMode === 'table'}
@@ -1982,15 +1992,14 @@ export default function WeaverPage() {
                     </button>
                     <button
                       onClick={() => handleViewModeChange('cards')}
-                      className={`min-[400px]:px-1.5 sm:px-2 px-2 py-1.5 sm:py-2 text-xs font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center min-[400px]:space-x-1 ${
-                        viewMode === 'cards'
-                          ? isDarkMode
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-blue-500 text-white shadow-md'
-                          : isDarkMode
-                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            : 'bg-white text-gray-700 hover:bg-blue-50'
-                      }`}
+                      className={`min-[400px]:px-1.5 sm:px-2 px-2 py-1.5 sm:py-2 text-xs font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center min-[400px]:space-x-1 ${viewMode === 'cards'
+                        ? isDarkMode
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-blue-500 text-white shadow-md'
+                        : isDarkMode
+                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          : 'bg-white text-gray-700 hover:bg-blue-50'
+                        }`}
                       title="Card View"
                       aria-label="Switch to card view"
                       aria-pressed={viewMode === 'cards'}
@@ -2012,11 +2021,10 @@ export default function WeaverPage() {
                       fetchWeavers(currentPage, itemsPerPage, searchQuery, sortOrder);
                     }}
                     disabled={loading || isChangingPage}
-                    className={`min-[430px]:px-3 px-2.5 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center min-[430px]:space-x-2 ${
-                      isDarkMode
-                        ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-600'
-                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
-                    } ${(loading || isChangingPage) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`min-[430px]:px-3 px-2.5 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center min-[430px]:space-x-2 ${isDarkMode
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-600'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
+                      } ${(loading || isChangingPage) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     title="Refresh"
                     aria-label="Refresh weavers list"
                   >
@@ -2027,11 +2035,10 @@ export default function WeaverPage() {
                   {/* Add Weaver Button */}
                   <button
                     onClick={handleAddWeaver}
-                    className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 flex items-center space-x-2 ${
-                      isDarkMode
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
+                    className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 flex items-center space-x-2 ${isDarkMode
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
                     title="Add Weaver"
                     aria-label="Add new weaver"
                   >
@@ -2043,31 +2050,29 @@ export default function WeaverPage() {
             </div>
 
             {/* Pagination Info Bar - Second Row */}
-            <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-col gap-2 max-[900px]:gap-2 min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between ${
-              isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
-            }`}>
+            <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-col gap-2 max-[900px]:gap-2 min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'
+              }`}>
               {/* Row 1: Showing text and Show dropdown (under 900px) / All in one row (900px+) */}
               <div className="flex flex-row items-center justify-between min-[900px]:flex-row min-[900px]:items-center min-[900px]:space-x-3 lg:space-x-4">
                 <span className={`text-[10px] xs:text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                   <span className="hidden min-[640px]:inline">Showing {paginationDisplayInfo.start} to {paginationDisplayInfo.end} of {paginationDisplayInfo.total} weavers</span>
                   <span className="min-[640px]:hidden">Showing {paginationDisplayInfo.start} to {paginationDisplayInfo.end} of {paginationDisplayInfo.total}</span>
                 </span>
-                
+
                 {/* Items per page dropdown */}
-                <div className="flex items-center gap-2 relative flex-shrink-0 z-[100]">
+                <div className="flex items-center gap-2 relative flex-shrink-0 z-[40]">
                   <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
-                  <div className="relative items-per-page-dropdown-container z-[100]">
+                  <div className="relative items-per-page-dropdown-container z-[40]">
                     <button
                       onClick={() => {
                         setShowItemsPerPageDropdown(!showItemsPerPageDropdown);
                         setShowSortDropdown(false); // Close other dropdown
                       }}
                       disabled={isChangingPage || loading}
-                      className={`px-2 py-1.5 text-[10px] xs:text-xs font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between min-w-[70px] ${
-                        isDarkMode
-                          ? 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20 hover:border-white/40'
-                          : 'bg-gray-50 border-gray-400 text-gray-600 hover:bg-gray-100 hover:border-gray-500'
-                      } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`px-2 py-1.5 text-[10px] xs:text-xs font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between min-w-[70px] ${isDarkMode
+                        ? 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20 hover:border-white/40'
+                        : 'bg-gray-50 border-gray-400 text-gray-600 hover:bg-gray-100 hover:border-gray-500'
+                        } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                       aria-label={`Show ${itemsPerPage} items per page`}
                       aria-expanded={showItemsPerPageDropdown}
                       aria-haspopup="true"
@@ -2077,19 +2082,16 @@ export default function WeaverPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
-                    <div 
-                      className={`fixed inset-0 z-[9998] transition-opacity duration-300 ${
-                        showItemsPerPageDropdown ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                      }`}
+                    <div
+                      className={`fixed inset-0 z-[40] transition-opacity duration-300 ${showItemsPerPageDropdown ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                        }`}
                       onClick={() => setShowItemsPerPageDropdown(false)}
                     />
-                    <div className={`absolute top-full left-0 mt-1 w-28 rounded-lg border shadow-xl z-[10000] transition-all duration-300 ease-out ${
-                      showItemsPerPageDropdown 
-                        ? 'opacity-100 translate-y-0 scale-100' 
-                        : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'
-                    } ${
-                      isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'
-                    }`}>
+                    <div className={`absolute top-full left-0 mt-1 w-28 rounded-lg border shadow-xl z-[40] transition-all duration-300 ease-out ${showItemsPerPageDropdown
+                      ? 'opacity-100 translate-y-0 scale-100'
+                      : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'
+                      } ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'
+                      }`}>
                       {itemsPerPageOptions.map((option) => (
                         <button
                           key={option}
@@ -2097,11 +2099,10 @@ export default function WeaverPage() {
                             handleItemsPerPageChange(option);
                             setShowItemsPerPageDropdown(false);
                           }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg ${
-                            itemsPerPage === option
-                              ? isDarkMode ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-700'
-                              : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
-                          }`}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg ${itemsPerPage === option
+                            ? isDarkMode ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-700'
+                            : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                            }`}
                         >
                           {option}
                         </button>
@@ -2112,22 +2113,20 @@ export default function WeaverPage() {
               </div>
 
               {/* Row 2: Pagination Navigation (under 900px) / Same row (900px+) */}
-                {(totalPages > 1 || weavers.length > 0) && (
-                  <div className="flex items-center justify-between w-full max-[900px]:w-full min-[900px]:justify-end min-[900px]:w-auto space-x-2 sm:space-x-3">
+              {(totalPages > 1 || weavers.length > 0) && (
+                <div className="flex items-center justify-between w-full max-[900px]:w-full min-[900px]:justify-end min-[900px]:w-auto space-x-2 sm:space-x-3">
                   <button
                     onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1 || isChangingPage || loading}
-                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5 ${
-                      currentPage === 1 || isChangingPage || loading
-                        ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                    }`}
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5 ${currentPage === 1 || isChangingPage || loading
+                      ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
                   >
                     {isChangingPage ? (
                       <span className="flex items-center space-x-2">
-                        <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${
-                          isDarkMode ? 'border-gray-400' : 'border-gray-600'
-                        }`}></div>
+                        <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${isDarkMode ? 'border-gray-400' : 'border-gray-600'
+                          }`}></div>
                         <span className="hidden sm:inline">Loading...</span>
                         <span className="sm:hidden">...</span>
                       </span>
@@ -2141,12 +2140,12 @@ export default function WeaverPage() {
                       </>
                     )}
                   </button>
-                  
+
                   {/* Page numbers - Dynamic based on screen size */}
                   <div className="flex items-center space-x-1 flex-1 justify-center max-[900px]:overflow-x-auto max-[900px]:scrollbar-hide">
                     {(() => {
                       const pages = [];
-                      
+
                       // Calculate max visible pages based on screen width
                       let maxVisiblePages: number;
                       if (windowWidth < 480) {
@@ -2160,7 +2159,7 @@ export default function WeaverPage() {
                       } else {
                         maxVisiblePages = 11; // Very large screens: 11 pages
                       }
-                      
+
                       // If total pages is less than or equal to max visible, show all
                       if (totalPages <= maxVisiblePages) {
                         for (let i = 1; i <= totalPages; i++) {
@@ -2169,10 +2168,9 @@ export default function WeaverPage() {
                               key={i}
                               onClick={() => handlePageChange(i)}
                               disabled={isChangingPage || loading}
-                              className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-110 active:scale-95 whitespace-nowrap ${
-                                currentPage === i
-                                    ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
-                                    : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                              className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-110 active:scale-95 whitespace-nowrap ${currentPage === i
+                                ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
+                                : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                                 } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                               {i}
@@ -2182,23 +2180,22 @@ export default function WeaverPage() {
                       } else {
                         // Smart pagination - dynamically adjust based on maxVisiblePages
                         const halfVisible = Math.floor(maxVisiblePages / 2);
-                        
+
                         // Always show first page
                         pages.push(
                           <button
                             key={1}
                             onClick={() => handlePageChange(1)}
                             disabled={isChangingPage || loading}
-                            className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${
-                              currentPage === 1
-                                  ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
-                                  : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
-                            } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${currentPage === 1
+                              ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
+                              : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
+                              } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
                             1
                           </button>
                         );
-                        
+
                         if (currentPage <= halfVisible + 1) {
                           // Near the beginning: Show 1, 2, 3, ..., last
                           const endPage = Math.min(maxVisiblePages - 1, totalPages - 1);
@@ -2208,11 +2205,10 @@ export default function WeaverPage() {
                                 key={i}
                                 onClick={() => handlePageChange(i)}
                                 disabled={isChangingPage || loading}
-                                className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${
-                                  currentPage === i
-                                      ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
-                                      : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
-                                } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${currentPage === i
+                                  ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
+                                  : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
+                                  } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 {i}
                               </button>
@@ -2241,11 +2237,10 @@ export default function WeaverPage() {
                                 key={i}
                                 onClick={() => handlePageChange(i)}
                                 disabled={isChangingPage || loading}
-                                className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${
-                                  currentPage === i
-                                      ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
-                                      : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
-                                } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${currentPage === i
+                                  ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
+                                  : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
+                                  } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 {i}
                               </button>
@@ -2266,11 +2261,10 @@ export default function WeaverPage() {
                                 key={i}
                                 onClick={() => handlePageChange(i)}
                                 disabled={isChangingPage || loading}
-                                className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${
-                                  currentPage === i
-                                      ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
-                                      : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
-                                } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${currentPage === i
+                                  ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
+                                  : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
+                                  } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 {i}
                               </button>
@@ -2284,7 +2278,7 @@ export default function WeaverPage() {
                             );
                           }
                         }
-                        
+
                         // Always show last page (if not already shown and not page 1)
                         if (totalPages > 1 && currentPage < totalPages - halfVisible) {
                           pages.push(
@@ -2292,36 +2286,33 @@ export default function WeaverPage() {
                               key={totalPages}
                               onClick={() => handlePageChange(totalPages)}
                               disabled={isChangingPage || loading}
-                              className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${
-                                currentPage === totalPages
-                                    ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
-                                    : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
-                              } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${currentPage === totalPages
+                                ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
+                                : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
+                                } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                               {totalPages}
                             </button>
                           );
                         }
                       }
-                      
+
                       return pages;
                     })()}
                   </div>
-                  
+
                   <button
                     onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages || isChangingPage || loading}
-                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5 ${
-                      currentPage === totalPages || isChangingPage || loading
-                        ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                    }`}
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5 ${currentPage === totalPages || isChangingPage || loading
+                      ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
                   >
                     {isChangingPage ? (
                       <span className="flex items-center space-x-1 sm:space-x-2">
-                        <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${
-                          isDarkMode ? 'border-gray-400' : 'border-gray-600'
-                        }`}></div>
+                        <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${isDarkMode ? 'border-gray-400' : 'border-gray-600'
+                          }`}></div>
                         <span className="hidden sm:inline">Loading...</span>
                         <span className="sm:hidden">...</span>
                       </span>
@@ -2335,340 +2326,311 @@ export default function WeaverPage() {
                       </>
                     )}
                   </button>
-                  </div>
-                )}
+                </div>
+              )}
             </div>
 
             {viewMode === 'table' ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                <thead className={`${
-                  isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'
-                }`}
-                style={{
-                  borderBottom: isDarkMode 
-                    ? '2px solid rgba(75, 85, 99, 0.6)' 
-                    : '2px solid rgba(209, 213, 219, 1)'
-                }}
-                >
-                  <tr>
-                    <th className={`px-3 sm:px-4 py-4 text-left text-sm font-bold uppercase tracking-wider ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
-                      <div className="flex items-center space-x-2">
-                        <UserIcon className="h-4 w-4" />
-                        <span>Name</span>
-                      </div>
-                    </th>
-                    <th className={`px-3 sm:px-4 py-4 text-left text-sm font-bold uppercase tracking-wider ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
-                      <div className="flex items-center space-x-2">
-                        <DevicePhoneMobileIcon className="h-4 w-4" />
-                        <span>Phone</span>
-                      </div>
-                    </th>
-                    <th className={`px-3 sm:px-4 py-4 text-left text-sm font-bold uppercase tracking-wider ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
-                      <div className="flex items-center space-x-2">
-                        <BuildingOfficeIcon className="h-4 w-4" />
-                        <span>Address</span>
-                      </div>
-                    </th>
-                    <th className={`px-3 sm:px-4 py-4 text-left text-sm font-bold uppercase tracking-wider ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
-                      <div className="flex items-center space-x-2">
-                        <WeaverIcon className="h-4 w-4" />
-                        <span>Actions</span>
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className={`divide-y divide-gray-200 dark:divide-gray-700 ${
-                  sortFlipDirection === 'top-to-bottom'
+                  <thead className={`${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'
+                    }`}
+                    style={{
+                      borderBottom: isDarkMode
+                        ? '2px solid rgba(75, 85, 99, 0.6)'
+                        : '2px solid rgba(209, 213, 219, 1)'
+                    }}
+                  >
+                    <tr>
+                      <th className={`px-3 sm:px-4 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                        <div className="flex items-center space-x-2">
+                          <UserIcon className="h-4 w-4" />
+                          <span>Name</span>
+                        </div>
+                      </th>
+                      <th className={`px-3 sm:px-4 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                        <div className="flex items-center space-x-2">
+                          <DevicePhoneMobileIcon className="h-4 w-4" />
+                          <span>Phone</span>
+                        </div>
+                      </th>
+                      <th className={`px-3 sm:px-4 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                        <div className="flex items-center space-x-2">
+                          <BuildingOfficeIcon className="h-4 w-4" />
+                          <span>Address</span>
+                        </div>
+                      </th>
+                      <th className={`px-3 sm:px-4 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                        <div className="flex items-center space-x-2">
+                          <WeaverIcon className="h-4 w-4" />
+                          <span>Actions</span>
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y divide-gray-200 dark:divide-gray-700 ${sortFlipDirection === 'top-to-bottom'
                     ? 'animate-flip-top-to-bottom'
                     : sortFlipDirection === 'bottom-to-top'
-                    ? 'animate-flip-bottom-to-top'
-                    : ''
-                }`}>
-                  {(loading || isChangingPage) && !sortFlipDirection && !showWeaverModal && !showSampleForm ? (
-                    // Skeleton loader - matches exact table structure
-                    Array.from({ length: itemsPerPage }).map((_, index) => (
-                      <tr 
-                        key={`skeleton-${index}`} 
-                        className="animate-pulse"
-                        style={{
-                          borderBottom: index < itemsPerPage - 1 
-                            ? isDarkMode 
-                              ? '2px solid rgba(75, 85, 99, 0.6)' 
-                              : '2px solid rgba(209, 213, 219, 1)'
-                            : 'none'
-                        }}
-                      >
-                        {/* Name column */}
-                        <td className={`px-3 sm:px-4 py-4 ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          <div className="flex items-center space-x-2 sm:space-x-3">
-                            <div className={`flex-shrink-0 w-7 h-7 sm:w-9 sm:h-9 rounded-full border ${
-                              isDarkMode ? 'bg-gray-700/60 border-gray-600' : 'bg-gray-200 border-gray-300'
-                            }`}></div>
-                            <div className={`h-4 rounded w-32 ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
-                          </div>
-                        </td>
-                        {/* Phone column - with icon placeholder */}
-                        <td className={`px-3 sm:px-4 py-4 whitespace-nowrap ${
-                          isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                        }`}>
-                          <div className="flex items-center space-x-2">
-                            <div className={`h-4 w-4 rounded ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
-                            <div className={`h-4 rounded w-24 ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
-                          </div>
-                        </td>
-                        {/* Address column - with icon placeholder */}
-                        <td className={`px-3 sm:px-4 py-4 ${
-                          isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                        }`}>
-                          <div className="flex items-start space-x-2 max-w-xs">
-                            <div className={`h-4 w-4 rounded flex-shrink-0 mt-0.5 ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
-                            <div className={`h-4 rounded w-40 ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
-                          </div>
-                        </td>
-                        {/* Actions column - skeleton buttons matching responsive layout */}
-                        <td className="px-3 sm:px-4 py-4">
-                          <div className="grid grid-cols-1 min-[900px]:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-1.5 sm:gap-2">
-                            {/* Edit Button Skeleton - Row 1 under 900px */}
-                            <div className={`h-9 w-full col-span-1 max-[899px]:col-span-1 rounded-lg ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
-                            {/* View Button Skeleton - Row 2 under 900px */}
-                            <div className={`h-9 w-full col-span-1 max-[899px]:col-span-1 rounded-lg ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
-                            {/* Add Sample Button Skeleton - Row 3 under 900px */}
-                            <div className={`h-9 w-full col-span-1 max-[899px]:col-span-1 min-[900px]:col-span-2 max-[1023px]:col-span-2 lg:col-span-1 xl:col-span-1 rounded-lg ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
-                            {/* Delete Button Skeleton - Row 4 under 900px - Show for all users */}
-                            <div className={`h-9 w-full col-span-1 max-[899px]:col-span-1 min-[900px]:col-span-2 max-[1023px]:col-span-2 lg:col-span-1 xl:col-span-1 rounded-lg ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
+                      ? 'animate-flip-bottom-to-top'
+                      : ''
+                    }`}>
+                    {(loading || isChangingPage) && !sortFlipDirection && !showWeaverModal && !showSampleForm ? (
+                      // Skeleton loader - matches exact table structure
+                      Array.from({ length: itemsPerPage }).map((_, index) => (
+                        <tr
+                          key={`skeleton-${index}`}
+                          className="animate-pulse"
+                          style={{
+                            borderBottom: index < itemsPerPage - 1
+                              ? isDarkMode
+                                ? '2px solid rgba(75, 85, 99, 0.6)'
+                                : '2px solid rgba(209, 213, 219, 1)'
+                              : 'none'
+                          }}
+                        >
+                          {/* Name column */}
+                          <td className={`px-3 sm:px-4 py-4 ${isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                            <div className="flex items-center space-x-2 sm:space-x-3">
+                              <div className={`flex-shrink-0 w-7 h-7 sm:w-9 sm:h-9 rounded-full border ${isDarkMode ? 'bg-gray-700/60 border-gray-600' : 'bg-gray-200 border-gray-300'
+                                }`}></div>
+                              <div className={`h-4 rounded w-32 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
+                                }`}></div>
+                            </div>
+                          </td>
+                          {/* Phone column - with icon placeholder */}
+                          <td className={`px-3 sm:px-4 py-4 whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                            }`}>
+                            <div className="flex items-center space-x-2">
+                              <div className={`h-4 w-4 rounded ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
+                                }`}></div>
+                              <div className={`h-4 rounded w-24 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
+                                }`}></div>
+                            </div>
+                          </td>
+                          {/* Address column - with icon placeholder */}
+                          <td className={`px-3 sm:px-4 py-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                            }`}>
+                            <div className="flex items-start space-x-2 max-w-xs">
+                              <div className={`h-4 w-4 rounded flex-shrink-0 mt-0.5 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
+                                }`}></div>
+                              <div className={`h-4 rounded w-40 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
+                                }`}></div>
+                            </div>
+                          </td>
+                          {/* Actions column - skeleton buttons matching responsive layout */}
+                          <td className="px-3 sm:px-4 py-4">
+                            <div className={`grid grid-cols-1 ${isMaster
+                                ? 'min-[900px]:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4'
+                                : 'min-[900px]:grid-cols-3'
+                              } gap-1.5 sm:gap-2`}>
+                              {/* Edit Button Skeleton */}
+                              <div className={`h-9 w-full col-span-1 rounded-lg ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'}`}></div>
+                              {/* View Button Skeleton */}
+                              <div className={`h-9 w-full col-span-1 rounded-lg ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'}`}></div>
+                              {/* Add Sample Button Skeleton */}
+                              <div className={`h-9 w-full col-span-1 ${isMaster
+                                  ? 'min-[900px]:col-span-2 max-[1023px]:col-span-2 lg:col-span-1 xl:col-span-1'
+                                  : ''
+                                } rounded-lg ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'}`}></div>
+                              {/* Delete Button Skeleton */}
+                              {isMaster && (
+                                <div className={`h-9 w-full col-span-1 min-[900px]:col-span-2 max-[1023px]:col-span-2 lg:col-span-1 xl:col-span-1 rounded-lg ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'}`}></div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : weavers.length === 0 ? (
+                      // Empty state
+                      <tr>
+                        <td colSpan={4} className="px-3 sm:px-4 py-8 sm:py-20">
+                          <div className={`flex flex-col items-center justify-center min-h-[30vh] sm:min-h-[50vh] space-y-3 sm:space-y-6 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                            }`}>
+                            <WeaverIcon className={`w-12 h-12 sm:w-20 sm:h-20 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                            <h3 className={`text-base sm:text-xl font-semibold text-center px-2 ${isDarkMode ? 'text-white' : 'text-gray-900'
+                              }`}>
+                              {searchQuery ? 'No Weavers Found' : 'No Weavers Registered'}
+                            </h3>
+                            <p className={`text-xs sm:text-sm text-center px-4 max-w-md ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                              {searchQuery ? 'Try a different search term' : 'Click "Add Weaver" to get started.'}
+                            </p>
+                            {!searchQuery && (
+                              <button
+                                onClick={handleAddWeaver}
+                                className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center justify-center space-x-2 shadow-sm text-xs sm:text-base font-medium ${isDarkMode
+                                  ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
+                                  : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
+                                  }`}
+                                title="Add Weaver"
+                              >
+                                <PlusIcon className="h-4 w-4 sm:h-6 sm:w-6" />
+                                <span className="whitespace-nowrap">Add Weaver</span>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
-                    ))
-                  ) : weavers.length === 0 ? (
-                    // Empty state
-                    <tr>
-                      <td colSpan={4} className="px-3 sm:px-4 py-8 sm:py-20">
-                        <div className={`flex flex-col items-center justify-center min-h-[30vh] sm:min-h-[50vh] space-y-3 sm:space-y-6 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <WeaverIcon className={`w-12 h-12 sm:w-20 sm:h-20 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
-                          <h3 className={`text-base sm:text-xl font-semibold text-center px-2 ${
-                            isDarkMode ? 'text-white' : 'text-gray-900'
-                          }`}>
-                            {searchQuery ? 'No Weavers Found' : 'No Weavers Registered'}
-                          </h3>
-                          <p className={`text-xs sm:text-sm text-center px-4 max-w-md ${
-                            isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                          }`}>
-                            {searchQuery ? 'Try a different search term' : 'Click "Add Weaver" to get started.'}
-                          </p>
-                          {!searchQuery && (
-                            <button
-                              onClick={handleAddWeaver}
-                              className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center justify-center space-x-2 shadow-sm text-xs sm:text-base font-medium ${
-                                isDarkMode
-                                  ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
-                                  : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
+                    ) : (
+                      weavers.map((weaver, index) => {
+                        const isNewlyAdded = newlyAddedWeaversRef.current.has(weaver._id);
+                        const isEdited = editedWeaversRef.current.has(weaver._id);
+                        const isDeleting = deletingWeaversRef.current.has(weaver._id);
+                        const hasNewSample = weaversWithNewSamplesRef.current.has(weaver._id);
+                        return (
+                          <tr
+                            key={weaver._id}
+                            className={`relative border-l-4 border-transparent transition-all duration-300 hover:shadow-md ${isDeleting
+                              ? 'animate-weaver-delete-fade-out'
+                              : isNewlyAdded
+                                ? 'animate-weaver-slide-in'
+                                : hasNewSample
+                                  ? 'animate-weaver-green-glow'
+                                  : isEdited
+                                    ? 'animate-weaver-edit-pulse'
+                                    : ''
+                              } ${isDarkMode
+                                ? 'hover:bg-white/5 hover:border-l-blue-600'
+                                : 'hover:bg-gray-100/50 hover:border-l-blue-500'
                               }`}
-                              title="Add Weaver"
-                            >
-                              <PlusIcon className="h-4 w-4 sm:h-6 sm:w-6" />
-                              <span className="whitespace-nowrap">Add Weaver</span>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    weavers.map((weaver, index) => {
-                      const isNewlyAdded = newlyAddedWeaversRef.current.has(weaver._id);
-                      const isEdited = editedWeaversRef.current.has(weaver._id);
-                      const isDeleting = deletingWeaversRef.current.has(weaver._id);
-                      const hasNewSample = weaversWithNewSamplesRef.current.has(weaver._id);
-                      return (
-                        <tr
-                        key={weaver._id}
-                        className={`relative border-l-4 border-transparent transition-all duration-300 hover:shadow-md ${
-                          isDeleting
-                            ? 'animate-weaver-delete-fade-out'
-                            : isNewlyAdded 
-                            ? 'animate-weaver-slide-in' 
-                            : hasNewSample
-                            ? 'animate-weaver-green-glow'
-                            : isEdited
-                            ? 'animate-weaver-edit-pulse'
-                            : ''
-                        } ${
-                          isDarkMode 
-                            ? 'hover:bg-white/5 hover:border-l-blue-600' 
-                            : 'hover:bg-gray-100/50 hover:border-l-blue-500'
-                        }`}
-                        style={{
-                          borderBottom: index < weavers.length - 1 
-                            ? isDarkMode 
-                              ? '2px solid rgba(75, 85, 99, 0.6)' 
-                              : '2px solid rgba(209, 213, 219, 1)'
-                            : 'none'
-                        }}
-                      >
-                      <td className={`px-3 sm:px-4 py-4 ${
-                        isDarkMode ? 'text-white' : 'text-gray-900'
-                      }`}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleViewWeaverSamples(weaver);
-                          }}
-                          className="flex items-center space-x-2 sm:space-x-3 w-full text-left group cursor-pointer hover:opacity-90 active:opacity-75 transition-all duration-200"
-                          title="Click to view samples"
-                        >
-                          <div className={`flex-shrink-0 w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm border transition-all duration-200 group-hover:scale-110 active:scale-95 ${
-                            isDarkMode 
-                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 group-hover:bg-blue-500/20 group-hover:border-blue-500/50' 
-                              : 'bg-blue-50 text-blue-600 border-blue-200 group-hover:bg-blue-100 group-hover:border-blue-300'
-                          }`}>
-                            {getInitial(weaver.name)}
-                          </div>
-                          <span className="font-semibold break-words min-w-0 group-hover:opacity-80 transition-all duration-200">{weaver.name}</span>
-                        </button>
-                      </td>
-                      <td className={`px-3 sm:px-4 py-4 whitespace-nowrap ${
-                        isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                      }`}>
-                        {weaver.phone ? (
-                          <div className="flex items-center space-x-2">
-                            <DevicePhoneMobileIcon className="h-4 w-4" />
-                            <span>{weaver.phone}</span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 italic">No data</span>
-                        )}
-                      </td>
-                      <td className={`px-3 sm:px-4 py-4 ${
-                        isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                      }`}>
-                        {weaver.address ? (
-                          <div className="flex items-start space-x-2 max-w-xs">
-                            <BuildingOfficeIcon className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                            <span className="break-words min-w-0">{weaver.address}</span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 italic">No data</span>
-                        )}
-                      </td>
-                      <td className="px-3 sm:px-4 py-4">
-                        {/* Responsive Action Buttons Grid - 4 Stages */}
-                        {/* Very Large (xl): All 4 in one row */}
-                        {/* Large (lg): Edit+Add Sample row 1, View+Delete row 2 */}
-                        {/* Medium (900px-1023px): Edit+View row 1, Add Sample full row 2, Delete full row 3 */}
-                        {/* Small (under 900px): Each button on separate row - Row 1: Edit, Row 2: View, Row 3: Add Sample, Row 4: Delete All */}
-                        <div className="grid grid-cols-1 min-[900px]:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-1.5 sm:gap-2">
-                          {/* Edit Button - Row 1 under 900px */}
-                          <button
-                            onClick={() => handleEditWeaver(weaver)}
-                            className={`w-full col-span-1 max-[899px]:col-span-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
-                              isDarkMode
-                                ? 'text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 bg-blue-500/10'
-                                : 'text-blue-600 hover:bg-blue-100 border border-blue-200 bg-blue-50'
-                            }`}
-                            title="Edit Weaver"
-                          >
-                            <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                            <span className="font-medium whitespace-nowrap">Edit</span>
-                          </button>
-                          {/* View Button - Row 2 under 900px */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleViewWeaverSamples(weaver);
+                            style={{
+                              borderBottom: index < weavers.length - 1
+                                ? isDarkMode
+                                  ? '2px solid rgba(75, 85, 99, 0.6)'
+                                  : '2px solid rgba(209, 213, 219, 1)'
+                                : 'none'
                             }}
-                            className={`w-full col-span-1 max-[899px]:col-span-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
-                              weaversWithPurpleViewRef.current.has(weaver._id) ? 'animate-purple-glow' : ''
-                            } ${
-                              isDarkMode
-                                ? 'text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 bg-purple-500/10'
-                                : 'text-purple-600 hover:bg-purple-100 border border-purple-200 bg-purple-50'
-                            }`}
-                            title="View Samples"
                           >
-                            <EyeIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                            <span className="font-medium whitespace-nowrap">View</span>
-                          </button>
-                          {/* Add Sample Button - Full width on 900px-1023px, normal on others */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedWeaver(weaver);
-                              setSelectedWeaverId(weaver._id);
-                              setEditingSample(null);
-                              setShowSampleForm(true);
-                            }}
-                            className={`w-full col-span-1 max-[899px]:col-span-1 min-[900px]:col-span-2 max-[1023px]:col-span-2 lg:col-span-1 xl:col-span-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
-                              isDarkMode
-                                ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
-                                : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
-                            }`}
-                            title="Add Sample"
-                          >
-                            <WeaverIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                            <span className="font-medium whitespace-nowrap">Add Sample</span>
-                          </button>
-                          {/* Delete Button - Show for master only */}
-                          {isMaster && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleDeleteWeaver(weaver._id, weaver.name);
-                              }}
-                              className={`w-full col-span-1 max-[899px]:col-span-1 min-[900px]:col-span-2 max-[1023px]:col-span-2 lg:col-span-1 xl:col-span-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
-                                isDarkMode
-                                  ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
-                                  : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
-                              }`}
-                              title="Delete Weaver"  
-                            >
-                              <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                              <span className="font-medium whitespace-nowrap">Delete All</span>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                            <td className={`px-3 sm:px-4 py-4 ${isDarkMode ? 'text-white' : 'text-gray-900'
+                              }`}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleViewWeaverSamples(weaver);
+                                }}
+                                className="flex items-center space-x-2 sm:space-x-3 w-full text-left group cursor-pointer hover:opacity-90 active:opacity-75 transition-all duration-200"
+                                title="Click to view samples"
+                              >
+                                <div className={`flex-shrink-0 w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm border transition-all duration-200 group-hover:scale-110 active:scale-95 ${isDarkMode
+                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 group-hover:bg-blue-500/20 group-hover:border-blue-500/50'
+                                  : 'bg-blue-50 text-blue-600 border-blue-200 group-hover:bg-blue-100 group-hover:border-blue-300'
+                                  }`}>
+                                  {getInitial(weaver.name)}
+                                </div>
+                                <span className="font-semibold break-words min-w-0 group-hover:opacity-80 transition-all duration-200">{weaver.name}</span>
+                              </button>
+                            </td>
+                            <td className={`px-3 sm:px-4 py-4 whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                              }`}>
+                              {weaver.phone ? (
+                                <div className="flex items-center space-x-2">
+                                  <DevicePhoneMobileIcon className="h-4 w-4" />
+                                  <span>{weaver.phone}</span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 italic">No data</span>
+                              )}
+                            </td>
+                            <td className={`px-3 sm:px-4 py-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                              }`}>
+                              {weaver.address ? (
+                                <div className="flex items-start space-x-2 max-w-xs">
+                                  <BuildingOfficeIcon className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                  <span className="break-words min-w-0">{weaver.address}</span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 italic">No data</span>
+                              )}
+                            </td>
+                            <td className="px-3 sm:px-4 py-4">
+                              <div className={`grid grid-cols-1 ${isMaster
+                                  ? 'min-[900px]:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4'
+                                  : 'min-[900px]:grid-cols-3'
+                                } gap-1.5 sm:gap-2`}>
+                                {/* Edit Button - Row 1 under 900px */}
+                                <button
+                                  onClick={() => handleEditWeaver(weaver)}
+                                  className={`w-full col-span-1 max-[899px]:col-span-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${isDarkMode
+                                    ? 'text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 bg-blue-500/10'
+                                    : 'text-blue-600 hover:bg-blue-100 border border-blue-200 bg-blue-50'
+                                    }`}
+                                  title="Edit Weaver"
+                                >
+                                  <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                                  <span className="font-medium whitespace-nowrap">Edit</span>
+                                </button>
+                                {/* View Button - Row 2 under 900px */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewWeaverSamples(weaver);
+                                  }}
+                                  className={`w-full col-span-1 max-[899px]:col-span-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${weaversWithPurpleViewRef.current.has(weaver._id) ? 'animate-purple-glow' : ''
+                                    } ${isDarkMode
+                                      ? 'text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 bg-purple-500/10'
+                                      : 'text-purple-600 hover:bg-purple-100 border border-purple-200 bg-purple-50'
+                                    }`}
+                                  title="View Samples"
+                                >
+                                  <EyeIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                                  <span className="font-medium whitespace-nowrap">View</span>
+                                </button>
+                                {/* Add Sample Button - Full width on 900px-1023px, normal on others */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedWeaver(weaver);
+                                    setSelectedWeaverId(weaver._id);
+                                    setEditingSample(null);
+                                    setShowSampleForm(true);
+                                  }}
+                                  className={`w-full col-span-1 max-[899px]:col-span-1 ${isMaster
+                                      ? 'min-[900px]:col-span-2 max-[1023px]:col-span-2 lg:col-span-1 xl:col-span-1'
+                                      : ''
+                                    } px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${isDarkMode
+                                      ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
+                                      : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
+                                    }`}
+                                  title="Add Sample"
+                                >
+                                  <SwatchIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                                  <span className="font-medium whitespace-nowrap">Add Sample</span>
+                                </button>
+                                {/* Delete Button - Show for master only */}
+                                {isMaster && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleDeleteWeaver(weaver._id, weaver.name);
+                                    }}
+                                    className={`w-full col-span-1 max-[899px]:col-span-1 min-[900px]:col-span-2 max-[1023px]:col-span-2 lg:col-span-1 xl:col-span-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${isDarkMode
+                                      ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
+                                      : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
+                                      }`}
+                                    title="Delete Weaver"
+                                  >
+                                    <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                                    <span className="font-medium whitespace-nowrap">Delete All</span>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               /* Card View */
               <div className="p-3 sm:p-4">
@@ -2676,89 +2638,71 @@ export default function WeaverPage() {
                   /* Skeleton loader for cards - matches exact card structure */
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {Array.from({ length: itemsPerPage }).map((_, index) => (
-                      <div 
+                      <div
                         key={`card-skeleton-${index}`}
-                        className={`rounded-xl border-2 p-4 sm:p-5 animate-pulse ${
-                          isDarkMode ? 'border-gray-700 bg-gray-800/90' : 'border-gray-200 bg-white'
-                        }`}
+                        className={`rounded-xl border-2 p-4 sm:p-5 animate-pulse ${isDarkMode ? 'border-gray-700 bg-gray-800/90' : 'border-gray-200 bg-white'
+                          }`}
                       >
                         {/* Name skeleton */}
                         <div className="flex items-center space-x-3 mb-4">
-                          <div className={`flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-full border ${
-                            isDarkMode ? 'bg-gray-700/60 border-gray-600' : 'bg-gray-200 border-gray-300'
-                          }`}></div>
-                          <div className={`h-6 sm:h-7 rounded w-3/4 ${
-                            isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                          }`}></div>
+                          <div className={`flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-full border ${isDarkMode ? 'bg-gray-700/60 border-gray-600' : 'bg-gray-200 border-gray-300'
+                            }`}></div>
+                          <div className={`h-6 sm:h-7 rounded w-3/4 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
+                            }`}></div>
                         </div>
                         {/* Phone skeleton with icon */}
                         <div className="mb-3">
                           <div className="flex items-center space-x-2">
-                            <div className={`h-4 w-4 sm:h-5 sm:w-5 rounded flex-shrink-0 ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
-                            <div className={`h-4 sm:h-5 rounded w-24 ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
+                            <div className={`h-4 w-4 sm:h-5 sm:w-5 rounded flex-shrink-0 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
+                              }`}></div>
+                            <div className={`h-4 sm:h-5 rounded w-24 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
+                              }`}></div>
                           </div>
                         </div>
                         {/* Address skeleton with icon */}
                         <div className="mb-4 sm:mb-5">
                           <div className="flex items-start space-x-2">
-                            <div className={`h-4 w-4 sm:h-5 sm:w-5 rounded flex-shrink-0 mt-0.5 ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
-                            <div className={`h-4 sm:h-5 rounded w-32 ${
-                              isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                            }`}></div>
+                            <div className={`h-4 w-4 sm:h-5 sm:w-5 rounded flex-shrink-0 mt-0.5 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
+                              }`}></div>
+                            <div className={`h-4 sm:h-5 rounded w-32 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
+                              }`}></div>
                           </div>
                         </div>
                         {/* Action buttons skeleton - 2x2 grid matching actual layout */}
-                        <div className={`grid grid-cols-1 min-[350px]:grid-cols-2 gap-2 ${isSuperAdmin ? '' : 'max-w-xs'}`}>
-                          <div className={`h-10 rounded-lg ${
-                            isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                          }`}></div>
-                          <div className={`h-10 rounded-lg ${
-                            isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                          }`}></div>
-                          <div className={`h-10 rounded-lg ${
-                            isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                          }`}></div>
-                          {/* Delete Button Skeleton - Show for all users */}
-                          <div className={`h-10 rounded-lg ${
-                            isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'
-                          }`}></div>
+                        <div className="grid grid-cols-1 min-[350px]:grid-cols-2 gap-2">
+                          <div className={`h-10 rounded-lg ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'}`}></div>
+                          <div className={`h-10 rounded-lg ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'}`}></div>
+                          <div className={`h-10 rounded-lg ${isMaster ? '' : 'col-span-1 min-[350px]:col-span-2'} ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'}`}></div>
+                          {/* Delete Button Skeleton - only show if isMaster */}
+                          {isMaster && (
+                            <div className={`h-10 rounded-lg ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-200'}`}></div>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : weavers.length === 0 ? (
                   /* Empty state */
-                  <div className={`flex flex-col items-center justify-center min-h-[40vh] sm:min-h-[60vh] py-8 sm:py-20 px-4 ${
-                    isDarkMode ? 'bg-gray-900' : 'bg-gray-50'
-                  }`}>
-                    <div className={`flex flex-col items-center justify-center space-y-3 sm:space-y-6 max-w-md ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                  <div className={`flex flex-col items-center justify-center min-h-[40vh] sm:min-h-[60vh] py-8 sm:py-20 px-4 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'
                     }`}>
-                      <WeaverIcon className={`w-12 h-12 sm:w-20 sm:h-20 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
-                      <h3 className={`text-base sm:text-xl font-semibold text-center ${
-                        isDarkMode ? 'text-white' : 'text-gray-900'
+                    <div className={`flex flex-col items-center justify-center space-y-3 sm:space-y-6 max-w-md ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
                       }`}>
+                      <WeaverIcon className={`w-12 h-12 sm:w-20 sm:h-20 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                      <h3 className={`text-base sm:text-xl font-semibold text-center ${isDarkMode ? 'text-white' : 'text-gray-900'
+                        }`}>
                         {searchQuery ? 'No Weavers Found' : 'No Weavers Registered'}
                       </h3>
-                      <p className={`text-xs sm:text-sm text-center ${
-                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                      }`}>
+                      <p className={`text-xs sm:text-sm text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
                         {searchQuery ? 'Try a different search term' : 'Click "Add Weaver" to get started.'}
                       </p>
                       {!searchQuery && (
                         <button
                           onClick={handleAddWeaver}
-                          className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center justify-center space-x-2 shadow-sm text-xs sm:text-base font-medium ${
-                            isDarkMode
-                              ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
-                              : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
-                          }`}
+                          className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center justify-center space-x-2 shadow-sm text-xs sm:text-base font-medium ${isDarkMode
+                            ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
+                            : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
+                            }`}
                           title="Add Weaver"
                         >
                           <PlusIcon className="h-4 w-4 sm:h-6 sm:w-6" />
@@ -2768,157 +2712,144 @@ export default function WeaverPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 ${
-                    sortFlipDirection === 'top-to-bottom'
-                      ? 'animate-flip-card-top-to-bottom'
-                      : sortFlipDirection === 'bottom-to-top'
+                  <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 ${sortFlipDirection === 'top-to-bottom'
+                    ? 'animate-flip-card-top-to-bottom'
+                    : sortFlipDirection === 'bottom-to-top'
                       ? 'animate-flip-card-bottom-to-top'
                       : ''
-                  }`}>
+                    }`}>
                     {weavers.map((weaver, index) => {
                       const isNewlyAdded = newlyAddedWeaversRef.current.has(weaver._id);
                       const isEdited = editedWeaversRef.current.has(weaver._id);
                       const isDeleting = deletingWeaversRef.current.has(weaver._id);
                       const hasNewSample = weaversWithNewSamplesRef.current.has(weaver._id);
                       return (
-                      <div
-                        key={weaver._id}
-                        className={`relative rounded-xl border-2 p-4 sm:p-5 transition-all duration-300 hover:shadow-xl hover:scale-[1.02] ${
-                          isDeleting
+                        <div
+                          key={weaver._id}
+                          className={`relative rounded-xl border-2 p-4 sm:p-5 transition-all duration-300 hover:shadow-xl hover:scale-[1.02] ${isDeleting
                             ? 'animate-weaver-card-delete-fade-out'
-                            : isNewlyAdded 
-                            ? 'animate-weaver-card-slide-in' 
-                            : hasNewSample
-                            ? 'animate-weaver-green-glow'
-                            : isEdited
-                            ? 'animate-weaver-edit-pulse'
-                            : ''
-                        } ${
-                          isDarkMode 
-                            ? 'border-gray-700 bg-gray-800/90 hover:border-gray-600 hover:bg-gray-800' 
-                            : 'border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-50'
-                        }`}
-                      >
-                        {/* Name - Clickable to view samples */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleViewWeaverSamples(weaver);
-                          }}
-                          className="flex items-center space-x-3 mb-4 w-full text-left group cursor-pointer hover:opacity-90 active:opacity-75 transition-all duration-200"
-                          title="Click to view samples"
+                            : isNewlyAdded
+                              ? 'animate-weaver-card-slide-in'
+                              : hasNewSample
+                                ? 'animate-weaver-green-glow'
+                                : isEdited
+                                  ? 'animate-weaver-edit-pulse'
+                                  : ''
+                            } ${isDarkMode
+                              ? 'border-gray-700 bg-gray-800/90 hover:border-gray-600 hover:bg-gray-800'
+                              : 'border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-50'
+                            }`}
                         >
-                          <div className={`flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center font-bold text-sm sm:text-base border transition-all duration-200 group-hover:scale-110 active:scale-95 ${
-                            isDarkMode 
-                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 group-hover:bg-blue-500/20 group-hover:border-blue-500/50' 
-                              : 'bg-blue-50 text-blue-600 border-blue-200 group-hover:bg-blue-100 group-hover:border-blue-300'
-                          }`}>
-                            {getInitial(weaver.name)}
-                          </div>
-                          <span className={`text-lg sm:text-xl font-bold break-words flex-1 transition-all duration-200 group-hover:opacity-80 ${
-                            isDarkMode ? 'text-white group-hover:text-blue-400' : 'text-gray-900 group-hover:text-blue-600'
-                          }`}>
-                            {weaver.name}
-                          </span>
-                        </button>
-
-                        {/* Phone */}
-                        <div className="mb-3">
-                          <div className={`flex items-center space-x-2 text-sm sm:text-base ${
-                            isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                          }`}>
-                            <DevicePhoneMobileIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                            <span className="break-words">{weaver.phone || 'No data'}</span>
-                          </div>
-                        </div>
-
-                        {/* Address */}
-                        <div className="mb-4 sm:mb-5">
-                          <div className={`flex items-start space-x-2 text-sm sm:text-base ${
-                            isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                          }`}>
-                            <BuildingOfficeIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" />
-                            <span className="break-words">{weaver.address || 'No data'}</span>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons - 2x2 Grid (2 columns, 2 rows) */}
-                        {/* Under 350px: All buttons in separate rows */}
-                        <div className="grid grid-cols-1 min-[350px]:grid-cols-2 gap-2">
-                          {/* Edit Button */}
+                          {/* Name - Clickable to view samples */}
                           <button
-                            onClick={() => handleEditWeaver(weaver)}
-                            className={`w-full px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
-                              isDarkMode
-                                ? 'text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 bg-blue-500/10'
-                                : 'text-blue-600 hover:bg-blue-100 border border-blue-200 bg-blue-50'
-                            }`}
-                            title="Edit Weaver"
-                          >
-                            <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                            <span className="font-medium whitespace-nowrap">Edit</span>
-                          </button>
-                          {/* Add Sample Button */}
-                          <button
+                            type="button"
                             onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedWeaver(weaver);
-                              setSelectedWeaverId(weaver._id);
-                              setEditingSample(null);
-                              setShowSampleForm(true);
-                            }}
-                            className={`w-full px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
-                              isDarkMode
-                                ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
-                                : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
-                            }`}
-                            title="Add Sample"
-                          >
-                            <WeaverIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                            <span className="font-medium whitespace-nowrap">Add Sample</span>
-                          </button>
-                          {/* View Button */}
-                          <button
-                            onClick={(e) => {
+                              e.preventDefault();
                               e.stopPropagation();
                               handleViewWeaverSamples(weaver);
                             }}
-                            className={`w-full px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
-                              weaversWithPurpleViewRef.current.has(weaver._id) ? 'animate-purple-glow' : ''
-                            } ${
-                              isDarkMode
-                                ? 'text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 bg-purple-500/10'
-                                : 'text-purple-600 hover:bg-purple-100 border border-purple-200 bg-purple-50'
-                            }`}
-                            title="View Samples"
+                            className="flex items-center space-x-3 mb-4 w-full text-left group cursor-pointer hover:opacity-90 active:opacity-75 transition-all duration-200"
+                            title="Click to view samples"
                           >
-                            <EyeIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                            <span className="font-medium whitespace-nowrap">View</span>
+                            <div className={`flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center font-bold text-sm sm:text-base border transition-all duration-200 group-hover:scale-110 active:scale-95 ${isDarkMode
+                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 group-hover:bg-blue-500/20 group-hover:border-blue-500/50'
+                              : 'bg-blue-50 text-blue-600 border-blue-200 group-hover:bg-blue-100 group-hover:border-blue-300'
+                              }`}>
+                              {getInitial(weaver.name)}
+                            </div>
+                            <span className={`text-lg sm:text-xl font-bold break-words flex-1 transition-all duration-200 group-hover:opacity-80 ${isDarkMode ? 'text-white group-hover:text-blue-400' : 'text-gray-900 group-hover:text-blue-600'
+                              }`}>
+                              {weaver.name}
+                            </span>
                           </button>
-                          {/* Delete Button - Show for master only */}
-                          {isMaster && (
+
+                          {/* Phone */}
+                          <div className="mb-3">
+                            <div className={`flex items-center space-x-2 text-sm sm:text-base ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                              }`}>
+                              <DevicePhoneMobileIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                              <span className="break-words">{weaver.phone || 'No data'}</span>
+                            </div>
+                          </div>
+
+                          {/* Address */}
+                          <div className="mb-4 sm:mb-5">
+                            <div className={`flex items-start space-x-2 text-sm sm:text-base ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                              }`}>
+                              <BuildingOfficeIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" />
+                              <span className="break-words">{weaver.address || 'No data'}</span>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="grid grid-cols-1 min-[350px]:grid-cols-2 gap-2">
+                            {/* Edit Button */}
                             <button
-                              type="button"
+                              onClick={() => handleEditWeaver(weaver)}
+                              className={`w-full px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${isDarkMode
+                                ? 'text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 bg-blue-500/10'
+                                : 'text-blue-600 hover:bg-blue-100 border border-blue-200 bg-blue-50'
+                                }`}
+                              title="Edit Weaver"
+                            >
+                              <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                              <span className="font-medium whitespace-nowrap">Edit</span>
+                            </button>
+                            {/* Add Sample Button */}
+                            <button
                               onClick={(e) => {
-                                e.preventDefault();
                                 e.stopPropagation();
-                                handleDeleteWeaver(weaver._id, weaver.name);
+                                setSelectedWeaver(weaver);
+                                setSelectedWeaverId(weaver._id);
+                                setEditingSample(null);
+                                setShowSampleForm(true);
                               }}
-                              className={`w-full px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${
-                                isDarkMode
+                              className={`w-full px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${isDarkMode
+                                ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
+                                : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
+                                }`}
+                              title="Add Sample"
+                            >
+                              <SwatchIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                              <span className="font-medium whitespace-nowrap">Add Sample</span>
+                            </button>
+                            {/* View Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewWeaverSamples(weaver);
+                              }}
+                              className={`w-full px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${weaversWithPurpleViewRef.current.has(weaver._id) ? 'animate-purple-glow' : ''
+                                } ${isDarkMode
+                                  ? 'text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 bg-purple-500/10'
+                                  : 'text-purple-600 hover:bg-purple-100 border border-purple-200 bg-purple-50'
+                                } ${isMaster ? '' : 'col-span-1 min-[350px]:col-span-2'}`}
+                              title="View Samples"
+                            >
+                              <EyeIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                              <span className="font-medium whitespace-nowrap">View</span>
+                            </button>
+                            {/* Delete Button - Show for master only */}
+                            {isMaster && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDeleteWeaver(weaver._id, weaver.name);
+                                }}
+                                className={`w-full px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm ${isDarkMode
                                   ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
                                   : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
-                              }`}
-                              title="Delete Weaver"
-                            >
-                              <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                              <span className="font-medium whitespace-nowrap flex-shrink-0">Delete All</span>
-                            </button>
-                          )}
+                                  }`}
+                                title="Delete Weaver"
+                              >
+                                <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                                <span className="font-medium whitespace-nowrap flex-shrink-0">Delete All</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
                       );
                     })}
                   </div>
@@ -2926,643 +2857,590 @@ export default function WeaverPage() {
               </div>
             )}
           </div>
-      </div>
+        </div>
 
-      {/* Weaver Modal */}
-      {showWeaverModal && (
-        <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4">Loading...</div>
-        </div>}>
-          <WeaverModal
-            weaver={editingWeaver}
-            onClose={() => {
-              setShowWeaverModal(false);
-              setEditingWeaver(null);
-            }}
-            onSave={handleWeaverSaved}
-            isDarkMode={isDarkMode}
-            onMessage={showMessage}
-            onOptimisticSave={handleOptimisticWeaverSave}
-          />
-        </Suspense>
-      )}
+        {/* Weaver Modal */}
+        {showWeaverModal && (
+          <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-4">Loading...</div>
+          </div>}>
+            <WeaverModal
+              weaver={editingWeaver}
+              onClose={() => {
+                setShowWeaverModal(false);
+                setEditingWeaver(null);
+              }}
+              onSave={handleWeaverSaved}
+              isDarkMode={isDarkMode}
+              onMessage={showMessage}
+              onOptimisticSave={handleOptimisticWeaverSave}
+            />
+          </Suspense>
+        )}
 
 
-      {/* Sample Form Modal */}
-      {showSampleForm && (
-        <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4">Loading form...</div>
-        </div>}>
-          <SampleForm
-            weaver={selectedWeaver}
-            sample={editingSample}
-            onClose={() => {
-              setShowSampleForm(false);
-              setEditingSample(null);
-              // Don't clear selectedWeaver - keep samples visible
-            }}
-            onSave={(wasEdit) => handleSampleSaved(wasEdit)}
-            onDelete={(sampleId) => {
-              handleDeleteSample(sampleId);
-            }}
-            isDarkMode={isDarkMode}
-            onOptimisticSave={handleOptimisticSampleSave}
-          />
-        </Suspense>
-      )}
+        {/* Sample Form Modal */}
+        {showSampleForm && (
+          <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-4">Loading form...</div>
+          </div>}>
+            <SampleForm
+              weaver={selectedWeaver}
+              sample={editingSample}
+              onClose={() => {
+                setShowSampleForm(false);
+                setEditingSample(null);
+                // Don't clear selectedWeaver - keep samples visible
+              }}
+              onSave={(wasEdit) => handleSampleSaved(wasEdit)}
+              onDelete={(sampleId) => {
+                handleDeleteSample(sampleId);
+              }}
+              isDarkMode={isDarkMode}
+              onOptimisticSave={handleOptimisticSampleSave}
+            />
+          </Suspense>
+        )}
 
-      {/* Sample View Modal */}
-      {viewingSample && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
-          <div className={`w-full max-w-4xl rounded-xl shadow-2xl border my-8 ${
-            isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-          }`}>
-            <div className={`flex items-center justify-between p-4 border-b ${
-              isDarkMode ? 'border-gray-700' : 'border-gray-200'
-            }`}>
-              <h2 className={`text-xl font-semibold ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
+        {/* Sample View Modal */}
+        {viewingSample && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <div className={`w-full max-w-4xl rounded-xl shadow-2xl border my-8 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
               }`}>
-                {viewingSample.qualityName}
-              </h2>
-              <button
-                onClick={() => setViewingSample(null)}
-                className={`p-2 rounded-lg transition-all ${
-                  isDarkMode
-                    ? 'text-gray-400 hover:bg-gray-700 hover:text-white'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                }`}
-                aria-label="Close sample view"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-              {/* Weaver Info */}
-              <div>
-                <h3 className={`text-sm font-semibold mb-2 ${
-                  isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                }`}>Weaver</h3>
-                <p className={`text-lg ${
-                  isDarkMode ? 'text-white' : 'text-gray-900'
+              <div className={`flex items-center justify-between p-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'
                 }`}>
-                  {typeof viewingSample.weaverId === 'object' && viewingSample.weaverId !== null && 'name' in viewingSample.weaverId 
-                    ? viewingSample.weaverId.name 
-                    : 'Unknown Weaver'}
-                  {typeof viewingSample.weaverId === 'object' && viewingSample.weaverId !== null && 'phone' in viewingSample.weaverId && viewingSample.weaverId.phone && (
-                    <span className={`ml-2 text-sm ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>
-                      - {viewingSample.weaverId.phone}
-                    </span>
-                  )}
-                </p>
-              </div>
-
-              {/* Images */}
-              {viewingSample.images && viewingSample.images.length > 0 && (
-                <div>
-                  <h3 className={`text-sm font-semibold mb-3 ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                  }`}>Images ({viewingSample.images.length})</h3>
-                  <ImageGallery
-                    images={viewingSample.images}
-                    onImageClick={(idx: number) => {
-                      // Handle image click if needed
-                    }}
-                    className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 md:gap-3"
-                    imageClassName="w-full aspect-square object-cover rounded-lg border-2"
-                    isDarkMode={isDarkMode}
-                  />
-                </div>
-              )}
-
-              {/* Sample Details */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {viewingSample.greighWidth > 0 && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>Greigh Width</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      {viewingSample.greighWidth} inches
-                    </p>
-                  </div>
-                )}
-                {viewingSample.finishWidth > 0 && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>Finish Width</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      {viewingSample.finishWidth} inches
-                    </p>
-                  </div>
-                )}
-                {viewingSample.weight > 0 && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>Weight</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      {viewingSample.weight} KG
-                    </p>
-                  </div>
-                )}
-                {viewingSample.gsm > 0 && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>GSM</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      {viewingSample.gsm}
-                    </p>
-                  </div>
-                )}
-                {viewingSample.content && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>Content</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      {viewingSample.content}
-                    </p>
-                  </div>
-                )}
-                {viewingSample.danier && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>Danier</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      {viewingSample.danier}
-                    </p>
-                  </div>
-                )}
-                {viewingSample.count > 0 && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>Count</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      {viewingSample.count}
-                    </p>
-                  </div>
-                )}
-                {viewingSample.reed > 0 && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>Reed</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      {viewingSample.reed}
-                    </p>
-                  </div>
-                )}
-                {viewingSample.pick > 0 && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>Pick</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      {viewingSample.pick}
-                    </p>
-                  </div>
-                )}
-                {viewingSample.greighRate > 0 && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>Greigh Rate</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      ₹{viewingSample.greighRate}
-                    </p>
-                  </div>
-                )}
-                {viewingSample.rack && (
-                  <div>
-                    <h3 className={`text-sm font-semibold mb-1 ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>Rack</h3>
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
-                      {viewingSample.rack}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-end flex-wrap gap-1.5 sm:gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                {/* View Sticker Button */}
-                <button
-                  onClick={() => {
-                    if (viewingSample) {
-                      handleStickerDownload(viewingSample);
-                    }
-                  }}
-                  className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${
-                    isDarkMode
-                      ? 'text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 bg-purple-500/10'
-                      : 'text-purple-600 hover:bg-purple-100 border border-purple-200 bg-purple-50'
-                  }`}
-                  title="View Sticker"
-                >
-                  <DocumentTextIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <span className="whitespace-nowrap">View Sticker</span>
-                </button>
-                {/* Edit Button */}
-                <button
-                  onClick={() => {
-                    setViewingSample(null);
-                    handleEditSample(viewingSample);
-                  }}
-                  className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${
-                    isDarkMode
-                      ? 'text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 bg-blue-500/10'
-                      : 'text-blue-600 hover:bg-blue-100 border border-blue-200 bg-blue-50'
-                  }`}
-                  title="Edit Sample"
-                >
-                  <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <span className="whitespace-nowrap">Edit</span>
-                </button>
-                {/* Add Sample Button */}
-                <button
-                  onClick={() => {
-                    if (viewingSample && viewingSample.weaverId) {
-                      const weaver = viewingSample.weaverId;
-                      if (typeof weaver === 'string') {
-                        setSelectedWeaverId(weaver);
-                        setEditingSample(null);
-                        setViewingSample(null);
-                        setShowSampleForm(true);
-                        return;
-                      }
-                      if (typeof weaver === 'object' && weaver !== null && '_id' in weaver) {
-                        setSelectedWeaver({
-                          _id: weaver._id,
-                          name: weaver.name,
-                          phone: weaver.phone,
-                          address: weaver.address
-                        });
-                        setSelectedWeaverId(weaver._id);
-                      }
-                      setEditingSample(null);
-                      setViewingSample(null);
-                      setShowSampleForm(true);
-                    }
-                  }}
-                  className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${
-                    isDarkMode
-                      ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
-                      : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
-                  }`}
-                  title="Add Sample"
-                >
-                  <WeaverIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <span className="whitespace-nowrap">Add Sample</span>
-                </button>
-                {/* Delete Button */}
-                {isMaster && (
-                  <button
-                    onClick={() => {
-                      if (viewingSample) {
-                        handleDeleteSample(viewingSample._id, viewingSample.qualityName);
-                        setViewingSample(null);
-                      }
-                    }}
-                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${
-                      isDarkMode
-                        ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
-                        : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
-                    }`}
-                    title="Delete Sample"
-                  >
-                    <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                    <span className="whitespace-nowrap">Delete</span>
-                  </button>
-                )}
-                {/* Close Button */}
+                <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
+                  {viewingSample.qualityName}
+                </h2>
                 <button
                   onClick={() => setViewingSample(null)}
-                  className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${
-                    isDarkMode
-                      ? 'text-gray-400 hover:bg-gray-500/20 border border-gray-500/30 bg-gray-500/10'
-                      : 'text-gray-600 hover:bg-gray-100 border border-gray-200 bg-gray-50'
-                  }`}
-                  title="Close"
+                  className={`p-2 rounded-lg transition-all ${isDarkMode
+                    ? 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                    }`}
+                  aria-label="Close sample view"
                 >
-                  <XMarkIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <span className="whitespace-nowrap">Close</span>
+                  <XMarkIcon className="h-5 w-5" />
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmation && deleteConfirmation.show && (
-        <div 
-          className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !isDeleting) {
-              setDeleteConfirmation(null);
-            }
-          }}
-        >
-          <div 
-            className={`w-full max-w-md rounded-xl shadow-2xl border animate-scale-in ${
-              isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className={`p-6 border-b flex items-center justify-between ${
-              isDarkMode ? 'border-gray-700' : 'border-gray-200'
-            }`}>
-              <h3 className={`text-xl font-semibold ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
-              }`}>
-                Confirm Delete
-              </h3>
-              <button
-                onClick={() => setDeleteConfirmation(null)}
-                disabled={isDeleting}
-                className={`p-1.5 rounded-lg transition-all duration-200 hover:rotate-90 active:scale-95 ${
-                  isDarkMode 
-                    ? 'text-gray-400 hover:text-white hover:bg-gray-700' 
-                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
-                }`}
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-6">
-              <p className={`text-base mb-4 ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                Are you sure you want to delete this {deleteConfirmation.type}?
-                {deleteConfirmation.name && (
-                  <span className={`font-semibold block mt-2 ${
-                    isDarkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    {deleteConfirmation.name}
-                  </span>
-                )}
-              </p>
-              {deleteConfirmation.type === 'weaver' && (
-                <div className={`mb-4 p-4 rounded-lg border-2 ${
-                  isDarkMode 
-                    ? 'bg-red-900/20 border-red-500/50' 
-                    : 'bg-red-50 border-red-200'
-                }`}>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <WeaverIcon className={`h-5 w-5 ${
-                      isDarkMode ? 'text-red-400' : 'text-red-600'
-                    }`} />
-                    <p className={`font-bold ${
-                      isDarkMode ? 'text-red-400' : 'text-red-700'
+              <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+                {/* Weaver Info */}
+                <div>
+                  <h3 className={`text-sm font-semibold mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                    }`}>Weaver</h3>
+                  <p className={`text-lg ${isDarkMode ? 'text-white' : 'text-gray-900'
                     }`}>
-                      Warning: This weaver has samples
-                    </p>
-                  </div>
-                  <p className={`text-sm ${
-                    isDarkMode ? 'text-red-300' : 'text-red-600'
-                  }`}>
-                    All samples will be permanently deleted along with the weaver.
+                    {typeof viewingSample.weaverId === 'object' && viewingSample.weaverId !== null && 'name' in viewingSample.weaverId
+                      ? viewingSample.weaverId.name
+                      : 'Unknown Weaver'}
+                    {typeof viewingSample.weaverId === 'object' && viewingSample.weaverId !== null && 'phone' in viewingSample.weaverId && viewingSample.weaverId.phone && (
+                      <span className={`ml-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                        - {viewingSample.weaverId.phone}
+                      </span>
+                    )}
                   </p>
                 </div>
-              )}
-              <p className={`text-sm ${
-                isDarkMode ? 'text-gray-400' : 'text-gray-500'
-              }`}>
-                This action cannot be undone.
-              </p>
-            </div>
-            <div className={`p-6 border-t flex items-center justify-end space-x-3 ${
-              isDarkMode ? 'border-gray-700' : 'border-gray-200'
-            }`}>
-              <button
-                onClick={() => setDeleteConfirmation(null)}
-                className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md ${
-                  isDarkMode
-                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                }`}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (deleteConfirmation.type === 'weaver') {
-                    confirmDeleteWeaver();
-                  } else {
-                    confirmDeleteSample();
-                  }
-                }}
-                disabled={isDeleting}
-                className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-lg flex items-center space-x-2 ${
-                  isDeleting
-                    ? 'opacity-50 cursor-not-allowed'
-                    : ''
-                } ${
-                  isDarkMode
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-red-600 hover:bg-red-700 text-white'
-                }`}
-              >
-                {isDeleting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Deleting...</span>
-                  </>
-                ) : (
-                  <span>Delete All</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Sticker PDF Preview Modal */}
-      {showStickerPreview && stickerPreviewUrl && currentStickerSample && (
-        <div 
-          className="fixed inset-0 backdrop-blur-md bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              if (stickerPreviewUrl && stickerPreviewUrl.startsWith('blob:')) {
-                URL.revokeObjectURL(stickerPreviewUrl);
-              }
-              setShowStickerPreview(false);
-              setStickerPreviewUrl(null);
-              setCurrentStickerSample(null);
-            }
-          }}
-        >
-          <div className={`w-full max-w-5xl max-h-[95vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col ${
-            isDarkMode ? 'bg-gray-900 border border-gray-700' : 'bg-white border border-gray-200'
-          }`}>
-            {/* Modal Header */}
-            <div className={`p-4 border-b ${
-              isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-            } flex items-center justify-between`}>
-              <div className="flex items-center gap-3">
-                <h3 className={`text-lg font-bold ${
-                  isDarkMode ? 'text-white' : 'text-gray-900'
-                }`}>
-                  Sticker Preview
-                </h3>
-                <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  {currentStickerSample.qualityName}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleFinalStickerDownload}
-                  className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-2 ${
-                    isDarkMode
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
-                  title="Download PDF"
-                >
-                  <ArrowDownTrayIcon className="h-5 w-5" />
-                  <span className="hidden sm:inline">Download PDF</span>
-                  <span className="sm:hidden">PDF</span>
-                </button>
-                <button
-                  onClick={() => {
-                    if (stickerPreviewUrl && stickerPreviewUrl.startsWith('blob:')) {
-                      URL.revokeObjectURL(stickerPreviewUrl);
-                    }
-                    setShowStickerPreview(false);
-                    setStickerPreviewUrl(null);
-                    setCurrentStickerSample(null);
-                  }}
-                  className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
-                    isDarkMode
-                      ? 'text-gray-400 hover:bg-gray-700 hover:text-white'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
-                  title="Close Preview"
-                >
-                  <XMarkIcon className="h-6 w-6" />
-                </button>
-              </div>
-            </div>
-            
-            {/* PDF Preview Container */}
-            <div className={`flex-1 overflow-auto p-2 sm:p-4 flex items-center justify-center ${
-              isDarkMode ? 'bg-gray-900' : 'bg-gray-100'
-            }`}>
-              <div className="w-full h-full">
-                <div className="relative w-full h-full bg-white rounded-lg shadow-lg overflow-hidden">
-                  {isLoadingStickerPreview && (
-                    <div className={`absolute inset-0 flex flex-col items-center justify-center z-10 ${
-                      isDarkMode ? 'bg-gray-900/90' : 'bg-white/90'
-                    } backdrop-blur-sm`}>
-                      <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${
-                        isDarkMode ? 'border-blue-400' : 'border-blue-600'
-                      }`}></div>
-                      <p className={`text-lg font-semibold mt-4 ${
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                      }`}>
-                        Generating Preview...
+                {/* Images */}
+                {viewingSample.images && viewingSample.images.length > 0 && (
+                  <div>
+                    <h3 className={`text-sm font-semibold mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>Images ({viewingSample.images.length})</h3>
+                    <ImageGallery
+                      images={viewingSample.images}
+                      onImageClick={(idx: number) => {
+                        // Handle image click if needed
+                      }}
+                      className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 md:gap-3"
+                      imageClassName="w-full aspect-square object-cover rounded-lg border-2"
+                      isDarkMode={isDarkMode}
+                    />
+                  </div>
+                )}
+
+                {/* Sample Details */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {viewingSample.greighWidth > 0 && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Greigh Width</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        {viewingSample.greighWidth} inches
                       </p>
                     </div>
                   )}
-                  
-                  <div className="relative w-full h-full" style={{ minHeight: '600px' }}>
-                    {stickerPreviewUrl && (
-                      <>
-                        {!isMobileDevice && (
-                          <iframe
-                            key={stickerPreviewUrl}
-                            src={`${stickerPreviewUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=150`}
-                            className="absolute inset-0 w-full h-full border-0"
-                            title="Sample Sticker PDF Preview"
-                            style={{ 
-                              minHeight: '600px',
-                              opacity: isLoadingStickerPreview ? 0 : 1,
-                              transition: 'opacity 0.3s ease-in-out'
-                            }}
-                            onLoad={() => {
-                              setIsLoadingStickerPreview(false);
-                            }}
-                            onError={() => {
-                              setIsLoadingStickerPreview(false);
-                            }}
-                            allow="fullscreen"
-                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                          />
-                        )}
-                        {isMobileDevice && (
-                          <div className={`absolute inset-0 flex flex-col items-center justify-center p-8 ${
-                            isDarkMode ? 'bg-gray-900 text-gray-300' : 'bg-white text-gray-700'
-                          }`}>
-                            <DocumentTextIcon className="h-16 w-16 mb-4 text-blue-500" />
-                            <p className="text-lg font-semibold mb-2">PDF Ready for Download</p>
-                            <p className="text-sm text-center mb-6">Mobile preview not available. Click below to download.</p>
-                            <button
-                              onClick={handleFinalStickerDownload}
-                              className={`px-6 py-3 rounded-lg font-semibold transition-all hover:scale-105 active:scale-95 ${
-                                isDarkMode
-                                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-                              }`}
-                            >
-                              <ArrowDownTrayIcon className="h-5 w-5 inline mr-2" />
-                              Download PDF
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    
-                    {!isLoadingStickerPreview && !stickerPreviewUrl && (
-                      <div className={`absolute inset-0 flex flex-col items-center justify-center p-8 ${
-                        isDarkMode ? 'bg-gray-900 text-gray-300' : 'bg-white text-gray-700'
+                  {viewingSample.finishWidth > 0 && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Finish Width</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        {viewingSample.finishWidth} inches
+                      </p>
+                    </div>
+                  )}
+                  {viewingSample.weight > 0 && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Weight</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        {viewingSample.weight} KG
+                      </p>
+                    </div>
+                  )}
+                  {viewingSample.gsm > 0 && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>GSM</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        {viewingSample.gsm}
+                      </p>
+                    </div>
+                  )}
+                  {viewingSample.content && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Content</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        {viewingSample.content}
+                      </p>
+                    </div>
+                  )}
+                  {viewingSample.danier && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Danier</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        {viewingSample.danier}
+                      </p>
+                    </div>
+                  )}
+                  {viewingSample.count > 0 && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Count</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        {viewingSample.count}
+                      </p>
+                    </div>
+                  )}
+                  {viewingSample.reed > 0 && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Reed</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        {viewingSample.reed}
+                      </p>
+                    </div>
+                  )}
+                  {viewingSample.pick > 0 && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Pick</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        {viewingSample.pick}
+                      </p>
+                    </div>
+                  )}
+                  {viewingSample.greighRate > 0 && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Greigh Rate</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        ₹{viewingSample.greighRate}
+                      </p>
+                    </div>
+                  )}
+                  {viewingSample.rack && (
+                    <div>
+                      <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>Rack</h3>
+                      <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>
+                        {viewingSample.rack}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end flex-wrap gap-1.5 sm:gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  {/* View Sticker Button */}
+                  <button
+                    onClick={() => {
+                      if (viewingSample) {
+                        handleStickerDownload(viewingSample);
+                      }
+                    }}
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${isDarkMode
+                      ? 'text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 bg-purple-500/10'
+                      : 'text-purple-600 hover:bg-purple-100 border border-purple-200 bg-purple-50'
+                      }`}
+                    title="View Sticker"
+                  >
+                    <DocumentTextIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <span className="whitespace-nowrap">View Sticker</span>
+                  </button>
+                  {/* Edit Button */}
+                  <button
+                    onClick={() => {
+                      setViewingSample(null);
+                      handleEditSample(viewingSample);
+                    }}
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${isDarkMode
+                      ? 'text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 bg-blue-500/10'
+                      : 'text-blue-600 hover:bg-blue-100 border border-blue-200 bg-blue-50'
+                      }`}
+                    title="Edit Sample"
+                  >
+                    <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <span className="whitespace-nowrap">Edit</span>
+                  </button>
+                  {/* Add Sample Button */}
+                  <button
+                    onClick={() => {
+                      if (viewingSample && viewingSample.weaverId) {
+                        const weaver = viewingSample.weaverId;
+                        if (typeof weaver === 'string') {
+                          setSelectedWeaverId(weaver);
+                          setEditingSample(null);
+                          setViewingSample(null);
+                          setShowSampleForm(true);
+                          return;
+                        }
+                        if (typeof weaver === 'object' && weaver !== null && '_id' in weaver) {
+                          setSelectedWeaver({
+                            _id: weaver._id,
+                            name: weaver.name,
+                            phone: weaver.phone,
+                            address: weaver.address
+                          });
+                          setSelectedWeaverId(weaver._id);
+                        }
+                        setEditingSample(null);
+                        setViewingSample(null);
+                        setShowSampleForm(true);
+                      }
+                    }}
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${isDarkMode
+                      ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
+                      : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
+                      }`}
+                    title="Add Sample"
+                  >
+                    <SwatchIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <span className="whitespace-nowrap">Add Sample</span>
+                  </button>
+                  {/* Delete Button */}
+                  {isMaster && (
+                    <button
+                      onClick={() => {
+                        if (viewingSample) {
+                          handleDeleteSample(viewingSample._id, viewingSample.qualityName);
+                          setViewingSample(null);
+                        }
+                      }}
+                      className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${isDarkMode
+                        ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
+                        : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
+                        }`}
+                      title="Delete Sample"
+                    >
+                      <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      <span className="whitespace-nowrap">Delete</span>
+                    </button>
+                  )}
+                  {/* Close Button */}
+                  <button
+                    onClick={() => setViewingSample(null)}
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${isDarkMode
+                      ? 'text-gray-400 hover:bg-gray-500/20 border border-gray-500/30 bg-gray-500/10'
+                      : 'text-gray-600 hover:bg-gray-100 border border-gray-200 bg-gray-50'
+                      }`}
+                    title="Close"
+                  >
+                    <XMarkIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <span className="whitespace-nowrap">Close</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmation && deleteConfirmation.show && (
+          <div
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isDeleting) {
+                setDeleteConfirmation(null);
+              }
+            }}
+          >
+            <div
+              className={`w-full max-w-md rounded-xl shadow-2xl border animate-scale-in ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={`p-6 border-b flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'
+                }`}>
+                <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
+                  Confirm Delete
+                </h3>
+                <button
+                  onClick={() => setDeleteConfirmation(null)}
+                  disabled={isDeleting}
+                  className={`p-1.5 rounded-lg transition-all duration-200 hover:rotate-90 active:scale-95 ${isDarkMode
+                    ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
+                    }`}
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="p-6">
+                <p className={`text-base mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                  Are you sure you want to delete this {deleteConfirmation.type}?
+                  {deleteConfirmation.name && (
+                    <span className={`font-semibold block mt-2 ${isDarkMode ? 'text-white' : 'text-gray-900'
                       }`}>
-                        <DocumentTextIcon className="h-16 w-16 mb-4 text-gray-400" />
-                        <p className="text-lg font-semibold mb-2">PDF Preview Not Available</p>
-                        <p className="text-sm text-center mb-4">Unable to load PDF preview. Please try downloading instead.</p>
-                        <button
-                          onClick={handleFinalStickerDownload}
-                          className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-                            isDarkMode
-                              ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                              : 'bg-blue-600 hover:bg-blue-700 text-white'
-                          }`}
-                        >
-                          Download PDF Instead
-                        </button>
+                      {deleteConfirmation.name}
+                    </span>
+                  )}
+                </p>
+                {deleteConfirmation.type === 'weaver' && (
+                  <div className={`mb-4 p-4 rounded-lg border-2 ${isDarkMode
+                    ? 'bg-red-900/20 border-red-500/50'
+                    : 'bg-red-50 border-red-200'
+                    }`}>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <WeaverIcon className={`h-5 w-5 ${isDarkMode ? 'text-red-400' : 'text-red-600'
+                        }`} />
+                      <p className={`font-bold ${isDarkMode ? 'text-red-400' : 'text-red-700'
+                        }`}>
+                        Warning: This weaver has samples
+                      </p>
+                    </div>
+                    <p className={`text-sm ${isDarkMode ? 'text-red-300' : 'text-red-600'
+                      }`}>
+                      All samples will be permanently deleted along with the weaver.
+                    </p>
+                  </div>
+                )}
+                <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                  This action cannot be undone.
+                </p>
+              </div>
+              <div className={`p-6 border-t flex items-center justify-end space-x-3 ${isDarkMode ? 'border-gray-700' : 'border-gray-200'
+                }`}>
+                <button
+                  onClick={() => setDeleteConfirmation(null)}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md ${isDarkMode
+                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (deleteConfirmation.type === 'weaver') {
+                      confirmDeleteWeaver();
+                    } else {
+                      confirmDeleteSample();
+                    }
+                  }}
+                  disabled={isDeleting}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-lg flex items-center space-x-2 ${isDeleting
+                    ? 'opacity-50 cursor-not-allowed'
+                    : ''
+                    } ${isDarkMode
+                      ? 'bg-red-600 hover:bg-red-700 text-white'
+                      : 'bg-red-600 hover:bg-red-700 text-white'
+                    }`}
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <span>Delete All</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sticker PDF Preview Modal */}
+        {showStickerPreview && stickerPreviewUrl && currentStickerSample && (
+          <div
+            className="fixed inset-0 backdrop-blur-md bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                if (stickerPreviewUrl && stickerPreviewUrl.startsWith('blob:')) {
+                  URL.revokeObjectURL(stickerPreviewUrl);
+                }
+                setShowStickerPreview(false);
+                setStickerPreviewUrl(null);
+                setCurrentStickerSample(null);
+              }
+            }}
+          >
+            <div className={`w-full max-w-5xl max-h-[95vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col ${isDarkMode ? 'bg-gray-900 border border-gray-700' : 'bg-white border border-gray-200'
+              }`}>
+              {/* Modal Header */}
+              <div className={`p-4 border-b ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
+                } flex items-center justify-between`}>
+                <div className="flex items-center gap-3">
+                  <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}>
+                    Sticker Preview
+                  </h3>
+                  <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    {currentStickerSample.qualityName}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleFinalStickerDownload}
+                    className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-2 ${isDarkMode
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    title="Download PDF"
+                  >
+                    <ArrowDownTrayIcon className="h-5 w-5" />
+                    <span className="hidden sm:inline">Download PDF</span>
+                    <span className="sm:hidden">PDF</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (stickerPreviewUrl && stickerPreviewUrl.startsWith('blob:')) {
+                        URL.revokeObjectURL(stickerPreviewUrl);
+                      }
+                      setShowStickerPreview(false);
+                      setStickerPreviewUrl(null);
+                      setCurrentStickerSample(null);
+                    }}
+                    className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95 ${isDarkMode
+                      ? 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
+                    title="Close Preview"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* PDF Preview Container */}
+              <div className={`flex-1 overflow-auto p-2 sm:p-4 flex items-center justify-center ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'
+                }`}>
+                <div className="w-full h-full">
+                  <div className="relative w-full h-full bg-white rounded-lg shadow-lg overflow-hidden">
+                    {isLoadingStickerPreview && (
+                      <div className={`absolute inset-0 flex flex-col items-center justify-center z-10 ${isDarkMode ? 'bg-gray-900/90' : 'bg-white/90'
+                        } backdrop-blur-sm`}>
+                        <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-600'
+                          }`}></div>
+                        <p className={`text-lg font-semibold mt-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                          }`}>
+                          Generating Preview...
+                        </p>
                       </div>
                     )}
+
+                    <div className="relative w-full h-full" style={{ minHeight: '600px' }}>
+                      {stickerPreviewUrl && (
+                        <>
+                          {!isMobileDevice && (
+                            <iframe
+                              key={stickerPreviewUrl}
+                              src={`${stickerPreviewUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=150`}
+                              className="absolute inset-0 w-full h-full border-0"
+                              title="Sample Sticker PDF Preview"
+                              style={{
+                                minHeight: '600px',
+                                opacity: isLoadingStickerPreview ? 0 : 1,
+                                transition: 'opacity 0.3s ease-in-out'
+                              }}
+                              onLoad={() => {
+                                setIsLoadingStickerPreview(false);
+                              }}
+                              onError={() => {
+                                setIsLoadingStickerPreview(false);
+                              }}
+                              allow="fullscreen"
+                              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                            />
+                          )}
+                          {isMobileDevice && (
+                            <div className={`absolute inset-0 flex flex-col items-center justify-center p-8 ${isDarkMode ? 'bg-gray-900 text-gray-300' : 'bg-white text-gray-700'
+                              }`}>
+                              <DocumentTextIcon className="h-16 w-16 mb-4 text-blue-500" />
+                              <p className="text-lg font-semibold mb-2">PDF Ready for Download</p>
+                              <p className="text-sm text-center mb-6">Mobile preview not available. Click below to download.</p>
+                              <button
+                                onClick={handleFinalStickerDownload}
+                                className={`px-6 py-3 rounded-lg font-semibold transition-all hover:scale-105 active:scale-95 ${isDarkMode
+                                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                  }`}
+                              >
+                                <ArrowDownTrayIcon className="h-5 w-5 inline mr-2" />
+                                Download PDF
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {!isLoadingStickerPreview && !stickerPreviewUrl && (
+                        <div className={`absolute inset-0 flex flex-col items-center justify-center p-8 ${isDarkMode ? 'bg-gray-900 text-gray-300' : 'bg-white text-gray-700'
+                          }`}>
+                          <DocumentTextIcon className="h-16 w-16 mb-4 text-gray-400" />
+                          <p className="text-lg font-semibold mb-2">PDF Preview Not Available</p>
+                          <p className="text-sm text-center mb-4">Unable to load PDF preview. Please try downloading instead.</p>
+                          <button
+                            onClick={handleFinalStickerDownload}
+                            className={`px-6 py-3 rounded-lg font-semibold transition-all ${isDarkMode
+                              ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                              : 'bg-blue-600 hover:bg-blue-700 text-white'
+                              }`}
+                          >
+                            Download PDF Instead
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Scroll to Top Button */}
-      {showScrollToTop && (
-        <button
-          onClick={scrollToTop}
-          className={`fixed bottom-6 right-6 z-40 w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 scroll-to-top-btn ${
-            isDarkMode
+        {/* Scroll to Top Button */}
+        {showScrollToTop && (
+          <button
+            onClick={scrollToTop}
+            className={`fixed bottom-6 right-6 z-40 w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 scroll-to-top-btn ${isDarkMode
               ? 'bg-blue-600/90 hover:bg-blue-600 text-white backdrop-blur-sm border border-blue-500/30'
               : 'bg-white hover:bg-gray-50 text-blue-600 backdrop-blur-sm border-2 border-blue-500 shadow-xl'
-          }`}
-          aria-label="Scroll to top"
-        >
-          <ArrowUpIcon className="h-4 w-4" />
-        </button>
-      )}
+              }`}
+            aria-label="Scroll to top"
+          >
+            <ArrowUpIcon className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </ErrorBoundary>
   );

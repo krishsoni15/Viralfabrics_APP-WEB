@@ -40,6 +40,17 @@ export default function WeaverModal({ weaver, onClose, onSave, isDarkMode, onMes
     setErrors({});
   }, [weaver]);
 
+  // Listen for Escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const handleChange = (field: string, value: string) => {
     // For phone field, only allow numbers in real-time
     if (field === 'phone') {

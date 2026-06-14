@@ -194,6 +194,27 @@ export default function UsersPage() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Listen for Escape key to close modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showAddPartyModal) {
+          setShowAddPartyModal(false);
+        } else if (showCreateModal) {
+          setShowCreateModal(false);
+        } else if (showEditModal) {
+          setShowEditModal(false);
+        } else if (showDeleteModal) {
+          setShowDeleteModal(false);
+        } else if (showProfileModal) {
+          setShowProfileModal(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAddPartyModal, showCreateModal, showEditModal, showDeleteModal, showProfileModal]);
+
   const isLargeScreen = screenSize > 1000;
   const isMediumScreen = screenSize > 600;
   const isSmallScreen = screenSize > 500;

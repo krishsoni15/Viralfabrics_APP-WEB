@@ -27,11 +27,11 @@ export default function WeaverPageSkeleton() {
       {/* Main Content */}
       <div className="w-full pb-6">
         <div className={`border-2 shadow-xl overflow-hidden ${
-          effectiveDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
+          effectiveDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-white'
         }`}>
           {/* Header Skeleton */}
           <div className={`px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6 border-b ${
-            effectiveDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+            effectiveDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'
           }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -50,7 +50,7 @@ export default function WeaverPageSkeleton() {
 
           {/* Search and Action Bar Skeleton */}
           <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-col gap-2 max-[900px]:gap-2 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3 ${
-            effectiveDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+            effectiveDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'
           }`}>
             {/* Search Bar and Sort */}
             <div className="flex flex-row items-center gap-2 min-[900px]:flex-1 min-[900px]:gap-3">
@@ -170,7 +170,7 @@ export default function WeaverPageSkeleton() {
 
           {/* Pagination Skeleton */}
           <div className={`px-2 sm:px-3 md:px-4 py-3 sm:py-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3 ${
-            effectiveDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+            effectiveDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'
           }`}>
             <div className={`h-4 w-32 rounded transition-colors duration-0 ${
               effectiveDarkMode ? 'bg-gray-700' : 'bg-gray-300'
