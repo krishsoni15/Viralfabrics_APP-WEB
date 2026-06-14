@@ -3022,7 +3022,12 @@ export default function FabricsPage() {
   };
 
   const handleWhatsAppShare = (imageUrl: string) => {
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(imageUrl)}`, '_blank');
+    const absoluteUrl = imageUrl.startsWith('http')
+      ? imageUrl
+      : imageUrl.startsWith('/')
+        ? `${window.location.origin}${imageUrl}`
+        : `${window.location.origin}/${imageUrl}`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(absoluteUrl)}`, '_blank');
   };
 
   const toggleCardExpansion = (qualityCode: string) => {

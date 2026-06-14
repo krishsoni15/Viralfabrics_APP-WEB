@@ -186,6 +186,49 @@ export default function ImagePreviewModal({
     document.body.removeChild(a);
   };
 
+  // WhatsApp Share
+  const handleWhatsAppShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const currentUrl = images[currentIndex];
+    if (!currentUrl) return;
+
+    // Handle local blob or data URLs
+    if (currentUrl.startsWith('blob:') || currentUrl.startsWith('data:')) {
+      if (navigator.share && navigator.canShare) {
+        try {
+          const response = await fetch(currentUrl);
+          const blob = await response.blob();
+          const file = new File([blob], `image-${currentIndex + 1}.jpg`, { type: 'image/jpeg' });
+          
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: 'ViralFabrics Image Share',
+              text: 'Check out this image from ViralFabrics'
+            });
+            return;
+          }
+        } catch (err) {
+          console.error('Web Share failed', err);
+        }
+      }
+      alert('This is a local preview image. Please save/upload the item or download the image first to share.');
+      return;
+    }
+
+    // Resolve absolute URL
+    const absoluteUrl = currentUrl.startsWith('http')
+      ? currentUrl
+      : currentUrl.startsWith('/')
+        ? `${window.location.origin}${currentUrl}`
+        : `${window.location.origin}/${currentUrl}`;
+
+    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(
+      `Check out this image from ViralFabrics: ${absoluteUrl}`
+    )}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   if (!isOpen || images.length === 0) return null;
 
   return (
@@ -266,6 +309,18 @@ export default function ImagePreviewModal({
             title="Download Image"
           >
             <ArrowDownTrayIcon className="h-5 w-5" />
+          </button>
+
+          {/* Share via WhatsApp */}
+          <button
+            type="button"
+            onClick={handleWhatsAppShare}
+            className="p-2 bg-slate-800 hover:bg-green-600 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5"
+            title="Share via WhatsApp"
+          >
+            <svg className="h-5 w-5 fill-current text-green-500 hover:text-white transition-colors" viewBox="0 0 24 24">
+              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.45L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.864-9.855.002-2.63-1.023-5.105-2.887-6.97C16.585 1.865 14.11 .84 11.49.842c-5.441 0-9.863 4.42-9.866 9.858-.002 2.073.547 4.103 1.588 5.912L2.17 20.89l4.477-1.736zM17.13 15.3c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.18.2-.35.23-.65.08-1.2-.6-2.09-1.05-2.9-2.45-.21-.36.21-.34.6-.12.35.2.45.33.65.03.2-.3.45-.63.68-.85.23-.23.3-.38.45-.68.15-.3.08-.55-.04-.7-.12-.15-.68-1.63-.95-2.28-.26-.62-.52-.53-.68-.54-.15-.01-.33-.01-.51-.01-.18 0-.48.07-.73.35-.25.27-.95.93-.95 2.28 0 1.35.98 2.65 1.12 2.83.14.18 1.92 2.94 4.66 4.13.65.28 1.16.45 1.56.57.66.21 1.25.18 1.72.11.53-.08 1.78-.73 2.03-1.43.25-.7.25-1.3.18-1.43-.07-.12-.27-.2-.58-.35z" />
+            </svg>
           </button>
 
           {/* Divider */}
