@@ -4677,10 +4677,7 @@ export default function GreyMaterialsPage() {
                               }`}>
                               Meter
                             </th>
-                            <th className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center text-[9px] xs:text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-wide border-b-2 border-r whitespace-nowrap min-w-[50px] sm:min-w-[60px] ${isDarkMode ? 'text-white border-slate-500 bg-slate-700/50' : 'text-black border-gray-300 bg-white'
-                              }`}>
-                              Action
-                            </th>
+
                             <th className={`px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-3 text-left text-[9px] xs:text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-wide border-b-2 whitespace-nowrap min-w-[80px] sm:min-w-[100px] md:min-w-[120px] ${isDarkMode ? 'text-white border-slate-500 bg-slate-700/50' : 'text-black border-gray-300 bg-white'
                               }`}>
                               Actions
@@ -4976,27 +4973,6 @@ export default function GreyMaterialsPage() {
                                   </td>
 
 
-                                  {/* Action Column - Delete button for weaver */}
-                                  <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'
-                                    }`}>
-                                    <div className="flex flex-col items-center justify-center space-y-1">
-
-                                      {/* Delete Button - Second Row */}
-                                      {isMaster && (
-                                        <button
-                                          onClick={() => handleDelete(greyMaterial)}
-                                          disabled={false}
-                                          className={`p-1 sm:p-1.5 rounded transition-all duration-150 hover:scale-110 active:scale-95 hover-lift disabled:opacity-50 disabled:cursor-not-allowed ${isDarkMode
-                                              ? 'text-red-400 border border-red-500/30 hover:bg-red-500/20'
-                                              : 'text-red-600 border border-red-300 hover:bg-red-50'
-                                            }`}
-                                          title={`Delete Weaver ${weaverIndex + 1}`}
-                                        >
-                                          <TrashIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
 
                                   {/* Actions - Only show on first row with rowspan */}
                                   {weaverIndex === 0 && (
