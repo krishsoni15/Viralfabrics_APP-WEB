@@ -23,7 +23,7 @@ export default function DashboardLayoutClient({
   const pathname = usePathname();
   const { user: sessionUser, isLoading: sessionLoading } = useAuthSession();
   const { isDarkMode, mounted } = useDarkMode();
-  
+
   // Use Zustand store for UI state
   const {
     isSidebarOpen,
@@ -35,7 +35,7 @@ export default function DashboardLayoutClient({
     setUser,
     user,
   } = useAppStore();
-  
+
   const [screenSize, setScreenSize] = useState<number>(0);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -67,18 +67,18 @@ export default function DashboardLayoutClient({
   // Track screen size and set sidebar state (only if no persisted preference)
   useEffect(() => {
     let timeoutId: any;
-    
+
     const handleResize = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         const newScreenSize = window.innerWidth;
         setScreenSize(newScreenSize);
-        
+
         // Only auto-adjust if user hasn't manually set a preference
         // Check if there's a saved preference in Zustand store (which persists to localStorage)
-        const hasSavedPreference = typeof window !== 'undefined' && 
+        const hasSavedPreference = typeof window !== 'undefined' &&
           localStorage.getItem('app-storage') !== null;
-        
+
         if (!hasSavedPreference) {
           // Set default collapsed state based on screen size only if no saved preference
           if (newScreenSize >= 800 && newScreenSize < 1900) {
@@ -92,9 +92,9 @@ export default function DashboardLayoutClient({
 
     const initialSize = window.innerWidth;
     setScreenSize(initialSize);
-    
+
     // Only set initial state if no saved preference exists
-    const hasSavedPreference = typeof window !== 'undefined' && 
+    const hasSavedPreference = typeof window !== 'undefined' &&
       localStorage.getItem('app-storage') !== null;
     if (!hasSavedPreference) {
       if (initialSize >= 800 && initialSize < 1900) {
@@ -103,7 +103,7 @@ export default function DashboardLayoutClient({
         setSidebarCollapsed(false);
       }
     }
-    
+
     window.addEventListener('resize', handleResize, { passive: true });
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -157,7 +157,7 @@ export default function DashboardLayoutClient({
 
   const handleLogoutConfirm = useCallback(async (type: 'normal' | 'all' = 'normal') => {
     setIsLoggingOut(true);
-    
+
     try {
       const token = localStorage.getItem('token');
       if (token) {
@@ -187,13 +187,13 @@ export default function DashboardLayoutClient({
     } finally {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      
+
       try {
         await fetch('/api/auth/logout', { method: 'POST' });
       } catch {
         // Ignore errors
       }
-      
+
       setShowLogoutConfirm(false);
       setLogoutType(null);
       window.location.replace('/login');
@@ -209,16 +209,16 @@ export default function DashboardLayoutClient({
   // Perform actual logout (called when OK button is clicked)
   const performLogout = useCallback(() => {
     console.log('🚨 Performing logout - redirecting to login...');
-    
+
     // Clear local storage IMMEDIATELY (synchronous)
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
+
     // Clear auth cookie in background (don't wait)
     fetch('/api/auth/logout', { method: 'POST' }).catch(() => {
       // Ignore errors - we're logging out anyway
     });
-    
+
     // Redirect to login IMMEDIATELY - no delays, no waiting
     window.location.href = '/login';
   }, []);
@@ -233,7 +233,7 @@ export default function DashboardLayoutClient({
     message?: string;
   }) => {
     console.log('🚨 Logout-all event received - showing modal...', data);
-    
+
     if (data) {
       // Show modal with super admin name and timestamp
       setLogoutAllData({
@@ -259,7 +259,7 @@ export default function DashboardLayoutClient({
   const handleInstallClick = useCallback(() => {
     setIsInstalling(true);
     const installPrompt = (window as any).deferredPrompt;
-    
+
     if (installPrompt) {
       installPrompt.prompt();
       installPrompt.userChoice.then((choiceResult: any) => {
@@ -296,16 +296,15 @@ export default function DashboardLayoutClient({
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 theme-switch-root ${
-      isDarkMode 
-        ? 'bg-slate-800' 
+    <div className={`min-h-screen transition-colors duration-300 theme-switch-root ${isDarkMode
+        ? 'bg-slate-800'
         : 'bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'
-    }`}>
+      }`}>
       <PWARegistration />
-      
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={closeSidebar} 
+
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={closeSidebar}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={toggleSidebarCollapse}
         user={user}
@@ -315,11 +314,11 @@ export default function DashboardLayoutClient({
         isInstalling={isInstalling}
         onInstallClick={handleInstallClick}
       />
-      
+
       <div className={mainContentMargin}>
-        <Navbar 
-          user={user} 
-          onLogout={handleLogoutClick} 
+        <Navbar
+          user={user}
+          onLogout={handleLogoutClick}
           isLoggingOut={isLoggingOut}
           onToggleSidebar={toggleSidebar}
           onToggleCollapse={toggleSidebarCollapse}
@@ -331,9 +330,8 @@ export default function DashboardLayoutClient({
         />
 
         <main className="">
-          <div className={`transition-colors duration-300 ${
-            isDarkMode ? 'text-white' : 'text-gray-900'
-          }`}>
+          <div className={`transition-colors duration-300 ${isDarkMode ? 'text-white' : 'text-gray-900'
+            }`}>
             {children}
           </div>
         </main>
@@ -342,11 +340,10 @@ export default function DashboardLayoutClient({
       {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm">
-          <div className={`rounded-lg shadow-xl max-w-md w-full mx-4 ${
-            isDarkMode 
-              ? 'bg-gray-800 border border-gray-700' 
+          <div className={`rounded-lg shadow-xl max-w-md w-full mx-4 ${isDarkMode
+              ? 'bg-gray-800 border border-gray-700'
               : 'bg-white border border-gray-200'
-          }`}>
+            }`}>
             <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
@@ -360,11 +357,10 @@ export default function DashboardLayoutClient({
                 <button
                   onClick={handleLogoutCancel}
                   disabled={isLoggingOut}
-                  className={`p-1 rounded-md transition-colors ${
-                    isLoggingOut
+                  className={`p-1 rounded-md transition-colors ${isLoggingOut
                       ? isDarkMode ? 'text-gray-600 cursor-not-allowed' : 'text-gray-300 cursor-not-allowed'
                       : isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   <XMarkIcon className="h-5 w-5" />
                 </button>
@@ -377,19 +373,18 @@ export default function DashboardLayoutClient({
                   <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
                     Choose your logout option:
                   </p>
-                  
+
                   <button
                     onClick={() => setLogoutType('normal')}
                     disabled={isLoggingOut}
-                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                      isLoggingOut
-                        ? isDarkMode 
-                          ? 'border-gray-700 bg-gray-700/50 cursor-not-allowed' 
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isLoggingOut
+                        ? isDarkMode
+                          ? 'border-gray-700 bg-gray-700/50 cursor-not-allowed'
                           : 'border-gray-300 bg-gray-50 cursor-not-allowed'
                         : isDarkMode
                           ? 'border-gray-600 bg-gray-700/50 hover:border-blue-500 hover:bg-blue-500/10'
                           : 'border-gray-200 bg-gray-50 hover:border-blue-500 hover:bg-blue-50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -407,15 +402,14 @@ export default function DashboardLayoutClient({
                   <button
                     onClick={() => setLogoutType('all')}
                     disabled={isLoggingOut}
-                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                      isLoggingOut
-                        ? isDarkMode 
-                          ? 'border-gray-700 bg-gray-700/50 cursor-not-allowed' 
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isLoggingOut
+                        ? isDarkMode
+                          ? 'border-gray-700 bg-gray-700/50 cursor-not-allowed'
                           : 'border-gray-300 bg-gray-50 cursor-not-allowed'
                         : isDarkMode
                           ? 'border-red-600 bg-red-900/20 hover:border-red-500 hover:bg-red-500/10'
                           : 'border-red-200 bg-red-50 hover:border-red-500 hover:bg-red-100'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -433,17 +427,16 @@ export default function DashboardLayoutClient({
               ) : (
                 <>
                   <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
-                    {logoutType === 'all' 
+                    {logoutType === 'all'
                       ? 'Are you sure you want to logout all users, super admins, and all devices? This action cannot be undone.'
                       : 'Are you sure you want to logout?'
                     }
                   </p>
                   {user && (
-                    <div className={`p-3 rounded-lg border ${
-                      isDarkMode 
-                        ? 'bg-gray-700 border-gray-600' 
+                    <div className={`p-3 rounded-lg border ${isDarkMode
+                        ? 'bg-gray-700 border-gray-600'
                         : 'bg-gray-50 border-gray-200'
-                    }`}>
+                      }`}>
                       <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                         {logoutType === 'all' ? 'Logging out all users as:' : 'Logging out as:'}
                       </p>
@@ -461,36 +454,33 @@ export default function DashboardLayoutClient({
                 <button
                   onClick={handleLogoutCancel}
                   disabled={isLoggingOut}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    isLoggingOut
-                      ? isDarkMode 
-                        ? 'text-gray-600 cursor-not-allowed' 
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${isLoggingOut
+                      ? isDarkMode
+                        ? 'text-gray-600 cursor-not-allowed'
                         : 'text-gray-400 cursor-not-allowed'
-                      : isDarkMode 
-                        ? 'text-gray-300 hover:bg-gray-700' 
+                      : isDarkMode
+                        ? 'text-gray-300 hover:bg-gray-700'
                         : 'text-gray-700 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => handleLogoutConfirm(logoutType)}
                   disabled={isLoggingOut}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    isLoggingOut
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${isLoggingOut
                       ? isDarkMode
                         ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : isDarkMode
                         ? 'bg-red-600 hover:bg-red-700 text-white'
                         : 'bg-red-600 hover:bg-red-700 text-white'
-                  }`}
+                    }`}
                 >
                   {isLoggingOut ? (
                     <div className="flex items-center space-x-2">
-                      <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${
-                        isDarkMode ? 'border-white' : 'border-white'
-                      }`}></div>
+                      <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${isDarkMode ? 'border-white' : 'border-white'
+                        }`}></div>
                       <span>Logging out...</span>
                     </div>
                   ) : (
@@ -506,11 +496,10 @@ export default function DashboardLayoutClient({
       {/* Logout All Modal - Shows when super admin triggers logout all */}
       {showLogoutAllModal && logoutAllData && (
         <div className="fixed inset-0 flex items-center justify-center z-[9999] bg-black/70 backdrop-blur-sm">
-          <div className={`rounded-lg shadow-2xl max-w-md w-full mx-4 ${
-            isDarkMode 
-              ? 'bg-gray-800 border-2 border-red-600' 
+          <div className={`rounded-lg shadow-2xl max-w-md w-full mx-4 ${isDarkMode
+              ? 'bg-gray-800 border-2 border-red-600'
               : 'bg-white border-2 border-red-500'
-          }`}>
+            }`}>
             <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <div className="flex items-center space-x-3">
                 <div className={`p-2 rounded-full ${isDarkMode ? 'bg-red-900/30' : 'bg-red-100'}`}>
@@ -526,12 +515,11 @@ export default function DashboardLayoutClient({
               <p className={`text-base mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                 Logout all clicked by <span className="font-semibold text-red-600 dark:text-red-400">{logoutAllData.triggeredBy}</span>
               </p>
-              
-              <div className={`p-3 rounded-lg mb-4 ${
-                isDarkMode 
-                  ? 'bg-gray-700/50 border border-gray-600' 
+
+              <div className={`p-3 rounded-lg mb-4 ${isDarkMode
+                  ? 'bg-gray-700/50 border border-gray-600'
                   : 'bg-gray-50 border border-gray-200'
-              }`}>
+                }`}>
                 <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   <span className="font-medium">Time:</span>{' '}
                   {new Date(logoutAllData.timestamp).toLocaleString('en-US', {
@@ -554,11 +542,10 @@ export default function DashboardLayoutClient({
             <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex justify-end`}>
               <button
                 onClick={handleLogoutAllOk}
-                className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isDarkMode
+                className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${isDarkMode
                     ? 'bg-red-600 hover:bg-red-700 text-white'
                     : 'bg-red-600 hover:bg-red-700 text-white'
-                }`}
+                  }`}
               >
                 OK
               </button>
