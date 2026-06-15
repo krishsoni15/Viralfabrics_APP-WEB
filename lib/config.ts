@@ -2,7 +2,7 @@
 export const BRAND_CONFIG = {
   name: "Viral Fabrics",
   shortName: "Viral",
-  tagline: "Premium Fabric Solutions",
+  tagline: "MPO & SUPPLIER OF: ALL TYPE OF EXPORT",
   description: "Manage your fabric business operations",
   copyright: "© 2025 Viral Fabrics"
 };
