@@ -13,7 +13,7 @@ import { clearDashboardCache } from '@/lib/dashboardCache';
 // Helper function to convert YYYY-MM-DD string to Date object at UTC midnight
 function parseDateString(dateString: string | undefined | null): Date | undefined {
   if (!dateString) return undefined;
-  
+
   // If it's already a YYYY-MM-DD format, create date at UTC midnight to avoid timezone shifts
   const yyyyMmDdMatch = String(dateString).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (yyyyMmDdMatch) {
@@ -21,7 +21,7 @@ function parseDateString(dateString: string | undefined | null): Date | undefine
     // Create date at UTC midnight (month is 0-indexed)
     return new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
   }
-  
+
   // Fallback to standard Date parsing
   const date = new Date(dateString);
   return isNaN(date.getTime()) ? undefined : date;
@@ -42,9 +42,9 @@ export async function GET(
     const session = await getSession(req);
 
     await dbConnect();
-    
+
     const { id } = await params;
-    
+
     const query: any = { _id: id };
     if (session && session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
       const mongoose = await import('mongoose');
@@ -52,7 +52,7 @@ export async function GET(
         ? new mongoose.default.Types.ObjectId(session.partyId)
         : session.partyId;
     }
-    
+
     // ⚡ OPTIMIZED: Use lean() and fetch related data separately (much faster than populate)
     const order = await Order.findOne(query)
       .select('_id orderId orderType arrivalDate party contactName contactPhone poNumber styleNo poDate deliveryDate items status labData createdAt updatedAt')
@@ -61,17 +61,17 @@ export async function GET(
 
     if (!order) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Order not found" 
-        }), 
+        JSON.stringify({
+          success: false,
+          message: "Order not found"
+        }),
         { status: 404 }
       );
     }
 
     // ⚡ OPTIMIZED: Fetch party and qualities separately (faster than populate)
     const partyId = (order as any).party;
-    const qualityIds = [...new Set((order as any).items?.flatMap((item: any) => 
+    const qualityIds = [...new Set((order as any).items?.flatMap((item: any) =>
       item.quality ? [item.quality] : []
     ) || [])];
 
@@ -87,7 +87,7 @@ export async function GET(
     ]);
 
     const qualityMap = new Map(qualities.map((q: any) => [q._id.toString(), q]));
-    
+
     // Helper to format date to YYYY-MM-DD string to avoid timezone issues
     const formatDateForResponse = (date: Date | string | null | undefined): string | null => {
       if (!date) return null;
@@ -105,7 +105,7 @@ export async function GET(
       }
       return null;
     };
-    
+
     // Attach party and qualities to order, and format dates
     (order as any).party = party;
     (order as any).arrivalDate = formatDateForResponse((order as any).arrivalDate);
@@ -125,105 +125,105 @@ export async function GET(
           import('@/models/MillOutput'),
           import('@/models/Dispatch')
         ]);
-        
+
         const Dispatch = DispatchModule.default;
-        
-      const itemIds = order.items.map((item: any) => item._id);
-      
+
+        const itemIds = order.items.map((item: any) => item._id);
+
         let [labs, millInputs, millOutputs, dispatches] = await Promise.all([
-          Lab.default.find({ 
-        order: id,
-        orderItemId: { $in: itemIds },
-        softDeleted: { $ne: true }
-        })
-        .select('orderItemId labSendDate labSendData labSendNumber status remarks')
-        .lean()
-          .maxTimeMS(3000),
-          
-          MillInput.find({ 
+          Lab.default.find({
+            order: id,
+            orderItemId: { $in: itemIds },
+            softDeleted: { $ne: true }
+          })
+            .select('orderItemId labSendDate labSendData labSendNumber status remarks')
+            .lean()
+            .maxTimeMS(3000),
+
+          MillInput.find({
             order: id
           })
-          .select('mill millDate chalanNo greighMtr pcs quality processName additionalMeters')
-          .lean()
-          .maxTimeMS(3000),
-          
-          MillOutput.find({ 
+            .select('mill millDate chalanNo greighMtr pcs quality processName additionalMeters')
+            .lean()
+            .maxTimeMS(3000),
+
+          MillOutput.find({
             order: id
           })
-          .select('recdDate millBillNo finishedMtr millRate quality')
-          .lean()
-          .maxTimeMS(3000),
-          
-          Dispatch.find({ 
+            .select('recdDate millBillNo finishedMtr millRate quality')
+            .lean()
+            .maxTimeMS(3000),
+
+          Dispatch.find({
             order: id
           })
-          .select('dispatchDate billNo transportNo lrNo finishMtr saleRate totalValue quality')
-          .lean()
-          .maxTimeMS(3000)
+            .select('dispatchDate billNo transportNo lrNo finishMtr saleRate totalValue quality')
+            .lean()
+            .maxTimeMS(3000)
         ]);
-      
-      // ⚡ OPTIMIZED: Fetch mills and qualities for mill inputs/outputs separately
-      const millIds = [...new Set(millInputs.flatMap((mi: any) => mi.mill ? [mi.mill] : []))];
-      const allQualityIds = [
-        ...new Set(millInputs.flatMap((mi: any) => [
-          ...(mi.quality ? [mi.quality] : []),
-          ...(mi.additionalMeters?.flatMap((am: any) => am.quality ? [am.quality] : []) || [])
-        ])),
-        ...new Set(millOutputs.flatMap((mo: any) => mo.quality ? [mo.quality] : [])),
-        ...new Set(dispatches.flatMap((d: any) => d.quality ? [d.quality] : []))
-      ];
 
-      const [mills, allQualities] = await Promise.all([
-        millIds.length > 0 ? (await import('@/models/Mill')).Mill.find({ _id: { $in: millIds } })
-          .select('_id name')
-          .lean()
-          .maxTimeMS(1000) : Promise.resolve([]),
-        allQualityIds.length > 0 ? Quality.find({ _id: { $in: allQualityIds } })
-          .select('_id name')
-          .lean()
-          .maxTimeMS(1000) : Promise.resolve([])
-      ]);
+        // ⚡ OPTIMIZED: Fetch mills and qualities for mill inputs/outputs separately
+        const millIds = [...new Set(millInputs.flatMap((mi: any) => mi.mill ? [mi.mill] : []))];
+        const allQualityIds = [
+          ...new Set(millInputs.flatMap((mi: any) => [
+            ...(mi.quality ? [mi.quality] : []),
+            ...(mi.additionalMeters?.flatMap((am: any) => am.quality ? [am.quality] : []) || [])
+          ])),
+          ...new Set(millOutputs.flatMap((mo: any) => mo.quality ? [mo.quality] : [])),
+          ...new Set(dispatches.flatMap((d: any) => d.quality ? [d.quality] : []))
+        ];
 
-      const millMap = new Map(mills.map((m: any) => [m._id.toString(), m]));
-      const allQualityMap = new Map(allQualities.map((q: any) => [q._id.toString(), q]));
+        const [mills, allQualities] = await Promise.all([
+          millIds.length > 0 ? (await import('@/models/Mill')).Mill.find({ _id: { $in: millIds } })
+            .select('_id name')
+            .lean()
+            .maxTimeMS(1000) : Promise.resolve([]),
+          allQualityIds.length > 0 ? Quality.find({ _id: { $in: allQualityIds } })
+            .select('_id name')
+            .lean()
+            .maxTimeMS(1000) : Promise.resolve([])
+        ]);
 
-      // Populate mill and quality references in mill inputs/outputs/dispatches
-      millInputs = millInputs.map((mi: any) => ({
-        ...mi,
-        mill: mi.mill ? millMap.get(mi.mill.toString()) || null : null,
-        quality: mi.quality ? allQualityMap.get(mi.quality.toString()) || null : null,
-        additionalMeters: mi.additionalMeters?.map((am: any) => ({
-          ...am,
-          quality: am.quality ? allQualityMap.get(am.quality.toString()) || null : null
-        })) || []
-      }));
+        const millMap = new Map(mills.map((m: any) => [m._id.toString(), m]));
+        const allQualityMap = new Map(allQualities.map((q: any) => [q._id.toString(), q]));
 
-      millOutputs = millOutputs.map((mo: any) => ({
-        ...mo,
-        quality: mo.quality ? allQualityMap.get(mo.quality.toString()) || null : null
-      }));
+        // Populate mill and quality references in mill inputs/outputs/dispatches
+        millInputs = millInputs.map((mi: any) => ({
+          ...mi,
+          mill: mi.mill ? millMap.get(mi.mill.toString()) || null : null,
+          quality: mi.quality ? allQualityMap.get(mi.quality.toString()) || null : null,
+          additionalMeters: mi.additionalMeters?.map((am: any) => ({
+            ...am,
+            quality: am.quality ? allQualityMap.get(am.quality.toString()) || null : null
+          })) || []
+        }));
 
-      dispatches = dispatches.map((d: any) => ({
-        ...d,
-        quality: d.quality ? allQualityMap.get(d.quality.toString()) || null : null
-      }));
-      
-      // Create a map of orderItemId to lab data
-      const labMap = new Map();
-      labs.forEach((lab: any) => {
-        labMap.set(lab.orderItemId.toString(), lab);
-      });
-      
+        millOutputs = millOutputs.map((mo: any) => ({
+          ...mo,
+          quality: mo.quality ? allQualityMap.get(mo.quality.toString()) || null : null
+        }));
+
+        dispatches = dispatches.map((d: any) => ({
+          ...d,
+          quality: d.quality ? allQualityMap.get(d.quality.toString()) || null : null
+        }));
+
+        // Create a map of orderItemId to lab data
+        const labMap = new Map();
+        labs.forEach((lab: any) => {
+          labMap.set(lab.orderItemId.toString(), lab);
+        });
+
         // Attach lab data and process data to order items
-      order.items.forEach((item: any) => {
+        order.items.forEach((item: any) => {
           // Attach lab data
-        const labData = labMap.get(item._id.toString());
+          const labData = labMap.get(item._id.toString());
           if (labData && labData.labSendData) {
-          item.labData = {
+            item.labData = {
               color: labData.labSendData.color || '',
               shade: labData.labSendData.shade || '',
               notes: labData.labSendData.notes || '',
-            labSendDate: labData.labSendDate,
+              labSendDate: labData.labSendDate,
               approvalDate: labData.labSendData.approvalDate,
               sampleNumber: labData.labSendData.sampleNumber || '',
               imageUrl: labData.labSendData.imageUrl || '',
@@ -244,44 +244,44 @@ export async function GET(
               labSendNumber: '',
               status: 'not_sent',
               remarks: ''
-          };
-        }
-          
+            };
+          }
+
           // Attach quality-specific process data from mill inputs
           if (millInputs.length > 0) {
             const itemQualityId = item.quality?._id?.toString() || item.quality?.toString();
             const itemQualityName = item.quality?.name || item.quality;
-            
+
             // Find process data for this specific quality
             let qualityProcessData = null;
-            
+
             // Collect all processes for this quality from all mill inputs
             const allProcesses: string[] = [];
-            
+
             for (const millInputData of millInputs) {
               // Check main quality
-              if (millInputData.quality?._id?.toString() === itemQualityId || 
-                  millInputData.quality?.name === itemQualityName) {
+              if (millInputData.quality?._id?.toString() === itemQualityId ||
+                millInputData.quality?.name === itemQualityName) {
                 if (millInputData.processName && millInputData.processName.trim() !== '') {
                   allProcesses.push(millInputData.processName.trim());
                 }
               }
-              
+
               // Check additional meters for this quality
               if (millInputData.additionalMeters) {
                 millInputData.additionalMeters.forEach((additional: any) => {
-                  if ((additional.quality?._id?.toString() === itemQualityId || 
-                       additional.quality?.name === itemQualityName) &&
-                      additional.processName && additional.processName.trim() !== '') {
+                  if ((additional.quality?._id?.toString() === itemQualityId ||
+                    additional.quality?.name === itemQualityName) &&
+                    additional.processName && additional.processName.trim() !== '') {
                     allProcesses.push(additional.processName.trim());
                   }
                 });
               }
             }
-            
+
             // Remove duplicates and sort by priority
             const uniqueProcesses = [...new Set(allProcesses)];
-            
+
             // Define process priority order (higher number = higher priority)
             const processPriority = [
               'Lot No Greigh',    // 1
@@ -300,7 +300,7 @@ export async function GET(
               'ready to dispatch', // 14
               'In House'          // 15 - Highest priority, shows first
             ];
-            
+
             // Sort by priority (highest number first)
             const sortedProcesses = uniqueProcesses.sort((a, b) => {
               const aIndex = processPriority.indexOf(a);
@@ -310,18 +310,18 @@ export async function GET(
               if (bIndex === -1) return -1;
               return bIndex - aIndex; // Higher index = higher priority
             });
-            
+
             if (sortedProcesses.length > 0) {
               qualityProcessData = {
                 mainProcess: sortedProcesses[0], // Highest priority process
                 additionalProcesses: sortedProcesses.slice(1) // Rest of the processes
               };
             }
-            
+
             // If no quality-specific data found, collect all processes from all mill inputs as fallback
             if (!qualityProcessData && millInputs.length > 0) {
               const fallbackProcesses: string[] = [];
-              
+
               millInputs.forEach((millInput: any) => {
                 if (millInput.processName && millInput.processName.trim() !== '') {
                   fallbackProcesses.push(millInput.processName.trim());
@@ -334,9 +334,9 @@ export async function GET(
                   });
                 }
               });
-              
+
               const uniqueFallbackProcesses = [...new Set(fallbackProcesses)];
-              
+
               // Define process priority order (higher number = higher priority)
               const processPriority = [
                 'Lot No Greigh',    // 1
@@ -354,7 +354,7 @@ export async function GET(
                 'folding',          // 13
                 'ready to dispatch' // 14
               ];
-              
+
               // Sort by priority (highest number first)
               const sortedFallbackProcesses = uniqueFallbackProcesses.sort((a, b) => {
                 const aIndex = processPriority.indexOf(a);
@@ -364,7 +364,7 @@ export async function GET(
                 if (bIndex === -1) return -1;
                 return bIndex - aIndex; // Higher index = higher priority
               });
-              
+
               if (sortedFallbackProcesses.length > 0) {
                 qualityProcessData = {
                   mainProcess: sortedFallbackProcesses[0],
@@ -372,7 +372,7 @@ export async function GET(
                 };
               }
             }
-            
+
             item.processData = qualityProcessData;
           } else {
             // Initialize empty process data structure
@@ -382,12 +382,12 @@ export async function GET(
             };
           }
         });
-        
+
         // Add mill inputs, mill outputs, and dispatches to the order object for PDF generation
         (order as any).millInputs = millInputs;
         (order as any).millOutputs = millOutputs;
         (order as any).dispatches = dispatches;
-        
+
       } catch (error) {
         // Initialize empty lab data and process data for all items if there's an error
         order.items.forEach((item: any) => {
@@ -408,7 +408,7 @@ export async function GET(
             additionalProcesses: []
           };
         });
-        
+
         // Initialize empty mill inputs, mill outputs, and dispatches arrays
         (order as any).millInputs = [];
         (order as any).millOutputs = [];
@@ -425,10 +425,10 @@ export async function GET(
     logView('order', id, req);
 
     // ⚡ Add ISR cache headers with specific order tag
-    return new Response(JSON.stringify({ 
-      success: true, 
-      data: order 
-    }), { 
+    return new Response(JSON.stringify({
+      success: true,
+      data: order
+    }), {
       status: 200,
       headers: {
         ...getCacheHeaders(CACHE_DURATIONS.ORDER_DETAILS),
@@ -438,17 +438,17 @@ export async function GET(
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.message.includes("Unauthorized")) {
-        return new Response(JSON.stringify({ 
-          success: false, 
-          message: "Unauthorized" 
+        return new Response(JSON.stringify({
+          success: false,
+          message: "Unauthorized"
         }), { status: 401 });
       }
     }
     const message = error instanceof Error ? error.message : "Internal Server Error";
-    return new Response(JSON.stringify({ 
-      success: false, 
-      message 
-    }), { 
+    return new Response(JSON.stringify({
+      success: false,
+      message
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -475,7 +475,7 @@ export async function PUT(
     }
 
     const requestData = await req.json();
-    
+
     const {
       orderType,
       arrivalDate,
@@ -507,59 +507,59 @@ export async function PUT(
 
     // Validation
     const errors: string[] = [];
-    
+
     if (orderType !== undefined && !['Dying', 'Printing'].includes(orderType)) {
       errors.push("Order type must be either 'Dying' or 'Printing'");
     }
-    
+
     if (arrivalDate !== undefined) {
       const arrival = parseDateString(arrivalDate);
       if (arrivalDate && !arrival) {
         errors.push("Invalid arrival date format");
       }
     }
-    
+
     if (partyId !== undefined && partyId !== null && partyId !== '' && partyId !== 'null' && partyId !== 'undefined') {
       if (!partyId.match(/^[0-9a-fA-F]{24}$/)) {
         errors.push("Invalid party ID format");
       }
     }
-    
+
     if (contactName !== undefined && contactName && typeof contactName === 'string' && contactName.trim().length > 50) {
       errors.push("Contact name cannot exceed 50 characters");
     }
-    
+
     if (contactPhone !== undefined && contactPhone && typeof contactPhone === 'string' && contactPhone.trim().length > 20) {
       errors.push("Contact phone cannot exceed 20 characters");
     }
-    
+
     if (poNumber !== undefined && poNumber && typeof poNumber === 'string' && poNumber.trim().length > 50) {
       errors.push("PO number cannot exceed 50 characters");
     }
-    
+
     if (styleNo !== undefined && styleNo && typeof styleNo === 'string' && styleNo.trim().length > 50) {
       errors.push("Style number cannot exceed 50 characters");
     }
-    
+
     if (poDate !== undefined && poDate) {
       const po = parseDateString(poDate);
       if (!po) {
         errors.push("Invalid PO date format");
       }
     }
-    
+
     if (deliveryDate !== undefined && deliveryDate) {
       const delivery = parseDateString(deliveryDate);
       if (!delivery) {
         errors.push("Invalid delivery date format");
       }
     }
-    
+
     const allowedStatuses = ['pending', 'in_progress', 'completed', 'delivered', 'cancelled', 'Not set', 'Not selected'];
     if (status !== undefined && !allowedStatuses.includes(status)) {
       errors.push(`Status must be one of: ${allowedStatuses.join(', ')}`);
     }
-    
+
     // Validate items if provided
     if (finalItems !== undefined) {
       if (!Array.isArray(finalItems) || finalItems.length === 0) {
@@ -570,7 +570,7 @@ export async function PUT(
           if (item.quality && item.quality !== null && item.quality !== '' && item.quality !== 'null' && item.quality !== 'undefined' && typeof item.quality === 'string' && !item.quality.match(/^[0-9a-fA-F]{24}$/)) {
             errors.push(`Invalid quality ID format in item ${index + 1}`);
           }
-          
+
           // Quantity is required for each item
           if (item.quantity === undefined || item.quantity === null) {
             errors.push(`Quantity is required for item ${index + 1}`);
@@ -587,14 +587,14 @@ export async function PUT(
           if (item.description && typeof item.description === 'string' && item.description.trim().length > 200) {
             errors.push(`Description cannot exceed 200 characters in item ${index + 1}`);
           }
-          
+
           // Validate millRate if provided
           if (item.millRate !== undefined && item.millRate !== null && item.millRate !== '') {
             if (typeof item.millRate !== 'number' || item.millRate < 0) {
               errors.push(`Mill rate must be a non-negative number in item ${index + 1}`);
             }
           }
-          
+
           // Validate salesRate if provided
           if (item.salesRate !== undefined && item.salesRate !== null && item.salesRate !== '') {
             if (typeof item.salesRate !== 'number' || item.salesRate < 0) {
@@ -604,10 +604,10 @@ export async function PUT(
         });
       }
     }
-    
+
     if (errors.length > 0) {
       return new Response(
-        JSON.stringify({ message: errors.join(", ") }), 
+        JSON.stringify({ message: errors.join(", ") }),
         { status: 400 }
       );
     }
@@ -622,7 +622,7 @@ export async function PUT(
       .maxTimeMS(2000);
     if (!existingOrder) {
       return new Response(
-        JSON.stringify({ message: "Order not found" }), 
+        JSON.stringify({ message: "Order not found" }),
         { status: 404 }
       );
     }
@@ -630,7 +630,7 @@ export async function PUT(
     // ⚡ OPTIMIZED: Verify party and qualities in parallel (non-blocking for logging)
     let newPartyName = null;
     const validationPromises: Promise<any>[] = [];
-    
+
     if (partyId && partyId !== '' && partyId !== 'null' && partyId !== 'undefined') {
       validationPromises.push(
         Party.findById(partyId).select('name').lean().maxTimeMS(1000)
@@ -650,9 +650,9 @@ export async function PUT(
       const qualityIds = finalItems
         .map(item => item?.quality)
         .filter(q => q && typeof q === 'string' && q.trim() && q !== 'null' && q !== 'undefined');
-      
+
       const uniqueQualityIds = [...new Set(qualityIds)];
-      
+
       if (uniqueQualityIds.length > 0) {
         validationPromises.push(
           Quality.find({ _id: { $in: uniqueQualityIds } }).select('_id').lean().maxTimeMS(1000)
@@ -671,7 +671,7 @@ export async function PUT(
       await Promise.all(validationPromises);
     } catch (validationError: any) {
       return new Response(
-        JSON.stringify({ message: validationError.message || "Validation failed" }), 
+        JSON.stringify({ message: validationError.message || "Validation failed" }),
         { status: 400 }
       );
     }
@@ -704,23 +704,23 @@ export async function PUT(
           imageUrls: item.imageUrls && Array.isArray(item.imageUrls) ? item.imageUrls.filter((url: any) => typeof url === 'string').map((url: string) => url.trim()) : [],
           description: (item.description && typeof item.description === 'string') ? item.description.trim() : '',
           weaverSupplierName: (item.weaverSupplierName && typeof item.weaverSupplierName === 'string') ? item.weaverSupplierName.trim() : '',
-          purchaseRate: item.purchaseRate !== undefined && item.purchaseRate !== null && item.purchaseRate !== '' ? 
+          purchaseRate: item.purchaseRate !== undefined && item.purchaseRate !== null && item.purchaseRate !== '' ?
             (() => {
               const rate = parseFloat(item.purchaseRate);
               return isNaN(rate) ? undefined : rate;
             })() : undefined,
-          millRate: item.millRate !== undefined && item.millRate !== null && item.millRate !== '' ? 
+          millRate: item.millRate !== undefined && item.millRate !== null && item.millRate !== '' ?
             (() => {
               const rate = parseFloat(item.millRate);
               return isNaN(rate) ? undefined : rate;
             })() : undefined,
-          salesRate: item.salesRate !== undefined && item.salesRate !== null && item.salesRate !== '' ? 
+          salesRate: item.salesRate !== undefined && item.salesRate !== null && item.salesRate !== '' ?
             (() => {
               const rate = parseFloat(item.salesRate);
               return isNaN(rate) ? undefined : rate;
             })() : undefined,
         };
-        
+
         // ⚡ CRITICAL: Preserve _id if it exists (for existing items) to maintain lab data associations
         // This ensures that when items are updated, their IDs don't change and lab data remains linked
         // Convert string _id to ObjectId if needed for proper MongoDB matching
@@ -728,8 +728,8 @@ export async function PUT(
           try {
             // If _id is already an ObjectId, use it directly; otherwise convert from string
             if (mongoose.Types.ObjectId.isValid(item._id)) {
-              itemData._id = typeof item._id === 'string' 
-                ? new mongoose.Types.ObjectId(item._id) 
+              itemData._id = typeof item._id === 'string'
+                ? new mongoose.Types.ObjectId(item._id)
                 : item._id;
             } else {
               // If not a valid ObjectId format, use as-is (might be a different ID format)
@@ -743,7 +743,7 @@ export async function PUT(
             itemData._id = item._id;
           }
         }
-        
+
         return itemData;
       });
     }
@@ -752,7 +752,7 @@ export async function PUT(
     const oldValues: any = {};
     const newValues: any = {};
     const changedFields: string[] = [];
-    
+
     const normalizeDate = (date: Date | undefined) => {
       if (!date) return null;
       // Extract date components in local timezone to avoid timezone shifts
@@ -761,7 +761,7 @@ export async function PUT(
       const day = String(date.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     };
-    
+
     if (orderType !== undefined && orderType !== existingOrder.orderType) {
       oldValues.orderType = existingOrder.orderType;
       newValues.orderType = orderType;
@@ -770,12 +770,12 @@ export async function PUT(
     if (arrivalDate !== undefined) {
       const newArrivalDate = arrivalDate ? parseDateString(arrivalDate) : undefined;
       const existingArrivalDate = existingOrder.arrivalDate ? (existingOrder.arrivalDate instanceof Date ? existingOrder.arrivalDate : parseDateString(String(existingOrder.arrivalDate))) : undefined;
-      
+
       const existingDateStr = normalizeDate(existingArrivalDate);
       const newDateStr = normalizeDate(newArrivalDate);
-      
+
       const arrivalDateChanged = existingDateStr !== newDateStr;
-      
+
       if (arrivalDateChanged) {
         oldValues.arrivalDate = existingOrder.arrivalDate;
         newValues.arrivalDate = newArrivalDate;
@@ -785,11 +785,11 @@ export async function PUT(
     if (partyId !== undefined) {
       const currentPartyId = existingOrder.party?.toString() || null;
       const newPartyId = partyId && partyId !== '' && partyId !== 'null' && partyId !== 'undefined' ? partyId : null;
-      
+
       if (currentPartyId !== newPartyId) {
         // Handle both populated and unpopulated party objects
-        const oldPartyName = typeof existingOrder.party === 'object' && existingOrder.party !== null && 'name' in existingOrder.party 
-          ? (existingOrder.party as any).name 
+        const oldPartyName = typeof existingOrder.party === 'object' && existingOrder.party !== null && 'name' in existingOrder.party
+          ? (existingOrder.party as any).name
           : existingOrder.party || 'Not set';
         oldValues.party = oldPartyName;
         newValues.party = newPartyName || newPartyId || 'Not set';
@@ -831,12 +831,12 @@ export async function PUT(
     if (poDate !== undefined) {
       const newPoDate = poDate ? parseDateString(poDate) : undefined;
       const existingPoDate = existingOrder.poDate ? (existingOrder.poDate instanceof Date ? existingOrder.poDate : parseDateString(String(existingOrder.poDate))) : undefined;
-      
+
       const existingDateStr = normalizeDate(existingPoDate);
       const newDateStr = normalizeDate(newPoDate);
-      
+
       const poDateChanged = existingDateStr !== newDateStr;
-      
+
       if (poDateChanged) {
         oldValues.poDate = existingOrder.poDate;
         newValues.poDate = newPoDate;
@@ -846,12 +846,12 @@ export async function PUT(
     if (deliveryDate !== undefined) {
       const newDeliveryDate = deliveryDate ? parseDateString(deliveryDate) : undefined;
       const existingDeliveryDate = existingOrder.deliveryDate ? (existingOrder.deliveryDate instanceof Date ? existingOrder.deliveryDate : parseDateString(String(existingOrder.deliveryDate))) : undefined;
-      
+
       const existingDateStr = normalizeDate(existingDeliveryDate);
       const newDateStr = normalizeDate(newDeliveryDate);
-      
+
       const deliveryDateChanged = existingDateStr !== newDateStr;
-      
+
       if (deliveryDateChanged) {
         oldValues.deliveryDate = existingOrder.deliveryDate;
         newValues.deliveryDate = newDeliveryDate;
@@ -872,23 +872,23 @@ export async function PUT(
         weaverSupplierName: item.weaverSupplierName || '',
         purchaseRate: item.purchaseRate || 0
       }));
-      
+
       const newItems = finalItems.map((item: any) => ({
         quality: item.quality && item.quality !== '' && item.quality !== 'null' && item.quality !== 'undefined' ? item.quality : 'Not set',
         quantity: item.quantity !== undefined && item.quantity !== null ? item.quantity : 0,
         imageUrls: item.imageUrls && Array.isArray(item.imageUrls) ? item.imageUrls.filter((url: any) => typeof url === 'string').map((url: string) => url.trim()) : [],
         description: (item.description && typeof item.description === 'string') ? item.description.trim() : '',
         weaverSupplierName: (item.weaverSupplierName && typeof item.weaverSupplierName === 'string') ? item.weaverSupplierName.trim() : '',
-        purchaseRate: item.purchaseRate !== undefined && item.purchaseRate !== null && item.purchaseRate !== '' ? 
+        purchaseRate: item.purchaseRate !== undefined && item.purchaseRate !== null && item.purchaseRate !== '' ?
           (() => {
             const rate = parseFloat(item.purchaseRate);
             return isNaN(rate) ? 0 : rate;
           })() : 0,
       }));
-      
+
       const itemChanges: any[] = [];
       const Quality = (await import('@/models/Quality')).default;
-      
+
       // Process all existing items for changes
       for (let index = 0; index < oldItems.length; index++) {
         const oldItem = oldItems[index];
@@ -897,19 +897,19 @@ export async function PUT(
           itemChanges.push({ type: 'item_removed', index });
           continue;
         }
-        
+
         const changes: any = {};
         let hasItemChanges = false;
-        
+
         // Compare quality values properly with debugging
         const oldQualityValue = oldItem.quality;
         const newQualityValue = newItem.quality;
-        
+
         // Check if quality actually changed
         let qualityChanged = false;
         let oldQualityName = 'Not set';
         let newQualityName = 'Not set';
-        
+
         // Extract old quality name
         if (oldQualityValue) {
           if (typeof oldQualityValue === 'object' && oldQualityValue.name) {
@@ -932,7 +932,7 @@ export async function PUT(
             }
           }
         }
-        
+
         // Extract new quality name
         if (newQualityValue) {
           const newQualIdStr = newQualityValue.toString();
@@ -952,28 +952,28 @@ export async function PUT(
             newQualityName = newQualIdStr;
           }
         }
-        
+
         // Compare the actual values
         const oldQualityId = oldQualityValue?._id?.toString() || oldQualityValue?.toString() || null;
         const newQualityId = (newQualityValue && newQualityValue !== 'Not set') ? newQualityValue.toString() : null;
-        
+
         // Normalize both to null if they represent unset/empty
         const normOldQualityId = (oldQualityId === 'null' || oldQualityId === 'undefined' || oldQualityId === 'Not set' || !oldQualityId) ? null : oldQualityId;
         const normNewQualityId = (newQualityId === 'null' || newQualityId === 'undefined') ? null : newQualityId;
-        
+
         qualityChanged = normOldQualityId !== normNewQualityId;
-        
+
         if (qualityChanged) {
           changes.quality = { old: oldQualityName, new: newQualityName };
           hasItemChanges = true;
         }
-        
+
         // Compare quantity
         if (oldItem.quantity !== newItem.quantity) {
           changes.quantity = { old: oldItem.quantity, new: newItem.quantity };
           hasItemChanges = true;
         }
-        
+
         // Compare description
         const oldDesc = oldItem.description || '';
         const newDesc = newItem.description || '';
@@ -981,7 +981,7 @@ export async function PUT(
           changes.description = { old: oldDesc, new: newDesc };
           hasItemChanges = true;
         }
-        
+
         // Compare weaver supplier name
         const oldWeaver = oldItem.weaverSupplierName || '';
         const newWeaver = newItem.weaverSupplierName || '';
@@ -989,7 +989,7 @@ export async function PUT(
           changes.weaverSupplierName = { old: oldWeaver, new: newWeaver };
           hasItemChanges = true;
         }
-        
+
         // Compare purchase rate
         const oldRate = oldItem.purchaseRate || 0;
         const newRate = newItem.purchaseRate || 0;
@@ -997,15 +997,15 @@ export async function PUT(
           changes.purchaseRate = { old: oldRate, new: newRate };
           hasItemChanges = true;
         }
-        
+
         const oldImageUrls = oldItem.imageUrls || [];
         const newImageUrls = newItem.imageUrls || [];
         if (JSON.stringify(oldImageUrls) !== JSON.stringify(newImageUrls)) {
           const addedImages = newImageUrls.filter((url: string) => !oldImageUrls.includes(url));
           const removedImages = oldImageUrls.filter((url: string) => !newImageUrls.includes(url));
-          
-          changes.imageUrls = { 
-            old: oldImageUrls, 
+
+          changes.imageUrls = {
+            old: oldImageUrls,
             new: newImageUrls,
             added: addedImages,
             removed: removedImages,
@@ -1014,16 +1014,16 @@ export async function PUT(
           };
           hasItemChanges = true;
         }
-        
+
         if (hasItemChanges) {
           itemChanges.push({ type: 'item_updated', index, changes });
         }
       }
-      
+
       if (newItems.length > oldItems.length) {
         for (let i = oldItems.length; i < newItems.length; i++) {
           const newItem = newItems[i];
-          
+
           // Fetch quality name for added items to show in logs
           let qualityName = newItem.quality;
           if (newItem.quality && newItem.quality !== 'Not set' && typeof newItem.quality === 'string') {
@@ -1036,7 +1036,7 @@ export async function PUT(
               qualityName = newItem.quality; // Fallback to ID if fetch fails
             }
           }
-          
+
           const itemDetail = {
             type: 'item_added',
             index: i,
@@ -1053,12 +1053,12 @@ export async function PUT(
           itemChanges.push(itemDetail);
         }
       }
-      
+
       if (itemChanges.length > 0) {
-         // Store the itemChanges in both oldValues and newValues for the logger
-         oldValues.itemChanges = itemChanges;
-         newValues.itemChanges = itemChanges;
-         changedFields.push('items');
+        // Store the itemChanges in both oldValues and newValues for the logger
+        oldValues.itemChanges = itemChanges;
+        newValues.itemChanges = itemChanges;
+        changedFields.push('items');
       }
     }
 
@@ -1070,32 +1070,32 @@ export async function PUT(
         updateData,
         { new: true, runValidators: true }
       )
-      .select('_id orderId orderType arrivalDate party contactName contactPhone poNumber styleNo poDate deliveryDate items status createdAt updatedAt')
-      .lean()
-      .maxTimeMS(3000);
+        .select('_id orderId orderType arrivalDate party contactName contactPhone poNumber styleNo poDate deliveryDate items status createdAt updatedAt')
+        .lean()
+        .maxTimeMS(3000);
     } catch (updateError) {
       throw updateError;
     }
 
     if (!updatedOrder) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Failed to update order" 
-        }), 
+        JSON.stringify({
+          success: false,
+          message: "Failed to update order"
+        }),
         { status: 500 }
       );
     }
 
     // ⚡ FIX: Populate party and qualities like POST endpoint does
     // Party and Quality are already imported at the top of the file
-    const partyId = updatedOrder.party;
+    const updatedPartyId = updatedOrder.party;
     const qualityIds = [...new Set(
       (updatedOrder.items || []).map((item: any) => item.quality).filter(Boolean)
     )];
-    
+
     const [parties, qualities] = await Promise.all([
-      partyId ? Party.find({ _id: partyId })
+      updatedPartyId ? Party.find({ _id: updatedPartyId })
         .select('_id name contactName contactPhone address')
         .lean()
         .maxTimeMS(1000) : Promise.resolve([]),
@@ -1104,10 +1104,10 @@ export async function PUT(
         .lean()
         .maxTimeMS(1000) : Promise.resolve([])
     ]);
-    
+
     const partyMap = new Map(parties.map((p: any) => [p._id.toString(), p]));
     const qualityMap = new Map(qualities.map((q: any) => [q._id.toString(), q]));
-    
+
     // Helper to format date to YYYY-MM-DD string to avoid timezone issues
     const formatDateForResponse = (date: Date | string | null | undefined): string | null => {
       if (!date) return null;
@@ -1129,14 +1129,14 @@ export async function PUT(
     // ⚡ FIX: Fetch and attach lab data to items (like GET endpoint does)
     const Lab = (await import("@/models/Lab")).default;
     const orderObjectId = new mongoose.Types.ObjectId(id);
-    const labs = await Lab.find({ 
+    const labs = await Lab.find({
       order: orderObjectId,
-      softDeleted: false 
+      softDeleted: false
     })
       .select('orderItemId labSendDate labSendNumber labSendData status remarks')
       .lean()
       .maxTimeMS(2000);
-    
+
     // Create a map of orderItemId to lab data
     const labMap = new Map();
     labs.forEach((lab: any) => {
@@ -1144,7 +1144,7 @@ export async function PUT(
         labMap.set(lab.orderItemId.toString(), lab);
       }
     });
-    
+
     // ⚡ CRITICAL FIX: Attach parties and qualities to order, and attach lab data to items
     // Ensure lab data is properly matched by orderItemId even if item IDs changed
     const populatedOrder = {
@@ -1152,18 +1152,18 @@ export async function PUT(
       arrivalDate: formatDateForResponse(updatedOrder.arrivalDate),
       poDate: formatDateForResponse(updatedOrder.poDate),
       deliveryDate: formatDateForResponse(updatedOrder.deliveryDate),
-      party: partyId ? partyMap.get(partyId.toString()) || partyId : null,
+      party: updatedPartyId ? partyMap.get(updatedPartyId.toString()) || updatedPartyId : null,
       items: (updatedOrder.items || []).map((item: any) => {
         // ⚡ CRITICAL: Match lab data by orderItemId (item._id)
         // This ensures lab data is attached even if items were reordered or updated
         const itemId = item._id?.toString();
         const labData = itemId ? labMap.get(itemId) : null;
-        
+
         const itemWithLabData = {
           ...item,
           quality: item.quality ? qualityMap.get(item.quality.toString()) || item.quality : null
         };
-        
+
         // ⚡ CRITICAL: Only attach lab data if it actually exists and has data
         if (labData && labData.labSendData) {
           (itemWithLabData as any).labData = {
@@ -1207,7 +1207,7 @@ export async function PUT(
             remarks: ''
           };
         }
-        
+
         return itemWithLabData;
       })
     };
@@ -1226,17 +1226,17 @@ export async function PUT(
     if (changedFields.length > 0) {
       // Fix: logOrderChange expects 3-4 arguments; pass only id, oldValues, newValues, and type
       logOrderChange('update', id, oldValues, newValues)
-        .catch(() => {}); // Silent error handling
+        .catch(() => { }); // Silent error handling
     }
 
     // ⚡ FIX: Return populated order data so frontend can display quality/party names immediately
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "Order updated successfully", 
-        data: populatedOrder 
-      }), 
-      { 
+      JSON.stringify({
+        success: true,
+        message: "Order updated successfully",
+        data: populatedOrder
+      }),
+      {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       }
@@ -1246,43 +1246,43 @@ export async function PUT(
       if (error.message.includes("Unauthorized")) {
         return new Response(JSON.stringify({ message: "Unauthorized" }), { status: 401 });
       }
-      
+
       if (error.message.includes('E11000')) {
         if (error.message.includes('orderId')) {
           return new Response(
-            JSON.stringify({ 
-              message: "Order ID already exists - please use a different order ID" 
-            }), 
+            JSON.stringify({
+              message: "Order ID already exists - please use a different order ID"
+            }),
             { status: 400 }
           );
         }
-        
+
         if (error.message.includes('party') && error.message.includes('poNumber') && error.message.includes('styleNo')) {
           return new Response(
-            JSON.stringify({ 
-              message: "This combination of Party, PO Number, and Style Number already exists. Please use different values." 
-            }), 
+            JSON.stringify({
+              message: "This combination of Party, PO Number, and Style Number already exists. Please use different values."
+            }),
             { status: 400 }
           );
         }
-        
+
         return new Response(
-          JSON.stringify({ 
-            message: "Duplicate key error - please check your data and try again" 
-          }), 
+          JSON.stringify({
+            message: "Duplicate key error - please check your data and try again"
+          }),
           { status: 400 }
         );
       }
-      
+
       if (error.name === 'ValidationError') {
         const validationErrors = Object.values((error as any).errors).map((err: any) => err.message);
         return new Response(
-          JSON.stringify({ message: validationErrors.join(", ") }), 
+          JSON.stringify({ message: validationErrors.join(", ") }),
           { status: 400 }
         );
       }
     }
-    
+
     const message = error instanceof Error ? error.message : "Internal Server Error";
     console.error('[PUT /api/orders/:id] Error:', message, error instanceof Error ? error.stack : '');
     return new Response(JSON.stringify({ message }), { status: 500 });
@@ -1303,26 +1303,26 @@ export async function DELETE(
     const session = await requireAuth(req);
     if (session.role !== 'master') {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Access denied - Only master can delete orders" 
-        }), 
+        JSON.stringify({
+          success: false,
+          message: "Access denied - Only master can delete orders"
+        }),
         { status: 403 }
       );
     }
 
     await dbConnect();
-    
+
     const { id } = await params;
-    
+
     // Check if order exists
     const existingOrder = await Order.findById(id);
     if (!existingOrder) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Order not found" 
-        }), 
+        JSON.stringify({
+          success: false,
+          message: "Order not found"
+        }),
         { status: 404 }
       );
     }
@@ -1339,13 +1339,13 @@ export async function DELETE(
 
     // Delete the order
     const deletedOrder = await Order.findByIdAndDelete(id);
-    
+
     if (!deletedOrder) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Failed to delete order" 
-        }), 
+        JSON.stringify({
+          success: false,
+          message: "Failed to delete order"
+        }),
         { status: 500 }
       );
     }
@@ -1361,23 +1361,23 @@ export async function DELETE(
 
     // Log the order deletion (async, non-blocking)
     logOrderChange('delete', id, orderDetails, {})
-      .catch(() => {}); // Silent error handling
+      .catch(() => { }); // Silent error handling
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "Order deleted successfully" 
-      }), 
+      JSON.stringify({
+        success: true,
+        message: "Order deleted successfully"
+      }),
       { status: 200 }
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error occurred';
-    
+
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        message 
-      }), 
+      JSON.stringify({
+        success: false,
+        message
+      }),
       { status: 500 }
     );
   }
@@ -1397,7 +1397,7 @@ export async function PATCH(
     await requireAuth(req);
 
     await dbConnect();
-    
+
     const { id } = await params;
     const requestData = await req.json();
     const { status, action, itemIndex } = requestData;
@@ -1407,10 +1407,10 @@ export async function PATCH(
       const order = await Order.findById(id);
       if (!order) {
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            message: "Order not found" 
-          }), 
+          JSON.stringify({
+            success: false,
+            message: "Order not found"
+          }),
           { status: 404 }
         );
       }
@@ -1419,10 +1419,10 @@ export async function PATCH(
       const index = parseInt(itemIndex);
       if (isNaN(index) || index < 0 || index >= order.items.length) {
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            message: "Invalid item index" 
-          }), 
+          JSON.stringify({
+            success: false,
+            message: "Invalid item index"
+          }),
           { status: 400 }
         );
       }
@@ -1436,11 +1436,11 @@ export async function PATCH(
       );
 
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           message: "Item deleted successfully",
-          data: updatedOrder 
-        }), 
+          data: updatedOrder
+        }),
         { status: 200 }
       );
     }
@@ -1451,7 +1451,7 @@ export async function PATCH(
       // Get old status before update
       const existingOrder = await Order.findById(id).select('status orderId').lean() as any;
       const oldStatus = existingOrder?.status || 'Not set';
-      
+
       // Direct update without validation for maximum speed
       const updatedOrder = await Order.findByIdAndUpdate(
         id,
@@ -1461,10 +1461,10 @@ export async function PATCH(
 
       if (!updatedOrder) {
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            message: "Order not found" 
-          }), 
+          JSON.stringify({
+            success: false,
+            message: "Order not found"
+          }),
           { status: 404 }
         );
       }
@@ -1480,19 +1480,19 @@ export async function PATCH(
 
       // Log the status change (async, don't wait for it)
       logOrderChange('status_change', id, { status: oldStatus }, { status: updatedOrder.status })
-        .catch(error => {}); // Silent error handling
+        .catch(error => { }); // Silent error handling
 
       // Return minimal response immediately
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: "Order status updated successfully", 
+        JSON.stringify({
+          success: true,
+          message: "Order status updated successfully",
           data: {
             _id: updatedOrder._id,
             orderId: updatedOrder.orderId,
             status: updatedOrder.status
           }
-        }), 
+        }),
         { status: 200 }
       );
     }
@@ -1500,10 +1500,10 @@ export async function PATCH(
     // Fallback for other status values
     if (status && !allowedStatuses.includes(status)) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}` 
-        }), 
+        JSON.stringify({
+          success: false,
+          message: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}`
+        }),
         { status: 400 }
       );
     }
@@ -1512,10 +1512,10 @@ export async function PATCH(
     const existingOrder = await Order.findById(id);
     if (!existingOrder) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Order not found" 
-        }), 
+        JSON.stringify({
+          success: false,
+          message: "Order not found"
+        }),
         { status: 404 }
       );
     }
@@ -1532,10 +1532,10 @@ export async function PATCH(
 
     if (!updatedOrder) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: "Failed to update order status" 
-        }), 
+        JSON.stringify({
+          success: false,
+          message: "Failed to update order status"
+        }),
         { status: 500 }
       );
     }
@@ -1551,19 +1551,19 @@ export async function PATCH(
 
     // Log the status change (async, don't wait for it)
     logOrderChange('status_change', id, { status: oldStatus }, { status: updatedOrder.status })
-      .catch(error => {}); // Silent error handling
+      .catch(error => { }); // Silent error handling
 
     // Return minimal response for faster performance
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "Order status updated successfully", 
+      JSON.stringify({
+        success: true,
+        message: "Order status updated successfully",
         data: {
           _id: updatedOrder._id,
           orderId: updatedOrder.orderId,
           status: updatedOrder.status
         }
-      }), 
+      }),
       { status: 200 }
     );
   } catch (error: unknown) {
@@ -1571,30 +1571,30 @@ export async function PATCH(
       if (error.name === 'ValidationError') {
         const validationErrors = Object.values((error as any).errors).map((err: any) => err.message);
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            message: validationErrors.join(", ") 
-          }), 
+          JSON.stringify({
+            success: false,
+            message: validationErrors.join(", ")
+          }),
           { status: 400 }
         );
       }
-      
+
       if (error.message.includes('E11000')) {
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            message: "Duplicate key error" 
-          }), 
+          JSON.stringify({
+            success: false,
+            message: "Duplicate key error"
+          }),
           { status: 400 }
         );
       }
     }
-    
+
     const message = error instanceof Error ? error.message : "Internal Server Error";
-    return new Response(JSON.stringify({ 
-      success: false, 
-      message 
-    }), { 
+    return new Response(JSON.stringify({
+      success: false,
+      message
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });

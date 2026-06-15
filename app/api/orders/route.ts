@@ -1613,13 +1613,13 @@ export async function POST(req: NextRequest) {
     }
 
     // ⚡ Fetch parties and qualities separately (MUCH faster than populate)
-    const partyId = fetchedOrder.party;
+    const fetchedPartyId = fetchedOrder.party;
     const qualityIds = [...new Set(
       (fetchedOrder.items || []).map((item: any) => item.quality).filter(Boolean)
     )];
 
     const [parties, qualities] = await Promise.all([
-      partyId ? Party.find({ _id: partyId })
+      fetchedPartyId ? Party.find({ _id: fetchedPartyId })
         .select('_id name contactName contactPhone address')
         .lean()
         .maxTimeMS(1000) : Promise.resolve([]),
@@ -1656,7 +1656,7 @@ export async function POST(req: NextRequest) {
       arrivalDate: formatDateForResponse(fetchedOrder.arrivalDate),
       poDate: formatDateForResponse(fetchedOrder.poDate),
       deliveryDate: formatDateForResponse(fetchedOrder.deliveryDate),
-      party: partyId ? partyMap.get(partyId.toString()) || partyId : null,
+      party: fetchedPartyId ? partyMap.get(fetchedPartyId.toString()) || fetchedPartyId : null,
       items: (fetchedOrder.items || []).map((item: any) => ({
         ...item,
         quality: item.quality ? qualityMap.get(item.quality.toString()) || item.quality : null

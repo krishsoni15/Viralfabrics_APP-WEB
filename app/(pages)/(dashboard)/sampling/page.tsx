@@ -894,6 +894,7 @@ export default function SamplingPage() {
                             <PhotoIcon className="h-10 w-10 text-slate-750" />
                             <span className="text-xs text-slate-600 mt-2 font-medium">No Image Uploaded</span>
                           </div>
+                        )}
                       </div>
                       <div className="p-4 flex flex-col flex-grow">
                         <h3 className="font-bold text-lg line-clamp-1 group-hover:text-blue-500 transition-colors" title={item.qualityName}>{item.qualityName}</h3>
@@ -1001,9 +1002,9 @@ export default function SamplingPage() {
                               )}
                             </div>
                           </td>
-                           <td className="px-6 py-4 whitespace-nowrap font-semibold">{item.qualityName}</td>
-                           <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.whereToPut || '-'}</td>
-                           <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={item.notes}>{item.notes || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-semibold">{item.qualityName}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.whereToPut || '-'}</td>
+                          <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={item.notes}>{item.notes || '-'}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-blue-500">{item.meter} M</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-purple-500">{item.piece}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -1152,29 +1153,26 @@ export default function SamplingPage() {
 
               <div className="mt-4">
                 <div className="flex items-center justify-between mb-3">
-                  <label className={`block text-xs font-bold uppercase tracking-wider ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
+                  <label className={`block text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    }`}>
                     Images
                   </label>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-                  }`}>
+                  <span className={`text-xs px-2 py-1 rounded ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                    }`}>
                     {pendingImages.length} image(s)
                   </span>
                 </div>
-                
+
                 {/* Image Upload Area - Compact with Drag & Drop */}
-                <div 
-                  className={`flex items-center space-x-3 mb-3 p-4 rounded-lg border-2 border-dashed transition-all duration-200 ${
-                    dragActive
+                <div
+                  className={`flex items-center space-x-3 mb-3 p-4 rounded-lg border-2 border-dashed transition-all duration-200 ${dragActive
                       ? isDarkMode
                         ? 'border-blue-500 bg-blue-500/10'
                         : 'border-blue-400 bg-blue-50'
                       : isDarkMode
                         ? 'border-slate-700 bg-slate-900/50'
                         : 'border-slate-200 bg-slate-50'
-                  }`}
+                    }`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
@@ -1191,51 +1189,46 @@ export default function SamplingPage() {
                   />
                   <label
                     htmlFor="sampling-image-upload"
-                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg border-2 border-dashed cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${
-                      isDarkMode 
-                        ? 'border-gray-600 hover:border-blue-500 text-gray-300 hover:text-blue-400' 
+                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg border-2 border-dashed cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${isDarkMode
+                        ? 'border-gray-600 hover:border-blue-500 text-gray-300 hover:text-blue-400'
                         : 'border-gray-300 hover:border-blue-400 text-gray-600 hover:text-blue-600'
-                    }`}
+                      }`}
                   >
                     <CloudArrowUpIcon className="h-5 w-5 mr-2" />
                     Upload Image
                   </label>
-                  
+
                   {/* Camera Button */}
                   <button
                     type="button"
                     onClick={() => setShowCamera(true)}
-                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg border-2 border-dashed transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${
-                      isDarkMode 
-                        ? 'border-gray-600 hover:border-green-500 text-gray-300 hover:text-green-400' 
+                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg border-2 border-dashed transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${isDarkMode
+                        ? 'border-gray-600 hover:border-green-500 text-gray-300 hover:text-green-400'
                         : 'border-gray-300 hover:border-green-400 text-gray-600 hover:text-green-600'
-                    }`}
+                      }`}
                   >
                     <PhotoIcon className="h-5 w-5 mr-2" />
                     Camera
                   </button>
-                  
+
                   {submitting && (
                     <div className="flex items-center space-x-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                      <span className={`text-sm hidden sm:inline ${
-                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                      }`}>Processing...</span>
+                      <span className={`text-sm hidden sm:inline ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                        }`}>Processing...</span>
                     </div>
                   )}
-                  
+
                   {/* Drag & Drop Hint */}
                   {!submitting && !dragActive && (
-                    <span className={`text-xs ml-auto hidden md:inline ${
-                      isDarkMode ? 'text-gray-500' : 'text-gray-400'
-                    }`}>
+                    <span className={`text-xs ml-auto hidden md:inline ${isDarkMode ? 'text-gray-500' : 'text-gray-400'
+                      }`}>
                       Drag & drop images here
                     </span>
                   )}
                   {dragActive && (
-                    <span className={`text-xs ml-auto hidden md:inline font-semibold animate-pulse ${
-                      isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                    }`}>
+                    <span className={`text-xs ml-auto hidden md:inline font-semibold animate-pulse ${isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                      }`}>
                       Drop images here
                     </span>
                   )}
@@ -1245,15 +1238,14 @@ export default function SamplingPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
                     {pendingImages.map((img, idx) => (
                       <div key={idx} className="relative group">
-                        <div className={`aspect-square rounded-xl overflow-hidden border-2 shadow-sm hover:shadow-lg transition-all duration-200 hover:scale-105 animate-fade-in-scale ${
-                          isDarkMode 
-                            ? 'border-gray-600 bg-gray-700' 
+                        <div className={`aspect-square rounded-xl overflow-hidden border-2 shadow-sm hover:shadow-lg transition-all duration-200 hover:scale-105 animate-fade-in-scale ${isDarkMode
+                            ? 'border-gray-600 bg-gray-700'
                             : 'border-gray-200 bg-gray-100'
-                        }`}>
-                           <img 
-                            src={img.url} 
-                            alt="" 
-                            className="object-cover h-full w-full cursor-pointer" 
+                          }`}>
+                          <img
+                            src={img.url}
+                            alt=""
+                            className="object-cover h-full w-full cursor-pointer"
                             onClick={() => setShowImagePreview({ urls: pendingImages.map(p => p.url), index: idx })}
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
@@ -1272,9 +1264,9 @@ export default function SamplingPage() {
                             </button>
                           </div>
                         </div>
-                        <button 
-                          type="button" 
-                          onClick={() => handleRemoveImage(idx)} 
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(idx)}
                           className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-all duration-200 z-10 hover:scale-110 active:scale-95 shadow-md"
                         >
                           <XMarkIcon className="h-3 w-3" />
