@@ -1341,6 +1341,21 @@ export async function POST(req: NextRequest) {
       items
     } = await req.json();
 
+    // Normalize party and quality references (might be sent as objects or string IDs)
+    const partyId = (party && typeof party === 'object')
+      ? (party._id || party.id)?.toString()
+      : (party !== undefined && party !== null ? String(party) : undefined);
+
+    const finalItems = Array.isArray(items) ? items.map((item: any) => {
+      const qualityId = (item.quality && typeof item.quality === 'object')
+        ? (item.quality._id || item.quality.id)?.toString()
+        : (item.quality !== undefined && item.quality !== null ? String(item.quality) : undefined);
+      return {
+        ...item,
+        quality: qualityId
+      };
+    }) : items;
+
     // Validation
     const errors: string[] = [];
 
@@ -1356,23 +1371,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (party && party !== '' && !party.match(/^[0-9a-fA-F]{24}$/)) {
+    if (partyId && partyId !== '' && !partyId.match(/^[0-9a-fA-F]{24}$/)) {
       errors.push("Invalid party ID format");
     }
 
-    if (contactName && contactName.trim().length > 50) {
+    if (contactName && typeof contactName === 'string' && contactName.trim().length > 50) {
       errors.push("Contact name cannot exceed 50 characters");
     }
 
-    if (contactPhone && contactPhone.trim().length > 20) {
+    if (contactPhone && typeof contactPhone === 'string' && contactPhone.trim().length > 20) {
       errors.push("Contact phone cannot exceed 20 characters");
     }
 
-    if (poNumber && poNumber.trim().length > 50) {
+    if (poNumber && typeof poNumber === 'string' && poNumber.trim().length > 50) {
       errors.push("PO number cannot exceed 50 characters");
     }
 
-    if (styleNo && styleNo.trim().length > 50) {
+    if (styleNo && typeof styleNo === 'string' && styleNo.trim().length > 50) {
       errors.push("Style number cannot exceed 50 characters");
     }
 
@@ -1397,10 +1412,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate items - quality is optional, quantity is required
-    if (items && Array.isArray(items)) {
-      items.forEach((item, index) => {
+    if (finalItems && Array.isArray(finalItems)) {
+      finalItems.forEach((item, index) => {
         // Quality is optional for each item
-        if (item.quality && item.quality !== '' && !item.quality.match(/^[0-9a-fA-F]{24}$/)) {
+        if (item.quality && item.quality !== '' && typeof item.quality === 'string' && !item.quality.match(/^[0-9a-fA-F]{24}$/)) {
           errors.push(`Invalid quality ID format in item ${index + 1}`);
         }
 
@@ -1412,12 +1427,12 @@ export async function POST(req: NextRequest) {
         }
         if (item.imageUrls && Array.isArray(item.imageUrls)) {
           item.imageUrls.forEach((url: string, urlIndex: number) => {
-            if (url && url.trim().length > 500) {
+            if (url && typeof url === 'string' && url.trim().length > 500) {
               errors.push(`Image URL cannot exceed 500 characters in item ${index + 1}, image ${urlIndex + 1}`);
             }
           });
         }
-        if (item.description && item.description.trim().length > 200) {
+        if (item.description && typeof item.description === 'string' && item.description.trim().length > 200) {
           errors.push(`Description cannot exceed 200 characters in item ${index + 1}`);
         }
 
@@ -1474,20 +1489,20 @@ export async function POST(req: NextRequest) {
     const validationPromises = [];
 
     // Add party validation promise if party is provided
-    if (party && party !== '' && party !== 'null' && party !== 'undefined') {
+    if (partyId && partyId !== '' && partyId !== 'null' && partyId !== 'undefined') {
       validationPromises.push(
-        Party.findById(party).maxTimeMS(5000).then(partyExists => ({
+        Party.findById(partyId).maxTimeMS(5000).then(partyExists => ({
           type: 'party',
           exists: !!partyExists,
-          id: party
+          id: partyId
         }))
       );
     }
 
     // Add quality validation promises for all items
-    if (items && items.length > 0) {
+    if (finalItems && finalItems.length > 0) {
       const uniqueQualityIds = [...new Set(
-        items
+        finalItems
           .filter((item: any) => item.quality && item.quality !== '' && item.quality !== 'null' && item.quality !== 'undefined')
           .map((item: any) => item.quality)
       )];
@@ -1525,19 +1540,19 @@ export async function POST(req: NextRequest) {
 
     // Create order data object with optional fields
     const orderData: any = {
-      contactName: contactName ? contactName.trim() : undefined,
-      contactPhone: contactPhone ? contactPhone.trim() : undefined,
-      poNumber: poNumber ? poNumber.trim() : undefined,
-      styleNo: styleNo ? styleNo.trim() : undefined,
+      contactName: (contactName && typeof contactName === 'string') ? contactName.trim() : undefined,
+      contactPhone: (contactPhone && typeof contactPhone === 'string') ? contactPhone.trim() : undefined,
+      poNumber: (poNumber && typeof poNumber === 'string') ? poNumber.trim() : undefined,
+      styleNo: (styleNo && typeof styleNo === 'string') ? styleNo.trim() : undefined,
       poDate: poDate ? parseDateString(poDate) : undefined,
       deliveryDate: deliveryDate ? parseDateString(deliveryDate) : undefined,
 
-      items: items && items.length > 0 ? items.map((item: any) => ({
+      items: finalItems && finalItems.length > 0 ? finalItems.map((item: any) => ({
         quality: item.quality && item.quality !== '' && item.quality !== 'null' && item.quality !== 'undefined' ? item.quality : undefined,
         quantity: item.quantity !== undefined && item.quantity !== null ? item.quantity : undefined,
-        imageUrls: item.imageUrls && Array.isArray(item.imageUrls) ? item.imageUrls.map((url: string) => url.trim()) : [],
-        description: item.description ? item.description.trim() : undefined,
-        weaverSupplierName: item.weaverSupplierName ? item.weaverSupplierName.trim() : undefined,
+        imageUrls: item.imageUrls && Array.isArray(item.imageUrls) ? item.imageUrls.filter((url: any) => typeof url === 'string').map((url: string) => url.trim()) : [],
+        description: (item.description && typeof item.description === 'string') ? item.description.trim() : '',
+        weaverSupplierName: (item.weaverSupplierName && typeof item.weaverSupplierName === 'string') ? item.weaverSupplierName.trim() : '',
         purchaseRate: item.purchaseRate !== undefined && item.purchaseRate !== null && item.purchaseRate !== '' ?
           (() => {
             const rate = parseFloat(item.purchaseRate);
@@ -1563,8 +1578,8 @@ export async function POST(req: NextRequest) {
     if (arrivalDate) {
       orderData.arrivalDate = parseDateString(arrivalDate);
     }
-    if (party && party !== '' && party !== 'null' && party !== 'undefined') {
-      orderData.party = party;
+    if (partyId && partyId !== '' && partyId !== 'null' && partyId !== 'undefined') {
+      orderData.party = partyId;
     }
     if (status && status !== '' && status !== 'null' && status !== 'undefined') {
       orderData.status = status;

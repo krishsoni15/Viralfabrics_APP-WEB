@@ -2,7 +2,6 @@ import dbConnect from "@/lib/dbConnect";
 import Order from "@/models/Order";
 import Party from "@/models/Party";
 import Quality from "@/models/Quality";
-import Lab from "@/models/Lab";
 import mongoose from "mongoose";
 import { requireAuth, getSession } from "@/lib/session";
 import { type NextRequest } from "next/server";
@@ -491,6 +490,21 @@ export async function PUT(
       status
     } = requestData;
 
+    // Normalize party and quality references (might be sent as objects or string IDs)
+    const partyId = (party && typeof party === 'object')
+      ? (party._id || party.id)?.toString()
+      : (party !== undefined && party !== null ? String(party) : undefined);
+
+    const finalItems = Array.isArray(items) ? items.map((item: any) => {
+      const qualityId = (item.quality && typeof item.quality === 'object')
+        ? (item.quality._id || item.quality.id)?.toString()
+        : (item.quality !== undefined && item.quality !== null ? String(item.quality) : undefined);
+      return {
+        ...item,
+        quality: qualityId
+      };
+    }) : items;
+
     // Validation
     const errors: string[] = [];
     
@@ -505,25 +519,25 @@ export async function PUT(
       }
     }
     
-    if (party !== undefined && party !== null && party !== '' && party !== 'null' && party !== 'undefined') {
-      if (!party.match(/^[0-9a-fA-F]{24}$/)) {
+    if (partyId !== undefined && partyId !== null && partyId !== '' && partyId !== 'null' && partyId !== 'undefined') {
+      if (!partyId.match(/^[0-9a-fA-F]{24}$/)) {
         errors.push("Invalid party ID format");
       }
     }
     
-    if (contactName !== undefined && contactName && contactName.trim().length > 50) {
+    if (contactName !== undefined && contactName && typeof contactName === 'string' && contactName.trim().length > 50) {
       errors.push("Contact name cannot exceed 50 characters");
     }
     
-    if (contactPhone !== undefined && contactPhone && contactPhone.trim().length > 20) {
+    if (contactPhone !== undefined && contactPhone && typeof contactPhone === 'string' && contactPhone.trim().length > 20) {
       errors.push("Contact phone cannot exceed 20 characters");
     }
     
-    if (poNumber !== undefined && poNumber && poNumber.trim().length > 50) {
+    if (poNumber !== undefined && poNumber && typeof poNumber === 'string' && poNumber.trim().length > 50) {
       errors.push("PO number cannot exceed 50 characters");
     }
     
-    if (styleNo !== undefined && styleNo && styleNo.trim().length > 50) {
+    if (styleNo !== undefined && styleNo && typeof styleNo === 'string' && styleNo.trim().length > 50) {
       errors.push("Style number cannot exceed 50 characters");
     }
     
@@ -547,13 +561,13 @@ export async function PUT(
     }
     
     // Validate items if provided
-    if (items !== undefined) {
-      if (!Array.isArray(items) || items.length === 0) {
+    if (finalItems !== undefined) {
+      if (!Array.isArray(finalItems) || finalItems.length === 0) {
         errors.push("At least one order item is required");
       } else {
-        items.forEach((item, index) => {
+        finalItems.forEach((item, index) => {
           // Quality is optional for each item
-          if (item.quality && item.quality !== null && item.quality !== '' && item.quality !== 'null' && item.quality !== 'undefined' && !item.quality.match(/^[0-9a-fA-F]{24}$/)) {
+          if (item.quality && item.quality !== null && item.quality !== '' && item.quality !== 'null' && item.quality !== 'undefined' && typeof item.quality === 'string' && !item.quality.match(/^[0-9a-fA-F]{24}$/)) {
             errors.push(`Invalid quality ID format in item ${index + 1}`);
           }
           
@@ -565,12 +579,12 @@ export async function PUT(
           }
           if (item.imageUrls && Array.isArray(item.imageUrls)) {
             item.imageUrls.forEach((url: string, urlIndex: number) => {
-              if (url && url.trim().length > 500) {
+              if (url && typeof url === 'string' && url.trim().length > 500) {
                 errors.push(`Image URL cannot exceed 500 characters in item ${index + 1}, image ${urlIndex + 1}`);
               }
             });
           }
-          if (item.description && item.description.trim().length > 200) {
+          if (item.description && typeof item.description === 'string' && item.description.trim().length > 200) {
             errors.push(`Description cannot exceed 200 characters in item ${index + 1}`);
           }
           
@@ -617,9 +631,9 @@ export async function PUT(
     let newPartyName = null;
     const validationPromises: Promise<any>[] = [];
     
-    if (party && party !== '' && party !== 'null' && party !== 'undefined') {
+    if (partyId && partyId !== '' && partyId !== 'null' && partyId !== 'undefined') {
       validationPromises.push(
-        Party.findById(party).select('name').lean().maxTimeMS(1000)
+        Party.findById(partyId).select('name').lean().maxTimeMS(1000)
           .then((partyDoc: any) => {
             if (!partyDoc) {
               throw new Error("Party not found");
@@ -631,17 +645,19 @@ export async function PUT(
     }
 
     // ⚡ OPTIMIZED: Verify all qualities in parallel instead of sequential loop
-    if (items && Array.isArray(items) && items.length > 0) {
+    if (finalItems && Array.isArray(finalItems) && finalItems.length > 0) {
       const Quality = (await import('@/models/Quality')).default;
-      const qualityIds = items
+      const qualityIds = finalItems
         .map(item => item?.quality)
         .filter(q => q && typeof q === 'string' && q.trim() && q !== 'null' && q !== 'undefined');
       
-      if (qualityIds.length > 0) {
+      const uniqueQualityIds = [...new Set(qualityIds)];
+      
+      if (uniqueQualityIds.length > 0) {
         validationPromises.push(
-          Quality.find({ _id: { $in: qualityIds } }).select('_id').lean().maxTimeMS(1000)
+          Quality.find({ _id: { $in: uniqueQualityIds } }).select('_id').lean().maxTimeMS(1000)
             .then(qualities => {
-              if (qualities.length !== qualityIds.length) {
+              if (qualities.length !== uniqueQualityIds.length) {
                 throw new Error("One or more qualities not found");
               }
               return qualities;
@@ -664,31 +680,30 @@ export async function PUT(
     const updateData: any = {};
     if (orderType !== undefined) updateData.orderType = orderType;
     if (arrivalDate !== undefined) updateData.arrivalDate = arrivalDate ? parseDateString(arrivalDate) : undefined;
-    if (party !== undefined) {
-      if (party && party !== '' && party !== 'null' && party !== 'undefined') {
-        updateData.party = party;
+    if (partyId !== undefined) {
+      if (partyId && partyId !== '' && partyId !== 'null' && partyId !== 'undefined') {
+        updateData.party = partyId;
       } else {
         updateData.party = null;
       }
     }
-    if (contactName !== undefined) updateData.contactName = contactName !== null ? contactName.trim() : '';
-    if (contactPhone !== undefined) updateData.contactPhone = contactPhone !== null ? contactPhone.trim() : '';
-    if (poNumber !== undefined) updateData.poNumber = poNumber !== null ? poNumber.trim() : '';
-    if (styleNo !== undefined) updateData.styleNo = styleNo !== null ? styleNo.trim() : '';
+    if (contactName !== undefined) updateData.contactName = (contactName !== null && typeof contactName === 'string') ? contactName.trim() : '';
+    if (contactPhone !== undefined) updateData.contactPhone = (contactPhone !== null && typeof contactPhone === 'string') ? contactPhone.trim() : '';
+    if (poNumber !== undefined) updateData.poNumber = (poNumber !== null && typeof poNumber === 'string') ? poNumber.trim() : '';
+    if (styleNo !== undefined) updateData.styleNo = (styleNo !== null && typeof styleNo === 'string') ? styleNo.trim() : '';
     if (poDate !== undefined) updateData.poDate = poDate ? parseDateString(poDate) : undefined;
     if (deliveryDate !== undefined) updateData.deliveryDate = deliveryDate ? parseDateString(deliveryDate) : undefined;
     if (status !== undefined) updateData.status = status;
-    if (items !== undefined) {
+    if (finalItems !== undefined) {
       // ⚡ CRITICAL FIX: Preserve item _id when updating to maintain lab data associations
       // If _id is provided, use it; otherwise MongoDB will generate a new one
-      const mongoose = (await import('mongoose')).default;
-      updateData.items = items.map((item: any) => {
+      updateData.items = finalItems.map((item: any) => {
         const itemData: any = {
           quality: item.quality && item.quality !== '' && item.quality !== 'null' && item.quality !== 'undefined' ? item.quality : null,
           quantity: item.quantity !== undefined && item.quantity !== null ? item.quantity : undefined,
-          imageUrls: item.imageUrls && Array.isArray(item.imageUrls) ? item.imageUrls.map((url: string) => url.trim()) : [],
-          description: item.description !== null ? item.description.trim() : '',
-          weaverSupplierName: item.weaverSupplierName ? item.weaverSupplierName.trim() : undefined,
+          imageUrls: item.imageUrls && Array.isArray(item.imageUrls) ? item.imageUrls.filter((url: any) => typeof url === 'string').map((url: string) => url.trim()) : [],
+          description: (item.description && typeof item.description === 'string') ? item.description.trim() : '',
+          weaverSupplierName: (item.weaverSupplierName && typeof item.weaverSupplierName === 'string') ? item.weaverSupplierName.trim() : '',
           purchaseRate: item.purchaseRate !== undefined && item.purchaseRate !== null && item.purchaseRate !== '' ? 
             (() => {
               const rate = parseFloat(item.purchaseRate);
@@ -738,6 +753,15 @@ export async function PUT(
     const newValues: any = {};
     const changedFields: string[] = [];
     
+    const normalizeDate = (date: Date | undefined) => {
+      if (!date) return null;
+      // Extract date components in local timezone to avoid timezone shifts
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
     if (orderType !== undefined && orderType !== existingOrder.orderType) {
       oldValues.orderType = existingOrder.orderType;
       newValues.orderType = orderType;
@@ -746,15 +770,6 @@ export async function PUT(
     if (arrivalDate !== undefined) {
       const newArrivalDate = arrivalDate ? parseDateString(arrivalDate) : undefined;
       const existingArrivalDate = existingOrder.arrivalDate ? (existingOrder.arrivalDate instanceof Date ? existingOrder.arrivalDate : parseDateString(String(existingOrder.arrivalDate))) : undefined;
-      
-      const normalizeDate = (date: Date | undefined) => {
-        if (!date) return null;
-        // Extract date components in local timezone to avoid timezone shifts
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      };
       
       const existingDateStr = normalizeDate(existingArrivalDate);
       const newDateStr = normalizeDate(newArrivalDate);
@@ -767,9 +782,9 @@ export async function PUT(
         changedFields.push('arrivalDate');
       }
     }
-    if (party !== undefined) {
+    if (partyId !== undefined) {
       const currentPartyId = existingOrder.party?.toString() || null;
-      const newPartyId = party && party !== '' && party !== 'null' && party !== 'undefined' ? party : null;
+      const newPartyId = partyId && partyId !== '' && partyId !== 'null' && partyId !== 'undefined' ? partyId : null;
       
       if (currentPartyId !== newPartyId) {
         // Handle both populated and unpopulated party objects
@@ -782,7 +797,7 @@ export async function PUT(
       }
     }
     if (contactName !== undefined) {
-      const newContactName = contactName !== null && contactName !== '' ? contactName.trim() : '';
+      const newContactName = (contactName !== null && typeof contactName === 'string' && contactName !== '') ? contactName.trim() : '';
       if (existingOrder.contactName !== newContactName) {
         oldValues.contactName = existingOrder.contactName;
         newValues.contactName = newContactName;
@@ -790,7 +805,7 @@ export async function PUT(
       }
     }
     if (contactPhone !== undefined) {
-      const newContactPhone = contactPhone !== null && contactPhone !== '' ? contactPhone.trim() : '';
+      const newContactPhone = (contactPhone !== null && typeof contactPhone === 'string' && contactPhone !== '') ? contactPhone.trim() : '';
       if (existingOrder.contactPhone !== newContactPhone) {
         oldValues.contactPhone = existingOrder.contactPhone;
         newValues.contactPhone = newContactPhone;
@@ -798,7 +813,7 @@ export async function PUT(
       }
     }
     if (poNumber !== undefined) {
-      const newPoNumber = poNumber !== null && poNumber !== '' ? poNumber.trim() : '';
+      const newPoNumber = (poNumber !== null && typeof poNumber === 'string' && poNumber !== '') ? poNumber.trim() : '';
       if (existingOrder.poNumber !== newPoNumber) {
         oldValues.poNumber = existingOrder.poNumber;
         newValues.poNumber = newPoNumber;
@@ -806,7 +821,7 @@ export async function PUT(
       }
     }
     if (styleNo !== undefined) {
-      const newStyleNo = styleNo !== null && styleNo !== '' ? styleNo.trim() : '';
+      const newStyleNo = (styleNo !== null && typeof styleNo === 'string' && styleNo !== '') ? styleNo.trim() : '';
       if (existingOrder.styleNo !== newStyleNo) {
         oldValues.styleNo = existingOrder.styleNo;
         newValues.styleNo = newStyleNo;
@@ -816,15 +831,6 @@ export async function PUT(
     if (poDate !== undefined) {
       const newPoDate = poDate ? parseDateString(poDate) : undefined;
       const existingPoDate = existingOrder.poDate ? (existingOrder.poDate instanceof Date ? existingOrder.poDate : parseDateString(String(existingOrder.poDate))) : undefined;
-      
-      const normalizeDate = (date: Date | undefined) => {
-        if (!date) return null;
-        // Extract date components in local timezone to avoid timezone shifts
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      };
       
       const existingDateStr = normalizeDate(existingPoDate);
       const newDateStr = normalizeDate(newPoDate);
@@ -840,15 +846,6 @@ export async function PUT(
     if (deliveryDate !== undefined) {
       const newDeliveryDate = deliveryDate ? parseDateString(deliveryDate) : undefined;
       const existingDeliveryDate = existingOrder.deliveryDate ? (existingOrder.deliveryDate instanceof Date ? existingOrder.deliveryDate : parseDateString(String(existingOrder.deliveryDate))) : undefined;
-      
-      const normalizeDate = (date: Date | undefined) => {
-        if (!date) return null;
-        // Extract date components in local timezone to avoid timezone shifts
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      };
       
       const existingDateStr = normalizeDate(existingDeliveryDate);
       const newDateStr = normalizeDate(newDeliveryDate);
@@ -866,8 +863,8 @@ export async function PUT(
       newValues.status = status;
       changedFields.push('status');
     }
-    if (items !== undefined) {
-      const oldItems = existingOrder.items.map((item: any) => ({
+    if (finalItems !== undefined) {
+      const oldItems = (existingOrder.items || []).map((item: any) => ({
         quality: item.quality, // Keep the original quality structure for proper comparison
         quantity: item.quantity,
         imageUrls: item.imageUrls || [],
@@ -876,12 +873,12 @@ export async function PUT(
         purchaseRate: item.purchaseRate || 0
       }));
       
-      const newItems = items.map((item: any) => ({
+      const newItems = finalItems.map((item: any) => ({
         quality: item.quality && item.quality !== '' && item.quality !== 'null' && item.quality !== 'undefined' ? item.quality : 'Not set',
         quantity: item.quantity !== undefined && item.quantity !== null ? item.quantity : 0,
-        imageUrls: item.imageUrls && Array.isArray(item.imageUrls) ? item.imageUrls.map((url: string) => url.trim()) : [],
-        description: item.description !== null ? item.description.trim() : '',
-        weaverSupplierName: item.weaverSupplierName ? item.weaverSupplierName.trim() : '',
+        imageUrls: item.imageUrls && Array.isArray(item.imageUrls) ? item.imageUrls.filter((url: any) => typeof url === 'string').map((url: string) => url.trim()) : [],
+        description: (item.description && typeof item.description === 'string') ? item.description.trim() : '',
+        weaverSupplierName: (item.weaverSupplierName && typeof item.weaverSupplierName === 'string') ? item.weaverSupplierName.trim() : '',
         purchaseRate: item.purchaseRate !== undefined && item.purchaseRate !== null && item.purchaseRate !== '' ? 
           (() => {
             const rate = parseFloat(item.purchaseRate);
@@ -890,6 +887,7 @@ export async function PUT(
       }));
       
       const itemChanges: any[] = [];
+      const Quality = (await import('@/models/Quality')).default;
       
       // Process all existing items for changes
       for (let index = 0; index < oldItems.length; index++) {
@@ -916,18 +914,32 @@ export async function PUT(
         if (oldQualityValue) {
           if (typeof oldQualityValue === 'object' && oldQualityValue.name) {
             oldQualityName = oldQualityValue.name;
-          } else if (typeof oldQualityValue === 'string') {
-            oldQualityName = oldQualityValue;
+          } else {
+            const oldQualIdStr = oldQualityValue.toString();
+            if (oldQualIdStr.match(/^[0-9a-fA-F]{24}$/)) {
+              try {
+                const qualityDoc = await Quality.findById(oldQualIdStr).select('name');
+                if (qualityDoc) {
+                  oldQualityName = qualityDoc.name;
+                } else {
+                  oldQualityName = 'Unknown Quality';
+                }
+              } catch (error) {
+                oldQualityName = 'Unknown Quality';
+              }
+            } else {
+              oldQualityName = oldQualIdStr;
+            }
           }
         }
         
         // Extract new quality name
         if (newQualityValue) {
-          if (typeof newQualityValue === 'string' && newQualityValue.match(/^[0-9a-fA-F]{24}$/)) {
+          const newQualIdStr = newQualityValue.toString();
+          if (newQualIdStr.match(/^[0-9a-fA-F]{24}$/)) {
             // It's an ID, fetch the name
             try {
-              const Quality = (await import('@/models/Quality')).default;
-              const qualityDoc = await Quality.findById(newQualityValue).select('name');
+              const qualityDoc = await Quality.findById(newQualIdStr).select('name');
               if (qualityDoc) {
                 newQualityName = qualityDoc.name;
               } else {
@@ -936,16 +948,20 @@ export async function PUT(
             } catch (error) {
               newQualityName = 'Unknown Quality';
             }
-          } else if (typeof newQualityValue === 'string') {
-            newQualityName = newQualityValue;
+          } else {
+            newQualityName = newQualIdStr;
           }
         }
         
         // Compare the actual values
         const oldQualityId = oldQualityValue?._id?.toString() || oldQualityValue?.toString() || null;
-        const newQualityId = newQualityValue?.toString() || null;
+        const newQualityId = (newQualityValue && newQualityValue !== 'Not set') ? newQualityValue.toString() : null;
         
-        qualityChanged = oldQualityId !== newQualityId;
+        // Normalize both to null if they represent unset/empty
+        const normOldQualityId = (oldQualityId === 'null' || oldQualityId === 'undefined' || oldQualityId === 'Not set' || !oldQualityId) ? null : oldQualityId;
+        const normNewQualityId = (newQualityId === 'null' || newQualityId === 'undefined') ? null : newQualityId;
+        
+        qualityChanged = normOldQualityId !== normNewQualityId;
         
         if (qualityChanged) {
           changes.quality = { old: oldQualityName, new: newQualityName };
@@ -958,27 +974,27 @@ export async function PUT(
           hasItemChanges = true;
         }
         
-                 // Compare description
-         const oldDesc = oldItem.description || '';
-         const newDesc = newItem.description || '';
-         if (oldDesc !== newDesc) {
-           changes.description = { old: oldDesc, new: newDesc };
+        // Compare description
+        const oldDesc = oldItem.description || '';
+        const newDesc = newItem.description || '';
+        if (oldDesc !== newDesc) {
+          changes.description = { old: oldDesc, new: newDesc };
           hasItemChanges = true;
         }
         
-                 // Compare weaver supplier name
-         const oldWeaver = oldItem.weaverSupplierName || '';
-         const newWeaver = newItem.weaverSupplierName || '';
-         if (oldWeaver !== newWeaver) {
-           changes.weaverSupplierName = { old: oldWeaver, new: newWeaver };
+        // Compare weaver supplier name
+        const oldWeaver = oldItem.weaverSupplierName || '';
+        const newWeaver = newItem.weaverSupplierName || '';
+        if (oldWeaver !== newWeaver) {
+          changes.weaverSupplierName = { old: oldWeaver, new: newWeaver };
           hasItemChanges = true;
         }
         
-                 // Compare purchase rate
-         const oldRate = oldItem.purchaseRate || 0;
-         const newRate = newItem.purchaseRate || 0;
-         if (oldRate !== newRate) {
-           changes.purchaseRate = { old: oldRate, new: newRate };
+        // Compare purchase rate
+        const oldRate = oldItem.purchaseRate || 0;
+        const newRate = newItem.purchaseRate || 0;
+        if (oldRate !== newRate) {
+          changes.purchaseRate = { old: oldRate, new: newRate };
           hasItemChanges = true;
         }
         
@@ -1002,7 +1018,7 @@ export async function PUT(
         if (hasItemChanges) {
           itemChanges.push({ type: 'item_updated', index, changes });
         }
-        }
+      }
       
       if (newItems.length > oldItems.length) {
         for (let i = oldItems.length; i < newItems.length; i++) {
@@ -1012,7 +1028,6 @@ export async function PUT(
           let qualityName = newItem.quality;
           if (newItem.quality && newItem.quality !== 'Not set' && typeof newItem.quality === 'string') {
             try {
-              const Quality = (await import('@/models/Quality')).default;
               const qualityDoc = await Quality.findById(newItem.quality).select('name');
               if (qualityDoc) {
                 qualityName = qualityDoc.name;
@@ -1112,6 +1127,7 @@ export async function PUT(
     };
 
     // ⚡ FIX: Fetch and attach lab data to items (like GET endpoint does)
+    const Lab = (await import("@/models/Lab")).default;
     const orderObjectId = new mongoose.Types.ObjectId(id);
     const labs = await Lab.find({ 
       order: orderObjectId,
@@ -1124,7 +1140,9 @@ export async function PUT(
     // Create a map of orderItemId to lab data
     const labMap = new Map();
     labs.forEach((lab: any) => {
-      labMap.set(lab.orderItemId.toString(), lab);
+      if (lab && lab.orderItemId) {
+        labMap.set(lab.orderItemId.toString(), lab);
+      }
     });
     
     // ⚡ CRITICAL FIX: Attach parties and qualities to order, and attach lab data to items
@@ -1175,9 +1193,19 @@ export async function PUT(
             remarks: labData.remarks || ''
           };
         } else {
-          // No lab data found for this item - don't attach empty structure
-          // Let frontend handle it
-          (itemWithLabData as any).labData = undefined;
+          // Initialize empty lab data structure for items without lab data (consistent with GET)
+          (itemWithLabData as any).labData = {
+            color: '',
+            shade: '',
+            notes: '',
+            labSendDate: null,
+            approvalDate: null,
+            sampleNumber: '',
+            imageUrl: '',
+            labSendNumber: '',
+            status: 'not_sent',
+            remarks: ''
+          };
         }
         
         return itemWithLabData;
@@ -1256,6 +1284,7 @@ export async function PUT(
     }
     
     const message = error instanceof Error ? error.message : "Internal Server Error";
+    console.error('[PUT /api/orders/:id] Error:', message, error instanceof Error ? error.stack : '');
     return new Response(JSON.stringify({ message }), { status: 500 });
   }
 }

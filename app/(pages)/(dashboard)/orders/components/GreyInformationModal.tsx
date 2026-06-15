@@ -978,7 +978,7 @@ export default function GreyInformationModal({
           weaverNames: [],
           weaverNameNotFound: false,
           quantity: item.quantity ? String(item.quantity) : '',
-          chalanNo: item.chalanNo || '',
+          chalanNo: item.chalanNo ? String(item.chalanNo) : '',
           numberOfPieces: item.numberOfPieces ? String(item.numberOfPieces) : '',
           date: item.date ? new Date(item.date).toISOString().split('T')[0] : today,
           qualitySearch: qualityName, // Set qualitySearch to qualityName so it displays
@@ -1406,28 +1406,28 @@ export default function GreyInformationModal({
           };
 
           // Add optional fields only if provided
-          if (entry.date && entry.date.trim && entry.date.trim() !== '') {
-            greyInfoData.date = entry.date;
+          if (entry.date && typeof entry.date === 'string' && entry.date.trim() !== '') {
+            greyInfoData.date = entry.date.trim();
           } else if (entry.date && typeof entry.date === 'string' && entry.date !== '') {
             greyInfoData.date = entry.date;
           }
-          if (entry.chalanNo !== undefined && entry.chalanNo !== null && entry.chalanNo.trim() !== '') {
-            greyInfoData.chalanNo = entry.chalanNo.trim();
+          if (entry.chalanNo !== undefined && entry.chalanNo !== null && String(entry.chalanNo).trim() !== '') {
+            greyInfoData.chalanNo = String(entry.chalanNo).trim();
           }
-          if (entry.quantity !== undefined && entry.quantity !== null && entry.quantity.trim() !== '') {
-            const qtyValue = parseFloat(entry.quantity);
+          if (entry.quantity !== undefined && entry.quantity !== null && String(entry.quantity).trim() !== '') {
+            const qtyValue = parseFloat(String(entry.quantity));
             if (!isNaN(qtyValue) && qtyValue >= 0) {
               greyInfoData.quantity = qtyValue;
             }
           }
-          if (entry.numberOfPieces !== undefined && entry.numberOfPieces !== null && entry.numberOfPieces.trim() !== '') {
-            const piecesValue = parseInt(entry.numberOfPieces);
+          if (entry.numberOfPieces !== undefined && entry.numberOfPieces !== null && String(entry.numberOfPieces).trim() !== '') {
+            const piecesValue = parseInt(String(entry.numberOfPieces));
             if (!isNaN(piecesValue) && piecesValue >= 0) {
               greyInfoData.numberOfPieces = piecesValue;
             }
           }
-          if (entry.qualityId && entry.qualityId.trim() !== '') {
-            greyInfoData.quality = entry.qualityId;
+          if (entry.qualityId && String(entry.qualityId).trim() !== '') {
+            greyInfoData.quality = String(entry.qualityId).trim();
           }
 
           // ⚡ FIX: Check if entry has existing ID (update) or new (create)
@@ -1823,7 +1823,7 @@ export default function GreyInformationModal({
                             } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all`}
                         />
                         {/* Clear button - shows when there's text in the field */}
-                        {!readOnly && (entry.qualityName || entry.qualitySearch) && (entry.qualityName || entry.qualitySearch).trim() !== '' && (
+                        {!readOnly && (entry.qualityName || entry.qualitySearch) && String(entry.qualityName || entry.qualitySearch || '').trim() !== '' && (
                           <button
                             type="button"
                             onClick={(e) => {

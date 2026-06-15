@@ -392,11 +392,8 @@ export default function Sidebar({
               }}
               className={`group cursor-pointer ${shouldShowText ? 'flex items-center space-x-3' : 'flex justify-center'}`}
             >
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-lg transition-all duration-300 ${mounted && isDarkMode
-                ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/25'
-                : 'bg-gradient-to-br from-blue-600 to-indigo-700 shadow-blue-500/25'
-                } group-hover:scale-105`}>
-                <BuildingOfficeIcon className="h-5 w-5 text-white" />
+              <div className="flex items-center justify-center">
+                <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics Logo" className="h-10 w-10 object-contain" />
               </div>
               {shouldShowText && (
                 <div className="min-w-0">
@@ -706,11 +703,8 @@ export default function Sidebar({
               }}
               className="flex items-center space-x-3 group cursor-pointer"
             >
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-lg transition-all duration-300 ${mounted && isDarkMode
-                ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/25'
-                : 'bg-gradient-to-br from-blue-600 to-indigo-700 shadow-blue-500/25'
-                } group-hover:scale-105`}>
-                <BuildingOfficeIcon className="h-5 w-5 text-white" />
+              <div className="flex items-center justify-center">
+                <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics Logo" className="h-10 w-10 object-contain" />
               </div>
               <div>
                 <h1 className={`text-lg font-bold transition-colors duration-300 ${mounted && isDarkMode ? 'text-white' : 'text-gray-900'

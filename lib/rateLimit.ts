@@ -91,21 +91,21 @@ if (useRedis && Ratelimit) {
 
   apiRateLimiterRedis = new Ratelimit({
     redis,
-    limiter: Ratelimit.slidingWindow(100, '1 m'),
+    limiter: Ratelimit.slidingWindow(1000, '1 m'),
     analytics: true,
     prefix: '@upstash/ratelimit:api',
   });
 
   strictRateLimiterRedis = new Ratelimit({
     redis,
-    limiter: Ratelimit.slidingWindow(10, '1 m'),
+    limiter: Ratelimit.slidingWindow(200, '1 m'),
     analytics: true,
     prefix: '@upstash/ratelimit:strict',
   });
 
   writeRateLimiterRedis = new Ratelimit({
     redis,
-    limiter: Ratelimit.slidingWindow(30, '1 m'),
+    limiter: Ratelimit.slidingWindow(500, '1 m'),
     analytics: true,
     prefix: '@upstash/ratelimit:write',
   });
@@ -207,7 +207,7 @@ export const apiRateLimiter = useRedis && apiRateLimiterRedis
     }
   : createInMemoryRateLimiter({
       windowMs: 60 * 1000,
-      max: 100,
+      max: 1000,
     });
 
 export const strictRateLimiter = useRedis && strictRateLimiterRedis
@@ -223,7 +223,7 @@ export const strictRateLimiter = useRedis && strictRateLimiterRedis
     }
   : createInMemoryRateLimiter({
       windowMs: 60 * 1000,
-      max: 10,
+      max: 200,
     });
 
 export const writeRateLimiter = useRedis && writeRateLimiterRedis
@@ -239,7 +239,7 @@ export const writeRateLimiter = useRedis && writeRateLimiterRedis
     }
   : createInMemoryRateLimiter({
       windowMs: 60 * 1000,
-      max: 30,
+      max: 500,
     });
 
 export function getRateLimitHeaders(result: RateLimitResult): Record<string, string> {

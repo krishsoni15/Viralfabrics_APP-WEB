@@ -1575,30 +1575,30 @@ export default function MillOutputForm({
     const newErrors: ValidationErrors = {};
 
     formData.millOutputItems.forEach((item, itemIndex) => {
-      if (!item.recdDate || item.recdDate.trim() === '') {
+      if (!item.recdDate || String(item.recdDate).trim() === '') {
         newErrors[`recdDate_${item.id}`] = 'Received date is required';
       }
 
-      if (!item.millBillNo || item.millBillNo.trim() === '') {
+      if (!item.millBillNo || String(item.millBillNo).trim() === '') {
         newErrors[`millBillNo_${item.id}`] = 'Mill bill number is required';
       }
 
-      if (!item.finishedMtr || item.finishedMtr.trim() === '' || parseFloat(item.finishedMtr) <= 0) {
+      if (!item.finishedMtr || String(item.finishedMtr).trim() === '' || parseFloat(String(item.finishedMtr)) <= 0) {
         newErrors[`finishedMtr_${item.id}`] = 'Valid finished meters is required';
       }
 
       // Mill rate is now optional - no validation required
 
-      if (!item.quality || item.quality.trim() === '') {
+      if (!item.quality || String(item.quality).trim() === '') {
         newErrors[`quality_${item.id}`] = 'Quality is required';
       }
 
       // Validate additional finished meters
       item.additionalFinishedMtr.forEach((additional, additionalIndex) => {
-        if (!additional.meters || additional.meters.trim() === '' || parseFloat(additional.meters) <= 0) {
+        if (!additional.meters || String(additional.meters).trim() === '' || parseFloat(String(additional.meters)) <= 0) {
           newErrors[`additionalFinishedMtr_${item.id}_${additionalIndex}_meters`] = 'Valid additional finished meters is required';
         }
-        if (!additional.quality || additional.quality.trim() === '') {
+        if (!additional.quality || String(additional.quality).trim() === '') {
           newErrors[`additionalQuality_${item.id}_${additionalIndex}`] = 'Quality is required';
         }
       });
@@ -1726,8 +1726,8 @@ export default function MillOutputForm({
       const millOutputData = {
         orderId: formData.orderId,
         recdDate: item.recdDate,
-        millBillNo: item.millBillNo.trim(),
-        finishedMtr: parseFloat(item.finishedMtr),
+        millBillNo: String(item.millBillNo).trim(),
+        finishedMtr: parseFloat(String(item.finishedMtr)),
         quality: item.quality // Add quality field
       };
 
@@ -1757,8 +1757,8 @@ export default function MillOutputForm({
         const additionalMillOutputData = {
           orderId: formData.orderId,
           recdDate: item.recdDate,
-          millBillNo: item.millBillNo.trim(),
-          finishedMtr: parseFloat(additional.meters),
+          millBillNo: String(item.millBillNo).trim(),
+          finishedMtr: parseFloat(String(additional.meters)),
           quality: additional.quality
         };
 

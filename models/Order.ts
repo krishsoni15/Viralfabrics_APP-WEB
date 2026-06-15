@@ -128,29 +128,24 @@ const OrderSchema = new Schema<IOrder>({
   },
   contactName: {
     type: String,
-    trim: true,
     maxlength: [50, "Contact name cannot exceed 50 characters"]
   },
   contactPhone: {
     type: String,
-    trim: true,
     maxlength: [20, "Contact phone cannot exceed 20 characters"]
   },
   contactEmail: {
     type: String,
-    trim: true,
     lowercase: true,
     maxlength: [100, "Contact email cannot exceed 100 characters"]
   },
   poNumber: {
     type: String,
-    trim: true,
     maxlength: [50, "PO number cannot exceed 50 characters"],
     index: true
   },
   styleNo: {
     type: String,
-    trim: true,
     maxlength: [50, "Style number cannot exceed 50 characters"],
     index: true
   },
@@ -203,12 +198,10 @@ const OrderSchema = new Schema<IOrder>({
       },
       description: {
         type: String,
-        trim: true,
         maxlength: [200, "Description cannot exceed 200 characters"]
       },
       weaverSupplierName: {
         type: String,
-        trim: true,
         maxlength: [100, "Weaver supplier name cannot exceed 100 characters"]
       },
       purchaseRate: {
@@ -240,7 +233,6 @@ const OrderSchema = new Schema<IOrder>({
       },
       notes: {
         type: String,
-        trim: true,
         maxlength: [500, "Notes cannot exceed 500 characters"]
       }
     }],
@@ -314,17 +306,14 @@ const OrderSchema = new Schema<IOrder>({
   },
   shippingAddress: {
     type: String,
-    trim: true,
     maxlength: [300, "Shipping address cannot exceed 300 characters"]
   },
   billingAddress: {
     type: String,
-    trim: true,
     maxlength: [300, "Billing address cannot exceed 300 characters"]
   },
   notes: {
     type: String,
-    trim: true,
     maxlength: [1000, "Notes cannot exceed 1000 characters"]
   },
   metadata: {
@@ -334,7 +323,6 @@ const OrderSchema = new Schema<IOrder>({
     },
     tags: [{
       type: String,
-      trim: true,
       maxlength: [30, "Tag cannot exceed 30 characters"]
     }],
     source: {
@@ -652,8 +640,8 @@ OrderSchema.pre('save', function (next) {
   this.finalAmount = this.totalAmount + this.taxAmount - this.discountAmount;
 
   // Normalize tags
-  if (this.metadata?.tags) {
-    this.metadata.tags = [...new Set(this.metadata.tags.map(tag => tag.toLowerCase().trim()))];
+  if (this.metadata?.tags && Array.isArray(this.metadata.tags)) {
+    this.metadata.tags = [...new Set(this.metadata.tags.filter(tag => typeof tag === 'string').map(tag => tag.toLowerCase().trim()))];
   }
 
   next();

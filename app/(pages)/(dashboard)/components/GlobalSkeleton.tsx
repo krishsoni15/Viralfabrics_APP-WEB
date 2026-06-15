@@ -95,12 +95,8 @@ const GlobalSkeleton: React.FC<GlobalSkeletonProps> = ({
         <div className="text-center max-w-md mx-auto px-6">
           {/* Logo Section - Matching Sidebar Style */}
           <div className="mb-6">
-            <div className={`w-16 h-16 mx-auto rounded-xl flex items-center justify-center shadow-lg transition-all duration-200 ${
-              mounted && isDarkMode 
-                ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/25' 
-                : 'bg-gradient-to-br from-blue-600 to-indigo-700 shadow-blue-500/25'
-            }`}>
-              <BuildingOfficeIcon className="h-8 w-8 text-white" />
+            <div className="mx-auto flex items-center justify-center">
+              <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics Logo" className="h-16 w-16 object-contain" />
             </div>
           </div>
           

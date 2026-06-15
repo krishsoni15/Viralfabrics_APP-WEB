@@ -1,7 +1,7 @@
 {
   "name": "Viral Fabrics",
   "short_name": "Viral",
-  "description": "Premium Fabric Solutions - Complete CRM Management System for Order Tracking, Party Management, and Business Operations",
+  "description": "Viral Fabrics Enterprise CRM. Manage inventory, track orders, and optimize business operations.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1D293D",
@@ -9,29 +9,34 @@
   "orientation": "portrait-primary",
   "scope": "/",
   "lang": "en",
-  "categories": ["business", "productivity", "utilities"],
+  "categories": [
+    "business",
+    "productivity",
+    "utilities"
+  ],
   "icons": [
     {
-      "src": "/icons/favicon.ico",
-      "sizes": "16x16 32x32",
-      "type": "image/x-icon"
-    },
-    {
-      "src": "/icons/favicon-32x32.png",
-      "sizes": "32x32",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/android-chrome-192x192.png",
+      "src": "/vflogo/viral lgoo.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/android-chrome-512x512.png",
+      "src": "/vflogo/viral lgoo.png",
       "sizes": "512x512",
       "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/vflogo/viral lgoo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/vflogo/favicon.ico",
+      "sizes": "16x16 32x32 64x64",
+      "type": "image/x-icon",
       "purpose": "any"
     }
   ],
@@ -59,22 +64,6 @@
           "sizes": "96x96"
         }
       ]
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshots/dashboard.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Dashboard Overview"
-    },
-    {
-      "src": "/screenshots/orders.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Order Management"
     }
   ]
 }

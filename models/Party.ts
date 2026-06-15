@@ -409,8 +409,8 @@ PartySchema.pre('save', function(next) {
   }
   
   // Normalize tags
-  if (this.metadata?.tags) {
-    this.metadata.tags = [...new Set(this.metadata.tags.map(tag => tag.toLowerCase().trim()))];
+  if (this.metadata?.tags && Array.isArray(this.metadata.tags)) {
+    this.metadata.tags = [...new Set(this.metadata.tags.filter(tag => typeof tag === 'string').map(tag => tag.toLowerCase().trim()))];
   }
   
   next();

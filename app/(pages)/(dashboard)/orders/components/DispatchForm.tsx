@@ -1078,9 +1078,9 @@ export default function DispatchForm({
         if (!groups[key]) {
           groups[key] = {
             dispatchDate: dispatch.dispatchDate ? new Date(dispatch.dispatchDate).toISOString().split('T')[0] : '',
-            billNo: dispatch.billNo,
-            transportNo: dispatch.transportNo || '',
-            lrNo: dispatch.lrNo || '',
+            billNo: dispatch.billNo ? String(dispatch.billNo) : '',
+            transportNo: dispatch.transportNo ? String(dispatch.transportNo) : '',
+            lrNo: dispatch.lrNo ? String(dispatch.lrNo) : '',
             createdAt: dispatch.createdAt, // Store createdAt for sorting
             subItems: []
           };
@@ -1941,33 +1941,33 @@ export default function DispatchForm({
 
     formData.dispatchItems.forEach((item, itemIndex) => {
       // Validate dispatch item fields
-      if (!item.dispatchDate || item.dispatchDate.trim() === '') {
+      if (!item.dispatchDate || String(item.dispatchDate).trim() === '') {
         newErrors[`dispatchDate_${item.id}`] = 'Dispatch date is required';
       }
 
-      if (!item.billNo || item.billNo.trim() === '') {
+      if (!item.billNo || String(item.billNo).trim() === '') {
         newErrors[`billNo_${item.id}`] = 'Bill number is required';
       }
 
       // Validate sub-items (main quality & finish items)
       (item.subItems || []).forEach((subItem, subIndex) => {
-        if (!subItem.finishMtr || subItem.finishMtr.trim() === '' || parseFloat(subItem.finishMtr) <= 0) {
+        if (!subItem.finishMtr || String(subItem.finishMtr).trim() === '' || parseFloat(String(subItem.finishMtr)) <= 0) {
           newErrors[`finishMtr_${subItem.id}`] = 'Valid finish meters is required';
         }
 
-        if (subItem.chindiKg && subItem.chindiKg.trim() !== '' && (isNaN(Number(subItem.chindiKg)) || Number(subItem.chindiKg) < 0)) {
+        if (subItem.chindiKg && String(subItem.chindiKg).trim() !== '' && (isNaN(Number(subItem.chindiKg)) || Number(subItem.chindiKg) < 0)) {
           newErrors[`chindiKg_${subItem.id}`] = 'Chindi (kg) must be a valid non-negative number';
         }
 
-        if (subItem.cutPieceMtr && subItem.cutPieceMtr.trim() !== '' && (isNaN(Number(subItem.cutPieceMtr)) || Number(subItem.cutPieceMtr) < 0)) {
+        if (subItem.cutPieceMtr && String(subItem.cutPieceMtr).trim() !== '' && (isNaN(Number(subItem.cutPieceMtr)) || Number(subItem.cutPieceMtr) < 0)) {
           newErrors[`cutPieceMtr_${subItem.id}`] = 'Cut piece must be a valid non-negative number';
         }
 
-        if (subItem.rejectedMtr && subItem.rejectedMtr.trim() !== '' && (isNaN(Number(subItem.rejectedMtr)) || Number(subItem.rejectedMtr) < 0)) {
+        if (subItem.rejectedMtr && String(subItem.rejectedMtr).trim() !== '' && (isNaN(Number(subItem.rejectedMtr)) || Number(subItem.rejectedMtr) < 0)) {
           newErrors[`rejectedMtr_${subItem.id}`] = 'Rejected (m) must be a valid non-negative number';
         }
 
-        if (!subItem.quality || subItem.quality.trim() === '') {
+        if (!subItem.quality || String(subItem.quality).trim() === '') {
           newErrors[`quality_${subItem.id}`] = 'Quality is required';
         }
       });
@@ -2128,15 +2128,15 @@ export default function DispatchForm({
           const subDispatch = {
             orderId: formDataToUse.orderId,
             dispatchDate: item.dispatchDate,
-            billNo: item.billNo.trim(),
-            transportNo: (item.transportNo || '').trim(),
-            lrNo: (item.lrNo || '').trim(),
+            billNo: String(item.billNo).trim(),
+            transportNo: String(item.transportNo || '').trim(),
+            lrNo: String(item.lrNo || '').trim(),
             finishMtr: finishMtrValue,
             quality: String(subItem.quality).trim(),
             photos: Array.isArray(subItem.photos) ? subItem.photos.filter((url) => typeof url === 'string') : [],
-            chindiKg: subItem.chindiKg && subItem.chindiKg.trim() !== '' ? Number(subItem.chindiKg) : 0,
-            cutPieceMtr: subItem.cutPieceMtr && subItem.cutPieceMtr.trim() !== '' ? Number(subItem.cutPieceMtr) : 0,
-            rejectedMtr: subItem.rejectedMtr && subItem.rejectedMtr.trim() !== '' ? Number(subItem.rejectedMtr) : 0
+            chindiKg: subItem.chindiKg && String(subItem.chindiKg).trim() !== '' ? Number(subItem.chindiKg) : 0,
+            cutPieceMtr: subItem.cutPieceMtr && String(subItem.cutPieceMtr).trim() !== '' ? Number(subItem.cutPieceMtr) : 0,
+            rejectedMtr: subItem.rejectedMtr && String(subItem.rejectedMtr).trim() !== '' ? Number(subItem.rejectedMtr) : 0
           };
           allDispatches.push(subDispatch);
           console.log(`✅ Added sub-item (M${validIndex + 1}) for item ${itemIndex + 1}:`, {

@@ -84,18 +84,11 @@ export default function PWARegistration() {
     );
     
     if (isDevelopment) {
-      // Unregister any existing service workers in development
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-          registrations.forEach((registration) => {
-            registration.unregister();
-          });
-        });
-      }
-      return;
+      // We will keep SW registration enabled in development so PWA can be installed locally
+      console.log('Running in development mode - Service Worker is enabled for PWA testing');
     }
 
-    // Register service worker (only in production)
+    // Register service worker (enabled for both prod and dev)
     const registerServiceWorker = async () => {
       if ('serviceWorker' in navigator) {
         try {
