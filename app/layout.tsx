@@ -67,14 +67,14 @@ export default function RootLayout({
       <html lang="en" suppressHydrationWarning>
       <head>
         {/* Favicon */}
-        <link rel="icon" type="image/x-icon" href="/icons/favicon.ico" />
-        <link rel="shortcut icon" type="image/x-icon" href="/icons/favicon.ico" />
+        <link rel="icon" href="/vflogo/favicon.ico" />
+        <link rel="shortcut icon" href="/vflogo/favicon.ico" />
         
         {/* PWA Manifest */}
         <link rel="manifest" href="/manifest.json" />
         
         {/* Apple Touch Icon */}
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" href="/vflogo/apple-touch-icon.png" />
         
         {/* Microsoft Tiles */}
         <meta name="msapplication-config" content="/browserconfig.xml" />

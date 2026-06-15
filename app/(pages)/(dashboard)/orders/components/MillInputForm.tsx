@@ -2723,37 +2723,37 @@ export default function MillInputForm({
   const validateForm = () => {
     const newErrors: ValidationErrors = {};
 
-    if (!formData.mill || formData.mill.trim() === '') {
+    if (!formData.mill || String(formData.mill).trim() === '') {
       newErrors.mill = 'Please select a mill';
     }
 
     // ⚡ REMOVED: Duplicate chalan number validation - chalan numbers don't need to be unique
 
     formData.millItems.forEach((item, itemIndex) => {
-      if (!item.quality || item.quality.trim() === '') {
+      if (!item.quality || String(item.quality).trim() === '') {
         newErrors[`quality_${item.id}`] = 'Quality is required';
       }
-      if (!item.millDate || item.millDate.trim() === '') {
+      if (!item.millDate || String(item.millDate).trim() === '') {
         newErrors[`millDate_${item.id}`] = 'Mill date is required';
       }
-      if (!item.chalanNo || item.chalanNo.trim() === '') {
+      if (!item.chalanNo || String(item.chalanNo).trim() === '') {
         newErrors[`chalanNo_${item.id}`] = 'Chalan number is required';
       }
-      if (!item.greighMtr || item.greighMtr.trim() === '' || parseFloat(item.greighMtr) <= 0) {
+      if (!item.greighMtr || String(item.greighMtr).trim() === '' || parseFloat(String(item.greighMtr)) <= 0) {
         newErrors[`greighMtr_${item.id}`] = 'Valid greigh meters is required';
       }
-      if (!item.pcs || item.pcs.trim() === '' || parseInt(item.pcs) <= 0) {
+      if (!item.pcs || String(item.pcs).trim() === '' || parseInt(String(item.pcs)) <= 0) {
         newErrors[`pcs_${item.id}`] = 'Valid number of pieces is required';
       }
 
       item.additionalMeters.forEach((additional, additionalIndex) => {
-        if (!additional.quality || additional.quality.trim() === '') {
+        if (!additional.quality || String(additional.quality).trim() === '') {
           newErrors[`additionalQuality_${item.id}_${additionalIndex}`] = 'Quality is required';
         }
-        if (!additional.meters || additional.meters.trim() === '' || parseFloat(additional.meters) <= 0) {
+        if (!additional.meters || String(additional.meters).trim() === '' || parseFloat(String(additional.meters)) <= 0) {
           newErrors[`additionalMeters_${item.id}_${additionalIndex}_meters`] = 'Valid additional meters is required';
         }
-        if (!additional.pieces || additional.pieces.trim() === '' || parseInt(additional.pieces) <= 0) {
+        if (!additional.pieces || String(additional.pieces).trim() === '' || parseInt(String(additional.pieces)) <= 0) {
           newErrors[`additionalMeters_${item.id}_${additionalIndex}_pieces`] = 'Valid additional pieces is required';
         }
       });

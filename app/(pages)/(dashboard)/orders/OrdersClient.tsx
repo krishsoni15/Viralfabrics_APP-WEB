@@ -374,6 +374,9 @@ export default function OrdersClient({
   const [showMillModal, setShowMillModal] = useState(false);
   const [showLabAddModal, setShowLabAddModal] = useState(false);
   const [selectedOrderForLab, setSelectedOrderForLab] = useState<Order | null>(null);
+  // Party-only order view modal (read-only)
+  const [showOrderViewModal, setShowOrderViewModal] = useState(false);
+  const [selectedOrderForView, setSelectedOrderForView] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [messages, setMessages] = useState<ValidationMessage[]>([]);
@@ -4551,6 +4554,11 @@ export default function OrdersClient({
   };
 
   const handleView = (order: Order) => {
+    if (isParty) {
+      setSelectedOrderForView(order);
+      setShowOrderViewModal(true);
+      return;
+    }
     router.push(`/orders/orderdetails?id=${order._id}`);
   };
 
@@ -8903,6 +8911,119 @@ export default function OrdersClient({
             setShowPartyModal(false);
           }}
         />
+      )}
+
+      {showOrderViewModal && selectedOrderForView && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowOrderViewModal(false)} />
+          <div className={`max-w-4xl w-full ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} rounded-lg shadow-lg overflow-auto z-50 p-6`}> 
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold">Order Details</h3>
+              <button onClick={() => setShowOrderViewModal(false)} className={`px-3 py-1 rounded ${isDarkMode ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-800'}`}>Close</button>
+            </div>
+
+            {/* Basic metadata */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div>
+                <div className="text-xs font-semibold">Order ID</div>
+                <div className="font-bold">{selectedOrderForView.orderId || selectedOrderForView._id}</div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold">Party</div>
+                <div className="font-medium">{selectedOrderForView.party && typeof selectedOrderForView.party === 'object' ? selectedOrderForView.party.name : selectedOrderForView.party}</div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold">PO Number</div>
+                <div className="font-medium">{selectedOrderForView.poNumber || '—'}</div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold">Style No</div>
+                <div className="font-medium">{selectedOrderForView.styleNo || '—'}</div>
+              </div>
+            </div>
+
+            {/* Items */}
+            <div className="mb-4">
+              <h4 className="font-semibold mb-2">Items</h4>
+              {selectedOrderForView.items && selectedOrderForView.items.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedOrderForView.items.map((it: any, idx: number) => (
+                    <div key={idx} className="p-2 border rounded">
+                      <div className="text-sm font-semibold">{it.quality || it.qualityName || 'Item'}</div>
+                      <div className="text-xs">Qty: {it.quantity || it.qty || 0}</div>
+                      <div className="text-xs">Shade: {it.shade || '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500">No items found</div>
+              )}
+            </div>
+
+            {/* Process Data - Mill Inputs / Outputs / Dispatches / Grey Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h5 className="font-semibold mb-2">Mill Inputs</h5>
+                {(orderMillInputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).length > 0 ? (
+                  (orderMillInputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).map((m: any, i: number) => (
+                    <div key={i} className="p-2 border rounded mb-2">
+                      <div className="text-sm font-semibold">{m.millName || m.mill || 'Mill'}</div>
+                      <div className="text-xs">Chalan: {m.chalanNo || m.chalan || '—'}</div>
+                      <div className="text-xs">Date: {m.millDate || m.recdDate || '—'}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500">No mill inputs</div>
+                )}
+              </div>
+
+              <div>
+                <h5 className="font-semibold mb-2">Mill Outputs</h5>
+                {(orderMillOutputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).length > 0 ? (
+                  (orderMillOutputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).map((m: any, i: number) => (
+                    <div key={i} className="p-2 border rounded mb-2">
+                      <div className="text-sm font-semibold">{m.millName || m.mill || 'Mill'}</div>
+                      <div className="text-xs">Bill No: {m.millBillNo || m.billNo || '—'}</div>
+                      <div className="text-xs">Pcs: {m.pcs || m.greighMtr || '—'}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500">No mill outputs</div>
+                )}
+              </div>
+
+              <div>
+                <h5 className="font-semibold mb-2">Dispatches</h5>
+                {(orderDispatches[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).length > 0 ? (
+                  (orderDispatches[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).map((d: any, i: number) => (
+                    <div key={i} className="p-2 border rounded mb-2">
+                      <div className="text-sm font-semibold">{d.dispatchNo || d.chalanNo || 'Dispatch'}</div>
+                      <div className="text-xs">Date: {d.dispatchDate || d.date || '—'}</div>
+                      <div className="text-xs">Qty: {d.qty || d.quantity || '—'}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500">No dispatches</div>
+                )}
+              </div>
+
+              <div>
+                <h5 className="font-semibold mb-2">Grey Info</h5>
+                {(orderGreyInfo[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).length > 0 ? (
+                  (orderGreyInfo[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).map((g: any, i: number) => (
+                    <div key={i} className="p-2 border rounded mb-2">
+                      <div className="text-sm font-semibold">{g.greyType || 'Grey'}</div>
+                      <div className="text-xs">Meters: {g.greighMtr || g.meters || '—'}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500">No grey info</div>
+                )}
+              </div>
+            </div>
+
+          </div>
+        </div>
       )}
 
       {showQualityModal && (

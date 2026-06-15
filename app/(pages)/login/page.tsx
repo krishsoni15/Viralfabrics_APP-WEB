@@ -758,12 +758,8 @@ function LoginForm() {
           <div className="max-w-lg text-center">
             {/* CRM Logo and Branding */}
             <div className="flex items-center justify-center mb-10 animate-fade-in-subtle">
-              <div className={`h-18 w-18 rounded-2xl flex items-center justify-center shadow-2xl transition-all duration-700 hover:scale-105 hover:rotate-1 transform ${
-                isDarkMode
-                  ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/40'
-                  : 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/50'
-              }`}>
-                <BuildingOfficeIcon className="h-9 w-9 text-white" />
+              <div className="flex items-center justify-center">
+                <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics Logo" className="h-20 w-20 object-contain" />
               </div>
               <div className="ml-5 animate-slide-in-subtle">
                 <h1 className="text-4xl font-bold tracking-tight text-white">{BRAND_NAME}</h1>
@@ -818,12 +814,8 @@ function LoginForm() {
             </button>
           </div>
           
-          <div className={`h-12 w-12 rounded-xl flex items-center justify-center shadow-xl transition-all duration-300 ${
-            isDarkMode
-              ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/30'
-              : 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/40'
-          }`}>
-            <BuildingOfficeIcon className="h-6 w-6 text-white" />
+          <div className="flex items-center justify-center">
+            <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics Logo" className="h-12 w-12 object-contain" />
           </div>
           <div className="ml-3">
             <h1 className="text-2xl font-bold tracking-tight text-white">{BRAND_NAME}</h1>

@@ -146,7 +146,17 @@ export function calculateOrderTotal(order: Order): number {
  */
 export function getDisplayOrderId(orderId?: string | null): string {
   if (!orderId) return '';
-  const idStr = String(orderId);
-  // Aggressively strip any FY block (e.g. FY2728, FY2627-) from anywhere in the string
-  return idStr.replace(/FY\s*\d{4}\s*-?\s*/gi, '').trim();
+  const idStr = String(orderId).trim();
+  
+  // Split by common separators: '/', '-', or space
+  const parts = idStr.split(/[\/\-\s]+/);
+  const lastPart = parts[parts.length - 1];
+  
+  // If the last part consists of digits, return it
+  if (lastPart && /^\d+$/.test(lastPart)) {
+    return lastPart;
+  }
+  
+  // Fallback: strip leading FY prefixes
+  return idStr.replace(/^FY\s*-?\s*/i, '');
 }

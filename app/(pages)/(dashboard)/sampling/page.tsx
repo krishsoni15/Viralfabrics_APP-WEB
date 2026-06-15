@@ -894,10 +894,6 @@ export default function SamplingPage() {
                             <PhotoIcon className="h-10 w-10 text-slate-750" />
                             <span className="text-xs text-slate-600 mt-2 font-medium">No Image Uploaded</span>
                           </div>
-                        )}
-                        <div className="absolute top-3 right-3 bg-black/65 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-white tracking-wider border border-white/10 z-10">
-                          {item.piece} Pcs
-                        </div>
                       </div>
                       <div className="p-4 flex flex-col flex-grow">
                         <h3 className="font-bold text-lg line-clamp-1 group-hover:text-blue-500 transition-colors" title={item.qualityName}>{item.qualityName}</h3>

@@ -49,6 +49,8 @@ export default function SuperAdminLayout({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [logoutType, setLogoutType] = useState<'normal' | 'all' | null>(null);
+  const [showInstallModal, setShowInstallModal] = useState(false);
+  const [installModalType, setInstallModalType] = useState<'ios' | 'other' | null>(null);
   const { isDarkMode, mounted } = useDarkMode();
 
   // Track screen size with debouncing
@@ -342,7 +344,12 @@ export default function SuperAdminLayout({
       e.preventDefault();
       // Store the event so it can be triggered later
       (window as any).deferredPrompt = e;
-      };
+      
+      // Smart detection: If this event fires, it means the app is DEFINITELY not installed.
+      // This fixes the issue where a user uninstalls the app but local storage still says it's installed.
+      setIsInstalled(false);
+      localStorage.removeItem('pwa-installed');
+    };
 
     const handleAppInstalled = () => {
       setIsInstalled(true);
@@ -384,41 +391,26 @@ export default function SuperAdminLayout({
   const handleInstallClick = useCallback(() => {
     setIsInstalling(true);
     
-    // Check if PWA is supported
-    if ('serviceWorker' in navigator && 'BeforeInstallPromptEvent' in window) {
-      // Trigger the browser's install prompt
-      const installPrompt = (window as any).deferredPrompt;
-      
-      if (installPrompt) {
-        installPrompt.prompt();
-        
-        // Wait for the user to respond to the prompt
-        installPrompt.userChoice.then((choiceResult: any) => {
-          if (choiceResult.outcome === 'accepted') {
-            setIsInstalled(true);
-            // Store install status in localStorage
-            localStorage.setItem('pwa-installed', 'true');
-          } else {
-            }
-          setIsInstalling(false);
-          // Clear the prompt
-          (window as any).deferredPrompt = null;
-        });
-      } else {
-        // No install prompt available, try alternative method
-        // For some browsers, we can try to install directly
-        if ('standalone' in navigator && (navigator as any).standalone === false) {
-          // iOS Safari - show instructions
-          alert('To install this app:\n1. Tap the Share button\n2. Tap "Add to Home Screen"\n3. Tap "Add"');
-        } else {
-          // Other browsers - show manual install instructions
-          alert('To install this app, look for the install icon in your browser\'s address bar or menu.');
+    const installPrompt = (window as any).deferredPrompt;
+    
+    if (installPrompt) {
+      installPrompt.prompt();
+      installPrompt.userChoice.then((choiceResult: any) => {
+        if (choiceResult.outcome === 'accepted') {
+          setIsInstalled(true);
+          localStorage.setItem('pwa-installed', 'true');
         }
         setIsInstalling(false);
-      }
+        (window as any).deferredPrompt = null;
+      });
     } else {
-      // PWA not supported
-      alert('PWA installation is not supported in your browser. Please use a modern browser like Chrome, Edge, or Firefox.');
+      // No prompt available - show custom modal
+      if ('standalone' in navigator && (navigator as any).standalone === false) {
+        setInstallModalType('ios');
+      } else {
+        setInstallModalType('other');
+      }
+      setShowInstallModal(true);
       setIsInstalling(false);
     }
   }, []);
@@ -754,6 +746,72 @@ export default function SuperAdminLayout({
                 }`}
               >
                 OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Install Instructions Modal */}
+      {showInstallModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm backdrop-enter">
+          <div className={`rounded-xl shadow-2xl max-w-sm w-full mx-4 modal-enter overflow-hidden ${
+            isDarkMode 
+              ? 'bg-gray-800 border border-gray-700' 
+              : 'bg-white border border-gray-200'
+          }`}>
+            <div className={`px-6 py-5 border-b flex justify-between items-center ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                Install App
+              </h3>
+              <button
+                onClick={() => setShowInstallModal(false)}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="px-6 py-6">
+              <div className="flex justify-center mb-6">
+                <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics" className="h-16 w-16 object-contain" />
+              </div>
+              
+              {installModalType === 'ios' ? (
+                <div className="space-y-4">
+                  <p className={`text-center font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                    Install Viral Fabrics on your iOS device:
+                  </p>
+                  <ol className={`list-decimal pl-5 space-y-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <li>Tap the <strong>Share</strong> button at the bottom of Safari</li>
+                    <li>Scroll down and tap <strong>"Add to Home Screen"</strong></li>
+                    <li>Tap <strong>"Add"</strong> in the top right corner</li>
+                  </ol>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className={`text-center font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                    Install Viral Fabrics on your device:
+                  </p>
+                  <p className={`text-center text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Look for the install icon <span className="inline-block px-2 py-0.5 mx-1 rounded border bg-gray-100 border-gray-300 text-gray-700 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300">⊕</span> or <span className="inline-block px-2 py-0.5 mx-1 rounded border bg-gray-100 border-gray-300 text-gray-700 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300">↓</span> in your browser's address bar or settings menu.
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'} flex justify-end`}>
+              <button
+                onClick={() => setShowInstallModal(false)}
+                className={`px-5 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                  isDarkMode
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                Got it
               </button>
             </div>
           </div>
