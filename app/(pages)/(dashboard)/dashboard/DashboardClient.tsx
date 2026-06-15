@@ -202,15 +202,22 @@ export default function DashboardClient({ initialStats }: DashboardClientProps) 
   }, [router]);
 
   const handleTotalOrdersClick = useCallback(() => {
+    sessionStorage.setItem('ordersPageFilterStatus', 'all');
+    sessionStorage.setItem('ordersPageFilterType', 'all');
+    sessionStorage.setItem('ordersPageFilterTime', Date.now().toString());
     router.push('/orders');
   }, [router]);
 
   const handlePendingOrdersClick = useCallback(() => {
+    sessionStorage.setItem('ordersPageFilterStatus', 'pending');
+    sessionStorage.setItem('ordersPageFilterType', 'all');
+    sessionStorage.setItem('ordersPageFilterTime', Date.now().toString());
     router.push('/orders');
   }, [router]);
 
   const handleDeliveredOrdersClick = useCallback(() => {
-    sessionStorage.setItem('ordersPageFilterToDelivered', 'true');
+    sessionStorage.setItem('ordersPageFilterStatus', 'delivered');
+    sessionStorage.setItem('ordersPageFilterType', 'all');
     sessionStorage.setItem('ordersPageFilterTime', Date.now().toString());
     router.push('/orders');
   }, [router]);
@@ -336,17 +343,15 @@ export default function DashboardClient({ initialStats }: DashboardClientProps) 
     }
   }, [authLoading, isAuthenticated]);
 
-  if (!mounted || authLoading) {
-    return <DashboardSkeleton />;
-  }
-
   // Don't render content if not authenticated (will redirect)
-  if (!isAuthenticated) {
+  if (!authLoading && !isAuthenticated) {
     return null;
   }
 
-  // Show skeleton while loading (only if no initial stats)
-  if (isLoading && !initialStats) {
+  // Show skeleton if we don't have initial stats and we are still loading/mounting
+  const showSkeleton = !initialStats && (!mounted || authLoading || isLoading);
+
+  if (showSkeleton) {
     return <DashboardSkeleton />;
   }
 
@@ -356,7 +361,7 @@ export default function DashboardClient({ initialStats }: DashboardClientProps) 
 
   return (
     <div
-      className={`min-h-screen transition-colors duration-0 ${isDarkMode ? 'dark bg-slate-800' : 'bg-white'}`}
+      className="min-h-screen"
       suppressHydrationWarning
     >
       <div className="w-full max-w-7xl 2xl:max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-6 py-4 sm:py-6">
