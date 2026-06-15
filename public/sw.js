@@ -17,7 +17,7 @@ const STATIC_FILES = [
   '/orders',
   '/weaver',
   '/manifest.json',
-  '/favicon.ico'
+  '/vflogo/favicon.ico'
 ];
 
 // API endpoints to cache - ONLY essential APIs
@@ -294,7 +294,7 @@ async function handleStaticRequest(request) {
     new Promise((_, reject) => 
       setTimeout(() => reject(new Error('Network timeout')), 5000)
     )
-  ]).then((response: Response) => {
+  ]).then((response) => {
     if (response && response.ok) {
       // Cache the fresh response for next time
       const cache = caches.open(STATIC_CACHE);
@@ -410,8 +410,8 @@ async function doBackgroundSync() {
 self.addEventListener('push', (event) => {
   const options = {
             body: event.data ? event.data.text() : 'New notification from Viral Fabrics',
-    icon: '/icons/icon-192x192.svg',
-    badge: '/icons/icon-72x72.svg',
+    icon: '/vflogo/android-chrome-192x192.png',
+    badge: '/vflogo/favicon-32x32.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -421,12 +421,12 @@ self.addEventListener('push', (event) => {
       {
         action: 'explore',
         title: 'View Dashboard',
-        icon: '/icons/dashboard-icon.svg'
+        icon: '/vflogo/android-chrome-192x192.png'
       },
       {
         action: 'close',
         title: 'Close',
-        icon: '/icons/close-icon.svg'
+        icon: '/vflogo/android-chrome-192x192.png'
       }
     ]
   };
