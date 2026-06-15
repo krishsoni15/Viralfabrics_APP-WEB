@@ -379,8 +379,8 @@ export default function Sidebar({
     <>
       {/* Desktop Sidebar - Large and Medium Screens */}
       <aside className={`hidden min-[800px]:block fixed left-0 top-0 h-full z-40 transition-all duration-300 ${sidebarWidth} ${mounted && isDarkMode
-          ? 'bg-[#343E51] border-r border-slate-800'
-          : 'bg-white/80 backdrop-blur-sm border-r border-gray-200/50'
+        ? 'bg-[#343E51] border-r border-slate-800'
+        : 'bg-white/80 backdrop-blur-sm border-r border-gray-200/50'
         }`}>
         <div className="flex flex-col h-full">
           {/* Logo Section */}
