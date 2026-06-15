@@ -146,7 +146,7 @@ export default function DashboardLayoutClient({
   }, []);
 
   const handleLogoutClick = useCallback(() => {
-    if (user?.role === 'superadmin') {
+    if (user?.role === 'superadmin' || user?.role === 'master') {
       setLogoutType(null);
       setShowLogoutConfirm(true);
     } else {
@@ -161,7 +161,7 @@ export default function DashboardLayoutClient({
     try {
       const token = localStorage.getItem('token');
       if (token) {
-        if (type === 'all' && user?.role === 'superadmin') {
+        if (type === 'all' && (user?.role === 'superadmin' || user?.role === 'master')) {
           await fetch('/api/auth/logout-all', {
             method: 'POST',
             headers: {
@@ -351,7 +351,7 @@ export default function DashboardLayoutClient({
                     <ExclamationTriangleIcon className={`h-6 w-6 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`} />
                   </div>
                   <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                    {user?.role === 'superadmin' && !logoutType ? 'Choose Logout Option' : 'Confirm Logout'}
+                    {(user?.role === 'superadmin' || user?.role === 'master') && !logoutType ? 'Choose Logout Option' : 'Confirm Logout'}
                   </h3>
                 </div>
                 <button
@@ -368,7 +368,7 @@ export default function DashboardLayoutClient({
             </div>
 
             <div className="px-6 py-4">
-              {user?.role === 'superadmin' && !logoutType ? (
+              {(user?.role === 'superadmin' || user?.role === 'master') && !logoutType ? (
                 <div className="space-y-3">
                   <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
                     Choose your logout option:
