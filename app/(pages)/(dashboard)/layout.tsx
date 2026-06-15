@@ -56,17 +56,17 @@ export default function SuperAdminLayout({
   // Track screen size with debouncing
   useEffect(() => {
     let timeoutId: any;
-    
+
     const handleResize = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         const newScreenSize = window.innerWidth;
         setScreenSize(newScreenSize);
-        
+
         // Only auto-adjust if user hasn't manually set a preference
         // Check if there's a saved preference in localStorage
         const hasSavedPreference = typeof window !== 'undefined' && localStorage.getItem('sidebarCollapsed') !== null;
-        
+
         if (!hasSavedPreference) {
           // Set default collapsed state based on screen size only if no saved preference
           if (newScreenSize >= 800 && newScreenSize < 1900) {
@@ -84,7 +84,7 @@ export default function SuperAdminLayout({
     // Set initial size and state
     const initialSize = window.innerWidth;
     setScreenSize(initialSize);
-    
+
     // Only set initial state if no saved preference exists
     const hasSavedPreference = typeof window !== 'undefined' && localStorage.getItem('sidebarCollapsed') !== null;
     if (!hasSavedPreference) {
@@ -94,7 +94,7 @@ export default function SuperAdminLayout({
         setIsSidebarCollapsed(false);
       }
     }
-    
+
     window.addEventListener('resize', handleResize, { passive: true });
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -116,7 +116,7 @@ export default function SuperAdminLayout({
         phoneNumber: sessionUser.phoneNumber,
         address: sessionUser.address,
       };
-      
+
       // Only update if user actually changed to prevent infinite loop
       if (user?._id !== storeUser._id || user?.username !== storeUser.username) {
         setUser(storeUser);
@@ -183,7 +183,7 @@ export default function SuperAdminLayout({
   const handleLogoutConfirm = useCallback(async (type: 'normal' | 'all' = 'normal') => {
     // Set logging out state but keep modal open
     setIsLoggingOut(true);
-    
+
     try {
       const token = localStorage.getItem('token');
       if (token) {
@@ -215,14 +215,14 @@ export default function SuperAdminLayout({
       // Always clear local storage and redirect
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      
+
       // Clear auth cookie by calling logout API
       try {
         await fetch('/api/auth/logout', { method: 'POST' });
       } catch {
         // Ignore errors - we're logging out anyway
       }
-      
+
       // Close modal and redirect immediately - no delay
       setShowLogoutConfirm(false);
       setLogoutType(null);
@@ -242,16 +242,16 @@ export default function SuperAdminLayout({
   // Perform actual logout (called when OK button is clicked)
   const performLogout = useCallback(() => {
     console.log('🚨 Performing logout - redirecting to login...');
-    
+
     // Clear local storage IMMEDIATELY (synchronous)
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
+
     // Clear auth cookie in background (don't wait)
     fetch('/api/auth/logout', { method: 'POST' }).catch(() => {
       // Ignore errors - we're logging out anyway
     });
-    
+
     // Set flag to prevent redirect loop
     sessionStorage.setItem('fromDashboard', 'true');
     // Redirect to login IMMEDIATELY - no delays, no waiting
@@ -268,7 +268,7 @@ export default function SuperAdminLayout({
     message?: string;
   }) => {
     console.log('🚨 Logout-all event received - showing modal...', data);
-    
+
     if (data) {
       // Show modal with super admin name and timestamp
       setLogoutAllData({
@@ -328,12 +328,12 @@ export default function SuperAdminLayout({
       document.documentElement.requestFullscreen().then(() => {
         setIsFullscreen(true);
       }).catch(err => {
-        });
+      });
     } else {
       document.exitFullscreen().then(() => {
         setIsFullscreen(false);
       }).catch(err => {
-        });
+      });
     }
   }, []);
 
@@ -344,7 +344,7 @@ export default function SuperAdminLayout({
       e.preventDefault();
       // Store the event so it can be triggered later
       (window as any).deferredPrompt = e;
-      
+
       // Smart detection: If this event fires, it means the app is DEFINITELY not installed.
       // This fixes the issue where a user uninstalls the app but local storage still says it's installed.
       setIsInstalled(false);
@@ -390,9 +390,9 @@ export default function SuperAdminLayout({
   // PWA install functions
   const handleInstallClick = useCallback(() => {
     setIsInstalling(true);
-    
+
     const installPrompt = (window as any).deferredPrompt;
-    
+
     if (installPrompt) {
       installPrompt.prompt();
       installPrompt.userChoice.then((choiceResult: any) => {
@@ -419,7 +419,7 @@ export default function SuperAdminLayout({
     // Handle opening in app mode
     if ('standalone' in navigator && (navigator as any).standalone === true) {
       // Already in app mode
-      } else {
+    } else {
       // Try to open in app mode
       if (window.location.href.includes('localhost')) {
         // Development - show message
@@ -460,18 +460,17 @@ export default function SuperAdminLayout({
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 theme-switch-root ${
-      isDarkMode 
-        ? 'bg-gray-950' 
+    <div className={`min-h-screen transition-colors duration-300 theme-switch-root ${isDarkMode
+        ? 'bg-background'
         : 'bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'
-    }`}>
+      }`}>
       {/* PWA Registration - Handles service worker and PWA setup */}
       <PWARegistration />
-      
+
       {/* Sidebar - Fixed on left */}
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={closeSidebar} 
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={closeSidebar}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={toggleSidebarCollapse}
         user={user}
@@ -484,13 +483,13 @@ export default function SuperAdminLayout({
         onInstallClick={handleInstallClick}
         onOpenInApp={handleOpenInApp}
       />
-      
+
       {/* Main content area - Flush with sidebar */}
       <div className={mainContentMargin}>
         {/* Navbar - Full width, no extra padding */}
-        <Navbar 
-          user={user} 
-          onLogout={handleLogoutClick} 
+        <Navbar
+          user={user}
+          onLogout={handleLogoutClick}
           isLoggingOut={isLoggingOut}
           onToggleSidebar={toggleSidebar}
           onToggleCollapse={toggleSidebarCollapse}
@@ -505,9 +504,8 @@ export default function SuperAdminLayout({
 
         {/* Main Content - Starts immediately below navbar */}
         <main className="">
-          <div className={`${contentPadding} transition-colors duration-300 ${
-            isDarkMode ? 'text-white' : 'text-gray-900'
-          }`}>
+          <div className={`${contentPadding} transition-colors duration-300 ${isDarkMode ? 'text-white' : 'text-gray-900'
+            }`}>
             {children}
           </div>
         </main>
@@ -516,11 +514,10 @@ export default function SuperAdminLayout({
       {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm backdrop-enter">
-          <div className={`rounded-lg shadow-xl max-w-md w-full mx-4 modal-enter ${
-            isDarkMode 
-              ? 'bg-gray-800 border border-gray-700' 
+          <div className={`rounded-lg shadow-xl max-w-md w-full mx-4 modal-enter ${isDarkMode
+              ? 'bg-gray-800 border border-gray-700'
               : 'bg-white border border-gray-200'
-          }`}>
+            }`}>
             {/* Header */}
             <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between">
@@ -535,11 +532,10 @@ export default function SuperAdminLayout({
                 <button
                   onClick={handleLogoutCancel}
                   disabled={isLoggingOut}
-                  className={`p-1 rounded-md transition-colors close-button-hover ${
-                    isLoggingOut
+                  className={`p-1 rounded-md transition-colors close-button-hover ${isLoggingOut
                       ? isDarkMode ? 'text-gray-600 cursor-not-allowed' : 'text-gray-300 cursor-not-allowed'
                       : isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   <XMarkIcon className="h-5 w-5" />
                 </button>
@@ -554,20 +550,19 @@ export default function SuperAdminLayout({
                   <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
                     Choose your logout option:
                   </p>
-                  
+
                   {/* Normal Logout Option */}
                   <button
                     onClick={() => setLogoutType('normal')}
                     disabled={isLoggingOut}
-                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                      isLoggingOut
-                        ? isDarkMode 
-                          ? 'border-gray-700 bg-gray-700/50 cursor-not-allowed' 
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isLoggingOut
+                        ? isDarkMode
+                          ? 'border-gray-700 bg-gray-700/50 cursor-not-allowed'
                           : 'border-gray-300 bg-gray-50 cursor-not-allowed'
                         : isDarkMode
                           ? 'border-gray-600 bg-gray-700/50 hover:border-blue-500 hover:bg-blue-500/10'
                           : 'border-gray-200 bg-gray-50 hover:border-blue-500 hover:bg-blue-50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -586,15 +581,14 @@ export default function SuperAdminLayout({
                   <button
                     onClick={() => setLogoutType('all')}
                     disabled={isLoggingOut}
-                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                      isLoggingOut
-                        ? isDarkMode 
-                          ? 'border-gray-700 bg-gray-700/50 cursor-not-allowed' 
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isLoggingOut
+                        ? isDarkMode
+                          ? 'border-gray-700 bg-gray-700/50 cursor-not-allowed'
                           : 'border-gray-300 bg-gray-50 cursor-not-allowed'
                         : isDarkMode
                           ? 'border-red-600 bg-red-900/20 hover:border-red-500 hover:bg-red-500/10'
                           : 'border-red-200 bg-red-50 hover:border-red-500 hover:bg-red-100'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -613,17 +607,16 @@ export default function SuperAdminLayout({
                 // Confirmation view (for regular users or after selecting option)
                 <>
                   <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
-                    {logoutType === 'all' 
+                    {logoutType === 'all'
                       ? 'Are you sure you want to logout all users, super admins, and all devices? This action cannot be undone.'
                       : 'Are you sure you want to logout?'
                     }
                   </p>
                   {user && (
-                    <div className={`p-3 rounded-lg border ${
-                      isDarkMode 
-                        ? 'bg-gray-700 border-gray-600' 
+                    <div className={`p-3 rounded-lg border ${isDarkMode
+                        ? 'bg-gray-700 border-gray-600'
                         : 'bg-gray-50 border-gray-200'
-                    }`}>
+                      }`}>
                       <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                         {logoutType === 'all' ? 'Logging out all users as:' : 'Logging out as:'}
                       </p>
@@ -642,23 +635,21 @@ export default function SuperAdminLayout({
                 <button
                   onClick={handleLogoutCancel}
                   disabled={isLoggingOut}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    isLoggingOut
-                      ? isDarkMode 
-                        ? 'text-gray-600 cursor-not-allowed' 
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${isLoggingOut
+                      ? isDarkMode
+                        ? 'text-gray-600 cursor-not-allowed'
                         : 'text-gray-400 cursor-not-allowed'
-                      : isDarkMode 
-                        ? 'text-gray-300 hover:bg-gray-700' 
+                      : isDarkMode
+                        ? 'text-gray-300 hover:bg-gray-700'
                         : 'text-gray-700 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => handleLogoutConfirm(logoutType)}
                   disabled={isLoggingOut}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    isLoggingOut
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${isLoggingOut
                       ? isDarkMode
                         ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -669,13 +660,12 @@ export default function SuperAdminLayout({
                         : isDarkMode
                           ? 'bg-red-600 hover:bg-red-700 text-white'
                           : 'bg-red-600 hover:bg-red-700 text-white'
-                  }`}
+                    }`}
                 >
                   {isLoggingOut ? (
                     <div className="flex items-center space-x-2">
-                      <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${
-                        isDarkMode ? 'border-white' : 'border-white'
-                      }`}></div>
+                      <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${isDarkMode ? 'border-white' : 'border-white'
+                        }`}></div>
                       <span>Logging out...</span>
                     </div>
                   ) : (
@@ -691,11 +681,10 @@ export default function SuperAdminLayout({
       {/* Logout All Modal - Shows when super admin triggers logout all */}
       {showLogoutAllModal && logoutAllData && (
         <div className="fixed inset-0 flex items-center justify-center z-[9999] bg-black/70 backdrop-blur-sm">
-          <div className={`rounded-lg shadow-2xl max-w-md w-full mx-4 ${
-            isDarkMode 
-              ? 'bg-gray-800 border-2 border-red-600' 
+          <div className={`rounded-lg shadow-2xl max-w-md w-full mx-4 ${isDarkMode
+              ? 'bg-gray-800 border-2 border-red-600'
               : 'bg-white border-2 border-red-500'
-          }`}>
+            }`}>
             <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <div className="flex items-center space-x-3">
                 <div className={`p-2 rounded-full ${isDarkMode ? 'bg-red-900/30' : 'bg-red-100'}`}>
@@ -711,12 +700,11 @@ export default function SuperAdminLayout({
               <p className={`text-base mb-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                 Logout all clicked by <span className="font-semibold text-red-600 dark:text-red-400">{logoutAllData.triggeredBy}</span>
               </p>
-              
-              <div className={`p-3 rounded-lg mb-4 ${
-                isDarkMode 
-                  ? 'bg-gray-700/50 border border-gray-600' 
+
+              <div className={`p-3 rounded-lg mb-4 ${isDarkMode
+                  ? 'bg-gray-700/50 border border-gray-600'
                   : 'bg-gray-50 border border-gray-200'
-              }`}>
+                }`}>
                 <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   <span className="font-medium">Time:</span>{' '}
                   {new Date(logoutAllData.timestamp).toLocaleString('en-US', {
@@ -739,11 +727,10 @@ export default function SuperAdminLayout({
             <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} flex justify-end`}>
               <button
                 onClick={handleLogoutAllOk}
-                className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isDarkMode
+                className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${isDarkMode
                     ? 'bg-red-600 hover:bg-red-700 text-white'
                     : 'bg-red-600 hover:bg-red-700 text-white'
-                }`}
+                  }`}
               >
                 OK
               </button>
@@ -755,30 +742,28 @@ export default function SuperAdminLayout({
       {/* Custom Install Instructions Modal */}
       {showInstallModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm backdrop-enter">
-          <div className={`rounded-xl shadow-2xl max-w-sm w-full mx-4 modal-enter overflow-hidden ${
-            isDarkMode 
-              ? 'bg-gray-800 border border-gray-700' 
+          <div className={`rounded-xl shadow-2xl max-w-sm w-full mx-4 modal-enter overflow-hidden ${isDarkMode
+              ? 'bg-gray-800 border border-gray-700'
               : 'bg-white border border-gray-200'
-          }`}>
+            }`}>
             <div className={`px-6 py-5 border-b flex justify-between items-center ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                 Install App
               </h3>
               <button
                 onClick={() => setShowInstallModal(false)}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
-                }`}
+                className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
+                  }`}
               >
                 <XMarkIcon className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="px-6 py-6">
               <div className="flex justify-center mb-6">
                 <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics" className="h-16 w-16 object-contain" />
               </div>
-              
+
               {installModalType === 'ios' ? (
                 <div className="space-y-4">
                   <p className={`text-center font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
@@ -801,15 +786,14 @@ export default function SuperAdminLayout({
                 </div>
               )}
             </div>
-            
+
             <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'} flex justify-end`}>
               <button
                 onClick={() => setShowInstallModal(false)}
-                className={`px-5 py-2 text-sm font-semibold rounded-lg transition-colors ${
-                  isDarkMode
+                className={`px-5 py-2 text-sm font-semibold rounded-lg transition-colors ${isDarkMode
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                     : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
+                  }`}
               >
                 Got it
               </button>

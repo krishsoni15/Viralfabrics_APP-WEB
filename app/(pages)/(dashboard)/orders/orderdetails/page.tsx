@@ -741,7 +741,7 @@ export default function OrderDetailsPage() {
   if (loading) {
     return (
       <div className={`min-h-screen ${isDarkMode
-          ? 'bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800'
+          ? 'bg-background'
           : 'bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'
         }`}>
         {/* Simple Header */}
@@ -809,11 +809,11 @@ export default function OrderDetailsPage() {
 
   return (
     <div className={`min-h-screen ${isDarkMode
-        ? 'bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800'
+        ? 'bg-background'
         : 'bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'
       }`}>
       <div className={`w-full ${isDarkMode
-          ? 'bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800'
+          ? 'bg-background'
           : 'bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'
         }`}>
         {/* Clean Header */}

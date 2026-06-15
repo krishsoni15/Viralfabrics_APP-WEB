@@ -655,94 +655,95 @@ function LoginForm() {
     <div className="min-h-screen flex flex-col lg:flex-row theme-switch-root" style={{ viewTransitionName: 'root' }}>
 
       {/* Left Side - Professional Design (Hidden on mobile, 55% on desktop) */}
-      <div className={`hidden lg:block lg:w-[55%] relative overflow-hidden transition-all duration-700 ${isDarkMode ? 'bg-[#1e3a8a]' : 'bg-[#2563eb]'
-        }`}>
+      <div className={`hidden lg:block lg:w-[55%] relative overflow-hidden transition-all duration-700 bg-gradient-to-br from-[#1e1b4b] via-[#312e81] to-[#1e1b4b]`}>
+        {/* Animated Fabric Grid Pattern Overlay */}
+        <div className="absolute inset-0 opacity-15 mix-blend-overlay" style={{ backgroundImage: 'radial-gradient(circle, #fff 10%, transparent 11%)', backgroundSize: '24px 24px' }} />
+
+        {/* Floating Ambient Light Orbs */}
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-[100px] animate-pulse-slow" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-purple-500/10 blur-[100px] animate-pulse-slow" />
+
+        {/* Luxury geometric SVG wave curves */}
+        <div className="absolute inset-0 pointer-events-none">
+          <svg className="absolute bottom-0 left-0 w-full h-[30%] text-white/5" fill="none" viewBox="0 0 1440 320" preserveAspectRatio="none">
+            <path fill="currentColor" d="M0,224L48,202.7C96,181,192,139,288,128C384,117,480,139,576,165.3C672,192,768,224,864,229.3C960,235,1056,213,1152,186.7C1248,160,1344,128,1392,112L1440,96L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z" />
+          </svg>
+          <svg className="absolute bottom-0 left-0 w-full h-[40%] text-white/5" fill="none" viewBox="0 0 1440 320" preserveAspectRatio="none">
+            <path fill="currentColor" d="M0,192L48,208C96,224,192,256,288,250.7C384,245,480,203,576,181.3C672,160,768,160,864,181.3C960,203,1056,245,1152,245.3C1248,245,1344,203,1392,181.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z" />
+          </svg>
+        </div>
+
+        {/* Floating circles/stars animation elements */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-[15%] left-[10%] w-3 h-3 rounded-full bg-white/20 animate-float-slow" />
+          <div className="absolute top-[40%] right-[15%] w-2 h-2 rounded-full bg-white/30 animate-float-gentle" />
+          <div className="absolute bottom-[30%] left-[20%] w-4 h-4 rounded-full bg-white/10 animate-float-slow" />
+          <div className="absolute top-[70%] left-[45%] w-2 h-2 rounded-full bg-white/25 animate-float-gentle" />
+        </div>
+
         {/* Main content */}
         <div className="relative z-10 flex flex-col justify-center items-center h-full px-8 lg:px-16 text-white py-12 lg:py-0">
-          {/* Dark Mode Toggle - Left Section (Mobile Only) */}
-          <div className="lg:hidden absolute top-4 right-4 z-20">
-            <button
-              onClick={handleThemeToggle}
-              disabled={isAnimating}
-              className={`p-3 rounded-full transition-all duration-300 shadow-lg hover:scale-110 transform ${isDarkMode
-                  ? 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/90 border border-slate-600/50 hover:shadow-slate-500/25'
-                  : 'bg-white/90 text-slate-700 hover:bg-white border border-slate-200/50 shadow-xl hover:shadow-slate-300/25'
-                } ${isAnimating ? 'opacity-75 cursor-not-allowed' : ''}`}
-              aria-label="Toggle dark mode"
-            >
-              {isDarkMode ? (
-                <SunIcon className="h-6 w-6" />
-              ) : (
-                <MoonIcon className="h-6 w-6" />
-              )}
-            </button>
-          </div>
-
-          <div className="max-w-lg text-center">
+          <div className="max-w-lg text-center flex flex-col items-center">
             {/* CRM Logo and Branding */}
-            <div className="flex items-center justify-center mb-10 animate-fade-in-subtle">
-              <div className="flex items-center justify-center">
-                <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics Logo" className="h-24 w-24 object-contain" />
-              </div>
-              <div className="ml-5 animate-slide-in-subtle">
-                <h1 className="text-4xl font-bold tracking-tight text-white">{BRAND_NAME}</h1>
-                <p className="text-blue-200 text-sm font-medium mt-1">{BRAND_TAGLINE}</p>
-              </div>
+            <div className="mb-10 animate-fade-in-subtle animate-logo-float flex justify-center">
+              <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics Logo" className="h-28 md:h-32 w-auto object-contain" />
             </div>
 
-            <h2 className="text-5xl lg:text-6xl font-bold mb-8 leading-tight tracking-tight text-white">
+            <h2 className="text-5xl lg:text-6xl font-extrabold mb-8 leading-tight tracking-tight text-white animate-fade-in-subtle">
               Welcome to
               <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-blue-200">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-100 via-blue-200 to-white">
                 {BRAND_NAME}
               </span>
             </h2>
-
+            <p className="text-lg lg:text-xl text-blue-200/90 font-medium tracking-wide animate-fade-in-subtle max-w-md mx-auto">
+              {BRAND_TAGLINE}
+            </p>
           </div>
         </div>
       </div>
 
       {/* Mobile Header - Only visible on mobile/tablet */}
-      <div className={`lg:hidden relative overflow-hidden transition-all duration-300 ${isDarkMode ? 'bg-[#1e3a8a]' : 'bg-[#2563eb]'
-        }`}>
-        <div className="flex items-center justify-center py-6 px-4 relative z-10">
+      <div className={`lg:hidden relative overflow-hidden transition-all duration-300 bg-gradient-to-br from-[#1e1b4b] via-[#312e81] to-[#1e1b4b]`}>
+        {/* Animated Fabric Grid Pattern Overlay */}
+        <div className="absolute inset-0 opacity-10 mix-blend-overlay" style={{ backgroundImage: 'radial-gradient(circle, #fff 10%, transparent 11%)', backgroundSize: '20px 20px' }} />
+
+        <div className="flex flex-col items-center justify-center pt-16 pb-24 px-4 relative z-10">
           {/* Dark Mode Toggle - Top Right of Left Side (Mobile) */}
           <div className="absolute top-4 right-4 z-20">
             <button
               onClick={handleThemeToggle}
               disabled={isAnimating}
-              className={`p-3 rounded-full transition-all duration-300 shadow-lg hover:scale-110 transform ${isDarkMode
-                  ? 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/90 border border-slate-600/50 hover:shadow-slate-500/25'
-                  : 'bg-white/90 text-slate-700 hover:bg-white border border-slate-200/50 shadow-xl hover:shadow-slate-300/25'
+              className={`p-2.5 rounded-full transition-all duration-300 shadow-lg hover:scale-110 transform ${isDarkMode
+                ? 'bg-slate-800/80 text-slate-350 hover:bg-slate-700/90 border border-slate-600/50 hover:shadow-slate-500/25'
+                : 'bg-white/90 text-slate-700 hover:bg-white border border-slate-200/50 shadow-xl hover:shadow-slate-300/25'
                 } ${isAnimating ? 'opacity-75 cursor-not-allowed' : ''}`}
               aria-label="Toggle dark mode"
             >
               {isDarkMode ? (
-                <SunIcon className="h-6 w-6" />
+                <SunIcon className="h-5 w-5" />
               ) : (
-                <MoonIcon className="h-6 w-6" />
+                <MoonIcon className="h-5 w-5" />
               )}
             </button>
           </div>
 
-          <div className="flex items-center justify-center">
-            <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics Logo" className="h-14 w-14 object-contain" />
+          <div className="animate-logo-float mb-6">
+            <img src="/vflogo/viral%20lgoo.png" alt="Viral Fabrics Logo" className="h-20 w-auto object-contain" />
           </div>
-          <div className="ml-3">
-            <h1 className="text-2xl font-bold tracking-tight text-white">{BRAND_NAME}</h1>
-            <p className="text-blue-200 text-xs font-medium mt-1">{BRAND_TAGLINE}</p>
+          <div className="text-center">
+            <h1 className="text-3xl font-extrabold tracking-tight text-white">{BRAND_NAME}</h1>
+            <p className="text-blue-200 text-xs font-medium mt-2 max-w-xs mx-auto">{BRAND_TAGLINE}</p>
           </div>
         </div>
       </div>
 
-      {/* Right Side - Login Form (Full width on mobile, 45% on desktop) */}
-      <div className={`flex-1 lg:w-[45%] flex items-center justify-center p-6 sm:p-8 lg:p-10 xl:p-12 transition-all duration-300 relative overflow-hidden ${isDarkMode
-          ? 'bg-slate-900'
-          : 'bg-white'
+      <div className={`flex-1 lg:w-[45%] flex items-center justify-center pt-6 pb-6 px-6 sm:p-8 lg:p-10 xl:p-12 transition-all duration-300 relative overflow-visible rounded-t-[32px] lg:rounded-t-none -mt-8 lg:mt-0 z-20 shadow-[0_-12px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_-12px_30px_rgba(0,0,0,0.18)] lg:shadow-none ${isDarkMode
+        ? 'bg-[#0f172a]'
+        : 'bg-white'
         }`}>
         {/* Mobile Particles - Simplified for better performance */}
         <div className="lg:hidden absolute inset-0 pointer-events-none">
-          {/* Reduced particles for better performance */}
           <div className="absolute top-1/4 left-1/4 w-1 h-1 bg-blue-400/30 rounded-full animate-pulse duration-4000"></div>
           <div className="absolute bottom-1/3 right-1/4 w-1 h-1 bg-indigo-400/25 rounded-full animate-pulse duration-5000 delay-1000"></div>
           <div className="absolute top-1/2 right-1/3 w-1 h-1 bg-purple-400/20 rounded-full animate-pulse duration-6000 delay-2000"></div>
@@ -750,26 +751,25 @@ function LoginForm() {
 
         {/* Desktop Particles - Simplified for better performance */}
         <div className="hidden lg:block absolute inset-0 pointer-events-none">
-          {/* Minimal particles for desktop performance */}
           <div className="absolute top-1/3 left-1/4 w-1 h-1 bg-slate-400/8 rounded-full animate-pulse duration-8000"></div>
           <div className="absolute bottom-1/3 right-1/4 w-1 h-1 bg-slate-500/6 rounded-full animate-pulse duration-10000 delay-2000"></div>
         </div>
 
         {/* Dark Mode Toggle - Right Section (Desktop Only) */}
-        <div className="hidden lg:block absolute top-4 right-4 z-20">
+        <div className="hidden lg:block absolute top-6 right-6 z-20">
           <button
             onClick={handleThemeToggle}
             disabled={isAnimating}
-            className={`p-3 rounded-full transition-all duration-300 shadow-lg hover:scale-110 transform ${isDarkMode
-                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-600 hover:shadow-slate-500/25'
-                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 shadow-xl hover:shadow-slate-300/25'
+            className={`p-3 rounded-full transition-all duration-300 shadow-sm hover:shadow-md hover:scale-110 transform border ${isDarkMode
+              ? 'bg-slate-800/80 text-slate-200 hover:bg-slate-700/80 border-slate-700 hover:shadow-slate-500/20'
+              : 'bg-slate-200/80 text-slate-800 hover:bg-slate-300/80 border-slate-300 shadow-slate-200/10 hover:shadow-slate-200/30'
               } ${isAnimating ? 'opacity-75 cursor-not-allowed' : ''}`}
             aria-label="Toggle dark mode"
           >
             {isDarkMode ? (
-              <SunIcon className="h-6 w-6" />
+              <SunIcon className="h-6 w-6 stroke-2" />
             ) : (
-              <MoonIcon className="h-6 w-6" />
+              <MoonIcon className="h-6 w-6 stroke-2" />
             )}
           </button>
         </div>
@@ -793,8 +793,8 @@ function LoginForm() {
           {/* Error Message */}
           {errors.general && (
             <div className={`mb-6 lg:mb-8 p-3 lg:p-4 rounded-xl flex items-center justify-center space-x-3 shadow-lg w-full lg:w-80 xl:w-96 ${isDarkMode
-                ? 'bg-transparent border-none shadow-none '
-                : 'bg-transparent border-none shadow-none'
+              ? 'bg-transparent border-none shadow-none '
+              : 'bg-transparent border-none shadow-none'
               }`}>
               <ExclamationTriangleIcon className={`h-5 w-5 lg:h-6 lg:w-6 ${isDarkMode ? 'text-red-400' : 'text-red-600'
                 }`} />
@@ -810,8 +810,8 @@ function LoginForm() {
           {/* Remember Me Alert */}
           {showRememberMeAlert && (
             <div className={`mb-6 lg:mb-8 ml-8 p-4 lg:p-5 rounded-xl flex items-center space-x-3 shadow-lg w-full lg:w-80 xl:w-96 border-2 ${isDarkMode
-                ? 'bg-blue-900/30 border-blue-500/50 backdrop-blur-sm'
-                : 'bg-blue-50 border-blue-200 shadow-blue-100'
+              ? 'bg-blue-900/30 border-blue-500/50 backdrop-blur-sm'
+              : 'bg-blue-50 border-blue-200 shadow-blue-100'
               } animate-fade-in-up`}>
               <div className={`p-2 rounded-full ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'
                 }`}>
@@ -831,11 +831,11 @@ function LoginForm() {
               <button
                 onClick={() => setShowRememberMeAlert(false)}
                 className={`p-1 rounded-full transition-colors duration-200 ${isDarkMode
-                    ? 'text-blue-400 hover:bg-blue-500/20'
-                    : 'text-blue-600 hover:bg-blue-100'
+                  ? 'text-blue-400 hover:bg-blue-500/20'
+                  : 'text-blue-600 hover:bg-blue-100'
                   }`}
               >
-                <XMarkIcon className="h-4 w-4" /> {/* Add this import */}
+                <XMarkIcon className="h-4 w-4" />
               </button>
             </div>
           )}
@@ -858,14 +858,14 @@ function LoginForm() {
                   onBlur={handleInputBlur}
                   placeholder="Enter your username"
                   className={`w-full pl-12 lg:pl-14 pr-4 py-4 lg:py-5 border rounded-2xl transition-all duration-300 focus:outline-none font-medium text-base relative z-0 ${isDarkMode
-                      ? 'bg-slate-800/40 border-slate-700/85 text-white placeholder-slate-400 focus:border-blue-500 focus:bg-slate-800/80'
-                      : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-500 focus:border-blue-500 focus:bg-white'
+                    ? 'bg-[#1e293b]/40 border-slate-800 text-white placeholder-slate-500 focus:border-blue-500 focus:bg-[#1e293b]/80'
+                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-500 focus:border-blue-500 focus:bg-white'
                     } ${errors.username ? 'border-red-400 focus:border-red-400' : ''}`}
                 />
                 {focusedField === 'username' && (
                   <div className={`absolute -top-2 left-3 lg:left-4 px-2 lg:px-3 text-xs font-semibold transition-colors duration-300 rounded-md z-20 ${isDarkMode
-                      ? 'text-blue-400 bg-slate-900 border border-slate-700'
-                      : 'text-blue-600 bg-white border border-slate-200'
+                    ? 'text-blue-400 bg-[#0f172a] border border-slate-800'
+                    : 'text-blue-600 bg-white border border-slate-200'
                     }`}>
                     Username
                   </div>
@@ -894,14 +894,14 @@ function LoginForm() {
                   onBlur={handleInputBlur}
                   placeholder="Enter your password"
                   className={`w-full pl-12 lg:pl-14 pr-14 lg:pr-16 py-4 lg:py-5 border rounded-2xl transition-all duration-300 focus:outline-none font-medium text-base relative z-0 ${isDarkMode
-                      ? 'bg-slate-800/40 border-slate-700/85 text-white placeholder-slate-400 focus:border-blue-500 focus:bg-slate-800/80'
-                      : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-500 focus:border-blue-500 focus:bg-white'
+                    ? 'bg-[#1e293b]/40 border-slate-800 text-white placeholder-slate-500 focus:border-blue-500 focus:bg-[#1e293b]/80'
+                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-500 focus:border-blue-500 focus:bg-white'
                     } ${errors.password ? 'border-red-400 focus:border-red-400' : ''}`}
                 />
                 {focusedField === 'password' && (
                   <div className={`absolute -top-2 left-3 lg:left-4 px-2 lg:px-3 text-xs font-semibold transition-colors duration-300 rounded-md z-20 ${isDarkMode
-                      ? 'text-blue-400 bg-slate-900 border border-slate-700'
-                      : 'text-blue-600 bg-white border border-slate-200'
+                    ? 'text-blue-400 bg-[#0f172a] border border-slate-800'
+                    : 'text-blue-600 bg-white border border-slate-200'
                     }`}>
                     Password
                   </div>
@@ -920,42 +920,33 @@ function LoginForm() {
                 </button>
               </div>
               {errors.password && (
-                <p className={`mt-2 text-sm font-medium ${isDarkMode ? 'text-red-400' : 'text-red-600'
+                <p className={`mt-2 text-sm font-medium ${isDarkMode ? 'text-red-400' : 'text-red-650'
                   }`}>
                   {errors.password}
                 </p>
               )}
             </div>
 
-            {/* Remember Me Checkbox */}
-            <div className="flex items-center justify-left mb-6 w-full lg:w-80 xl:w-96">
-              <label className="flex items-center space-x-3 cursor-pointer group">
-                <div
-                  onClick={() => handleInputChange('rememberMe', !formData.rememberMe)}
-                  className={`relative w-5 h-5 rounded-md border transition-all duration-300 group-hover:scale-105 ${isDarkMode
-                      ? 'bg-slate-800 border-slate-700 group-hover:border-blue-500'
-                      : 'bg-white border-slate-300 group-hover:border-blue-500'
-                    }`}
-                >
-                  {formData.rememberMe && (
-                    <div className={`absolute inset-0 flex items-center justify-center rounded-md transition-all duration-300 ${isDarkMode
-                        ? 'bg-blue-500 border-blue-500'
-                        : 'bg-blue-600 border-blue-600'
-                      }`}>
-                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                </div>
+            {/* Remember Me Toggle Row */}
+            <div className="w-full lg:w-80 xl:w-96 flex items-center justify-between px-1 py-3 transition-all duration-300">
+              <span className={`text-base font-semibold transition-colors duration-300 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                Remember me
+              </span>
+              <button
+                type="button"
+                onClick={() => handleInputChange('rememberMe', !formData.rememberMe)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData.rememberMe
+                  ? 'bg-indigo-600'
+                  : isDarkMode ? 'bg-slate-700' : 'bg-slate-300'
+                  }`}
+              >
                 <span
-                  onClick={() => handleInputChange('rememberMe', !formData.rememberMe)}
-                  className={`text-base font-medium transition-colors duration-300 group-hover:scale-[1.02] transform ${isDarkMode ? 'text-slate-300 group-hover:text-slate-200' : 'text-slate-700 group-hover:text-slate-900'
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${formData.rememberMe
+                    ? 'translate-x-5'
+                    : 'translate-x-0'
                     }`}
-                >
-                  Remember me
-                </span>
-              </label>
+                />
+              </button>
             </div>
 
             {/* Submit Button */}
@@ -963,8 +954,8 @@ function LoginForm() {
               type="submit"
               disabled={isLoading || isRetrying}
               className={`w-full lg:w-80 xl:w-96 flex items-center justify-center px-8 lg:px-10 py-4 lg:py-5 rounded-2xl font-bold text-base lg:text-lg transition-all duration-300 cursor-pointer shadow-md hover:shadow-lg border ${isLoading || isRetrying
-                  ? 'bg-slate-400 text-slate-200 cursor-not-allowed border-slate-300'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white border-transparent transform hover:scale-[1.02]'
+                ? 'bg-slate-400 text-slate-200 cursor-not-allowed border-slate-300'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white border-transparent transform hover:scale-[1.02]'
                 }`}
             >
               {isRetrying ? (
@@ -981,11 +972,11 @@ function LoginForm() {
                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/30"></div>
                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent absolute top-0 left-0"></div>
                   </div>
-                  <span>Logging in...</span>
+                  <span>Signing in...</span>
                 </div>
               ) : (
                 <div className="flex items-center space-x-3">
-                  <span>LOGIN</span>
+                  <span>SIGN IN</span>
                   <ArrowRightIcon className="h-5 w-5" />
                 </div>
               )}
@@ -995,6 +986,24 @@ function LoginForm() {
       </div>
 
       <style jsx>{`
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.1; transform: scale(1); }
+          50% { opacity: 0.25; transform: scale(1.05); }
+        }
+        
+        @keyframes logo-float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
+        
+        .animate-pulse-slow {
+          animation: pulse-slow 10s ease-in-out infinite;
+        }
+        
+        .animate-logo-float {
+          animation: logo-float 6s ease-in-out infinite;
+        }
+
         @keyframes float-slow {
           0%, 100% { transform: translateY(0px) rotate(0deg); }
           50% { transform: translateY(-8px) rotate(1deg); }
@@ -1056,8 +1065,8 @@ function LoginForm() {
       {showLogoutAllModal && logoutAllData && (
         <div className="fixed inset-0 flex items-center justify-center z-[9999] bg-black/70 backdrop-blur-sm">
           <div className={`rounded-lg shadow-2xl max-w-md w-full mx-4 ${isDarkMode
-              ? 'bg-gray-800 border-2 border-red-600'
-              : 'bg-white border-2 border-red-500'
+            ? 'bg-gray-800 border-2 border-red-600'
+            : 'bg-white border-2 border-red-500'
             }`}>
             <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <div className="flex items-center space-x-3">
@@ -1076,8 +1085,8 @@ function LoginForm() {
               </p>
 
               <div className={`p-3 rounded-lg mb-4 ${isDarkMode
-                  ? 'bg-gray-700/50 border border-gray-600'
-                  : 'bg-gray-50 border border-gray-200'
+                ? 'bg-gray-700/50 border border-gray-600'
+                : 'bg-gray-50 border border-gray-200'
                 }`}>
                 <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   <span className="font-medium">Time:</span>{' '}
@@ -1105,8 +1114,8 @@ function LoginForm() {
                   setLogoutAllData(null);
                 }}
                 className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${isDarkMode
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-red-600 hover:bg-red-700 text-white'
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-red-600 hover:bg-red-700 text-white'
                   }`}
               >
                 OK
