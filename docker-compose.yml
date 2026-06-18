@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # Production Mode Container
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: viralfabrics-app
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    restart: always
+
+  # Development Mode Container (with Hot Reloading)
+  app-dev:
+    image: node:20-alpine
+    container_name: viralfabrics-app-dev
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+    command: npm run dev

@@ -193,7 +193,18 @@
   }
 
   /* Smooth theme transitions */
-  html.dark-transitioning * {
+  html.dark-transitioning body,
+  html.dark-transitioning header,
+  html.dark-transitioning nav,
+  html.dark-transitioning aside,
+  html.dark-transitioning main,
+  html.dark-transitioning footer,
+  html.dark-transitioning section,
+  html.dark-transitioning table,
+  html.dark-transitioning button,
+  html.dark-transitioning input,
+  html.dark-transitioning select,
+  html.dark-transitioning textarea {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease !important;
   }
 }
@@ -268,7 +279,18 @@ body {
 }
 
 /* Prevent white flash during theme transitions */
-html.dark-transitioning * {
+html.dark-transitioning body,
+html.dark-transitioning header,
+html.dark-transitioning nav,
+html.dark-transitioning aside,
+html.dark-transitioning main,
+html.dark-transitioning footer,
+html.dark-transitioning section,
+html.dark-transitioning table,
+html.dark-transitioning button,
+html.dark-transitioning input,
+html.dark-transitioning select,
+html.dark-transitioning textarea {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
@@ -1130,7 +1152,18 @@ button, a, input, select, textarea {
   }
 
   /* Premium smooth dark mode transition with better easing */
-  html.dark-transitioning * {
+  html.dark-transitioning body,
+  html.dark-transitioning header,
+  html.dark-transitioning nav,
+  html.dark-transitioning aside,
+  html.dark-transitioning main,
+  html.dark-transitioning footer,
+  html.dark-transitioning section,
+  html.dark-transitioning table,
+  html.dark-transitioning button,
+  html.dark-transitioning input,
+  html.dark-transitioning select,
+  html.dark-transitioning textarea {
     transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
                 color 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
                 border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
