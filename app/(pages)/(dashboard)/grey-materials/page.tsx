@@ -3,7 +3,7 @@
 // Force dynamic rendering to prevent static build failures
 export const dynamic = 'force-dynamic';
 
-
+import React, { useState, useEffect, useMemo, useCallback, useRef, useTransition } from 'react';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
