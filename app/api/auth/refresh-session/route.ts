@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the user to ensure they still exist
-    const user = await User.findById(decoded.id).select('_id username name role partyId');
+    const user = await User.findById(decoded.id).select('_id username name role partyId email phoneNumber address');
     if (!user) {
       return unauthorized('User not found');
     }
@@ -73,6 +73,9 @@ export async function POST(request: NextRequest) {
         _id: user._id,
         name: user.name,
         username: user.username,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        address: user.address,
         role: user.role,
         partyId: user.partyId ? user.partyId.toString() : undefined,
         exp: exp // Include expiration time

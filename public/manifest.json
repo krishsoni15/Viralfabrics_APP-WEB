@@ -1,6 +1,6 @@
 {
   "name": "Viral Fabrics",
-  "short_name": "Viral",
+  "short_name": "Viral Fabrics",
   "description": "Viral Fabrics Enterprise CRM. Manage inventory, track orders, and optimize business operations.",
   "start_url": "/",
   "display": "standalone",
@@ -19,17 +19,35 @@
       "src": "/vflogo/android-chrome-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/vflogo/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/vflogo/android-chrome-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/vflogo/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/vflogo/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/vflogo/viral lgoo.png",
-      "sizes": "any",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },

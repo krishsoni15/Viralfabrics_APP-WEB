@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS='--max-old-space-size=4096' node server.js",
-    "dev:quiet": "NODE_OPTIONS='--max-old-space-size=4096' node server.js",
-    "build": "next build",
+    "dev": "node scripts/update-sw-version.js && NODE_OPTIONS='--max-old-space-size=4096' node server.js",
+    "dev:quiet": "node scripts/update-sw-version.js && NODE_OPTIONS='--max-old-space-size=4096' node server.js",
+    "build": "node scripts/update-sw-version.js && next build",
     "start": "NODE_ENV=production node server.js",
     "lint": "next lint",
     "type-check": "tsc --noEmit",

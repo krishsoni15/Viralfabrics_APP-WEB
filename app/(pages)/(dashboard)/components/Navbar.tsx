@@ -78,7 +78,7 @@ interface NavbarProps {
 }
 
 export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleSidebar, onToggleCollapse, isCollapsed, updateUser, sessionStatus = 'active', isLoading = false, isInstalled = false, isInstalling = false, onInstallClick, onOpenInApp }: NavbarProps) {
-  const { isDarkMode, toggleDarkMode, setSystemTheme, mounted, themeSwitchRef } = useDarkMode();
+  const { isDarkMode, toggleDarkMode, setSystemTheme, mounted, themeSwitchRef, isTransitioning } = useDarkMode();
   const [isThemeTransitioning, setIsThemeTransitioning] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
@@ -1025,7 +1025,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       }`}>
                       Name
                     </label>
-                    {user?.role === 'superadmin' && (
+                    {user?.role === 'master' && (
                       <button
                         onClick={() => startEditing('name')}
                         className={`p-1 rounded transition-all duration-300 ${isDarkMode
@@ -1083,65 +1083,19 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
 
                 {/* Username */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                      }`}>
-                      Username
-                    </label>
-                    {user?.role === 'superadmin' && (
-                      <button
-                        onClick={() => startEditing('username')}
-                        className={`p-1 rounded transition-all duration-300 ${isDarkMode
-                          ? 'text-gray-400 hover:bg-white/10'
-                          : 'text-gray-500 hover:bg-gray-100'
-                          }`}
-                      >
-                        <PencilIcon className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                  {editingField === 'username' ? (
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="text"
-                        value={editValues.username}
-                        onChange={(e) => setEditValues({ ...editValues, username: e.target.value })}
-                        className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${isDarkMode
-                          ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
-                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
-                          }`}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleSaveField('username', e.currentTarget.value);
-                          }
-                        }}
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => handleSaveField('username', editValues.username)}
-                        className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
-                          ? 'bg-blue-600 text-white hover:bg-blue-700'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                          }`}
-                      >
-                        <CheckIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setEditingField(null)}
-                        className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
-                          ? 'bg-gray-600 text-white hover:bg-gray-700'
-                          : 'bg-gray-600 text-white hover:bg-gray-700'
-                          }`}
-                      >
-                        <XMarkIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                      }`}>
-                      {user?.username || 'Not provided'}
-                    </p>
-                  )}
+                  <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                    Username (Not Editable)
+                  </label>
+                  <input
+                    type="text"
+                    value={user?.username || ''}
+                    disabled
+                    className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${isDarkMode
+                      ? 'bg-slate-700/50 border-slate-700 text-gray-400'
+                      : 'bg-gray-100 border-gray-200 text-gray-500'
+                      } cursor-not-allowed`}
+                  />
                 </div>
 
                 {/* Phone Number */}
@@ -1151,7 +1105,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       }`}>
                       Phone Number
                     </label>
-                    {user?.role === 'superadmin' && (
+                    {user?.role === 'master' && (
                       <button
                         onClick={() => startEditing('phoneNumber')}
                         className={`p-1 rounded transition-all duration-300 ${isDarkMode
@@ -1214,7 +1168,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       }`}>
                       Address
                     </label>
-                    {user?.role === 'superadmin' && (
+                    {user?.role === 'master' && (
                       <button
                         onClick={() => startEditing('address')}
                         className={`p-1 rounded transition-all duration-300 ${isDarkMode
@@ -1272,69 +1226,22 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                   )}
                 </div>
 
-                {/* Password - Only for superadmin */}
-                {user?.role === 'superadmin' && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                        }`}>
-                        Password
-                      </label>
-                      <button
-                        onClick={() => startEditing('password')}
-                        className={`p-1 rounded transition-all duration-300 ${isDarkMode
-                          ? 'text-gray-400 hover:bg-white/10'
-                          : 'text-gray-500 hover:bg-gray-100'
-                          }`}
-                      >
-                        <PencilIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                    {editingField === 'password' ? (
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="password"
-                          value={editValues.password}
-                          onChange={(e) => setEditValues({ ...editValues, password: e.target.value })}
-                          className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${isDarkMode
-                            ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
-                            : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
-                            }`}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              handleSaveField('password', e.currentTarget.value);
-                            }
-                          }}
-                          placeholder="Enter new password"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => handleSaveField('password', editValues.password)}
-                          className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                            }`}
-                        >
-                          <CheckIcon className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setEditingField(null)}
-                          className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
-                            ? 'bg-gray-600 text-white hover:bg-gray-700'
-                            : 'bg-gray-600 text-white hover:bg-gray-700'
-                            }`}
-                        >
-                          <XMarkIcon className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                        }`}>
-                        ••••••••
-                      </p>
-                    )}
-                  </div>
-                )}
+                {/* Password */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                    Password (Not Editable)
+                  </label>
+                  <input
+                    type="password"
+                    value="••••••••"
+                    disabled
+                    className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${isDarkMode
+                      ? 'bg-slate-700/50 border-slate-700 text-gray-400'
+                      : 'bg-gray-100 border-gray-200 text-gray-500'
+                      } cursor-not-allowed`}
+                  />
+                </div>
               </div>
             </div>
 
@@ -1412,14 +1319,17 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                     onClick={() => {
                       // Set dark mode
                       if (!isDarkMode) toggleDarkMode();
-                      setShowThemeModal(false);
+                      setTimeout(() => {
+                        setShowThemeModal(false);
+                      }, 450);
                     }}
+                    disabled={isTransitioning}
                     className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all duration-300 ${isDarkMode
                       ? 'bg-blue-600 text-white'
                       : isDarkMode
                         ? 'bg-slate-700 text-white hover:bg-slate-600'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                      } ${isTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center space-x-3">
                       <MoonIcon className="h-5 w-5" />
@@ -1431,14 +1341,17 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                     onClick={() => {
                       // Set light mode
                       if (isDarkMode) toggleDarkMode();
-                      setShowThemeModal(false);
+                      setTimeout(() => {
+                        setShowThemeModal(false);
+                      }, 450);
                     }}
+                    disabled={isTransitioning}
                     className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all duration-300 ${!isDarkMode
                       ? 'bg-blue-600 text-white'
                       : isDarkMode
                         ? 'bg-slate-700 text-white hover:bg-slate-600'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                      } ${isTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center space-x-3">
                       <SunIcon className="h-5 w-5" />
@@ -1450,12 +1363,15 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                     onClick={() => {
                       // Set system default (detect system preference)
                       setSystemTheme();
-                      setShowThemeModal(false);
+                      setTimeout(() => {
+                        setShowThemeModal(false);
+                      }, 450);
                     }}
+                    disabled={isTransitioning}
                     className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all duration-300 ${isDarkMode
                       ? 'bg-slate-700 text-white hover:bg-slate-600'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                      } ${isTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center space-x-3">
                       <CogIcon className="h-5 w-5" />

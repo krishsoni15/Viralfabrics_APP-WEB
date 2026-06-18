@@ -10,16 +10,26 @@ interface DarkModeReturn {
   mounted: boolean;
   getDarkModeState: (defaultValue?: boolean) => boolean;
   themeSwitchRef: React.RefObject<HTMLButtonElement | null>;
+  isTransitioning: boolean;
 }
 
 export function useDarkMode(): DarkModeReturn {
   // Initialize with a safe default to prevent hydration mismatch
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [mounted, setMounted] = useState<boolean>(false);
+  const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
   const themeSwitchRef = useRef<HTMLButtonElement | null>(null);
+  const isTransitioningRef = useRef<boolean>(false);
 
   // Simple theme toggle function
   const toggleTheme = useCallback((isDark: boolean) => {
+    if (isTransitioningRef.current) return;
+    isTransitioningRef.current = true;
+    setIsTransitioning(true);
+
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.add('dark-transitioning');
+    }
     setIsDarkMode(isDark);
     // Save to localStorage immediately
     try {
@@ -45,6 +55,15 @@ export function useDarkMode(): DarkModeReturn {
       cancelable: true
     });
     window.dispatchEvent(customEvent);
+
+    // Remove transitioning class after animation completes
+    setTimeout(() => {
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove('dark-transitioning');
+      }
+      isTransitioningRef.current = false;
+      setIsTransitioning(false);
+    }, 450);
   }, []);
 
   useEffect(() => {
@@ -177,6 +196,7 @@ export function useDarkMode(): DarkModeReturn {
     getThemeMode, 
     mounted,
     getDarkModeState,
-    themeSwitchRef
+    themeSwitchRef,
+    isTransitioning
   };
 }
