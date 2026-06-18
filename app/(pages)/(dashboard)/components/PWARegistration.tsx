@@ -84,11 +84,25 @@ export default function PWARegistration() {
     );
     
     if (isDevelopment) {
-      // We will keep SW registration enabled in development so PWA can be installed locally
-      console.log('Running in development mode - Service Worker is enabled for PWA testing');
+      console.log('Running in development mode - Service Worker disabled & unregistered to prevent page compilation timeouts');
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const registration of registrations) {
+            registration.unregister().then(() => {
+              console.log('Service Worker unregistered successfully');
+            });
+          }
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          keys.forEach((key) => caches.delete(key));
+        });
+      }
+      return;
     }
 
-    // Register service worker (enabled for both prod and dev)
+    // Register service worker (enabled for prod only)
     const registerServiceWorker = async () => {
       if ('serviceWorker' in navigator) {
         try {

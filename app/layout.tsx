@@ -74,7 +74,15 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         
         {/* Apple Touch Icon */}
-        <link rel="apple-touch-icon" href="/vflogo/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/vflogo/apple-touch-icon.png" />
+        
+        {/* Apple Mobile Web App Meta Tags */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Viral Fabrics" />
+        
+        {/* Mobile Web App Capable */}
+        <meta name="mobile-web-app-capable" content="yes" />
         
         {/* Microsoft Tiles */}
         <meta name="msapplication-config" content="/browserconfig.xml" />

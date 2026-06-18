@@ -141,6 +141,7 @@ async function performLogin(req: Request) {
       _id: user._id,
       name: user.name,
       username: user.username,
+      email: user.email,
       phoneNumber: user.phoneNumber,
       address: user.address,
       role: user.role,

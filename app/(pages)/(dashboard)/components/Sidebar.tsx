@@ -68,7 +68,7 @@ export default function Sidebar({
   onOpenInApp
 }: SidebarProps) {
   const pathname = usePathname();
-  const { isDarkMode, mounted, toggleDarkMode, themeSwitchRef } = useDarkMode();
+  const { isDarkMode, mounted, toggleDarkMode, themeSwitchRef, isTransitioning } = useDarkMode();
   const [screenSize, setScreenSize] = useState<number>(0);
   const [hasSetInitialState, setHasSetInitialState] = useState<boolean>(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
@@ -525,18 +525,20 @@ export default function Sidebar({
                     {/* Dark/White Mode Toggle Button */}
                     <button
                       ref={themeSwitchRef}
-                      disabled={false}
+                      disabled={isTransitioning}
                       className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 dropdown-item-enter dropdown-item-1 theme-transition ${isDarkMode
                         ? 'text-yellow-300 hover:bg-yellow-500/10'
                         : 'text-gray-600 hover:bg-gray-50'
-                        }`}
+                        } ${isTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
                       onClick={() => {
-                        closeProfileDropdown();
                         toggleDarkMode();
+                        setTimeout(() => {
+                          closeProfileDropdown();
+                        }, 450);
                       }}
                     >
                       <div className="flex items-center space-x-2">
-                        {false ? (
+                        {isTransitioning ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
                         ) : isDarkMode ? (
                           <SunIcon className="h-4 w-4" />
@@ -544,7 +546,7 @@ export default function Sidebar({
                           <MoonIcon className="h-4 w-4" />
                         )}
                         <span>
-                          {false
+                          {isTransitioning
                             ? 'Switching...'
                             : isDarkMode
                               ? 'Switch to Light Mode'

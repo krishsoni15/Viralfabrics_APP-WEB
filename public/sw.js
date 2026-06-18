@@ -2,7 +2,7 @@
 // Using build time ensures each deployment gets a unique version
 // This allows new deployments to be detected while keeping old cache as fallback
 // IMPORTANT: This version should match the deployment version from the server
-const BUILD_VERSION = 'v' + Date.now();
+const BUILD_VERSION = 'v1781788412412';
 const CACHE_NAME = 'viral-fabrics-' + BUILD_VERSION;
 const STATIC_CACHE = 'viral-fabrics-static-' + BUILD_VERSION;
 const DYNAMIC_CACHE = 'viral-fabrics-dynamic-' + BUILD_VERSION;
@@ -33,10 +33,15 @@ self.addEventListener('install', (event) => {
         // Cache essential files, but don't fail if some fail
         return Promise.allSettled(
           STATIC_FILES.map(url => 
-            cache.add(url).catch(err => {
-              console.log('Failed to cache:', url, err);
-              return null;
-            })
+            fetch(new Request(url, { cache: 'reload' }))
+              .then(response => {
+                if (response.ok) return cache.put(url, response);
+                throw new Error(`Fetch failed with status ${response.status}`);
+              })
+              .catch(err => {
+                console.log('Failed to cache:', url, err);
+                return null;
+              })
           )
         );
       })
@@ -105,6 +110,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const isNavigation = request.destination === 'document' || url.pathname.endsWith('.html') || 
+      (!url.pathname.includes('.') && !url.pathname.startsWith('/_next'));
+
+  if (isNavigation) {
+    // If online, do NOT intercept navigation requests. Let browser handle it naturally.
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      return;
+    }
+    // If offline, serve from cache
+    event.respondWith(handleOfflineNavigation(request));
+    return;
+  }
+
   // Handle API requests
   if (url.pathname.startsWith('/api/')) {
     // Skip SSE endpoints - they should not be cached
@@ -132,16 +150,35 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(handleExternalRequest(request));
 });
 
+// Handle offline navigation requests by loading from cache fallback
+async function handleOfflineNavigation(request) {
+  let cachedResponse = await caches.match(request);
+  if (!cachedResponse) {
+    const allCaches = await caches.keys();
+    for (const cacheName of allCaches) {
+      if (cacheName.includes('viral-fabrics') || cacheName.includes('crm-admin')) {
+        const cache = await caches.open(cacheName);
+        cachedResponse = await cache.match(request);
+        if (cachedResponse) {
+          break;
+        }
+      }
+    }
+  }
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+  return new Response('Offline - Page not cached', {
+    status: 503,
+    headers: { 'Content-Type': 'text/plain' }
+  });
+}
+
 // Handle API requests with network-first strategy
 async function handleApiRequest(request) {
   try {
-    // Try network first with timeout
-    const networkResponse = await Promise.race([
-      fetch(request),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Network timeout')), 10000)
-      )
-    ]);
+    // Try network first
+    const networkResponse = await fetch(request);
     
     if (networkResponse && networkResponse.ok) {
       // Cache successful GET responses
@@ -169,7 +206,6 @@ async function handleApiRequest(request) {
     }
 
     // Return offline response for API requests only if we're actually offline
-    // Check navigator.onLine to avoid false offline messages
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       return new Response(
         JSON.stringify({ 
@@ -186,7 +222,6 @@ async function handleApiRequest(request) {
     }
     
     // If navigator says we're online but fetch failed, return a generic error
-    // Don't show "offline" message - might be a temporary network issue
     return new Response(
       JSON.stringify({ 
         success: false, 
@@ -204,113 +239,20 @@ async function handleApiRequest(request) {
 
 // Handle static files with network-first strategy for HTML, cache-first for assets
 async function handleStaticRequest(request) {
-  const url = new URL(request.url);
-  
-  // For HTML pages (navigation requests), ALWAYS fetch fresh from network
-  // Never serve cached HTML to prevent black screens on new deployments
-  if (request.destination === 'document' || url.pathname.endsWith('.html') || 
-      (!url.pathname.includes('.') && !url.pathname.startsWith('/_next'))) {
-    try {
-      // Always fetch fresh HTML from network with cache-busting
-      // This prevents black screens when new deployment has new JS bundles
-      const networkResponse = await Promise.race([
-        fetch(request, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-SW-Version': BUILD_VERSION // Send version to server
-          }
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Network timeout')), 8000)
-        )
-      ]);
-      
-      if (networkResponse && networkResponse.ok) {
-        // Don't cache HTML pages - always fetch fresh to prevent black screens
-        // Only cache for offline fallback, but prefer network
-        return networkResponse;
-      }
-    } catch (error) {
-      // Network failed - only use cache if we're actually offline
-      // Don't serve stale HTML if network is just slow (prevents black screen)
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        // Actually offline - try cache as last resort
-        let cachedResponse = await caches.match(request);
-        
-        if (!cachedResponse) {
-          // Try all caches for fallback
-          const allCaches = await caches.keys();
-          for (const cacheName of allCaches) {
-            if (cacheName.includes('viral-fabrics') || cacheName.includes('crm-admin')) {
-              const cache = await caches.open(cacheName);
-              cachedResponse = await cache.match(request);
-              if (cachedResponse) {
-                console.log('📦 Serving from cache (offline):', url.pathname);
-                break;
-              }
-            }
-          }
-        }
-        
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-      }
-      
-      // Network failed but we're online - might be deployment in progress
-      // Return error instead of stale cache to prevent black screen
-      return new Response('Page loading... Please refresh if this persists.', { 
-        status: 503,
-        headers: { 'Content-Type': 'text/plain' }
-      });
-    }
-    
-    // If we get here, something went wrong - try one more time
-    try {
-      return await fetch(request, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
-      });
-    } catch {
-      return new Response('Page not available - Please refresh the page', { 
-        status: 503,
-        headers: { 'Content-Type': 'text/plain' }
-      });
-    }
-  }
-  
   // For static assets (JS, CSS, images, Next.js chunks), use stale-while-revalidate
-  // This ensures users get cached content immediately while fetching fresh version in background
   const cachedResponse = await caches.match(request);
   
   // Start fetching fresh version in background (don't wait)
-  const networkPromise = Promise.race([
-    fetch(request),
-    new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Network timeout')), 5000)
-    )
-  ]).then((response) => {
+  const networkPromise = fetch(request).then((response) => {
     if (response && response.ok) {
-      // Cache the fresh response for next time
       const cache = caches.open(STATIC_CACHE);
-      cache.then(c => c.put(request, response.clone())).catch(() => {
-        // Ignore cache errors
-      });
+      cache.then(c => c.put(request, response.clone())).catch(() => {});
     }
     return response;
   }).catch(() => null);
 
   // If we have cached version, return it immediately (stale-while-revalidate)
   if (cachedResponse) {
-    // Don't wait for network - return cached version immediately
-    networkPromise.catch(() => {
-      // Network fetch failed, but we already returned cached version
-    });
     return cachedResponse;
   }
 
@@ -331,14 +273,13 @@ async function handleStaticRequest(request) {
       const cache = await caches.open(cacheName);
       const oldCached = await cache.match(request);
       if (oldCached) {
-        console.log('📦 Serving from old cache:', url.pathname);
+        console.log('📦 Serving from old cache:', request.url);
         return oldCached;
       }
     }
   }
   
   // Return error response
-  // Only show offline message if navigator confirms we're offline
   const offlineMessage = (typeof navigator !== 'undefined' && !navigator.onLine)
     ? 'Offline - Resource not available'
     : 'Resource not available - Please try again';
