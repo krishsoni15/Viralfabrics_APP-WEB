@@ -19,71 +19,73 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
   const themeSwitchRef = useRef<HTMLButtonElement | null>(null);
-  const isTransitioningRef = useRef<boolean>(false);
 
-  // Simple theme toggle function
+  // Simple and ultra-fast theme toggle using a premium gradient transition overlay
   const toggleDarkMode = useCallback(() => {
-    if (isTransitioningRef.current) return;
-    isTransitioningRef.current = true;
-    setIsTransitioning(true);
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.add('dark-transitioning');
-    }
+    const applyTheme = (newMode: boolean) => {
+      setIsDarkMode(newMode);
+      
+      if (typeof document !== 'undefined') {
+        if (newMode) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
+      
+      localStorage.setItem('darkMode', newMode.toString());
+      
+      // Dispatch event for any legacy dependencies
+      const customEvent = new CustomEvent('darkModeChange', { 
+        detail: newMode,
+        bubbles: true,
+        cancelable: true
+      });
+      window.dispatchEvent(customEvent);
+    };
+
     const newMode = !isDarkMode;
-    setIsDarkMode(newMode);
-    
-    // Apply theme to document
-    if (newMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    
-    // Store in localStorage for persistence
-    localStorage.setItem('darkMode', newMode.toString());
-    
-    // Dispatch custom event for other components
-    const customEvent = new CustomEvent('darkModeChange', { 
-      detail: { isDark: newMode, timestamp: Date.now() },
-      bubbles: true,
-      cancelable: true
-    });
-    window.dispatchEvent(customEvent);
-    
-    // Clear transition state after animation
+
+    // Start transitioning state (shows premium gradient overlay)
+    setIsTransitioning(true);
+
+    // Apply the theme change during the overlay's maximum opacity point (180ms)
+    setTimeout(() => {
+      if (typeof document !== 'undefined' && (document as any).startViewTransition) {
+        (document as any).startViewTransition(() => {
+          applyTheme(newMode);
+        });
+      } else {
+        applyTheme(newMode);
+      }
+    }, 180);
+
+    // End transition state after animation finishes (420ms total)
     setTimeout(() => {
       setIsTransitioning(false);
-      isTransitioningRef.current = false;
-      if (typeof document !== 'undefined') {
-        document.documentElement.classList.remove('dark-transitioning');
-      }
-    }, 450);
+    }, 420);
   }, [isDarkMode]);
 
   useEffect(() => {
-    // Only run on client side to prevent hydration mismatch
     if (typeof window === 'undefined') return;
     
     setMounted(true);
     
-    // Initialize theme from the layout script or localStorage
+    // Initialize theme from layout script or localStorage
     const initialTheme = (window as any).__INITIAL_THEME__;
     if (initialTheme !== undefined) {
       setIsDarkMode(initialTheme);
-      // Apply initial theme to document
       if (initialTheme) {
         document.documentElement.classList.add('dark');
       } else {
         document.documentElement.classList.remove('dark');
       }
     } else {
-      // Fallback to localStorage and system preference
       const savedMode = localStorage.getItem('darkMode');
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       const expectedMode = savedMode !== null ? savedMode === 'true' : prefersDark;
       
       setIsDarkMode(expectedMode);
-      // Apply initial theme to document
       if (expectedMode) {
         document.documentElement.classList.add('dark');
       } else {
@@ -104,33 +106,6 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // Listen for theme changes triggered within the application (via hooks)
-    const handleDarkModeChange = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const isDark = typeof customEvent.detail === 'object' && customEvent.detail !== null 
-        ? customEvent.detail.isDark 
-        : customEvent.detail;
-        
-      if (isDark !== isDarkMode) {
-        setIsTransitioning(true);
-        if (typeof document !== 'undefined') {
-          document.documentElement.classList.add('dark-transitioning');
-        }
-        setIsDarkMode(isDark);
-        if (isDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-        setTimeout(() => {
-          setIsTransitioning(false);
-          if (typeof document !== 'undefined') {
-            document.documentElement.classList.remove('dark-transitioning');
-          }
-        }, 450);
-      }
-    };
-
     // Listen for system theme changes
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleSystemChange = (event: MediaQueryListEvent) => {
@@ -146,12 +121,10 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
     };
 
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('darkModeChange', handleDarkModeChange);
     mediaQuery.addEventListener('change', handleSystemChange);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('darkModeChange', handleDarkModeChange);
       mediaQuery.removeEventListener('change', handleSystemChange);
     };
   }, []);
@@ -185,46 +158,100 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
-      {mounted && isTransitioning && (
-        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950/60 dark:bg-black/75 backdrop-blur-xl animate-portal-fade-in pointer-events-auto">
-          {/* Main Cinematic Card */}
-          <div className="relative w-72 p-8 rounded-3xl bg-white/5 dark:bg-slate-950/30 border border-white/10 dark:border-white/5 shadow-2xl backdrop-blur-2xl animate-portal-scale-up animate-border-glow flex flex-col items-center justify-center overflow-hidden">
-            
-            {/* Ambient Background Spotlights */}
-            <div className="absolute -top-12 -left-12 w-24 h-24 bg-blue-500/20 rounded-full blur-2xl pointer-events-none" />
-            <div className="absolute -bottom-12 -right-12 w-24 h-24 bg-purple-500/20 rounded-full blur-2xl pointer-events-none" />
-            
-            {/* Outer Orbit Ring */}
-            <div className="absolute w-28 h-28 border border-dashed border-white/10 rounded-full animate-orbit pointer-events-none" />
-            
-            {/* Logo Wrapper with Double Ripple Rings */}
-            <div className="relative w-20 h-20 mb-6 flex items-center justify-center">
-              <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-400/5 rounded-full scale-125 blur-md animate-ping" style={{ animationDuration: '1.5s' }} />
-              <div className="absolute inset-0 bg-purple-500/10 dark:bg-purple-400/5 rounded-full scale-110 blur-sm animate-ping" style={{ animationDuration: '2s' }} />
-              
-              {/* Logo Image */}
-              <img 
-                src="/vflogo/viral%20lgoo.png" 
-                alt="Viral Fabrics Logo" 
-                className="w-14 h-14 object-contain z-10 transition-transform duration-300 hover:scale-105" 
-              />
+      {isTransitioning && mounted && (
+        <>
+          <style dangerouslySetInnerHTML={{ __html: `
+            @keyframes themeOverlayFade {
+              0% { opacity: 0; backdrop-filter: blur(0px); }
+              30%, 70% { opacity: 1; backdrop-filter: blur(12px); }
+              100% { opacity: 0; backdrop-filter: blur(0px); }
+            }
+            @keyframes themeOrbPulse {
+              0%, 100% { transform: scale(0.9); opacity: 0.8; }
+              50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 40px rgba(139, 92, 246, 0.8); }
+            }
+            @keyframes themeTextFade {
+              0%, 100% { opacity: 0; transform: translateY(10px); }
+              30%, 70% { opacity: 1; transform: translateY(0); }
+            }
+            .theme-overlay-container {
+              position: fixed;
+              inset: 0;
+              z-index: 99999;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              background: radial-gradient(circle at center, rgba(139, 92, 246, 0.85) 0%, rgba(99, 102, 241, 0.85) 50%, rgba(15, 23, 42, 0.95) 100%);
+              animation: themeOverlayFade 420ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+              pointer-events: auto;
+            }
+            html:not(.dark) .theme-overlay-container {
+              background: radial-gradient(circle at center, rgba(196, 181, 253, 0.85) 0%, rgba(165, 180, 252, 0.85) 50%, rgba(248, 250, 252, 0.95) 100%);
+            }
+            .theme-orb-glow {
+              width: 72px;
+              height: 72px;
+              border-radius: 9999px;
+              background: linear-gradient(135deg, #ec4899, #8b5cf6, #3b82f6);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 4px;
+              animation: themeOrbPulse 420ms ease-in-out infinite;
+              box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+            }
+            .theme-orb-inner {
+              width: 100%;
+              height: 100%;
+              border-radius: 9999px;
+              background: #0f172a;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            html:not(.dark) .theme-orb-inner {
+              background: #ffffff;
+            }
+            .theme-orb-logo {
+              width: 44px;
+              height: 44px;
+              object-fit: contain;
+              animation: themeLogoPulse 1.2s ease-in-out infinite;
+              filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.4));
+            }
+            @keyframes themeLogoPulse {
+              0%, 100% { transform: scale(0.95); }
+              50% { transform: scale(1.1); }
+            }
+            .theme-text-msg {
+              margin-top: 24px;
+              font-size: 14px;
+              font-weight: 700;
+              letter-spacing: 0.05em;
+              text-transform: uppercase;
+              color: #f8fafc;
+              animation: themeTextFade 420ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+            html:not(.dark) .theme-text-msg {
+              color: #0f172a;
+            }
+          `}} />
+          <div className="theme-overlay-container">
+            <div className="theme-orb-glow">
+              <div className="theme-orb-inner">
+                <img 
+                  src="/vflogo/viral%20lgoo.png" 
+                  alt="Viral Fabrics Logo" 
+                  className="theme-orb-logo"
+                />
+              </div>
             </div>
-            
-            {/* Status Labels */}
-            <span className="text-xs font-bold text-white tracking-[0.25em] uppercase text-center bg-gradient-to-r from-blue-200 via-white to-purple-200 bg-clip-text text-transparent">
-              Adapting UI Theme
-            </span>
-            <span className="text-[9px] text-white/50 mt-1 font-medium tracking-[0.1em] uppercase">
-              Optimizing Workspace
-            </span>
-            
-            {/* Premium Linear Progress Indicator */}
-            <div className="w-36 h-[3px] bg-white/10 rounded-full mt-5 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full animate-progress-bar" />
+            <div className="theme-text-msg">
+              {isDarkMode ? 'Switching to Light Mode' : 'Switching to Dark Mode'}
             </div>
-            
           </div>
-        </div>
+        </>
       )}
     </DarkModeContext.Provider>
   );
