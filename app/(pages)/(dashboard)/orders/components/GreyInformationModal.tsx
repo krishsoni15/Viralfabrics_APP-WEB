@@ -803,25 +803,17 @@ export default function GreyInformationModal({
     return qualityIds;
   }, [order]);
 
-  // ⚡ INSTANT LOAD: Use data provided by parent (parent handles all fetching)
-  // ⚡ FIX: Fetch fresh data when modal opens to ensure newly added entries are shown
+  // ⚡ INSTANT LOAD: Always fetch fresh data from API when modal opens
+  // ⚡ FIX: Don't rely on existingGreyInfo prop (may not be ready due to race condition)
   useEffect(() => {
     if (isOpen && order?.orderId) {
-      // ⚡ FIX: Check if we have existing data - only fetch API if in Edit mode
-      const hasExistingData = existingGreyInfo && Array.isArray(existingGreyInfo) && existingGreyInfo.length > 0;
+      // ⚡ FIX: Always fetch fresh from API - don't skip based on existingGreyInfo
+      // existingGreyInfo may be undefined at open time even if data exists (race condition)
 
-      // If no existing data (Add mode), skip API call and don't show loading
-      if (!hasExistingData) {
-        setFetchedGreyInfo([]);
-        setLoadingGreyInfo(false);
-        fetchedOrderIdRef.current = order.orderId;
-        return;
-      }
-
-      // ⚡ FIX: Reset fetchedGreyInfo to null when modal opens to force fresh fetch (Edit mode only)
+      // ⚡ FIX: Reset fetchedGreyInfo to null when modal opens to force fresh fetch
       setFetchedGreyInfo(null);
 
-      // Only fetch fresh data when modal opens if we have existing data (Edit mode)
+      // Always fetch fresh data from API - handles both Add and Edit mode correctly
       const fetchFreshData = async () => {
         setLoadingGreyInfo(true);
         try {

@@ -5,6 +5,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 interface DarkModeContextType {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
+  /** Toggles theme without showing the global Viral Fabrics overlay. Use on pages with their own animation (e.g. login). */
+  toggleDarkModeSilent: () => void;
   setSystemTheme: () => void;
   getThemeMode: () => 'system' | 'dark' | 'light';
   mounted: boolean;
@@ -64,6 +66,30 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => {
       setIsTransitioning(false);
     }, 420);
+  }, [isDarkMode]);
+
+  // Silent toggle — no overlay, instant theme switch (for login page circular animation)
+  const toggleDarkModeSilent = useCallback(() => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+
+    if (typeof document !== 'undefined') {
+      if (newMode) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+
+    localStorage.setItem('darkMode', newMode.toString());
+
+    // Dispatch event for any legacy dependencies
+    const customEvent = new CustomEvent('darkModeChange', {
+      detail: newMode,
+      bubbles: true,
+      cancelable: true
+    });
+    window.dispatchEvent(customEvent);
   }, [isDarkMode]);
 
   useEffect(() => {
@@ -150,6 +176,7 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
       value={{
         isDarkMode,
         toggleDarkMode,
+        toggleDarkModeSilent,
         setSystemTheme,
         getThemeMode,
         mounted,

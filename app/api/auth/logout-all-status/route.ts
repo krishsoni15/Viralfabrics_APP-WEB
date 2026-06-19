@@ -109,7 +109,10 @@ export async function GET(request: NextRequest) {
     }
 
     const logoutAllTime = logoutAllTimestamp.getTime();
-    const shouldLogout = loginTime < logoutAllTime;
+    // Add 10-second grace buffer: users who logged in within 10s of logout-all are NOT logged out
+    // This prevents false logouts when loginTime ~= logoutAllTimestamp (race condition)
+    const GRACE_PERIOD_MS = 10000; // 10 seconds
+    const shouldLogout = loginTime > 0 && loginTime < (logoutAllTime - GRACE_PERIOD_MS);
 
     // ⚡ OPTIMIZATION: Use cached triggeredBy (removed slow log query)
     // The triggeredBy is set when logout-all is triggered, so we can use cached value

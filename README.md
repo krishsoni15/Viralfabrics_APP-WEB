@@ -51,3 +51,19 @@ To view setup, local running commands, APK building scripts, and Apple TestFligh
 cd mobile-app
 # Read README.md for complete platform-specific instructions!
 ```
+How to Run the App with Docker:
+1. Development Mode (with Hot-Reloading)
+To run the app as a developer with instant hot-reloads (modifying code on your local computer updates the app inside Docker instantly):
+
+bash
+docker compose up app-dev
+This uses anonymous volume caching for node_modules so it does not conflict with your host machine.
+
+2. Production Mode (Built and Compressed)
+To test the exact compiled build that gets sent to clients:
+
+bash
+docker compose up --build app
+3. Stop all containers
+bash
+docker compose down
