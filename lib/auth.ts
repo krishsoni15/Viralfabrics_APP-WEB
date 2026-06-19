@@ -51,9 +51,16 @@ export async function verifyToken(token: string, checkLogoutAll: boolean = true)
           const loginTime = (payload as any).loginTime ? (payload as any).loginTime * 1000 : (payload.iat ? payload.iat * 1000 : 0);
           const logoutAllTime = logoutAllTimestamp.getTime();
           
-          // If original login was before logout all, token is invalid
-          if (loginTime < logoutAllTime) {
-            return null;
+          // If loginTime is 0/missing, don't invalidate (fail open for safety)
+          if (loginTime === 0) {
+            // No login time in token, allow it
+          } else {
+            // Add 10-second grace buffer to prevent false logouts when loginTime ~= logoutAllTimestamp
+            // This handles the race condition where a user logs in just after logout-all was triggered
+            const GRACE_PERIOD_MS = 10000; // 10 seconds grace period
+            if (loginTime < (logoutAllTime - GRACE_PERIOD_MS)) {
+              return null;
+            }
           }
         }
       } catch (error) {

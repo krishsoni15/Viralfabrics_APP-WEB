@@ -46,7 +46,7 @@ function LoginForm() {
   const [isRetrying, setIsRetrying] = useState(false);
   // ⚡ FIX: Use dark mode hook (must be called unconditionally)
   // The hook is safe because DarkModeProvider wraps the app in root layout
-  const { isDarkMode, toggleDarkMode, mounted: darkModeMounted, themeSwitchRef } = useDarkMode();
+  const { isDarkMode, toggleDarkModeSilent, mounted: darkModeMounted, themeSwitchRef } = useDarkMode();
   const [isCheckingSession, setIsCheckingSession] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const hasCheckedSessionRef = useRef(false);
@@ -87,8 +87,8 @@ function LoginForm() {
         root.classList.add('theme-switch-circle-animation', 'light-to-dark');
       }
 
-      // Toggle theme immediately for better visual effect
-      toggleDarkMode();
+      // Toggle theme immediately for better visual effect (silent - no VF overlay on login page)
+      toggleDarkModeSilent();
 
       // Remove animation class after animation completes
       setTimeout(() => {
@@ -97,7 +97,7 @@ function LoginForm() {
       }, 600);
     } else {
       // Fallback without animation
-      toggleDarkMode();
+      toggleDarkModeSilent();
       setIsAnimating(false);
     }
   };

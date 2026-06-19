@@ -136,6 +136,39 @@ async function performLogin(req: Request) {
       .setExpirationTime(expirationTime)
       .sign(secretKey);
 
+    // ⚡ FIX: After successful login, check if there's a logout-all timestamp that would
+    // immediately invalidate this new session. If the new loginTime would be blocked by
+    // the existing logoutAllTimestamp (within 10s grace), clear it so users can log back in.
+    // This is the root fix for the "auto-logout after login" bug.
+    try {
+      const { getCachedLogoutAllTimestamp, invalidateLogoutAllCache } = await import('@/lib/logoutAllCache');
+      const SystemConfig = (await import('@/models/SystemConfig')).default;
+      
+      let logoutAllTimestamp = getCachedLogoutAllTimestamp();
+      if (logoutAllTimestamp === undefined) {
+        // Cache miss - check DB
+        logoutAllTimestamp = await (SystemConfig as any).getLogoutAllTimestamp();
+      }
+      
+      if (logoutAllTimestamp) {
+        const loginTimeMs = now * 1000;
+        const logoutAllTimeMs = logoutAllTimestamp.getTime();
+        const GRACE_PERIOD_MS = 10000; // 10 seconds
+        
+        // If this new login would be blocked by the logoutAllTimestamp, clear it
+        // This happens when user is logging back in after a logout-all event
+        if (loginTimeMs < logoutAllTimeMs || (logoutAllTimeMs - loginTimeMs) < GRACE_PERIOD_MS) {
+          // Clear the logout-all timestamp so this new login session works
+          await (SystemConfig as any).findOneAndDelete({ key: 'logout_all_timestamp' });
+          invalidateLogoutAllCache();
+          console.log('✅ Cleared logout-all timestamp on new login to prevent auto-logout');
+        }
+      }
+    } catch (clearError) {
+      // Non-critical: if this fails, login still proceeds
+      console.warn('Could not check/clear logout-all timestamp on login:', clearError);
+    }
+
     // Prepare user object without password
     const userSafe = {
       _id: user._id,
