@@ -30,7 +30,7 @@ interface MillItem {
   pcs: string;
   quality: string; // Add quality field
   process: string; // Add process field
-  additionalMeters: { meters: string; pieces: string; quality: string; process: string }[]; // Add process to additional meters
+  additionalMeters: { meters: string; pieces: string; quality: string; process: string; _id?: string }[]; // Add process and optional _id to additional meters
 }
 
 interface MillInputFormData {
@@ -2016,6 +2016,7 @@ export default function MillInputForm({
               process: group.mainInput.processName || '', // Extract process name
               additionalMeters: group.additionalInputs.map((input: any) => {
                 return {
+                  _id: input._id || 'existing', // ⚡ FIX: Add identifier to mark as existing/saved
                   meters: (input.greighMtr || 0).toString(),
                   pieces: (input.pcs || 0).toString(),
                   quality: input.quality?._id || input.quality || '', // Extract quality ID
@@ -3221,22 +3222,26 @@ export default function MillInputForm({
         }
       `}</style>
 
-      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
-        <div className={`relative w-full max-w-full sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl max-h-[95vh] overflow-hidden rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
+      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-0 sm:p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
+        <div className={`relative w-full max-w-full sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl min-h-screen sm:min-h-0 max-h-[100vh] sm:max-h-[95vh] overflow-hidden rounded-none sm:rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
           }`}>
           {/* Loading Overlay for Loading Data */}
           {/* ⚡ FIX: Single loading overlay - prioritize saving over loading data */}
           {(loadingExistingData || saving) && (
             <div className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-10">
-              <div className={`p-6 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'
+              <div className={`px-4 sm:px-6 py-3 sm:py-6 rounded-full sm:rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'
                 }`}>
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="mt-3 text-sm font-medium">
-                  {saving ? (savingProgress || 'Saving mill input data...') : 'Loading mill input data...'}
-                </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  {saving ? 'Please wait, do not close this window' : 'Please wait while we fetch your data'}
-                </p>
+                <div className="flex items-center space-x-0 sm:flex-col sm:space-x-0 sm:space-y-3">
+                  <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-blue-500 sm:mx-auto"></div>
+                  <div className="hidden sm:block text-center">
+                    <p className="text-sm font-medium">
+                      {saving ? (savingProgress || 'Saving mill input data...') : 'Loading mill input data...'}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {saving ? 'Please wait, do not close this window' : 'Please wait while we fetch your data'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -3495,7 +3500,7 @@ export default function MillInputForm({
 
                         <div className="space-y-3 sm:space-y-4">
                           {/* M1 and P1 Fields (Always visible) - Responsive grid: 1 col mobile, 2 col tablet, 5 col desktop */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                          <div className={`grid grid-cols-1 sm:grid-cols-2 ${(!readOnly && (!hasExistingData || item.id.startsWith('new-') || isMaster)) ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3 sm:gap-4`}>
                             {/* Quality for M1 */}
                             <div>
                               <div className="flex items-center justify-between mb-1.5 sm:mb-2">
@@ -3721,30 +3726,34 @@ export default function MillInputForm({
                             </div>
 
                             {/* ⚡ FIX: Delete button for M1 only - disabled if only M1 exists (no M2) */}
-                            <div className="flex items-end sm:col-span-2 lg:col-span-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  removeMainMillItem(item.id);
-                                }}
-                                disabled={readOnly || item.additionalMeters.length === 0}
-                                className={`w-full px-3 py-2.5 sm:py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${item.additionalMeters.length === 0
-                                  ? isDarkMode
-                                    ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
-                                    : 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'
-                                  : isDarkMode
-                                    ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
-                                    : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
-                                  }`}
-                                title={item.additionalMeters.length === 0 ? "Cannot delete - at least one entry (M1) required" : "Delete M1 only (M2 will move to M1 if exists)"}
-                              >
-                                <TrashIcon className="h-5 w-5" />
-                              </button>
-                            </div>
+                            {(!readOnly && (!hasExistingData || item.id.startsWith('new-') || isMaster)) && (
+                              <div className="flex items-end sm:col-span-2 lg:col-span-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    removeMainMillItem(item.id);
+                                  }}
+                                  disabled={readOnly || item.additionalMeters.length === 0}
+                                  className={`w-full px-3 py-2.5 sm:py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${item.additionalMeters.length === 0
+                                    ? isDarkMode
+                                      ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
+                                      : 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'
+                                    : isDarkMode
+                                      ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
+                                      : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
+                                    }`}
+                                  title={item.additionalMeters.length === 0 ? "Cannot delete - at least one entry (M1) required" : "Delete M1 only (M2 will move to M1 if exists)"}
+                                >
+                                  <TrashIcon className="h-5 w-5" />
+                                </button>
+                              </div>
+                            )}
                           </div>
 
-                          {item.additionalMeters.map((additional, index) => (
-                            <div key={index} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                          {item.additionalMeters.map((additional, index) => {
+                            const showAdditionalDelete = !readOnly && (!hasExistingData || item.id.startsWith('new-') || !additional._id || isMaster);
+                            return (
+                              <div key={index} className={`grid grid-cols-1 sm:grid-cols-2 ${showAdditionalDelete ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3 sm:gap-4`}>
                               {/* Quality for Additional Meters */}
                               <div>
                                 <div className="flex items-center justify-between mb-1.5 sm:mb-2">
@@ -3970,28 +3979,31 @@ export default function MillInputForm({
                               </div>
 
                               {/* ⚡ FIX: Delete button in same row - enabled when multiple entries exist (like dispatch) */}
-                              <div className="flex items-end sm:col-span-2 lg:col-span-1">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    removeAdditionalMeters(item.id, index);
-                                  }}
-                                  disabled={readOnly || 1 + (item.additionalMeters.length || 0) <= 1}
-                                  className={`w-full px-3 py-2.5 sm:py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${1 + (item.additionalMeters.length || 0) <= 1
-                                    ? isDarkMode
-                                      ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
-                                      : 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'
-                                    : isDarkMode
-                                      ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
-                                      : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
-                                    }`}
-                                  title={1 + (item.additionalMeters.length || 0) <= 1 ? "Cannot delete - at least one entry required" : `Delete M${index + 2} row`}
-                                >
-                                  <TrashIcon className="h-5 w-5" />
-                                </button>
-                              </div>
+                              {showAdditionalDelete ? (
+                                <div className="flex items-end sm:col-span-2 lg:col-span-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      removeAdditionalMeters(item.id, index);
+                                    }}
+                                    disabled={readOnly || 1 + (item.additionalMeters.length || 0) <= 1}
+                                    className={`w-full px-3 py-2.5 sm:py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${1 + (item.additionalMeters.length || 0) <= 1
+                                      ? isDarkMode
+                                        ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
+                                        : 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'
+                                      : isDarkMode
+                                        ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
+                                        : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
+                                      }`}
+                                    title={1 + (item.additionalMeters.length || 0) <= 1 ? "Cannot delete - at least one entry required" : `Delete M${index + 2} row`}
+                                  >
+                                    <TrashIcon className="h-5 w-5" />
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
-                          ))}
+                          );
+                        })}
                         </div>
 
                         {/* Add More Additional Meters Button - Full width horizontal design */}

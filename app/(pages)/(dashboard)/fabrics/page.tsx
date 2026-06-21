@@ -21,6 +21,7 @@ import {
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useSession } from '../hooks/useSession';
+import { useRealtimeSync } from '@/app/hooks/useRealtimeSync';
 import { Fabric, FabricFilters } from '@/types/fabric';
 
 // Development-only logging utility
@@ -143,14 +144,7 @@ export default function FabricsPage() {
   });
 
   // Enhanced UI states
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
-    // Load view mode from localStorage on component mount
-    if (typeof window !== 'undefined') {
-      const savedViewMode = localStorage.getItem('fabricsViewMode');
-      return savedViewMode === 'table' ? 'table' : 'cards';
-    }
-    return 'cards';
-  });
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showStats, setShowStats] = useState(true);
   const [selectedFabrics, setSelectedFabrics] = useState<Set<string>>(new Set());
@@ -236,43 +230,40 @@ export default function FabricsPage() {
     }
   }, [isUser, router]);
 
-  // Auto-switch view mode based on screen size (only if no saved preference exists)
+  // Load view mode from cache on component mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedMode = localStorage.getItem('fabricsViewMode');
+      if (savedMode === 'table' || savedMode === 'cards') {
+        setViewMode(savedMode);
+      } else {
+        const isMobile = window.innerWidth < 768;
+        setViewMode(isMobile ? 'cards' : 'table');
+      }
+    }
+  }, []);
+
+  // Screen resize listener to auto-switch viewMode if user has no saved preference
   useEffect(() => {
     const handleResize = () => {
-      // Check if user has a saved preference - if yes, respect it and don't auto-switch
-      const savedViewMode = localStorage.getItem('fabricsViewMode');
-      if (savedViewMode === 'table' || savedViewMode === 'cards') {
-        // User has a saved preference, don't auto-switch
-        return;
+      const savedMode = localStorage.getItem('fabricsViewMode');
+      if (savedMode === 'table' || savedMode === 'cards') {
+        return; // Respect user preference
       }
-
-      // Only auto-switch if no saved preference exists
-      if (window.innerWidth < 800 && viewMode === 'table') {
-        setViewMode('cards');
-        localStorage.setItem('fabricsViewMode', 'cards');
-      } else if (window.innerWidth >= 800 && viewMode === 'cards') {
-        setViewMode('table');
-        localStorage.setItem('fabricsViewMode', 'table');
-      }
+      const isMobile = window.innerWidth < 768;
+      setViewMode(isMobile ? 'cards' : 'table');
     };
-
-    // Only run auto-switch on mount if no saved preference exists
-    const savedViewMode = localStorage.getItem('fabricsViewMode');
-    if (!savedViewMode || (savedViewMode !== 'table' && savedViewMode !== 'cards')) {
-      handleResize(); // Check on mount only if no preference
-    }
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [viewMode]);
+  }, []);
 
   // Handle manual view mode changes
   const handleViewModeChange = (newMode: 'table' | 'cards') => {
     setViewMode(newMode);
-    // Save view mode to localStorage for persistence
-    localStorage.setItem('fabricsViewMode', newMode);
-    // Store timestamp of manual change
-    localStorage.setItem('lastViewModeChange', Date.now().toString());
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('fabricsViewMode', newMode);
+      localStorage.setItem('lastViewModeChange', Date.now().toString());
+    }
   };
 
   // Handle image navigation in cards
@@ -3413,61 +3404,63 @@ export default function FabricsPage() {
     setBulkActions(false);
   };
 
+  // 🌟 REAL-TIME SYNC
+  useRealtimeSync(
+    () => fetchFabrics(true, currentPage, itemsPerPage, 0, false), 
+    showFabricForm || !!showImageModal || showExportModal || showDeleteConfirmation || showStickerPreview
+  );
 
   if (!mounted) return null;
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+    <div className={`min-h-screen w-full transition-colors duration-500 ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
       {/* Toast Notifications - Right Side Popup */}
       <ToastNotification toasts={toasts} onRemove={removeToast} />
 
-      {/* Search and Controls Bar */}
-      <div className={`mb-4 p-2 sm:p-3 rounded-lg border transition-all duration-150 animate-in fade-in-0 slide-in-from-top-2 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-        } shadow-sm`}>
-        <div className="flex flex-col gap-4">
-          {/* First Row - Search and Filters in Parallel */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Unified Search Bar with Dropdown */}
-            <div className="flex-1 min-w-[200px] flex items-center gap-2">
-              {/* Search Type Dropdown */}
-              <div className="relative">
-                <select
-                  value={searchType}
-                  onChange={(e) => {
-                    const newSearchType = e.target.value as typeof searchType;
-                    setSearchType(newSearchType);
-                    // Clear search when changing search type for better UX
-                    setFilters(prev => ({ ...prev, search: '' }));
-                  }}
-                  className={`px-3 py-2.5 rounded-lg border transition-all duration-150 hover:scale-[1.02] focus:scale-[1.02] text-sm appearance-none cursor-pointer input-focus ${isDarkMode
-                      ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500 hover:border-blue-400'
-                      : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 hover:border-blue-400'
-                    } focus:outline-none focus:ring-2 focus:ring-blue-500/20 pr-8`}
-                >
-                  <option value="all">All</option>
-                  <option value="qualityCode">Quality Code</option>
-                  <option value="qualityName">Quality Name</option>
-                  <option value="type">Type</option>
-                  <option value="weaver">Weaver Name</option>
-                  <option value="weaverQualityName">Weaver Quality</option>
-                </select>
-                <ChevronDownIcon className={`absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  }`} />
-              </div>
+      {/* Main Content */}
+      <div className="w-full pb-6">
+        {/* Search and Controls Bar */}
+        <div className={`mb-4 sm:mb-6 flex flex-col gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border shadow-sm transition-all duration-200 animate-in fade-in-0 slide-in-from-top-2 ${isDarkMode ? 'bg-gray-800 border-gray-700 shadow-gray-900/50' : 'bg-white border-gray-200'}`}>
+        
+        {/* First Row - Search Bar & Action Buttons */}
+        <div className="flex flex-row items-center justify-between gap-2 sm:gap-3 w-full">
+          {/* Search Bar Container */}
+          <div className="flex-grow w-full max-w-xl flex relative group">
+            <div className="relative w-full">
+              {/* Search Type Dropdown inside the search bar on desktop */}
+              <select
+                value={searchType}
+                onChange={(e) => {
+                  const newSearchType = e.target.value as typeof searchType;
+                  setSearchType(newSearchType);
+                  setFilters(prev => ({ ...prev, search: '' }));
+                }}
+                className={`hidden sm:block absolute left-1 top-1.5 bottom-1.5 z-10 pl-3 pr-8 py-1 rounded-md text-xs font-medium border-0 focus:ring-0 cursor-pointer ${
+                  isDarkMode 
+                    ? 'bg-gray-700/80 text-gray-200 hover:bg-gray-700' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                } appearance-none transition-colors duration-200`}
+                style={{ width: '120px' }}
+              >
+                <option value="all">All</option>
+                <option value="qualityCode">Quality Code</option>
+                <option value="qualityName">Quality Name</option>
+                <option value="type">Type</option>
+                <option value="weaver">Weaver Name</option>
+                <option value="weaverQualityName">Weaver Quality</option>
+              </select>
+              <ChevronDownIcon className={`hidden sm:block absolute left-[110px] top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 z-10 pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
 
-              {/* Search Input - Enhanced */}
-              <div className="flex-1 relative">
-                {/* Search Icon - Animated when searching */}
+              {/* Search Input */}
+              <div className="relative w-full">
                 {fetchInFlight > 0 && filters.search ? (
-                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent"></div>
+                  <div className={`absolute ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} left-3 sm:left-[140px] top-1/2 transform -translate-y-1/2`}>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
                   </div>
                 ) : (
-                  <MagnifyingGlassIcon className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 transition-colors duration-200 ${filters.search
-                      ? isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                      : isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                    }`} />
+                  <MagnifyingGlassIcon className={`absolute left-3 sm:left-[140px] top-1/2 transform -translate-y-1/2 h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
                 )}
+                
                 <input
                   type="text"
                   placeholder={
@@ -3488,77 +3481,42 @@ export default function FabricsPage() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      // Clear any pending debounce
                       if (searchDebounceRef.current) {
                         clearTimeout(searchDebounceRef.current);
                         searchDebounceRef.current = null;
                       }
-                      // Cancel in-flight fetch
                       if (fetchAbortRef.current) {
                         fetchAbortRef.current.abort();
                         fetchAbortRef.current = null;
                       }
-                      // Trigger immediate search
                       setCurrentPage(1);
                       setIsChangingPage(true);
                       fetchFabrics(false, 1, itemsPerPage, 0, true)
-                        .then(() => {
-                          setIsChangingPage(false);
-                        })
+                        .then(() => setIsChangingPage(false))
                         .catch((error) => {
-                          // Ignore abort errors
-                          if (error instanceof Error && error.name === 'AbortError') {
-                            return;
-                          }
+                          if (error instanceof Error && error.name === 'AbortError') return;
                           setIsChangingPage(false);
-                          devError('Error searching on Enter:', error);
                         });
                     }
                   }}
-                  className={`w-full pl-10 pr-10 py-2.5 rounded-lg border transition-all duration-200 hover:scale-[1.01] focus:scale-[1.01] text-sm input-focus ${filters.search
-                      ? isDarkMode
-                        ? 'bg-gray-700 border-blue-500 text-white placeholder-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30'
-                        : 'bg-white border-blue-500 text-gray-900 placeholder-gray-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30'
-                      : isDarkMode
-                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 hover:border-blue-400'
-                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500 hover:border-blue-400'
-                    } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+                  className={`w-full pl-10 sm:pl-[170px] pr-10 py-2 sm:py-2.5 rounded-lg border-2 transition-all duration-300 font-medium text-xs sm:text-sm outline-none ${
+                    isDarkMode
+                      ? 'bg-white/10 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-0'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-0'
+                  }`}
                 />
-                {/* Clear button - Enhanced */}
+                
                 {filters.search && (
                   <button
                     onClick={() => {
                       setFilters(prev => ({ ...prev, search: '' }));
-                      // Clear any pending debounce
-                      if (searchDebounceRef.current) {
-                        clearTimeout(searchDebounceRef.current);
-                        searchDebounceRef.current = null;
-                      }
-                      // Cancel in-flight fetch
-                      if (fetchAbortRef.current) {
-                        fetchAbortRef.current.abort();
-                        fetchAbortRef.current = null;
-                      }
-                      // Reset to page 1 and fetch
+                      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                      if (fetchAbortRef.current) fetchAbortRef.current.abort();
                       setCurrentPage(1);
                       setIsChangingPage(true);
-                      fetchFabrics(false, 1, itemsPerPage, 0, false)
-                        .then(() => {
-                          setIsChangingPage(false);
-                        })
-                        .catch((error) => {
-                          // Ignore abort errors
-                          if (error instanceof Error && error.name === 'AbortError') {
-                            return;
-                          }
-                          setIsChangingPage(false);
-                          devError('Error clearing search:', error);
-                        });
+                      fetchFabrics(false, 1, itemsPerPage, 0, false).finally(() => setIsChangingPage(false));
                     }}
-                    className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 ${isDarkMode
-                        ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                      }`}
+                    className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
                     title="Clear search"
                   >
                     <XMarkIcon className="h-4 w-4" />
@@ -3566,16 +3524,84 @@ export default function FabricsPage() {
                 )}
               </div>
             </div>
+          </div>
 
-            {/* Type Filter Dropdown */}
-            <div className="relative">
+          {/* Create Button */}
+          <div className="flex items-center flex-shrink-0">
+            <button
+              onClick={handleCreate}
+              className={`inline-flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm shadow-md hover:shadow-lg h-[36px] sm:h-[42px] ${
+                isDarkMode
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
+              }`}
+              title="Add Fabric"
+            >
+              <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 sm:mr-1.5" />
+              <span className="font-medium hidden sm:inline">Add Fabric</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Second Row - Filters & Actions */}
+        <div className="flex flex-row items-center justify-between gap-2 mt-1 sm:mt-0 w-full">
+          {/* Left Side: Filter Dropdowns */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
+            {/* Mobile Search Type Dropdown (shown only on mobile, inline in Row 2) */}
+            <div className="relative flex-1 sm:hidden min-w-[70px]">
+              <select
+                value={searchType}
+                onChange={(e) => {
+                  const newSearchType = e.target.value as typeof searchType;
+                  setSearchType(newSearchType);
+                  setFilters(prev => ({ ...prev, search: '' }));
+                }}
+                className={`w-full pl-2 pr-6 py-1.5 rounded-lg border text-xs font-medium cursor-pointer appearance-none ${
+                  isDarkMode 
+                    ? 'bg-gray-700 border-gray-600 text-gray-200 focus:border-blue-500' 
+                    : 'bg-white border-gray-300 text-gray-700 focus:border-blue-500'
+                }`}
+              >
+                <option value="all">All Fields</option>
+                <option value="qualityCode">Code</option>
+                <option value="qualityName">Name</option>
+                <option value="type">Type</option>
+                <option value="weaver">Weaver</option>
+                <option value="weaverQualityName">Weaver Qual</option>
+              </select>
+              <ChevronDownIcon className={`absolute right-1.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+            </div>
+
+            {/* Sort Filter */}
+            <div className="relative flex-1 sm:flex-initial min-w-[70px]">
+              <select
+                value={`${filters.sortBy}-${filters.sortOrder}`}
+                onChange={(e) => {
+                  const [sortBy, sortOrder] = e.target.value.split('-');
+                  setFilters(prev => ({ ...prev, sortBy: sortBy as FabricFilters['sortBy'], sortOrder: sortOrder as 'asc' | 'desc' }));
+                }}
+                className={`w-full pl-2 pr-6 py-1.5 rounded-lg border text-xs font-medium cursor-pointer appearance-none ${
+                  isDarkMode
+                    ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500'
+                    : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                }`}
+              >
+                <option value="createdAt-desc">Latest</option>
+                <option value="createdAt-asc">Oldest</option>
+              </select>
+              <ChevronDownIcon className={`absolute right-1.5 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+            </div>
+
+            {/* Type Filter */}
+            <div className="relative flex-1 sm:flex-initial min-w-[70px]">
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className={`px-3 py-2.5 rounded-lg border transition-all duration-150 hover:scale-[1.02] focus:scale-[1.02] text-sm appearance-none cursor-pointer min-w-[140px] input-focus ${isDarkMode
-                    ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500 hover:border-blue-400'
-                    : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 hover:border-blue-400'
-                  } focus:outline-none focus:ring-2 focus:ring-blue-500/20 pr-8`}
+                className={`w-full pl-2 pr-6 py-1.5 rounded-lg border text-xs font-medium cursor-pointer appearance-none ${
+                  isDarkMode
+                    ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500'
+                    : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                }`}
               >
                 <option value="">All Types</option>
                 <option value="Polyester">Polyester</option>
@@ -3585,145 +3611,77 @@ export default function FabricsPage() {
                 <option value="Rayon">Rayon</option>
                 <option value="Other">Other</option>
               </select>
-              <ChevronDownIcon className={`absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                }`} />
+              <ChevronDownIcon className={`absolute right-1.5 top-1/2 transform -translate-y-1/2 h-3 w-3 pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
               {typeFilter && (
                 <button
                   onClick={() => setTypeFilter('')}
-                  className={`absolute right-8 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-                    }`}
+                  className={`absolute right-7 top-1/2 transform -translate-y-1/2 p-0.5 rounded-full ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-gray-600' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'}`}
                 >
                   <XMarkIcon className="h-3 w-3" />
                 </button>
               )}
             </div>
 
-            {/* Clear All Filters Button */}
+            {/* Clear All Filters */}
             {(filters.search || typeFilter || filters.weaver || filters.weaverQualityName) && (
               <button
                 onClick={clearFilters}
-                className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 hover:scale-105 active:scale-95 hover-lift ${isDarkMode
-                    ? 'bg-red-600 hover:bg-red-700 text-white border border-red-500'
-                    : 'bg-red-500 hover:bg-red-600 text-white border border-red-400'
-                  } shadow-sm hover:shadow-md flex items-center gap-2`}
+                className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 active:scale-95 hover-lift ${isDarkMode
+                    ? 'bg-red-900/30 text-red-400 border border-red-800'
+                    : 'bg-red-50 text-red-600 border border-red-200'
+                  } flex items-center justify-center gap-1`}
                 title="Clear All Filters"
               >
-                <XMarkIcon className="h-4 w-4" />
-                <span className="hidden sm:inline">Clear All</span>
+                <XMarkIcon className="h-3.5 w-3.5" />
+                <span className="hidden xs:inline">Clear</span>
               </button>
             )}
           </div>
 
-          {/* Second Row - Sort, View, and Action Buttons - All on Same Line on Desktop */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-            {/* Left Side - Sort and View Controls */}
-            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-              {/* Sort Controls */}
-              <div className="flex items-center space-x-2">
-                <span className={`text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                  }`}>Sort:</span>
-                <div className="flex rounded-lg border overflow-hidden shadow-sm">
-                  <button
-                    onClick={() => setFilters(prev => ({ ...prev, sortBy: 'createdAt', sortOrder: 'desc' }))}
-                    className={`px-3 py-2 text-sm font-medium transition-all duration-150 hover:scale-105 active:scale-95 ${(filters.sortBy === 'createdAt' && filters.sortOrder === 'desc') || (filters.sortBy === 'createdAt' && !filters.sortOrder)
-                        ? isDarkMode
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-blue-500 text-white shadow-md'
-                        : isDarkMode
-                          ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 border-r border-slate-600'
-                          : 'bg-white text-slate-700 hover:bg-blue-50 border-r border-slate-200'
-                      }`}
-                    title="Latest First"
-                  >
-                    Latest
-                  </button>
-                  <button
-                    onClick={() => setFilters(prev => ({ ...prev, sortBy: 'createdAt', sortOrder: 'asc' }))}
-                    className={`px-3 py-2 text-sm font-medium transition-all duration-150 ${filters.sortBy === 'createdAt' && filters.sortOrder === 'asc'
-                        ? isDarkMode
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-blue-500 text-white shadow-md'
-                        : isDarkMode
-                          ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                          : 'bg-white text-slate-700 hover:bg-blue-50'
-                      }`}
-                    title="Oldest First"
-                  >
-                    Oldest
-                  </button>
-                </div>
-              </div>
-
-              {/* View Mode Toggle */}
-              <div className="flex items-center space-x-2">
-                <span className={`text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                  }`}>View:</span>
-                <div className="flex rounded-lg border overflow-hidden shadow-sm">
-                  <button
-                    onClick={() => handleViewModeChange('table')}
-                    className={`px-2 sm:px-3 py-2 text-sm font-medium transition-all duration-150 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1 sm:space-x-2 ${viewMode === 'table'
-                        ? isDarkMode
-                          ? 'bg-emerald-600 text-white shadow-md'
-                          : 'bg-emerald-500 text-white shadow-md'
-                        : isDarkMode
-                          ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 border-r border-slate-600'
-                          : 'bg-white text-slate-700 hover:bg-emerald-50 border-r border-slate-200'
-                      }`}
-                    title="Table View"
-                  >
-                    <ListBulletIcon className="h-4 w-4" />
-                    <span className="hidden lg:inline">Table</span>
-                  </button>
-                  <button
-                    onClick={() => handleViewModeChange('cards')}
-                    className={`px-2 sm:px-3 py-2 text-sm font-medium transition-all duration-150 hover:scale-105 active:scale-95 flex items-center justify-center space-x-1 sm:space-x-2 ${viewMode === 'cards'
-                        ? isDarkMode
-                          ? 'bg-emerald-600 text-white shadow-md'
-                          : 'bg-emerald-500 text-white shadow-md'
-                        : isDarkMode
-                          ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                          : 'bg-white text-slate-700 hover:bg-emerald-50'
-                      }`}
-                    title="Card View"
-                  >
-                    <Squares2X2Icon className="h-4 w-4" />
-                    <span className="hidden lg:inline">Cards</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Side - Action Buttons */}
-            <div className="flex items-center space-x-2">
-              {/* Add Fabric Button - Improved UI matching sampling page */}
+          {/* Right Side: View Actions & Refresh */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            <div className={`flex rounded-lg border overflow-hidden h-[32px] sm:h-[38px] ${isDarkMode ? 'border-gray-600' : 'border-gray-300'}`}>
               <button
-                onClick={handleCreate}
-                className={`px-4 py-2.5 rounded-lg font-semibold transition-all duration-150 hover:scale-105 active:scale-95 hover-lift text-sm shadow-md hover:shadow-lg whitespace-nowrap flex items-center space-x-2 ${isDarkMode
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white border border-blue-500'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white border border-blue-400'
-                  }`}
-                title="Add New Fabric"
-                aria-label="Add new fabric"
+                onClick={() => handleViewModeChange('table')}
+                className={`px-2 sm:px-3 h-full text-xs sm:text-sm font-medium transition-all duration-200 flex items-center justify-center gap-1 ${
+                  viewMode === 'table'
+                    ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
+                    : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                title="Table View"
               >
-                <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                <span className="text-xs sm:text-sm">Add Fabric</span>
+                <ListBulletIcon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Table</span>
               </button>
-
-              {/* Refresh Button */}
               <button
-                onClick={() => fetchFabrics(true, currentPage, itemsPerPage, 0, true)}
-                disabled={loading}
-                className={`group px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 shadow-sm hover:shadow-md hover:scale-105 active:scale-95 hover-lift whitespace-nowrap ${loading ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${isDarkMode
-                    ? 'bg-slate-600 hover:bg-slate-700 text-white border border-slate-500'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
-                  }`}
-                title="Refresh Data"
+                onClick={() => handleViewModeChange('cards')}
+                className={`px-2 sm:px-3 h-full text-xs sm:text-sm font-medium transition-all duration-200 flex items-center justify-center gap-1 ${
+                  viewMode === 'cards'
+                    ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
+                    : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                title="Card View"
               >
-                <ArrowPathIcon className={`h-4 w-4 inline mr-2 transition-transform duration-300 ${loading ? 'animate-spin' : 'hover-rotate-icon'}`} />
-                Refresh
+                <Squares2X2Icon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Cards</span>
               </button>
             </div>
+
+            <button
+              onClick={() => fetchFabrics(true, currentPage, itemsPerPage, 0, true)}
+              disabled={loading}
+              className={`group inline-flex items-center justify-center px-2.5 py-1.5 rounded-lg font-medium transition-all duration-200 hover:scale-105 text-xs sm:text-sm h-[32px] sm:h-[38px] ${
+                loading ? 'opacity-50 cursor-not-allowed' : ''
+              } ${
+                isDarkMode
+                  ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+              title="Refresh"
+            >
+              <ArrowPathIcon className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''} sm:mr-1`} />
+              <span className="font-medium hidden sm:inline">Refresh</span>
+            </button>
           </div>
         </div>
 
@@ -3915,42 +3873,36 @@ export default function FabricsPage() {
               </div>
             ) : (
               <div>
-                {/* Top Pagination and Results Info */}
-                <div className={`px-3 sm:px-4 py-2 sm:py-3 border-b flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:items-center sm:justify-between transition-all duration-150 animate-in fade-in-0 slide-in-from-top-2 ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
-                  }`}>
-                  <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:items-center sm:space-x-3 lg:space-x-4">
+                {/* Pagination Info Bar */}
+                <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-row items-center justify-between gap-2 transition-all duration-150 animate-in fade-in-0 slide-in-from-top-2 ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}`}>
+                  <div className="flex flex-row items-center gap-2 sm:gap-3 lg:gap-4">
                     {/* Search result indicator */}
                     {filters.search && (
-                      <div className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium ${isDarkMode
+                      <div className={`px-2 py-1 rounded-lg text-[10px] sm:text-xs font-medium hidden sm:flex items-center gap-1.5 ${isDarkMode
                           ? 'bg-blue-900/30 text-blue-300 border border-blue-700/50'
                           : 'bg-blue-50 text-blue-700 border border-blue-200'
                         }`}>
-                        <span className="flex items-center gap-1.5">
-                          <MagnifyingGlassIcon className="h-3.5 w-3.5" />
-                          Searching: <span className="font-semibold">"{filters.search}"</span>
-                          {paginationInfo.totalCount > 0 && (
-                            <span className="ml-1">({paginationInfo.totalCount} {paginationInfo.totalCount === 1 ? 'result' : 'results'})</span>
-                          )}
-                        </span>
+                        <MagnifyingGlassIcon className="h-3 w-3" />
+                        "{filters.search}"
                       </div>
                     )}
                     {paginationInfo.totalCount > 0 && (
-                      <span className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                      <span className={`text-[10px] xs:text-xs sm:text-sm whitespace-nowrap font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                         <span className="hidden sm:inline">
                           Showing {(currentPage - 1) * (itemsPerPage === 'All' ? paginationInfo.totalCount : itemsPerPage) + 1} to{' '}
                           {Math.min(currentPage * (itemsPerPage === 'All' ? paginationInfo.totalCount : itemsPerPage), paginationInfo.totalCount)} of{' '}
                           {paginationInfo.totalCount} {paginationInfo.totalCount === 1 ? 'fabric' : 'fabrics'}
                         </span>
-                        <span className="sm:hidden">
+                        <span className="sm:hidden text-[10px]">
                           {(currentPage - 1) * (itemsPerPage === 'All' ? paginationInfo.totalCount : itemsPerPage) + 1}-
-                          {Math.min(currentPage * (itemsPerPage === 'All' ? paginationInfo.totalCount : itemsPerPage), paginationInfo.totalCount)} of {paginationInfo.totalCount} {paginationInfo.totalCount === 1 ? 'fabric' : 'fabrics'}
+                          {Math.min(currentPage * (itemsPerPage === 'All' ? paginationInfo.totalCount : itemsPerPage), paginationInfo.totalCount)} <span className="opacity-75">of {paginationInfo.totalCount}</span>
                         </span>
                       </span>
                     )}
 
-                    {/* Items per page dropdown (matches sampling behavior, persists in localStorage) */}
-                    <div className="flex items-center space-x-2">
-                      <span className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
+                    {/* Items per page dropdown */}
+                    <div className="flex items-center space-x-1 sm:space-x-2">
+                      <span className={`text-[10px] xs:text-xs sm:text-sm hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
                       <select
                         value={itemsPerPage}
                         onChange={(e) => {
@@ -3958,7 +3910,7 @@ export default function FabricsPage() {
                           handleItemsPerPageChange(value);
                         }}
                         disabled={loading}
-                        className={`px-2 sm:px-3 py-1 rounded-lg border text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-150 hover:scale-[1.02] focus:scale-[1.02] input-focus ${isDarkMode
+                        className={`px-2 sm:px-3 py-1 rounded-lg border text-[10px] xs:text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-150 hover:scale-[1.02] focus:scale-[1.02] input-focus ${isDarkMode
                             ? 'bg-gray-700 border-gray-600 text-white hover:border-blue-400'
                             : 'bg-white border-gray-300 text-gray-900 hover:border-blue-400'
                           } ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -3972,7 +3924,7 @@ export default function FabricsPage() {
 
                   {/* Top Page Navigation */}
                   {itemsPerPage !== 'All' && totalPages > 1 && (
-                    <div className="flex items-center space-x-1 sm:space-x-2">
+                    <div className="flex items-center justify-end flex-1 min-w-[100px] sm:min-w-[150px] space-x-1 sm:space-x-2">
                       <button
                         onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                         disabled={currentPage === 1 || isChangingPage || loading}
@@ -3991,13 +3943,13 @@ export default function FabricsPage() {
                         ) : (
                           <>
                             <span className="hidden sm:inline">Previous</span>
-                            <span className="sm:hidden">Prev</span>
+                            <span className="sm:hidden">&larr;</span>
                           </>
                         )}
                       </button>
 
                       {/* Smart Page numbers */}
-                      <div className="flex items-center space-x-1">
+                      <div className="hidden sm:flex items-center space-x-1">
                         {(() => {
                           const pages = [];
 
@@ -4134,7 +4086,7 @@ export default function FabricsPage() {
                       <button
                         onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                         disabled={currentPage === totalPages || isChangingPage || loading}
-                        className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm transition-all duration-150 shadow-sm hover:shadow-md ${currentPage === totalPages || isChangingPage || loading
+                        className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm transition-all duration-150 hover:scale-105 active:scale-95 hover-lift shadow-sm hover:shadow-md ${currentPage === totalPages || isChangingPage || loading
                             ? isDarkMode ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                             : isDarkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600 border border-slate-600' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'
                           }`}
@@ -4143,10 +4095,14 @@ export default function FabricsPage() {
                           <span className="flex items-center space-x-2">
                             <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${isDarkMode ? 'border-slate-400' : 'border-slate-600'
                               }`}></div>
-                            <span>Loading...</span>
+                            <span className="hidden sm:inline">Loading...</span>
+                            <span className="sm:hidden">...</span>
                           </span>
                         ) : (
-                          'Next'
+                          <>
+                            <span className="hidden sm:inline">Next</span>
+                            <span className="sm:hidden">&rarr;</span>
+                          </>
                         )}
                       </button>
                     </div>
@@ -5280,6 +5236,7 @@ export default function FabricsPage() {
           </div>
         )}
       </div>
+    </div>
 
       {/* Modals */}
       {showDetails && selectedFabric && (

@@ -241,29 +241,45 @@ export default function ImagePreviewModal({
       ref={containerRef}
     >
       {/* Top Bar Controls */}
+      {/* Top Bar Controls */}
       <div
-        className="flex items-center justify-between w-full z-50 p-2 sm:p-4 bg-slate-900/50 backdrop-blur-lg rounded-2xl border border-white/5 shadow-2xl"
+        className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full z-50 p-3 sm:p-4 bg-slate-900/80 sm:bg-slate-900/50 backdrop-blur-xl rounded-2xl border border-white/10 sm:border-white/5 shadow-2xl gap-3"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Left: Image Info */}
-        <div className="text-left">
-          <span className="font-extrabold text-[10px] sm:text-xs uppercase tracking-wider text-blue-400 block mb-0.5">
-            Image {currentIndex + 1} of {images.length}
-          </span>
-          <span className="text-xs text-gray-400 font-medium max-w-[200px] sm:max-w-md truncate block">
-            {images[currentIndex].startsWith('blob:')
-              ? 'Local preview file'
-              : images[currentIndex].split('/').pop()}
-          </span>
+        {/* Top Row on Mobile (Info + Close) / Left on Desktop */}
+        <div className="flex items-start justify-between w-full sm:w-auto gap-2">
+          <div className="text-left">
+            <span className="font-extrabold text-[10px] sm:text-xs uppercase tracking-wider text-blue-400 block mb-0.5">
+              Image {currentIndex + 1} of {images.length}
+            </span>
+            <span className="text-xs text-gray-400 font-medium max-w-[220px] sm:max-w-md truncate block">
+              {images[currentIndex].startsWith('blob:')
+                ? 'Local preview file'
+                : images[currentIndex].split('/').pop()}
+            </span>
+          </div>
+
+          {/* Close Button on Mobile (Shows here instead of in the toolbar) */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="sm:hidden p-2 bg-red-950/60 hover:bg-red-900 active:scale-95 rounded-xl text-red-400 hover:text-white transition-all shadow-md border border-red-500/10 flex-shrink-0"
+            title="Close"
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* Right: Quick Action Controls */}
-        <div className="flex items-center space-x-1.5 sm:space-x-3">
+        {/* Bottom Row on Mobile (Action Toolbar) / Right on Desktop */}
+        <div 
+          className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
           {/* Zoom Out */}
           <button
             type="button"
             onClick={handleZoomOut}
-            className="p-2 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5"
+            className="p-2 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5 flex-shrink-0"
             title="Zoom Out (-)"
           >
             <MagnifyingGlassMinusIcon className="h-5 w-5" />
@@ -273,7 +289,7 @@ export default function ImagePreviewModal({
           <button
             type="button"
             onClick={handleResetZoom}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5 text-xs font-bold min-w-[55px]"
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5 text-xs font-bold min-w-[55px] flex-shrink-0"
             title="Reset Zoom (0)"
           >
             {Math.round(zoomLevel * 100)}%
@@ -283,7 +299,7 @@ export default function ImagePreviewModal({
           <button
             type="button"
             onClick={handleZoomIn}
-            className="p-2 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5"
+            className="p-2 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5 flex-shrink-0"
             title="Zoom In (+)"
           >
             <MagnifyingGlassPlusIcon className="h-5 w-5" />
@@ -295,7 +311,7 @@ export default function ImagePreviewModal({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="p-2 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5"
+            className="p-2 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5 flex-shrink-0"
             title="Open in New Tab"
           >
             <ArrowTopRightOnSquareIcon className="h-5 w-5" />
@@ -305,7 +321,7 @@ export default function ImagePreviewModal({
           <button
             type="button"
             onClick={handleDownload}
-            className="p-2 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5"
+            className="p-2 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5 flex-shrink-0"
             title="Download Image"
           >
             <ArrowDownTrayIcon className="h-5 w-5" />
@@ -315,22 +331,22 @@ export default function ImagePreviewModal({
           <button
             type="button"
             onClick={handleWhatsAppShare}
-            className="p-2 bg-slate-800 hover:bg-green-600 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5"
+            className="p-2 bg-slate-800 hover:bg-green-600 active:scale-95 rounded-xl text-gray-300 hover:text-white transition-all shadow-md border border-white/5 flex-shrink-0"
             title="Share via WhatsApp"
           >
-            <svg className="h-5 w-5 fill-current text-green-500 hover:text-white transition-colors" viewBox="0 0 24 24">
+            <svg className="h-5 w-5 fill-current text-green-500 hover:text-white transition-colors flex-shrink-0" viewBox="0 0 24 24">
               <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.45L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.864-9.855.002-2.63-1.023-5.105-2.887-6.97C16.585 1.865 14.11 .84 11.49.842c-5.441 0-9.863 4.42-9.866 9.858-.002 2.073.547 4.103 1.588 5.912L2.17 20.89l4.477-1.736zM17.13 15.3c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.18.2-.35.23-.65.08-1.2-.6-2.09-1.05-2.9-2.45-.21-.36.21-.34.6-.12.35.2.45.33.65.03.2-.3.45-.63.68-.85.23-.23.3-.38.45-.68.15-.3.08-.55-.04-.7-.12-.15-.68-1.63-.95-2.28-.26-.62-.52-.53-.68-.54-.15-.01-.33-.01-.51-.01-.18 0-.48.07-.73.35-.25.27-.95.93-.95 2.28 0 1.35.98 2.65 1.12 2.83.14.18 1.92 2.94 4.66 4.13.65.28 1.16.45 1.56.57.66.21 1.25.18 1.72.11.53-.08 1.78-.73 2.03-1.43.25-.7.25-1.3.18-1.43-.07-.12-.27-.2-.58-.35z" />
             </svg>
           </button>
 
           {/* Divider */}
-          <span className="h-6 w-px bg-white/10 hidden sm:inline-block" />
+          <span className="h-6 w-px bg-white/10 hidden sm:inline-block flex-shrink-0" />
 
-          {/* Close */}
+          {/* Close Button on Desktop (Hidden on Mobile) */}
           <button
             type="button"
             onClick={onClose}
-            className="p-2 bg-red-950/60 hover:bg-red-900 active:scale-95 rounded-xl text-red-400 hover:text-white transition-all shadow-md border border-red-500/10"
+            className="hidden sm:block p-2 bg-red-950/60 hover:bg-red-900 active:scale-95 rounded-xl text-red-400 hover:text-white transition-all shadow-md border border-red-500/10 flex-shrink-0"
             title="Close (Esc)"
           >
             <XMarkIcon className="h-5 w-5" />

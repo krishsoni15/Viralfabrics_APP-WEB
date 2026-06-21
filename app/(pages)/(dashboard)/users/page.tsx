@@ -16,10 +16,16 @@ import {
   Squares2X2Icon,
   EyeIcon,
   EyeSlashIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  FunnelIcon,
+  CameraIcon,
+  CloudArrowUpIcon,
+  PhotoIcon
 } from '@heroicons/react/24/outline';
 import { useDarkMode } from '../hooks/useDarkMode';
 import UserCardView from './components/UserCardView';
+import { useRealtimeSync } from '@/app/hooks/useRealtimeSync';
+import CameraModal from '../components/CameraModal';
 
 interface User {
   _id: string;
@@ -30,6 +36,7 @@ interface User {
   role: string;
   isActive: boolean;
   partyId?: { _id: string; name: string } | string;
+  profilePhoto?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +49,7 @@ interface UserFormData {
   address: string;
   role: string;
   partyId?: string;
+  profilePhoto?: string;
 }
 
 // Helper function to generate the next incremented username for a party
@@ -114,10 +122,67 @@ export default function UsersPage() {
     phoneNumber: '',
     address: '',
     role: 'user',
-    partyId: ''
+    partyId: '',
+    profilePhoto: ''
   });
   const [formErrors, setFormErrors] = useState<Partial<UserFormData>>({});
   const [showPassword, setShowPassword] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+
+  const handlePhotoUpload = async (file: File) => {
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    if (!file.type.startsWith('image/')) {
+      setValidationAlert({ type: 'error', text: 'Only image files are allowed.' });
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setValidationAlert({ type: 'error', text: 'File size must be less than 10MB.' });
+      return;
+    }
+
+    try {
+      setUploadingPhoto(true);
+      const token = localStorage.getItem('token');
+      const formDataPayload = new FormData();
+      formDataPayload.append('file', file);
+      formDataPayload.append('folder', 'profiles');
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formDataPayload
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Upload failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.success && (data.url || data.imageUrl)) {
+        const url = data.url || data.imageUrl;
+        setFormData(prev => ({ ...prev, profilePhoto: url }));
+        setValidationAlert({ type: 'success', text: 'Photo uploaded successfully' });
+        setTimeout(() => setValidationAlert(null), 3000);
+      } else {
+        throw new Error(data.message || 'Upload failed: No URL received');
+      }
+    } catch (err: any) {
+      console.error('Error uploading photo:', err);
+      setValidationAlert({ type: 'error', text: err.message || 'Failed to upload photo.' });
+      setTimeout(() => setValidationAlert(null), 5000);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleCameraCapture = async (file: File) => {
+    setShowCamera(false);
+    await handlePhotoUpload(file);
+  };
   
   // Party state management for Party role user creation
   const [parties, setParties] = useState<any[]>([]);
@@ -159,16 +224,35 @@ export default function UsersPage() {
   const itemsPerPageOptions = [10, 25, 50, 100, 'All'] as const; // Standard pagination options
   const fetchInProgress = useRef(false); // Prevent multiple simultaneous fetches
   const [isChangingPage, setIsChangingPage] = useState(false);
-  const [viewMode, setViewMode] = useState<'table' | 'card'>(() => {
-    // Load from localStorage if available, otherwise default to table view
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+
+  // Load view mode from cache on mount
+  useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedViewMode = localStorage.getItem('usersViewMode');
-      if (savedViewMode === 'table' || savedViewMode === 'card') {
-        return savedViewMode;
+      const savedMode = localStorage.getItem('usersViewMode');
+      if (savedMode === 'table' || savedMode === 'card') {
+        setViewMode(savedMode);
+      } else {
+        const isMobile = window.innerWidth < 768;
+        setViewMode(isMobile ? 'card' : 'table');
       }
     }
-    return 'table'; // Default to table view
-  });
+  }, []);
+
+  // Screen resize listener to auto-switch viewMode if user has no saved preference
+  useEffect(() => {
+    const handleResize = () => {
+      const savedMode = localStorage.getItem('usersViewMode');
+      if (savedMode === 'table' || savedMode === 'card') {
+        return; // Respect user preference
+      }
+      const isMobile = window.innerWidth < 768;
+      setViewMode(isMobile ? 'card' : 'table');
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Simple user check - no complex validation
   useEffect(() => {
@@ -689,6 +773,7 @@ export default function UsersPage() {
           phoneNumber: updatedUser.phoneNumber || formData.phoneNumber || '',
           address: updatedUser.address || formData.address || '',
           role: updatedUser.role || formData.role,
+          profilePhoto: updatedUser.profilePhoto || '',
           isActive: updatedUser.isActive !== undefined ? updatedUser.isActive : true,
           createdAt: updatedUser.createdAt || latestUser.createdAt,
           updatedAt: updatedUser.updatedAt || new Date().toISOString()
@@ -702,7 +787,8 @@ export default function UsersPage() {
           password: '', // Clear password field after update
           phoneNumber: updatedUser.phoneNumber || formData.phoneNumber || '',
           address: updatedUser.address || formData.address || '',
-          role: updatedUser.role || formData.role
+          role: updatedUser.role || formData.role,
+          profilePhoto: updatedUser.profilePhoto || ''
         });
         
         // Update currentUser if the updated user is the current user
@@ -923,7 +1009,8 @@ export default function UsersPage() {
       phoneNumber: '',
       address: '',
       role: 'user',
-      partyId: ''
+      partyId: '',
+      profilePhoto: ''
     });
     setFormErrors({});
     setShowPassword(false);
@@ -1007,6 +1094,12 @@ export default function UsersPage() {
     });
   };
 
+  // 🌟 REAL-TIME SYNC
+  useRealtimeSync(
+    () => fetchUsers(), 
+    showCreateModal || showEditModal || showDeleteModal || showProfileModal || showAddPartyModal
+  );
+
   // Show spinner while not mounted
   if (!mounted) {
     return (
@@ -1030,229 +1123,252 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* Header with Add Button and View Toggle */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        {/* Add New User Button - Left Side */}
-        <div className="flex-shrink-0">
-          <button
-            onClick={() => {
-              setShowCreateModal(true);
-              setValidationAlert(null);
-            }}
-            className={`inline-flex items-center px-4 py-2 rounded-lg font-medium ${
-              isDarkMode
-                ? 'bg-blue-600 text-white border border-blue-500/30'
-                : 'bg-blue-600 text-white border border-blue-500/30'
-            }`}
-          >
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Add New User
-          </button>
-        </div>
-
-        {/* View Toggle - Right Side */}
-        <div className="flex items-center space-x-2">
-          <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-            View:
-          </span>
-          <div className={`flex rounded-lg border ${
-            isDarkMode ? 'border-white/20 bg-white/5' : 'border-gray-300 bg-white'
-          }`}>
-            <button
-              onClick={() => {
-                setViewMode('table');
-                // Save to localStorage to persist across page refreshes
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('usersViewMode', 'table');
-                }
-              }}
-              className={`flex items-center px-3 py-2 text-sm font-medium rounded-l-lg transition-all duration-200 ${
-                viewMode === 'table'
-                  ? isDarkMode
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-blue-600 text-white'
-                  : isDarkMode
-                    ? 'text-gray-300 hover:bg-white/10'
-                    : 'text-gray-600 hover:bg-gray-50'
-              }`}
-              title="Table View"
-            >
-              <TableCellsIcon className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Table</span>
-            </button>
-            <button
-              onClick={() => {
-                setViewMode('card');
-                // Save to localStorage to persist across page refreshes
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('usersViewMode', 'card');
-                }
-              }}
-              className={`flex items-center px-3 py-2 text-sm font-medium rounded-r-lg transition-all duration-200 ${
-                viewMode === 'card'
-                  ? isDarkMode
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-blue-600 text-white'
-                  : isDarkMode
-                    ? 'text-gray-300 hover:bg-white/10'
-                    : 'text-gray-600 hover:bg-gray-50'
-              }`}
-              title="Card View"
-            >
-              <Squares2X2Icon className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Cards</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Message */}
-      {message && (
-        <div className={`p-4 rounded-lg border ${
-          message.type === 'success'
-            ? isDarkMode
-              ? 'bg-green-900/20 border-green-500/30 text-green-400'
-              : 'bg-green-50 border-green-200 text-green-800'
-            : isDarkMode
-              ? 'bg-red-900/20 border-red-500/30 text-red-400'
-              : 'bg-red-50 border-red-200 text-red-800'
-        }`}>
-          <div className="flex items-center">
-            {message.type === 'success' ? (
-              <CheckIcon className="h-5 w-5 mr-2" />
-            ) : (
-              <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
-            )}
-            {message.text}
-          </div>
-        </div>
-      )}
-
-      {/* Validation Alert - Only show if not already showing message and no modals are open */}
-      {validationAlert && !message && !showCreateModal && !showEditModal && !showDeleteModal && (
-        <div className={`p-4 rounded-lg border ${
-          validationAlert.type === 'success'
-            ? isDarkMode
-              ? 'bg-green-900/20 border-green-500/30 text-green-400'
-              : 'bg-green-50 border-green-200 text-green-800'
-            : isDarkMode
-              ? 'bg-red-900/20 border-red-500/30 text-red-400'
-              : 'bg-red-50 border-red-200 text-red-800'
-        }`}>
-          <div className="flex items-center">
-            {validationAlert.type === 'success' ? (
-              <CheckIcon className="h-5 w-5 mr-2" />
-            ) : (
-              <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
-            )}
-            {validationAlert.text}
-          </div>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className={`p-4 rounded-lg border ${
-        isDarkMode
-          ? 'bg-white/5 border-white/10'
-          : 'bg-white border-gray-200'
-      }`}>
-        <div className="flex flex-col gap-4">
-          {/* Top Row - Search and Refresh */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1">
-              <div className="relative">
-                <MagnifyingGlassIcon className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 ${
-                  isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                }`} />
-                <input
-                  type="text"
-                  placeholder="Search users..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 rounded-lg border transition-colors duration-300 ${
-                    isDarkMode
-                      ? 'bg-white/10 border-white/20 text-white placeholder-gray-400 focus:border-blue-500'
-                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500'
+      {/* Search and Controls Bar */}
+      <div className={`mb-4 sm:mb-6 flex flex-col gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border shadow-sm transition-all duration-200 ${isDarkMode ? 'bg-gray-800 border-gray-700 shadow-gray-900/50' : 'bg-white border-gray-200'}`}>
+        
+        {/* Main Controls Row: Stacks on mobile, single row on desktop (md and up) */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 z-10 relative">
+          
+          {/* Left Side: Search Bar & Direct Filters (desktop) or Toggle Button (mobile) */}
+          <div className="flex flex-row flex-wrap items-center flex-1 gap-2 sm:gap-3 w-full md:max-w-4xl">
+            {/* Search Bar Container */}
+            <div className="flex-1 min-w-[200px] relative group">
+              <MagnifyingGlassIcon className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`w-full pl-10 pr-10 py-2 sm:py-2.5 rounded-lg border-2 transition-all duration-300 font-medium text-xs sm:text-sm outline-none ${isDarkMode
+                    ? 'bg-white/10 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-0 focus:outline-none'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-0 focus:outline-none'
                   }`}
-                />
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
+                  title="Clear search"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Desktop Direct Role Filter */}
+            <div className="hidden md:flex items-center gap-2">
+              <span className={`text-xs sm:text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Role:</span>
+              <div className="relative sort-dropdown-container min-w-[130px]">
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-lg border transition-all duration-150 text-xs sm:text-sm appearance-none cursor-pointer input-focus font-medium ${isDarkMode
+                      ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500 hover:border-blue-400'
+                      : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 hover:border-blue-400'
+                    } focus:outline-none pr-8`}
+                >
+                  <option value="all">All Roles</option>
+                  <option value="master">Master</option>
+                  <option value="superadmin">Super Admin</option>
+                  <option value="user">User</option>
+                  <option value="party">Party</option>
+                </select>
+                <ChevronDownIcon className={`absolute right-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
               </div>
             </div>
 
-            {/* Refresh Button */}
-            <div className="sm:w-auto">
+            {/* Desktop Direct Sort Filter */}
+            <div className="hidden md:flex items-center gap-2">
+              <span className={`text-xs sm:text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Sort:</span>
+              <div className="relative sort-dropdown-container min-w-[130px]">
+                <select
+                  value={dateSort}
+                  onChange={(e) => setDateSort(e.target.value as 'latest' | 'oldest')}
+                  className={`w-full px-3 py-2 rounded-lg border transition-all duration-150 text-xs sm:text-sm appearance-none cursor-pointer input-focus font-medium ${isDarkMode
+                      ? 'bg-gray-700 border-gray-600 text-white focus:border-blue-500 hover:border-blue-400'
+                      : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 hover:border-blue-400'
+                    } focus:outline-none pr-8`}
+                >
+                  <option value="latest">Latest First</option>
+                  <option value="oldest">Oldest First</option>
+                </select>
+                <ChevronDownIcon className={`absolute right-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              </div>
+            </div>
+
+            {/* Desktop Clear Filters */}
+            {((roleFilter !== 'all' ? 1 : 0) + (dateSort !== 'latest' ? 1 : 0)) > 0 && (
               <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className={`inline-flex items-center px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                  refreshing
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:scale-105 active:scale-95'
-                } ${
-                  isDarkMode
-                    ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:border-white/30 shadow-lg hover:shadow-xl'
-                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 shadow-lg hover:shadow-xl'
+                onClick={() => {
+                  setRoleFilter('all');
+                  setDateSort('latest');
+                }}
+                className={`hidden md:inline-flex items-center justify-center px-3 py-2 rounded-lg border border-red-500/20 text-xs sm:text-sm font-semibold transition-all duration-200 hover-lift ${
+                  isDarkMode ? 'text-red-400 hover:bg-red-500/10' : 'text-red-600 hover:bg-red-50'
                 }`}
-                title="Refresh users list"
+                title="Clear Filters"
               >
-                <ArrowPathIcon className={`h-5 w-5 ${screenSize > 1000 ? 'mr-2' : ''} ${refreshing ? 'animate-spin' : ''}`} />
-                {screenSize > 1000 && (refreshing ? 'Refreshing...' : 'Refresh')}
+                Clear
+              </button>
+            )}
+
+            {/* Filter Toggle Button (Mobile/Tablet only) */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`relative py-2 px-3 sm:px-4 flex md:hidden items-center justify-center rounded-lg border transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm font-semibold h-[36px] sm:h-[42px] ${
+                showFilters 
+                  ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20' 
+                  : isDarkMode 
+                    ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' 
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+              title="Toggle Filters"
+            >
+              <div className="flex items-center gap-1.5">
+                <FunnelIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>Filters</span>
+                {((roleFilter !== 'all' ? 1 : 0) + (dateSort !== 'latest' ? 1 : 0)) > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] sm:text-[10px] font-bold text-white shadow-sm border border-white bg-red-500 animate-pulse">
+                    {(roleFilter !== 'all' ? 1 : 0) + (dateSort !== 'latest' ? 1 : 0)}
+                  </span>
+                )}
+              </div>
+            </button>
+          </div>
+
+          {/* Right Side: View Actions & Create Button */}
+          <div className="flex flex-row items-center justify-between md:justify-end gap-2 sm:gap-3 w-full md:w-auto">
+            {/* View Mode Toggle */}
+            <div className={`flex rounded-lg border overflow-hidden h-[36px] sm:h-[42px] ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button
+                onClick={() => {
+                  setViewMode('table');
+                  if (typeof window !== 'undefined') localStorage.setItem('usersViewMode', 'table');
+                }}
+                className={`px-2.5 sm:px-3 h-full transition-colors flex items-center justify-center ${viewMode === 'table' ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50')}`}
+                title="Table View"
+              >
+                <TableCellsIcon className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  setViewMode('card');
+                  if (typeof window !== 'undefined') localStorage.setItem('usersViewMode', 'card');
+                }}
+                className={`px-2.5 sm:px-3 h-full transition-colors flex items-center justify-center ${viewMode === 'card' ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50')}`}
+                title="Card View"
+              >
+                <Squares2X2Icon className="h-4 w-4" />
               </button>
             </div>
-          </div>
 
-          {/* Bottom Row - Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Role Filter */}
-            <div className="sm:w-48">
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 appearance-none cursor-pointer ${
-                  isDarkMode
-                    ? 'bg-white/10 border-white/20 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 hover:border-white/30'
-                    : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+            {/* Refresh Button */}
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className={`group inline-flex items-center justify-center px-3 py-1.5 sm:py-2 rounded-lg font-medium transition-all duration-200 hover-lift text-xs sm:text-sm h-[36px] sm:h-[42px] ${refreshing ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode
+                  ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                 }`}
-                style={{
-                  backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${isDarkMode ? 'rgb(156 163 175)' : 'rgb(107 114 128)'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
-                  backgroundPosition: 'right 0.5rem center',
-                  backgroundRepeat: 'no-repeat',
-                  backgroundSize: '1.5em 1.5em',
-                  paddingRight: '2.5rem'
-                }}
-              >
-                <option value="all" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>All Roles</option>
-                <option value="master" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Master</option>
-                <option value="superadmin" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Super Admin</option>
-                <option value="user" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>User</option>
-                <option value="party" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Party</option>
-              </select>
-            </div>
+              title="Refresh"
+            >
+              <ArrowPathIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : 'hover-rotate-icon'} sm:mr-1`} />
+              <span className="font-medium hidden sm:inline">Refresh</span>
+            </button>
 
-            {/* Date Sort Filter */}
-            <div className="sm:w-48">
-              <select
-                value={dateSort}
-                onChange={(e) => setDateSort(e.target.value as 'latest' | 'oldest')}
-                className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 appearance-none cursor-pointer ${
-                  isDarkMode
-                    ? 'bg-white/10 border-white/20 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 hover:border-white/30'
-                    : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-                }`}
-                style={{
-                  backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${isDarkMode ? 'rgb(156 163 175)' : 'rgb(107 114 128)'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
-                  backgroundPosition: 'right 0.5rem center',
-                  backgroundRepeat: 'no-repeat',
-                  backgroundSize: '1.5em 1.5em',
-                  paddingRight: '2.5rem'
-                }}
-              >
-                <option value="latest" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Latest First</option>
-                <option value="oldest" className={isDarkMode ? 'bg-[#1D293D] text-white' : 'bg-white text-gray-900'}>Oldest First</option>
-              </select>
-            </div>
+            {/* Add User Button */}
+            <button
+              onClick={() => {
+                setShowCreateModal(true);
+                setValidationAlert(null);
+              }}
+              className="inline-flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg font-semibold transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg h-[36px] sm:h-[42px]"
+              title="Add User"
+            >
+              <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 sm:mr-1.5" />
+              <span className="font-semibold hidden sm:inline">Add User</span>
+            </button>
           </div>
         </div>
+
+        {/* Search Results Indicator */}
+        {searchTerm && (
+          <div className="flex">
+            <div className={`px-3 py-1 rounded-full text-xs font-medium ${isDarkMode
+              ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
+              : 'bg-blue-100 text-blue-700 border border-blue-200'
+              }`}>
+              {filteredUsers.length} results for "{searchTerm}"
+            </div>
+          </div>
+        )}
+
+        {/* Collapsible Filter Options Panel (Mobile/Tablet only) */}
+        {showFilters && (
+          <div className={`p-3 rounded-lg border flex flex-col sm:flex-row gap-3 items-start sm:items-center transition-all duration-300 md:hidden ${
+            isDarkMode 
+              ? 'bg-gray-900/40 border-gray-700 shadow-inner' 
+              : 'bg-gray-50 border-gray-200 shadow-inner'
+          }`}>
+            <div className="flex flex-row flex-wrap gap-3 items-center w-full">
+              {/* Role Filter */}
+              <div className="flex items-center gap-2 flex-1 sm:flex-none min-w-[150px]">
+                <span className={`text-xs sm:text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Role:</span>
+                <div className="relative sort-dropdown-container flex-1">
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value)}
+                    className={`w-full px-3 py-1.5 sm:py-2 rounded-lg border transition-all duration-150 text-xs sm:text-sm appearance-none cursor-pointer input-focus font-medium ${isDarkMode
+                        ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 hover:border-blue-400'
+                        : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 hover:border-blue-400'
+                      } focus:outline-none pr-8`}
+                  >
+                    <option value="all">All Roles</option>
+                    <option value="master">Master</option>
+                    <option value="superadmin">Super Admin</option>
+                    <option value="user">User</option>
+                    <option value="party">Party</option>
+                  </select>
+                  <ChevronDownIcon className={`absolute right-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                </div>
+              </div>
+
+              {/* Sort Filter */}
+              <div className="flex items-center gap-2 flex-1 sm:flex-none min-w-[150px]">
+                <span className={`text-xs sm:text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Sort:</span>
+                <div className="relative sort-dropdown-container flex-1">
+                  <select
+                    value={dateSort}
+                    onChange={(e) => setDateSort(e.target.value as 'latest' | 'oldest')}
+                    className={`w-full px-3 py-1.5 sm:py-2 rounded-lg border transition-all duration-150 text-xs sm:text-sm appearance-none cursor-pointer input-focus font-medium ${isDarkMode
+                        ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 hover:border-blue-400'
+                        : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 hover:border-blue-400'
+                      } focus:outline-none pr-8`}
+                  >
+                    <option value="latest">Latest First</option>
+                    <option value="oldest">Oldest First</option>
+                  </select>
+                  <ChevronDownIcon className={`absolute right-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 pointer-events-none ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                </div>
+              </div>
+
+              {/* Clear Filters Button */}
+              {((roleFilter !== 'all' ? 1 : 0) + (dateSort !== 'latest' ? 1 : 0)) > 0 && (
+                <button
+                  onClick={() => {
+                    setRoleFilter('all');
+                    setDateSort('latest');
+                  }}
+                  className={`text-xs sm:text-sm font-semibold transition-colors duration-150 ml-auto border border-red-500/20 px-3 py-1.5 rounded-lg ${
+                    isDarkMode ? 'text-red-400 hover:bg-red-500/10' : 'text-red-600 hover:bg-red-50'
+                  }`}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
 
@@ -1262,33 +1378,32 @@ export default function UsersPage() {
         <div className={`rounded-lg border overflow-hidden ${
           isDarkMode
             ? 'bg-white/5 border-white/10'
-            : 'bg-white border-gray-200'
+            : 'bg-white border-gray-200 shadow-sm'
         }`}>
-        {/* Pagination Controls - Top */}
-        <div className={`flex items-center justify-between px-4 py-3 border-b ${
-          isDarkMode 
-            ? 'bg-white/5 border-white/10' 
-            : 'bg-white border-gray-200'
-        } sm:px-6`}>
-          <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:items-center sm:space-x-3 lg:space-x-4">
-            <span className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+          <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-row items-center justify-between gap-2 transition-all duration-150 ${
+            isDarkMode 
+              ? 'bg-white/5 border-white/10' 
+              : 'bg-gray-50 border-gray-200'
+          }`}>
+          <div className="flex flex-row items-center gap-2 sm:gap-4">
+            <span className={`text-[10px] xs:text-xs sm:text-sm whitespace-nowrap font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
               <span className="hidden sm:inline">Showing {paginationDisplayInfo.start} to {paginationDisplayInfo.end} of {paginationDisplayInfo.total} users</span>
-              <span className="sm:hidden">{paginationDisplayInfo.start}-{paginationDisplayInfo.end} of {paginationDisplayInfo.total}</span>
+              <span className="sm:hidden">{paginationDisplayInfo.start}-{paginationDisplayInfo.end} <span className="opacity-75">of {paginationDisplayInfo.total}</span></span>
             </span>
             
             {/* Items per page dropdown */}
-            <div className="flex items-center space-x-2">
-              <span className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <span className={`text-[10px] xs:text-xs sm:text-sm hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
               <select
                 value={itemsPerPage}
                 onChange={(e) => {
                   const value = e.target.value === 'All' ? 'All' : parseInt(e.target.value);
                   handleItemsPerPageChange(value);
                 }}
-                className={`text-xs sm:text-sm px-2 py-1 rounded border transition-colors ${
+                className={`px-1.5 sm:px-2 py-0.5 rounded-lg border text-[10px] xs:text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-150 hover:scale-[1.02] focus:scale-[1.02] input-focus ${
                   isDarkMode 
-                    ? 'bg-gray-800 border-gray-600 text-white' 
-                    : 'bg-white border-gray-300 text-gray-900'
+                    ? 'bg-gray-700 border-gray-600 text-white hover:border-blue-400' 
+                    : 'bg-white border-gray-300 text-gray-900 hover:border-blue-400'
                 } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 {itemsPerPageOptions.map(option => (
@@ -1300,24 +1415,24 @@ export default function UsersPage() {
 
           {/* Pagination Navigation */}
           {totalPages > 1 && (
-            <div key={`pagination-${itemsPerPage}-${totalPages}`} className="flex items-center space-x-2">
+            <div key={`pagination-${itemsPerPage}-${totalPages}`} className="flex items-center space-x-1">
               {/* Mobile pagination */}
-              <div className="flex sm:hidden">
+              <div className="flex sm:hidden items-center space-x-1">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1 || isChangingPage || loading}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
                     currentPage === 1 || isChangingPage || loading
                       ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                   }`}
                 >
-                  <span className="hidden sm:inline">Previous</span>
-                  <span className="sm:hidden">Prev</span>
+                  <span className="hidden xs:inline">Prev</span>
+                  <span className="xs:hidden">&larr;</span>
                 </button>
                 
                 {/* Page numbers */}
-                <div className="flex items-center space-x-1">
+                <div className="flex items-center space-x-0.5">
                   {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                     let pageNum;
                     if (totalPages <= 5) {
@@ -1335,7 +1450,7 @@ export default function UsersPage() {
                         key={pageNum}
                         onClick={() => handlePageChange(pageNum)}
                         disabled={isChangingPage || loading}
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                        className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                           currentPage === pageNum
                             ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white'
                             : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
@@ -1350,13 +1465,14 @@ export default function UsersPage() {
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages || isChangingPage || loading}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
                     currentPage === totalPages || isChangingPage || loading
                       ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                   }`}
                 >
-                  Next
+                  <span className="hidden xs:inline">Next</span>
+                  <span className="xs:hidden">&rarr;</span>
                 </button>
               </div>
 
@@ -1534,12 +1650,16 @@ export default function UsersPage() {
                 }`}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold ${
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold overflow-hidden ${
                         isDarkMode
                           ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
                           : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white'
                       }`}>
-                        {getUserInitials(user.name)}
+                        {user.profilePhoto ? (
+                          <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover" />
+                        ) : (
+                          getUserInitials(user.name)
+                        )}
                       </div>
                       <div className="ml-4 flex-1">
                         <div className={`text-sm font-medium ${
@@ -1669,7 +1789,8 @@ export default function UsersPage() {
                                     phoneNumber: userData.phoneNumber || userToEdit.phoneNumber || '',
                                     address: userData.address || userToEdit.address || '',
                                     role: userData.role || userToEdit.role,
-                                    partyId: getPartyId(userData.partyId) || getPartyId(userToEdit.partyId)
+                                    partyId: getPartyId(userData.partyId) || getPartyId(userToEdit.partyId),
+                                    profilePhoto: userData.profilePhoto || userToEdit.profilePhoto || ''
                                   });
                                 } else {
                                   // Fallback to user data without password
@@ -1681,7 +1802,8 @@ export default function UsersPage() {
                                     phoneNumber: userToEdit.phoneNumber || '',
                                     address: userToEdit.address || '',
                                     role: userToEdit.role,
-                                    partyId: getPartyId(userToEdit.partyId)
+                                    partyId: getPartyId(userToEdit.partyId),
+                                    profilePhoto: userToEdit.profilePhoto || ''
                                   });
                                 }
                               } else {
@@ -1694,7 +1816,8 @@ export default function UsersPage() {
                                   phoneNumber: userToEdit.phoneNumber || '',
                                   address: userToEdit.address || '',
                                   role: userToEdit.role,
-                                  partyId: getPartyId(userToEdit.partyId)
+                                  partyId: getPartyId(userToEdit.partyId),
+                                  profilePhoto: userToEdit.profilePhoto || ''
                                 });
                               }
                             } catch (error) {
@@ -1707,7 +1830,8 @@ export default function UsersPage() {
                                   phoneNumber: userToEdit.phoneNumber || '',
                                   address: userToEdit.address || '',
                                   role: userToEdit.role,
-                                  partyId: getPartyId(userToEdit.partyId)
+                                  partyId: getPartyId(userToEdit.partyId),
+                                  profilePhoto: userToEdit.profilePhoto || ''
                                 });
                               }
                               
@@ -1922,30 +2046,30 @@ export default function UsersPage() {
         /* Card View */
         <div className="space-y-4">
           {/* Pagination Controls - Top for Card View */}
-          <div className={`flex items-center justify-between px-4 py-3 rounded-lg border ${
+          <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 rounded-lg border flex flex-row items-center justify-between gap-2 transition-all duration-150 ${
             isDarkMode 
               ? 'bg-white/5 border-white/10' 
-              : 'bg-white border-gray-200'
+              : 'bg-gray-50 border-gray-200'
           }`}>
-            <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:items-center sm:space-x-3 lg:space-x-4">
-              <span className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+            <div className="flex flex-row items-center gap-2 sm:gap-4">
+              <span className={`text-[10px] xs:text-xs sm:text-sm whitespace-nowrap font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                 <span className="hidden sm:inline">Showing {paginationDisplayInfo.start} to {paginationDisplayInfo.end} of {paginationDisplayInfo.total} users</span>
-                <span className="sm:hidden">{paginationDisplayInfo.start}-{paginationDisplayInfo.end} of {paginationDisplayInfo.total}</span>
+                <span className="sm:hidden">{paginationDisplayInfo.start}-{paginationDisplayInfo.end} <span className="opacity-75">of {paginationDisplayInfo.total}</span></span>
               </span>
               
               {/* Items per page dropdown */}
-              <div className="flex items-center space-x-2">
-                <span className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                <span className={`text-[10px] xs:text-xs sm:text-sm hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
                 <select
                   value={itemsPerPage}
                   onChange={(e) => {
                     const value = e.target.value === 'All' ? 'All' : parseInt(e.target.value);
                     handleItemsPerPageChange(value);
                   }}
-                  className={`text-xs sm:text-sm px-2 py-1 rounded border transition-colors ${
+                  className={`px-1.5 sm:px-2 py-0.5 rounded-lg border text-[10px] xs:text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-150 hover:scale-[1.02] focus:scale-[1.02] input-focus ${
                     isDarkMode 
-                      ? 'bg-gray-800 border-gray-600 text-white' 
-                      : 'bg-white border-gray-300 text-gray-900'
+                      ? 'bg-gray-700 border-gray-600 text-white hover:border-blue-400' 
+                      : 'bg-white border-gray-300 text-gray-900 hover:border-blue-400'
                   } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   {itemsPerPageOptions.map(option => (
@@ -1957,20 +2081,21 @@ export default function UsersPage() {
 
             {/* Pagination Navigation for Card View */}
             {totalPages > 1 && (
-              <div key={`card-pagination-${itemsPerPage}-${totalPages}`} className="flex items-center space-x-2">
+              <div key={`card-pagination-${itemsPerPage}-${totalPages}`} className="flex items-center space-x-1">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1 || isChangingPage || loading}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                     currentPage === 1 || isChangingPage || loading
                       ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                   }`}
                 >
-                  Previous
+                  <span className="hidden xs:inline">Prev</span>
+                  <span className="xs:hidden">&larr;</span>
                 </button>
                 
-                <div className="flex items-center space-x-1">
+                <div className="flex items-center space-x-0.5">
                   {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                     let pageNum;
                     if (totalPages <= 5) {
@@ -1988,7 +2113,7 @@ export default function UsersPage() {
                         key={pageNum}
                         onClick={() => handlePageChange(pageNum)}
                         disabled={isChangingPage || loading}
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                        className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                           currentPage === pageNum
                             ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white'
                             : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
@@ -2003,13 +2128,14 @@ export default function UsersPage() {
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages || isChangingPage || loading}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                     currentPage === totalPages || isChangingPage || loading
                       ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                   }`}
                 >
-                  Next
+                  <span className="hidden xs:inline">Next</span>
+                  <span className="xs:hidden">&rarr;</span>
                 </button>
               </div>
             )}
@@ -2093,7 +2219,8 @@ export default function UsersPage() {
                       phoneNumber: userData.phoneNumber || userToEdit.phoneNumber || '',
                       address: userData.address || userToEdit.address || '',
                       role: userData.role || userToEdit.role,
-                      partyId: getPartyId(userData.partyId) || getPartyId(userToEdit.partyId)
+                      partyId: getPartyId(userData.partyId) || getPartyId(userToEdit.partyId),
+                      profilePhoto: userData.profilePhoto || userToEdit.profilePhoto || ''
                     });
                   } else {
                     // Fallback to user data without password
@@ -2105,7 +2232,8 @@ export default function UsersPage() {
                       phoneNumber: userToEdit.phoneNumber || '',
                       address: userToEdit.address || '',
                       role: userToEdit.role,
-                      partyId: getPartyId(userToEdit.partyId)
+                      partyId: getPartyId(userToEdit.partyId),
+                      profilePhoto: userToEdit.profilePhoto || ''
                     });
                   }
                 } else {
@@ -2118,7 +2246,8 @@ export default function UsersPage() {
                     phoneNumber: userToEdit.phoneNumber || '',
                     address: userToEdit.address || '',
                     role: userToEdit.role,
-                    partyId: getPartyId(userToEdit.partyId)
+                    partyId: getPartyId(userToEdit.partyId),
+                    profilePhoto: userToEdit.profilePhoto || ''
                   });
                 }
               } catch (error) {
@@ -2131,7 +2260,8 @@ export default function UsersPage() {
                   phoneNumber: userToEdit.phoneNumber || '',
                   address: userToEdit.address || '',
                   role: userToEdit.role,
-                  partyId: getPartyId(userToEdit.partyId)
+                  partyId: getPartyId(userToEdit.partyId),
+                  profilePhoto: userToEdit.profilePhoto || ''
                 });
               }
               
@@ -2312,6 +2442,73 @@ export default function UsersPage() {
               </div>
               
               <div className="space-y-6">
+                {/* Profile Photo Upload/Capture */}
+                <div className="flex flex-col items-center justify-center space-y-3 pb-4 border-b border-gray-150 dark:border-slate-700/50">
+                  <div className="relative group">
+                    <div className={`h-24 w-24 rounded-full flex items-center justify-center text-3xl font-semibold overflow-hidden border-2 shadow-inner transition-all duration-300 ${
+                      isDarkMode
+                        ? 'bg-slate-750 border-slate-600 text-white shadow-slate-900/50'
+                        : 'bg-gray-100 border-gray-300 text-gray-700 shadow-gray-200'
+                    }`}>
+                      {formData.profilePhoto ? (
+                        <img src={formData.profilePhoto} alt="Profile Preview" className="w-full h-full object-cover animate-fade-in" />
+                      ) : (
+                        getUserInitials(formData.name || 'New User')
+                      )}
+                    </div>
+                    {formData.profilePhoto && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, profilePhoto: '' })}
+                        className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full shadow-md transition-all active:scale-90 hover:scale-110"
+                        title="Remove photo"
+                      >
+                        <XMarkIcon className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <label className={`relative px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 ${
+                      isDarkMode 
+                        ? 'border-slate-700 hover:border-slate-650 hover:bg-slate-700/50 text-gray-300' 
+                        : 'border-gray-300 hover:border-gray-400 hover:bg-gray-100 text-gray-700 shadow-sm'
+                    }`}>
+                      <CloudArrowUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                      Upload File
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            await handlePhotoUpload(file);
+                          }
+                          e.target.value = '';
+                        }}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowCamera(true)}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
+                        isDarkMode 
+                          ? 'border-slate-700 hover:border-slate-650 hover:bg-slate-700/50 text-gray-300' 
+                          : 'border-gray-300 hover:border-gray-400 hover:bg-gray-100 text-gray-700 shadow-sm'
+                      }`}
+                    >
+                      <CameraIcon className="w-3.5 h-3.5 text-emerald-500" />
+                      Camera
+                    </button>
+                  </div>
+                  {uploadingPhoto && (
+                    <div className="flex items-center gap-1.5 text-xs text-blue-500 animate-pulse">
+                      <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      Uploading photo...
+                    </div>
+                  )}
+                </div>
+
                 {/* Role and Party Select (Top Section) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Role */}
@@ -2711,6 +2908,73 @@ export default function UsersPage() {
               )}
 
               <div className="space-y-6">
+                {/* Profile Photo Upload/Capture */}
+                <div className="flex flex-col items-center justify-center space-y-3 pb-4 border-b border-gray-150 dark:border-slate-700/50">
+                  <div className="relative group">
+                    <div className={`h-24 w-24 rounded-full flex items-center justify-center text-3xl font-semibold overflow-hidden border-2 shadow-inner transition-all duration-300 ${
+                      isDarkMode
+                        ? 'bg-slate-750 border-slate-600 text-white shadow-slate-900/50'
+                        : 'bg-gray-100 border-gray-300 text-gray-700 shadow-gray-200'
+                    }`}>
+                      {formData.profilePhoto ? (
+                        <img src={formData.profilePhoto} alt="Profile Preview" className="w-full h-full object-cover animate-fade-in" />
+                      ) : (
+                        getUserInitials(formData.name || 'User')
+                      )}
+                    </div>
+                    {formData.profilePhoto && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, profilePhoto: '' })}
+                        className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full shadow-md transition-all active:scale-90 hover:scale-110"
+                        title="Remove photo"
+                      >
+                        <XMarkIcon className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <label className={`relative px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 ${
+                      isDarkMode 
+                        ? 'border-slate-700 hover:border-slate-650 hover:bg-slate-700/50 text-gray-300' 
+                        : 'border-gray-300 hover:border-gray-400 hover:bg-gray-100 text-gray-700 shadow-sm'
+                    }`}>
+                      <CloudArrowUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                      Upload File
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            await handlePhotoUpload(file);
+                          }
+                          e.target.value = '';
+                        }}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowCamera(true)}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
+                        isDarkMode 
+                          ? 'border-slate-700 hover:border-slate-650 hover:bg-slate-700/50 text-gray-300' 
+                          : 'border-gray-300 hover:border-gray-400 hover:bg-gray-100 text-gray-700 shadow-sm'
+                      }`}
+                    >
+                      <CameraIcon className="w-3.5 h-3.5 text-emerald-500" />
+                      Camera
+                    </button>
+                  </div>
+                  {uploadingPhoto && (
+                    <div className="flex items-center gap-1.5 text-xs text-blue-500 animate-pulse">
+                      <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      Uploading photo...
+                    </div>
+                  )}
+                </div>
+
                 {/* Role and Party Select (Top Section) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Role */}
@@ -3097,12 +3361,16 @@ export default function UsersPage() {
 
             <div className="p-6">
               <div className="flex items-center mb-4">
-                <div className={`h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold ${
+                <div className={`h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold overflow-hidden ${
                   isDarkMode
                     ? 'bg-gradient-to-br from-red-500 to-red-600 text-white'
                     : 'bg-gradient-to-br from-red-600 to-red-700 text-white'
                 }`}>
-                  {getUserInitials(selectedUser.name)}
+                  {selectedUser.profilePhoto ? (
+                    <img src={selectedUser.profilePhoto} alt={selectedUser.name} className="w-full h-full object-cover" />
+                  ) : (
+                    getUserInitials(selectedUser.name)
+                  )}
                 </div>
                 <div className="ml-4">
                   <p className={`text-lg font-medium ${
@@ -3204,12 +3472,16 @@ export default function UsersPage() {
 
             <div className="p-6">
               <div className="flex items-center mb-6">
-                <div className={`h-16 w-16 rounded-full flex items-center justify-center text-xl font-semibold ${
+                <div className={`h-16 w-16 rounded-full flex items-center justify-center text-xl font-semibold overflow-hidden ${
                   isDarkMode
                     ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
                     : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white'
                 }`}>
-                  {getUserInitials(selectedUser.name)}
+                  {selectedUser.profilePhoto ? (
+                    <img src={selectedUser.profilePhoto} alt={selectedUser.name} className="w-full h-full object-cover" />
+                  ) : (
+                    getUserInitials(selectedUser.name)
+                  )}
                 </div>
                 <div className="ml-4">
                   <h4 className={`text-xl font-bold ${
@@ -3487,6 +3759,14 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      {/* Camera Modal */}
+      <CameraModal
+        isOpen={showCamera}
+        onClose={() => setShowCamera(false)}
+        onCapture={handleCameraCapture}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 }

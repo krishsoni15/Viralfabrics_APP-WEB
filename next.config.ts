@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
+import path from "path";
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: path.join(__dirname),
   // Experimental features for better performance
   experimental: {
     optimizePackageImports: ['lucide-react', '@heroicons/react'],

@@ -21,8 +21,13 @@ export async function GET(request: NextRequest) {
 
     // Create cache key
     const cacheKey = 'upcoming-deliveries-instant';
+    
+    // ⚡ FIX: Respect no-cache header for real-time synchronization
+    const skipCache = request.headers.get('cache-control')?.includes('no-cache') || 
+                      request.headers.get('pragma')?.includes('no-cache');
+
     const cached = upcomingCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+    if (!skipCache && cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
       return NextResponse.json(successResponse(cached.data, 'Upcoming deliveries loaded from cache'), { 
         status: 200,
         headers: {

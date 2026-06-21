@@ -26,7 +26,7 @@ export async function PUT(req: NextRequest) {
   try {
     const session = await requireAuth(req);
 
-    const { name, username, password, phoneNumber, address } = await req.json();
+    const { name, username, password, phoneNumber, address, profilePhoto } = await req.json();
     
     // Validation
     const errors: string[] = [];
@@ -72,6 +72,7 @@ export async function PUT(req: NextRequest) {
     if (typeof username === "string" && username.trim()) update.username = username.trim();
     if (typeof phoneNumber === "string") update.phoneNumber = phoneNumber.trim();
     if (typeof address === "string") update.address = address.trim();
+    if (typeof profilePhoto === "string") update.profilePhoto = profilePhoto.trim();
     
     // Only allow password changes for superadmin users
     if (typeof password === "string" && password.length > 0) {

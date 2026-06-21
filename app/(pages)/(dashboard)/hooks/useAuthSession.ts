@@ -10,6 +10,7 @@ export interface SessionUser {
   role: string;
   phoneNumber?: string;
   address?: string;
+  profilePhoto?: string;
 }
 
 interface AuthSession {
@@ -26,6 +27,11 @@ interface AuthSession {
 // Session validation interval - check every 120 seconds for logout-all detection (reduced frequency)
 const LOGOUT_ALL_CHECK_INTERVAL = 120 * 1000; // Check every 120 seconds for logout-all (increased from 60)
 const TOKEN_REFRESH_INTERVAL = 5 * 60 * 1000; // Refresh token every 5 minutes
+
+// Singleton pattern variables to prevent duplicate intervals across multiple hook usages
+let activeAuthHooks = 0;
+let globalLogoutCheckInterval: any = null;
+let globalRefreshTimeout: any = null;
 
 export function useAuthSession(): AuthSession {
   const router = useRouter();
@@ -383,31 +389,43 @@ export function useAuthSession(): AuthSession {
       return;
     }
 
-    // ⚡ OPTIMIZATION: Validate session in background (this catches logout-all)
-    // Use a small delay to prevent immediate duplicate calls on mount
-    setTimeout(() => {
-      if (!isValidatingRef.current && !pendingValidationRef.current) {
+    activeAuthHooks++;
+
+    // Only set up background intervals if this is the FIRST mounted instance of the hook
+    // This perfectly prevents 5 components from spamming 5 intervals at once
+    if (activeAuthHooks === 1) {
+      // ⚡ OPTIMIZATION: Validate session in background (this catches logout-all)
+      // Use a small delay to prevent immediate duplicate calls on mount
+      setTimeout(() => {
+        if (!isValidatingRef.current && !pendingValidationRef.current) {
+          validateSession();
+        }
+      }, 500);
+
+      // Check for logout-all every 60 seconds
+      globalLogoutCheckInterval = setInterval(() => {
         validateSession();
-      }
-    }, 500); // 500ms delay to allow other effects to initialize
+      }, LOGOUT_ALL_CHECK_INTERVAL);
 
-    // Check for logout-all every 60 seconds
-    logoutCheckIntervalRef.current = setInterval(() => {
-      validateSession();
-    }, LOGOUT_ALL_CHECK_INTERVAL);
-
-    // Set up automatic token refresh (every 5 minutes)
-    refreshTimeoutRef.current = setInterval(() => {
-      refreshToken();
-    }, TOKEN_REFRESH_INTERVAL);
+      // Set up automatic token refresh (every 5 minutes)
+      globalRefreshTimeout = setInterval(() => {
+        refreshToken();
+      }, TOKEN_REFRESH_INTERVAL);
+    }
 
     // Cleanup
     return () => {
-      if (refreshTimeoutRef.current) {
-        clearInterval(refreshTimeoutRef.current);
-      }
-      if (logoutCheckIntervalRef.current) {
-        clearInterval(logoutCheckIntervalRef.current);
+      activeAuthHooks--;
+      
+      if (activeAuthHooks === 0) {
+        if (globalRefreshTimeout) {
+          clearInterval(globalRefreshTimeout);
+          globalRefreshTimeout = null;
+        }
+        if (globalLogoutCheckInterval) {
+          clearInterval(globalLogoutCheckInterval);
+          globalLogoutCheckInterval = null;
+        }
       }
     };
   }, [router, validateSession, refreshToken]);
@@ -458,10 +476,15 @@ export function useAuthSession(): AuthSession {
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
+    // Add singleton tracking for focus checks to prevent duplicate listener firing
+    const isFirstFocusListener = activeAuthHooks === 1;
+    
     return () => {
       clearTimeout(initTimeout);
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (isFirstFocusListener) {
+        window.removeEventListener('focus', handleFocus);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
     };
   }, [validateSession]);
 

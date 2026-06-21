@@ -1224,9 +1224,8 @@ export async function PUT(
 
     // ⚡ OPTIMIZED: Log changes asynchronously (non-blocking) - don't wait for it
     if (changedFields.length > 0) {
-      // Fix: logOrderChange expects 3-4 arguments; pass only id, oldValues, newValues, and type
-      logOrderChange('update', id, oldValues, newValues)
-        .catch(() => { }); // Silent error handling
+      logOrderChange('update', id, oldValues, newValues, req)
+        .catch(error => console.error('Logging error:', error));
     }
 
     // ⚡ FIX: Return populated order data so frontend can display quality/party names immediately
@@ -1360,8 +1359,8 @@ export async function DELETE(
     revalidatePath('/dashboard');
 
     // Log the order deletion (async, non-blocking)
-    logOrderChange('delete', id, orderDetails, {})
-      .catch(() => { }); // Silent error handling
+    logOrderChange('delete', id, orderDetails, {}, req)
+      .catch(error => console.error('Logging error (non-blocking):', error));
 
     return new Response(
       JSON.stringify({
@@ -1479,8 +1478,8 @@ export async function PATCH(
       revalidatePath('/dashboard');
 
       // Log the status change (async, don't wait for it)
-      logOrderChange('status_change', id, { status: oldStatus }, { status: updatedOrder.status })
-        .catch(error => { }); // Silent error handling
+      logOrderChange('status_change', id, { status: oldStatus }, { status: updatedOrder.status }, req)
+        .catch(error => console.error('Logging error:', error));
 
       // Return minimal response immediately
       return new Response(
@@ -1550,8 +1549,8 @@ export async function PATCH(
     revalidatePath('/dashboard');
 
     // Log the status change (async, don't wait for it)
-    logOrderChange('status_change', id, { status: oldStatus }, { status: updatedOrder.status })
-      .catch(error => { }); // Silent error handling
+    logOrderChange('status_change', id, { status: oldStatus }, { status: updatedOrder.status }, req)
+      .catch(error => console.error('Logging error (non-blocking):', error));
 
     // Return minimal response for faster performance
     return new Response(

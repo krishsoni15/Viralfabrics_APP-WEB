@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get('orderId');
+    const orderIds = searchParams.get('orderIds');
     const millId = searchParams.get('millId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
@@ -29,11 +30,16 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const skip = (page - 1) * limit;
 
-    let query = {};
+    let query: any = {};
     
     // Filter by order ID
     if (orderId) {
       query = { ...query, orderId };
+    } else if (orderIds) {
+      const ids = orderIds.split(',').map(id => id.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        query = { ...query, orderId: { $in: ids } };
+      }
     }
     
     // Filter by mill ID
@@ -66,7 +72,7 @@ export async function GET(request: NextRequest) {
     
     // ⚡ Fetch related data separately (batch queries - no N+1)
     const millIds = [...new Set(millInputs.map((mi: any) => mi.mill).filter(Boolean))];
-    const orderIds = [...new Set(millInputs.map((mi: any) => mi.order).filter(Boolean))];
+    const uniqueOrderIds = [...new Set(millInputs.map((mi: any) => mi.order).filter(Boolean))];
     const qualityIds = [...new Set([
       ...millInputs.map((mi: any) => mi.quality).filter(Boolean),
       ...millInputs.flatMap((mi: any) => 
@@ -79,7 +85,7 @@ export async function GET(request: NextRequest) {
         .select('_id name contactPerson contactPhone')
         .lean()
         .maxTimeMS(100) : Promise.resolve([]),
-      orderIds.length > 0 ? Order.find({ _id: { $in: orderIds } })
+      uniqueOrderIds.length > 0 ? Order.find({ _id: { $in: uniqueOrderIds } })
         .select('_id orderId orderType party')
         .lean()
         .maxTimeMS(100) : Promise.resolve([]),

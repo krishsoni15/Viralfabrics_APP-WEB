@@ -105,9 +105,17 @@ export default function DashboardClient({ initialStats }: DashboardClientProps) 
     if (filters.financialYear && filters.financialYear !== 'all') {
       queryParams.append('financialYear', filters.financialYear);
     }
+    queryParams.append('t', Date.now().toString());
 
     const response = await fetch(
-      `/api/dashboard/stats-instant${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+      `/api/dashboard/stats-instant?${queryParams.toString()}`,
+      {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        },
+        cache: 'no-store'
+      }
     );
 
     if (!response.ok) {
@@ -148,30 +156,42 @@ export default function DashboardClient({ initialStats }: DashboardClientProps) 
 
   // Listen for order changes and refresh dashboard immediately
   useEffect(() => {
-    const handleOrderChange = () => {
-      // Clear cache and refetch when orders change
-      refetch();
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const handleRealtimeSync = () => {
+      // DEBOUNCE: Collect all simultaneous socket pings (e.g. if Order and Party are saved at the same time)
+      if (timeoutId) clearTimeout(timeoutId);
+      
+      timeoutId = setTimeout(() => {
+        // Background silent refetch triggered by Socket.io Ping
+        refetch(true); // true = silent mode (no flickering)
+      }, 800);
     };
 
-    // Listen for custom event when orders are created/updated/deleted
-    window.addEventListener('orderChanged', handleOrderChange);
+    // Listen for custom event when orders are created/updated/deleted locally or via socket
+    window.addEventListener('orderChanged', handleRealtimeSync);
+    window.addEventListener('dashboardRefresh', handleRealtimeSync);
+    window.addEventListener('realtimeDataChanged', handleRealtimeSync);
 
     // Also listen for storage events (cross-tab communication)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'dashboardRefresh') {
-        refetch();
+        handleRealtimeSync();
       }
     };
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      window.removeEventListener('orderChanged', handleOrderChange);
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('orderChanged', handleRealtimeSync);
+      window.removeEventListener('dashboardRefresh', handleRealtimeSync);
+      window.removeEventListener('realtimeDataChanged', handleRealtimeSync);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, [refetch]);
 
-  // Use initial stats if available, otherwise use fetched data
-  const displayStats = initialStats || stats || {
+  // Use fetched stats if available, otherwise use initial stats
+  const displayStats = stats || initialStats || {
     totalOrders: 0,
     statusStats: { pending: 0, in_progress: 0, completed: 0, delivered: 0, cancelled: 0, not_set: 0 },
     typeStats: { Dying: 0, Printing: 0, not_set: 0 },

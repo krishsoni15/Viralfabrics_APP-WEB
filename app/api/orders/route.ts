@@ -58,13 +58,7 @@ export async function GET(request: NextRequest) {
       return Response.json(unauthorizedResponse('Unauthorized'), { status: 401 });
     }
 
-    // 🔍 DEBUG: Log session info for debugging party scoping
-    console.log('🔍 Orders API Session:', {
-      userId: session.id,
-      role: session.role,
-      partyId: session.partyId,
-      hasPartyId: !!session.partyId
-    });
+    // Removed verbose session logging
 
     // Connect to database with timeout (increased for reliability)
     try {
@@ -110,8 +104,12 @@ export async function GET(request: NextRequest) {
     // Create cache key for this query (include millId and fy for proper caching with multiple filters)
     const cacheKey = `orders_${JSON.stringify({ limit, page, search, orderType, status, startDate, endDate, sort, millId, fy })}`;
 
+    // ⚡ FIX: Respect no-cache header for real-time synchronization
+    const skipCache = request.headers.get('cache-control')?.includes('no-cache') || 
+                      request.headers.get('pragma')?.includes('no-cache');
+
     // Check cache first (skip if force refresh OR timestamp provided for cache busting)
-    if (!force && !timestamp) {
+    if (!force && !timestamp && !skipCache) {
       const cached = queryCache.get(cacheKey);
       if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
         return Response.json({
@@ -146,13 +144,7 @@ export async function GET(request: NextRequest) {
       // 🔍 DEBUG: Confirm party filter was applied
       console.log('🔍 Party filter applied:', session.partyId);
     } else if (session) {
-      // 🔍 DEBUG: Log why filter was NOT applied
-      console.log('🔍 Party filter NOT applied - reason:', {
-        hasPartyId: !!session.partyId,
-        isMaster: session.role === 'master',
-        isSuperAdmin: session.role === 'superadmin',
-        role: session.role
-      });
+      // Party filter NOT applied (user is master or superadmin)
     }
 
     // If mill filter provided, prefetch order IDs that have mill inputs for that mill
@@ -1723,6 +1715,7 @@ export async function POST(req: NextRequest) {
     revalidatePath('/dashboard');
 
     // Log the order creation (async, non-blocking)
+    // Log the order creation (async, non-blocking)
     logOrderChange('create', orderId, {}, {
       orderId: populatedOrder.orderId,
       orderType: populatedOrder.orderType,
@@ -1736,7 +1729,7 @@ export async function POST(req: NextRequest) {
       deliveryDate: populatedOrder.deliveryDate,
       status: populatedOrder.status,
       itemChanges: itemChanges
-    }).catch(error => console.error('Logging error (non-blocking):', error));
+    }, req).catch(error => console.error('Logging error (non-blocking):', error));
 
     return new Response(
       JSON.stringify({

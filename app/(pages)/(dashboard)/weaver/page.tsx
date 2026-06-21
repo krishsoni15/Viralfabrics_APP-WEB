@@ -40,6 +40,7 @@ import WeaverPageSkeleton from './components/WeaverPageSkeleton';
 import UnauthorizedMessage from './components/UnauthorizedMessage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ImageGallery } from './components/ImageGallery';
+import { useRealtimeSync } from '@/app/hooks/useRealtimeSync';
 import { generateSampleStickerPDF, downloadSampleStickerPDFDirect } from '@/lib/pdfGenerator';
 
 // Lazy load heavy components for code-splitting
@@ -260,21 +261,7 @@ export default function WeaverPage() {
     }
     return 1024; // Default to desktop width
   });
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
-    if (typeof window !== 'undefined') {
-      const savedViewMode = getCookie('weaverViewMode');
-      if (savedViewMode === 'table' || savedViewMode === 'cards') {
-        return savedViewMode;
-      }
-      // Default: cards on screens under 600px, table on larger screens
-      const isSmallScreen = window.innerWidth < 600;
-      const defaultMode = isSmallScreen ? 'cards' : 'table';
-      // Save the default to cookie
-      setCookie('weaverViewMode', defaultMode, 365);
-      return defaultMode;
-    }
-    return 'table';
-  });
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
   // Check if mobile device
   const isMobileDevice = typeof window !== 'undefined' && (
@@ -1554,14 +1541,28 @@ export default function WeaverPage() {
     };
   }, [stickerPreviewUrl]);
 
-  // Track window width for responsive pagination
+  // Track window width and handle responsive view mode switches
   useEffect(() => {
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
+      const savedMode = localStorage.getItem('weaversViewMode');
+      if (!savedMode) {
+        const isMobile = window.innerWidth < 768;
+        setViewMode(isMobile ? 'cards' : 'table');
+      }
     };
 
     if (typeof window !== 'undefined') {
       setWindowWidth(window.innerWidth);
+      
+      const savedMode = localStorage.getItem('weaversViewMode');
+      if (savedMode === 'table' || savedMode === 'cards') {
+        setViewMode(savedMode);
+      } else {
+        const isMobile = window.innerWidth < 768;
+        setViewMode(isMobile ? 'cards' : 'table');
+      }
+
       window.addEventListener('resize', handleResize);
       return () => window.removeEventListener('resize', handleResize);
     }
@@ -1618,7 +1619,10 @@ export default function WeaverPage() {
   // Handle view mode change
   const handleViewModeChange = useCallback((newMode: 'table' | 'cards') => {
     setViewMode(newMode);
-    setCookie('weaverViewMode', newMode, 365);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('weaversViewMode', newMode);
+      localStorage.setItem('lastViewModeChange', Date.now().toString());
+    }
   }, []);
 
   // Get first letter of name for avatar
@@ -1782,6 +1786,15 @@ export default function WeaverPage() {
   // Weaver page is accessible to all authenticated users
   // No redirect needed for non-superadmin users
 
+  // 🌟 REAL-TIME SYNC
+  useRealtimeSync(
+    () => {
+      // Refresh the current page without changing pagination state
+      fetchWeavers(currentPage, itemsPerPage, searchQuery, sortOrder);
+    },
+    showWeaverModal || showSampleForm
+  );
+
   // Show skeleton while loading auth or dark mode (only if authenticated)
   if (!darkModeMounted || authLoading) {
     // Only show skeleton if user is authenticated or still loading
@@ -1844,74 +1857,88 @@ export default function WeaverPage() {
           <div className={`border-2 shadow-xl overflow-hidden ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-white'
             }`}>
             {/* Search and Action Bar - Top Row */}
-            <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-col gap-2 max-[900px]:gap-2 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3 ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'
-              }`}>
-              {/* Search Bar and Sort - Same row on all screens */}
-              <div className="flex flex-row items-center gap-2 min-[900px]:flex-1 min-[900px]:gap-3">
-                {/* Search Bar */}
-                <div className="flex-1 relative">
-                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none z-10">
-                    {isChangingPage && searchQuery ? (
-                      <ArrowPathIcon className={`h-5 w-5 animate-spin ${isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                        }`} />
-                    ) : (
-                      <MagnifyingGlassIcon className={`h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                        }`} />
+            <div className={`px-3 py-3 border-b flex flex-col gap-3 ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'}`}>
+              {/* Row 1: Search input and Add Weaver button side by side */}
+              <div className="flex flex-row items-center justify-between gap-2 sm:gap-3 w-full">
+                {/* Search Bar Container */}
+                <div className="flex-grow w-full max-w-xl flex relative group">
+                  <div className="relative w-full">
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none z-10">
+                      {isChangingPage && searchQuery ? (
+                        <ArrowPathIcon className={`h-5 w-5 animate-spin ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                      ) : (
+                        <MagnifyingGlassIcon className={`h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search by name or phone..."
+                      value={searchQuery}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      className={`w-full pl-10 ${searchQuery ? 'pr-10' : 'pr-4'} py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none ${isDarkMode
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                        }`}
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => {
+                          setSearchQuery('');
+                          if (searchTimeoutRef.current) {
+                            clearTimeout(searchTimeoutRef.current);
+                            searchTimeoutRef.current = null;
+                          }
+                          if (searchAbortControllerRef.current) {
+                            searchAbortControllerRef.current.abort();
+                            searchAbortControllerRef.current = null;
+                          }
+                          lastFetchParamsRef.current = null;
+                          isFetchingRef.current = false;
+                          setCurrentPage(1);
+                          setIsChangingPage(false);
+                          fetchWeavers(1, itemsPerPage, '', sortOrder);
+                        }}
+                        className={`absolute right-3 top-1/2 transform -translate-y-1/2 z-10 p-1 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 ${isDarkMode
+                          ? 'text-gray-400 hover:text-white hover:bg-gray-600'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
+                          }`}
+                        title="Clear search"
+                        aria-label="Clear search"
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
                     )}
                   </div>
-                  <input
-                    type="text"
-                    placeholder="Search by name or phone..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    className={`w-full pl-10 ${searchQuery ? 'pr-10' : 'pr-4'} py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode
-                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                      } ${isChangingPage && searchQuery ? (isDarkMode ? 'border-blue-500/50' : 'border-blue-400/50') : ''}`}
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => {
-                        // Clear search immediately
-                        setSearchQuery('');
-                        // Clear timeout
-                        if (searchTimeoutRef.current) {
-                          clearTimeout(searchTimeoutRef.current);
-                          searchTimeoutRef.current = null;
-                        }
-                        // Cancel pending search
-                        if (searchAbortControllerRef.current) {
-                          searchAbortControllerRef.current.abort();
-                          searchAbortControllerRef.current = null;
-                        }
-                        // Reset fetch params and fetch with empty search
-                        lastFetchParamsRef.current = null;
-                        isFetchingRef.current = false;
-                        setCurrentPage(1);
-                        setIsChangingPage(false);
-                        // Fetch immediately with empty search
-                        fetchWeavers(1, itemsPerPage, '', sortOrder);
-                      }}
-                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 z-10 p-1 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 ${isDarkMode
-                        ? 'text-gray-400 hover:text-white hover:bg-gray-600'
-                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
-                        }`}
-                      title="Clear search"
-                      aria-label="Clear search"
-                    >
-                      <XMarkIcon className="h-4 w-4" />
-                    </button>
-                  )}
                 </div>
 
-                {/* Sort Filter */}
-                <div className="flex items-center gap-2 relative flex-shrink-0 z-[40]">
-                  <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Sort:</span>
+                {/* Add Weaver Button */}
+                <div className="flex items-center flex-shrink-0">
+                  <button
+                    onClick={handleAddWeaver}
+                    className={`px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 flex items-center space-x-1.5 sm:space-x-2 h-[36px] sm:h-[42px] ${isDarkMode
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
+                      }`}
+                    title="Add Weaver"
+                    aria-label="Add new weaver"
+                  >
+                    <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <span className="text-xs sm:text-sm hidden sm:inline">Add Weaver</span>
+                    <span className="text-xs sm:hidden">Add</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Row 2: Sort (left) + View Toggles & Refresh (right) */}
+              <div className="flex flex-row items-center justify-between gap-2 mt-1 sm:mt-0 w-full">
+                {/* Left Side: Sort Controls */}
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
+                  <span className={`text-xs sm:text-sm font-medium hidden sm:inline ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Sort:</span>
                   <div className="relative sort-dropdown-container z-[40]">
                     <button
                       onClick={() => {
                         setShowSortDropdown(!showSortDropdown);
-                        setShowItemsPerPageDropdown(false); // Close other dropdown
+                        setShowItemsPerPageDropdown(false);
                       }}
                       disabled={isChangingPage || loading}
                       className={`px-2 py-1.5 text-[11px] sm:text-xs font-medium rounded-lg border-2 transition-all duration-200 flex items-center gap-1.5 min-w-[70px] ${isDarkMode
@@ -1928,15 +1955,13 @@ export default function WeaverPage() {
                       </svg>
                     </button>
                     <div
-                      className={`fixed inset-0 z-[40] transition-opacity duration-300 ${showSortDropdown ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                        }`}
+                      className={`fixed inset-0 z-[40] transition-opacity duration-300 ${showSortDropdown ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                       onClick={() => setShowSortDropdown(false)}
                     />
-                    <div className={`absolute top-full left-0 mt-1 w-32 rounded-lg border shadow-xl z-[40] transition-all duration-300 ease-out ${showSortDropdown
+                    <div className={`absolute top-full left-0 mt-1 w-32 rounded-lg border shadow-xl z-[45] transition-all duration-300 ease-out ${showSortDropdown
                       ? 'opacity-100 translate-y-0 scale-100'
                       : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'
-                      } ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'
-                      }`}>
+                      } ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}`}>
                       <button
                         onClick={() => {
                           handleSortChange('newest');
@@ -1964,134 +1989,94 @@ export default function WeaverPage() {
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* View Toggle */}
-              <div className="flex items-center gap-3 max-[900px]:justify-between min-[900px]:flex-shrink-0">
-                {/* View Mode Toggle */}
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>View:</span>
-                  <div className={`flex rounded-lg border-2 overflow-hidden shadow-sm ${isDarkMode ? 'border-gray-600' : 'border-gray-300'
-                    }`}>
+                {/* Right Side Actions: View Toggles & Refresh */}
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                  {/* View Mode Toggle */}
+                  <div className={`flex rounded-lg border overflow-hidden h-[32px] sm:h-[38px] ${isDarkMode ? 'border-gray-750 bg-gray-800' : 'border-gray-250 bg-white'}`}>
                     <button
                       onClick={() => handleViewModeChange('table')}
-                      className={`min-[400px]:px-1.5 sm:px-2 px-2 py-1.5 sm:py-2 text-xs font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center min-[400px]:space-x-1 ${viewMode === 'table'
-                        ? isDarkMode
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-blue-500 text-white shadow-md'
-                        : isDarkMode
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border-r border-gray-600'
-                          : 'bg-white text-gray-700 hover:bg-blue-50 border-r border-gray-300'
-                        }`}
+                      className={`px-2 sm:px-3 h-full text-xs transition-colors flex items-center justify-center ${viewMode === 'table' ? (isDarkMode ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-white') : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50')}`}
                       title="Table View"
                       aria-label="Switch to table view"
                       aria-pressed={viewMode === 'table'}
                     >
-                      <ListBulletIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      <span className="text-xs hidden min-[400px]:inline">Table</span>
+                      <ListBulletIcon className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline ml-1 text-xs">Table</span>
                     </button>
                     <button
                       onClick={() => handleViewModeChange('cards')}
-                      className={`min-[400px]:px-1.5 sm:px-2 px-2 py-1.5 sm:py-2 text-xs font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center min-[400px]:space-x-1 ${viewMode === 'cards'
-                        ? isDarkMode
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-blue-500 text-white shadow-md'
-                        : isDarkMode
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          : 'bg-white text-gray-700 hover:bg-blue-50'
-                        }`}
+                      className={`px-2 sm:px-3 h-full text-xs transition-colors flex items-center justify-center ${viewMode === 'cards' ? (isDarkMode ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-white') : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50')}`}
                       title="Card View"
                       aria-label="Switch to card view"
                       aria-pressed={viewMode === 'cards'}
                     >
-                      <Squares2X2Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      <span className="text-xs hidden min-[400px]:inline">Cards</span>
+                      <Squares2X2Icon className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline ml-1 text-xs">Cards</span>
                     </button>
                   </div>
-                </div>
 
-                {/* Refresh and Add Weaver Buttons */}
-                <div className="flex items-center gap-3">
                   {/* Refresh Button */}
                   <button
                     onClick={() => {
-                      // Reset fetch params to force refresh
                       lastFetchParamsRef.current = null;
                       isFetchingRef.current = false;
                       fetchWeavers(currentPage, itemsPerPage, searchQuery, sortOrder);
                     }}
                     disabled={loading || isChangingPage}
-                    className={`min-[430px]:px-3 px-2.5 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center min-[430px]:space-x-2 ${isDarkMode
-                      ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-600'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
+                    className={`group inline-flex items-center justify-center px-2.5 py-1.5 rounded-lg font-semibold transition-all duration-200 hover-lift text-xs sm:text-sm h-[32px] sm:h-[38px] ${isDarkMode
+                      ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                      : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                       } ${(loading || isChangingPage) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     title="Refresh"
                     aria-label="Refresh weavers list"
                   >
-                    <ArrowPathIcon className={`h-4 w-4 sm:h-5 sm:w-5 ${(loading || isChangingPage) ? 'animate-spin' : ''}`} />
-                    <span className="hidden min-[430px]:inline text-xs sm:text-sm">Refresh</span>
-                  </button>
-
-                  {/* Add Weaver Button */}
-                  <button
-                    onClick={handleAddWeaver}
-                    className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 flex items-center space-x-2 ${isDarkMode
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                      }`}
-                    title="Add Weaver"
-                    aria-label="Add new weaver"
-                  >
-                    <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                    <span className="text-xs sm:text-sm">Add Weaver</span>
+                    <ArrowPathIcon className={`h-3.5 w-3.5 ${(loading || isChangingPage) ? 'animate-spin' : ''} sm:mr-1`} />
+                    <span className="font-medium hidden sm:inline">Refresh</span>
                   </button>
                 </div>
               </div>
             </div>
 
             {/* Pagination Info Bar - Second Row */}
-            <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-col gap-2 max-[900px]:gap-2 min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'
-              }`}>
-              {/* Row 1: Showing text and Show dropdown (under 900px) / All in one row (900px+) */}
-              <div className="flex flex-row items-center justify-between min-[900px]:flex-row min-[900px]:items-center min-[900px]:space-x-3 lg:space-x-4">
-                <span className={`text-[10px] xs:text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                  <span className="hidden min-[640px]:inline">Showing {paginationDisplayInfo.start} to {paginationDisplayInfo.end} of {paginationDisplayInfo.total} weavers</span>
-                  <span className="min-[640px]:hidden">Showing {paginationDisplayInfo.start} to {paginationDisplayInfo.end} of {paginationDisplayInfo.total}</span>
+            <div className={`px-3 py-3 border-b flex flex-row items-center justify-between gap-2 w-full ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'}`}>
+              <div className="flex flex-row items-center gap-2 sm:gap-3 lg:gap-4 flex-1 min-w-0">
+                <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <span className="hidden sm:inline">Showing {paginationDisplayInfo.start} to {paginationDisplayInfo.end} of {paginationDisplayInfo.total} weavers</span>
+                  <span className="sm:hidden">{paginationDisplayInfo.start}-{paginationDisplayInfo.end} of {paginationDisplayInfo.total}</span>
                 </span>
 
                 {/* Items per page dropdown */}
-                <div className="flex items-center gap-2 relative flex-shrink-0 z-[40]">
-                  <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
+                <div className="flex items-center gap-1 sm:gap-2 relative flex-shrink-0 z-[40]">
+                  <span className={`text-[10px] xs:text-xs sm:text-sm hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
                   <div className="relative items-per-page-dropdown-container z-[40]">
                     <button
                       onClick={() => {
                         setShowItemsPerPageDropdown(!showItemsPerPageDropdown);
-                        setShowSortDropdown(false); // Close other dropdown
+                        setShowSortDropdown(false);
                       }}
                       disabled={isChangingPage || loading}
-                      className={`px-2 py-1.5 text-[10px] xs:text-xs font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between min-w-[70px] ${isDarkMode
-                        ? 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20 hover:border-white/40'
-                        : 'bg-gray-50 border-gray-400 text-gray-600 hover:bg-gray-100 hover:border-gray-500'
-                        } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`px-2 py-1 text-[10px] xs:text-xs sm:text-sm font-medium rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-150 hover:scale-[1.02] focus:scale-[1.02] flex items-center justify-between gap-1 min-w-[50px] sm:min-w-[65px] ${isDarkMode
+                        ? 'bg-gray-700 border-gray-600 text-white hover:border-blue-400'
+                        : 'bg-white border-gray-300 text-gray-900 hover:border-blue-400'
+                        } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                       aria-label={`Show ${itemsPerPage} items per page`}
                       aria-expanded={showItemsPerPageDropdown}
                       aria-haspopup="true"
                     >
                       <span>{itemsPerPage}</span>
-                      <svg className={`h-4 w-4 flex-shrink-0 transition-transform duration-300 ease-out ${showItemsPerPageDropdown ? 'rotate-180' : 'rotate-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`h-3 w-3 flex-shrink-0 transition-transform duration-300 ease-out ${showItemsPerPageDropdown ? 'rotate-180' : 'rotate-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
                     <div
-                      className={`fixed inset-0 z-[40] transition-opacity duration-300 ${showItemsPerPageDropdown ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                        }`}
+                      className={`fixed inset-0 z-[40] transition-opacity duration-300 ${showItemsPerPageDropdown ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                       onClick={() => setShowItemsPerPageDropdown(false)}
                     />
-                    <div className={`absolute top-full left-0 mt-1 w-28 rounded-lg border shadow-xl z-[40] transition-all duration-300 ease-out ${showItemsPerPageDropdown
+                    <div className={`absolute top-full left-0 mt-1 w-24 rounded-lg border shadow-xl z-[45] transition-all duration-300 ease-out ${showItemsPerPageDropdown
                       ? 'opacity-100 translate-y-0 scale-100'
                       : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'
-                      } ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'
-                      }`}>
+                      } ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}`}>
                       {itemsPerPageOptions.map((option) => (
                         <button
                           key={option}
@@ -2099,7 +2084,7 @@ export default function WeaverPage() {
                             handleItemsPerPageChange(option);
                             setShowItemsPerPageDropdown(false);
                           }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg ${itemsPerPage === option
+                          className={`w-full text-left px-3 py-1.5 text-xs hover:bg-opacity-50 transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg ${itemsPerPage === option
                             ? isDarkMode ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-700'
                             : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
                             }`}
@@ -2112,55 +2097,37 @@ export default function WeaverPage() {
                 </div>
               </div>
 
-              {/* Row 2: Pagination Navigation (under 900px) / Same row (900px+) */}
+              {/* Pagination Navigation */}
               {(totalPages > 1 || weavers.length > 0) && (
-                <div className="flex items-center justify-between w-full max-[900px]:w-full min-[900px]:justify-end min-[900px]:w-auto space-x-2 sm:space-x-3">
+                <div className="flex items-center space-x-1 sm:space-x-2">
                   <button
                     onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1 || isChangingPage || loading}
-                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5 ${currentPage === 1 || isChangingPage || loading
-                      ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm transition-all duration-150 hover:scale-105 active:scale-95 hover-lift shadow-sm hover:shadow-md ${currentPage === 1 || isChangingPage || loading
+                      ? isDarkMode ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      : isDarkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600 border border-slate-600' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'
                       }`}
                   >
                     {isChangingPage ? (
-                      <span className="flex items-center space-x-2">
-                        <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${isDarkMode ? 'border-gray-400' : 'border-gray-600'
-                          }`}></div>
+                      <span className="flex items-center space-x-1">
+                        <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${isDarkMode ? 'border-gray-400' : 'border-gray-600'}`}></div>
                         <span className="hidden sm:inline">Loading...</span>
                         <span className="sm:hidden">...</span>
                       </span>
                     ) : (
                       <>
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
                         <span className="hidden sm:inline">Previous</span>
-                        <span className="sm:hidden">Prev</span>
+                        <span className="sm:hidden">&larr;</span>
                       </>
                     )}
                   </button>
 
-                  {/* Page numbers - Dynamic based on screen size */}
-                  <div className="flex items-center space-x-1 flex-1 justify-center max-[900px]:overflow-x-auto max-[900px]:scrollbar-hide">
+                  {/* Smart page numbering */}
+                  <div className="hidden sm:flex items-center space-x-1">
                     {(() => {
                       const pages = [];
+                      let maxVisiblePages = 5;
 
-                      // Calculate max visible pages based on screen width
-                      let maxVisiblePages: number;
-                      if (windowWidth < 480) {
-                        maxVisiblePages = 3; // Very small screens: 3 pages
-                      } else if (windowWidth < 640) {
-                        maxVisiblePages = 5; // Small screens: 5 pages
-                      } else if (windowWidth < 768) {
-                        maxVisiblePages = 7; // Medium screens: 7 pages
-                      } else if (windowWidth < 1024) {
-                        maxVisiblePages = 9; // Large screens: 9 pages
-                      } else {
-                        maxVisiblePages = 11; // Very large screens: 11 pages
-                      }
-
-                      // If total pages is less than or equal to max visible, show all
                       if (totalPages <= maxVisiblePages) {
                         for (let i = 1; i <= totalPages; i++) {
                           pages.push(
@@ -2168,36 +2135,32 @@ export default function WeaverPage() {
                               key={i}
                               onClick={() => handlePageChange(i)}
                               disabled={isChangingPage || loading}
-                              className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-110 active:scale-95 whitespace-nowrap ${currentPage === i
-                                ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
-                                : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                                } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium transition-all duration-155 ${currentPage === i
+                                ? 'bg-blue-500 text-white'
+                                : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-205'
+                                }`}
                             >
                               {i}
                             </button>
                           );
                         }
                       } else {
-                        // Smart pagination - dynamically adjust based on maxVisiblePages
                         const halfVisible = Math.floor(maxVisiblePages / 2);
-
-                        // Always show first page
                         pages.push(
                           <button
                             key={1}
                             onClick={() => handlePageChange(1)}
                             disabled={isChangingPage || loading}
-                            className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${currentPage === 1
-                              ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
-                              : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
-                              } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium transition-all duration-155 ${currentPage === 1
+                              ? 'bg-blue-500 text-white'
+                              : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-205'
+                              }`}
                           >
                             1
                           </button>
                         );
 
                         if (currentPage <= halfVisible + 1) {
-                          // Near the beginning: Show 1, 2, 3, ..., last
                           const endPage = Math.min(maxVisiblePages - 1, totalPages - 1);
                           for (let i = 2; i <= endPage; i++) {
                             pages.push(
@@ -2205,30 +2168,21 @@ export default function WeaverPage() {
                                 key={i}
                                 onClick={() => handlePageChange(i)}
                                 disabled={isChangingPage || loading}
-                                className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${currentPage === i
-                                  ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
-                                  : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
-                                  } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium transition-all duration-155 ${currentPage === i
+                                  ? 'bg-blue-500 text-white'
+                                  : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-205'
+                                  }`}
                               >
                                 {i}
                               </button>
                             );
                           }
                           if (endPage < totalPages - 1) {
-                            pages.push(
-                              <span key="ellipsis1" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                ...
-                              </span>
-                            );
+                            pages.push(<span key="ellipsis1" className="px-1 text-xs text-gray-500">...</span>);
                           }
                         } else if (currentPage >= totalPages - halfVisible) {
-                          // Near the end: Show 1, ..., last-3, last-2, last-1, last
-                          if (totalPages - maxVisiblePages + 2 > 1) {
-                            pages.push(
-                              <span key="ellipsis1" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                ...
-                              </span>
-                            );
+                          if (totalPages - maxVisiblePages + 2 > 2) {
+                            pages.push(<span key="ellipsis1" className="px-1 text-xs text-gray-500">...</span>);
                           }
                           const startPage = Math.max(2, totalPages - maxVisiblePages + 2);
                           for (let i = startPage; i < totalPages; i++) {
@@ -2237,22 +2191,17 @@ export default function WeaverPage() {
                                 key={i}
                                 onClick={() => handlePageChange(i)}
                                 disabled={isChangingPage || loading}
-                                className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${currentPage === i
-                                  ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
-                                  : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
-                                  } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium transition-all duration-155 ${currentPage === i
+                                  ? 'bg-blue-500 text-white'
+                                  : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-205'
+                                  }`}
                               >
                                 {i}
                               </button>
                             );
                           }
                         } else {
-                          // Middle: Show 1, ..., current-1, current, current+1, ..., last
-                          pages.push(
-                            <span key="ellipsis1" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                              ...
-                            </span>
-                          );
+                          pages.push(<span key="ellipsis1" className="px-1 text-xs text-gray-500">...</span>);
                           const startPage = Math.max(2, currentPage - halfVisible + 1);
                           const endPage = Math.min(totalPages - 1, currentPage + halfVisible - 1);
                           for (let i = startPage; i <= endPage; i++) {
@@ -2261,42 +2210,36 @@ export default function WeaverPage() {
                                 key={i}
                                 onClick={() => handlePageChange(i)}
                                 disabled={isChangingPage || loading}
-                                className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${currentPage === i
-                                  ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
-                                  : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
-                                  } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium transition-all duration-155 ${currentPage === i
+                                  ? 'bg-blue-500 text-white'
+                                  : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-205'
+                                  }`}
                               >
                                 {i}
                               </button>
                             );
                           }
                           if (endPage < totalPages - 1) {
-                            pages.push(
-                              <span key="ellipsis2" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                ...
-                              </span>
-                            );
+                            pages.push(<span key="ellipsis2" className="px-1 text-xs text-gray-500">...</span>);
                           }
                         }
 
-                        // Always show last page (if not already shown and not page 1)
-                        if (totalPages > 1 && currentPage < totalPages - halfVisible) {
+                        if (currentPage < totalPages - halfVisible) {
                           pages.push(
                             <button
                               key={totalPages}
                               onClick={() => handlePageChange(totalPages)}
                               disabled={isChangingPage || loading}
-                              className={`px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 hover:scale-110 active:scale-95 ${currentPage === totalPages
-                                ? isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-500 text-white border-blue-400'
-                                : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400'
-                                } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium transition-all duration-155 ${currentPage === totalPages
+                                ? 'bg-blue-500 text-white'
+                                : isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-205'
+                                }`}
                             >
                               {totalPages}
                             </button>
                           );
                         }
                       }
-
                       return pages;
                     })()}
                   </div>
@@ -2304,25 +2247,21 @@ export default function WeaverPage() {
                   <button
                     onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages || isChangingPage || loading}
-                    className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5 ${currentPage === totalPages || isChangingPage || loading
-                      ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm transition-all duration-150 hover:scale-105 active:scale-95 hover-lift shadow-sm hover:shadow-md ${currentPage === totalPages || isChangingPage || loading
+                      ? isDarkMode ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      : isDarkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600 border border-slate-600' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'
                       }`}
                   >
                     {isChangingPage ? (
-                      <span className="flex items-center space-x-1 sm:space-x-2">
-                        <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${isDarkMode ? 'border-gray-400' : 'border-gray-600'
-                          }`}></div>
+                      <span className="flex items-center space-x-1">
+                        <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${isDarkMode ? 'border-gray-400' : 'border-gray-600'}`}></div>
                         <span className="hidden sm:inline">Loading...</span>
                         <span className="sm:hidden">...</span>
                       </span>
                     ) : (
                       <>
                         <span className="hidden sm:inline">Next</span>
-                        <span className="sm:hidden">Next</span>
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+                        <span className="sm:hidden">&rarr;</span>
                       </>
                     )}
                   </button>

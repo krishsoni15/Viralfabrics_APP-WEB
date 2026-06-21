@@ -1,5 +1,46 @@
 import mongoose, { type Mongoose } from "mongoose";
 
+// 🌟 100% Risk-Free Global Database Watcher
+// This plugin automatically tells the frontend when data changes, without touching any API files.
+mongoose.plugin((schema) => {
+  const emitChange = function (this: any) {
+    try {
+      if ((global as any).io) {
+        // Find the name of the table that was just modified (e.g. "Order", "GreyMaterial")
+        const modelName = this.constructor?.modelName || this.model?.modelName || 'unknown';
+        
+        // ⚡ CRITICAL FIX: Only emit for actual business data!
+        // If we emit for 'Log' or 'User' (which save on every API call), it creates an infinite refresh loop!
+        const whitelistedModels = [
+          'Order', 'Party', 'Mill', 'Quality', 'GreyMaterial', 
+          'Dispatch', 'Fabric', 'GreyInfo', 'MillOutput', 'Process', 
+          'Sample', 'Sampling', 'FinishLotStock', 'Lab'
+        ];
+
+        if (whitelistedModels.includes(modelName)) {
+          // Broadcast the tiny empty ping to all connected clients
+          (global as any).io.emit('data_changed', { module: modelName });
+        }
+      }
+    } catch (error) {
+      // Strict try/catch ensures database saves NEVER fail even if Socket is down
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Real-time sync silent failure:', error);
+      }
+    }
+  };
+
+  // Watch every possible database mutation
+  schema.post('save', emitChange);
+  schema.post('findOneAndUpdate', emitChange);
+  schema.post('findOneAndDelete', emitChange);
+  schema.post('updateOne', emitChange);
+  schema.post('updateMany', emitChange);
+  schema.post('deleteOne', emitChange);
+  schema.post('deleteMany', emitChange);
+  schema.post('insertMany', emitChange);
+});
+
 // Connection pool monitoring
 let poolMonitoringInterval: any = null;
 
@@ -181,8 +222,8 @@ export default async function dbConnect(): Promise<Mongoose> {
     
     const opts: mongoose.ConnectOptions = {
       bufferCommands: false, // Disable buffering for faster responses
-      maxPoolSize: 10, // Connection pool size
-      minPoolSize: 2, // Keep minimum connections open
+      maxPoolSize: 5, // Connection pool size (Reduced to prevent M0 limit issues)
+      minPoolSize: 1, // Keep minimum connections open
       serverSelectionTimeoutMS: 10000, // Timeout for server selection
       socketTimeoutMS: 45000, // Socket timeout
       family: 4, // Use IPv4, skip trying IPv6

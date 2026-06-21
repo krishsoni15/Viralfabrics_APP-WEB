@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get('orderId');
+    const orderIds = searchParams.get('orderIds');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
     const skip = (page - 1) * limit;
@@ -26,6 +27,11 @@ export async function GET(request: NextRequest) {
     let query: any = {};
     if (orderId) {
       query.orderId = orderId;
+    } else if (orderIds) {
+      const ids = orderIds.split(',').map(id => id.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        query.orderId = { $in: ids };
+      }
     }
 
     const { Dispatch, Order, Quality } = await import('@/models');
@@ -56,11 +62,11 @@ export async function GET(request: NextRequest) {
     ]);
 
     // ⚡ Fetch orders and qualities separately (MUCH faster than populate)
-    const orderIds = [...new Set(dispatches.map((d: any) => d.order).filter(Boolean))];
+    const uniqueOrderIds = [...new Set(dispatches.map((d: any) => d.order).filter(Boolean))];
     const qualityIds = [...new Set(dispatches.map((d: any) => d.quality).filter(Boolean))];
 
     const [orders, qualities] = await Promise.all([
-      orderIds.length > 0 ? Order.find({ _id: { $in: orderIds } })
+      uniqueOrderIds.length > 0 ? Order.find({ _id: { $in: uniqueOrderIds } })
         .select('_id orderId')
         .lean()
         .maxTimeMS(1000) : Promise.resolve([]),

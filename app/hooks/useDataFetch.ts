@@ -17,7 +17,7 @@ export interface UseDataFetchResult<T> {
   data: T | null;
   loading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refetch: (silent?: boolean) => Promise<void>;
   clearCache: () => void;
 }
 
@@ -38,7 +38,7 @@ export function useDataFetch<T>({
   const mountedRef = useRef(true);
   const fetchingRef = useRef(false);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (silent = false) => {
     if (!enabled) return;
     
     // Prevent duplicate fetches
@@ -48,11 +48,15 @@ export function useDataFetch<T>({
 
     try {
       fetchingRef.current = true;
-      setLoading(true);
+      // ⚡ OPTIMIZATION: Zero-Flicker Mode
+      // Only show loading spinner if it's NOT a silent fetch, OR if we don't have any data yet
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
 
-      // Check cache first
-      if (cacheKey) {
+      // Check cache first (skip cache if this is a silent background refresh, we want fresh data)
+      if (cacheKey && !silent) {
         const cached = getCache(cacheKey, cacheTTL);
         if (cached) {
           setData(cached);
@@ -92,11 +96,11 @@ export function useDataFetch<T>({
     }
   }, [fetchFn, cacheKey, cacheTTL, enabled, getCache, setCache, onSuccess, onError]);
 
-  const refetch = useCallback(async () => {
-    if (cacheKey) {
+  const refetch = useCallback(async (silent = false) => {
+    if (cacheKey && !silent) {
       clearStoreCache(cacheKey);
     }
-    await fetchData();
+    await fetchData(silent);
   }, [fetchData, cacheKey, clearStoreCache]);
 
   const clearCache = useCallback(() => {

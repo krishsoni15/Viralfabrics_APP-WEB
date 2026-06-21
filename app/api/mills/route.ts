@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 100); // Default 100 for dropdowns
     const page = parseInt(searchParams.get('page') || '1');
-    const force = searchParams.get('force') === 'true';
+    const force = searchParams.get('force') === 'true' || 
+                  searchParams.has('_t') ||
+                  request.headers.get('cache-control')?.includes('no-cache') ||
+                  request.headers.get('pragma')?.includes('no-cache');
     const cacheKey = `mills-${search || 'all'}-${limit}-${page}`;
     
     // Skip cache if force refresh is requested

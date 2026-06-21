@@ -20,13 +20,21 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get('orderId');
+    const orderIds = searchParams.get('orderIds');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100); // Ultra fast - 50ms target
     const skip = (page - 1) * limit;
 
     let query: any = {};
+    
+    // Filter by order ID
     if (orderId) {
-      query.orderId = orderId;
+      query = { ...query, orderId };
+    } else if (orderIds) {
+      const ids = orderIds.split(',').map(id => id.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        query = { ...query, orderId: { $in: ids } };
+      }
     }
 
     const { MillOutput, Order, Quality } = await import('@/models');
@@ -44,11 +52,11 @@ export async function GET(request: NextRequest) {
     ]);
     
     // ⚡ Fetch related data separately (batch queries - no N+1)
-    const orderIds = [...new Set(millOutputs.map((mo: any) => mo.order).filter(Boolean))];
+    const uniqueOrderIds = [...new Set(millOutputs.map((mo: any) => mo.order).filter(Boolean))];
     const qualityIds = [...new Set(millOutputs.map((mo: any) => mo.quality).filter(Boolean))];
     
     const [orders, qualities] = await Promise.all([
-      orderIds.length > 0 ? Order.find({ _id: { $in: orderIds } })
+      uniqueOrderIds.length > 0 ? Order.find({ _id: { $in: uniqueOrderIds } })
         .select('_id orderId orderType party')
         .lean()
         .maxTimeMS(100) : Promise.resolve([]),

@@ -158,15 +158,50 @@ export async function logCreate(
     action: 'create'
   };
   
+  let ipAddress, userAgent;
   if (request) {
-    const clientId = request.headers.get('x-forwarded-for') || 
-                    request.headers.get('x-real-ip') || 
-                    'unknown';
-    context.clientId = clientId;
+    ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    userAgent = request.headers.get('user-agent') || 'unknown';
+    context.clientId = ipAddress;
   }
   
   logger.info(`Created ${type}: ${id}`, context);
+
+  try {
+    const { default: dbConnect } = await import('@/lib/dbConnect');
+    const { getSession } = await import('@/lib/session');
+    const { default: Log } = await import('@/models/Log');
+    
+    await dbConnect();
+    
+    let user = { id: 'system', name: 'System', username: 'System', role: 'system' };
+    if (request && typeof request.headers?.get === 'function') {
+      try {
+        const session = await getSession(request as any);
+        if (session) user = { ...user, ...session };
+      } catch (e) {}
+    }
+
+    // Attempt to extract orderId if present
+    const orderId = data.orderId || data.orderObjectId || undefined;
+
+    await (Log as any).logUserAction({
+      userId: user.id,
+      username: user.username || user.name || 'System',
+      userRole: user.role,
+      action: `${type}_create`,
+      resource: type,
+      resourceId: id,
+      details: { newValues: data, orderId },
+      ipAddress,
+      userAgent,
+      severity: 'info'
+    });
+  } catch (error) {
+    logger.error(`Failed to save DB log for create ${type}`, error as Error);
+  }
 }
+
 
 /**
  * Log an order change event
@@ -175,7 +210,8 @@ export async function logOrderChange(
   changeType: string,
   orderId: string,
   oldValues: Record<string, unknown>,
-  newValues: Record<string, unknown>
+  newValues: Record<string, unknown>,
+  request?: Request
 ): Promise<void> {
   const context: Record<string, unknown> = {
     type: 'order',
@@ -186,7 +222,54 @@ export async function logOrderChange(
     action: 'change'
   };
   
+  let ipAddress, userAgent;
+  if (request) {
+    ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    userAgent = request.headers.get('user-agent') || 'unknown';
+    context.clientId = ipAddress;
+  }
+  
   logger.info(`Order ${changeType}: ${orderId}`, context);
+
+  try {
+    const { default: dbConnect } = await import('@/lib/dbConnect');
+    const { getSession } = await import('@/lib/session');
+    const { default: Log } = await import('@/models/Log');
+    
+    await dbConnect();
+    
+    let user = { id: 'system', name: 'System', username: 'System', role: 'system' };
+    if (request && typeof request.headers?.get === 'function') {
+      try {
+        const session = await getSession(request as any);
+        if (session) user = { ...user, ...session };
+      } catch (e) {}
+    }
+
+    let actionName = 'order_update';
+    if (changeType.includes('delete')) actionName = 'order_delete';
+    else if (changeType.includes('status')) actionName = 'order_status_change';
+    else if (changeType.includes('create')) actionName = 'order_create';
+
+    await (Log as any).logUserAction({
+      userId: user.id,
+      username: user.username || user.name || 'System',
+      userRole: user.role,
+      action: actionName,
+      resource: 'order',
+      resourceId: orderId,
+      details: { 
+        oldValues, 
+        newValues, 
+        orderId 
+      },
+      ipAddress,
+      userAgent,
+      severity: 'info'
+    });
+  } catch (error) {
+    logger.error(`Failed to save DB log for order change ${changeType}`, error as Error);
+  }
 }
 
 /**
@@ -216,13 +299,13 @@ export function logView(
 /**
  * Log an update event
  */
-export function logUpdate(
+export async function logUpdate(
   type: string,
   id: string,
   oldValues: Record<string, unknown>,
   newValues: Record<string, unknown>,
   request?: Request
-): void {
+): Promise<void> {
   const context: Record<string, unknown> = {
     type,
     id,
@@ -231,25 +314,58 @@ export function logUpdate(
     action: 'update'
   };
   
+  let ipAddress, userAgent;
   if (request) {
-    const clientId = request.headers.get('x-forwarded-for') || 
-                    request.headers.get('x-real-ip') || 
-                    'unknown';
-    context.clientId = clientId;
+    ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    userAgent = request.headers.get('user-agent') || 'unknown';
+    context.clientId = ipAddress;
   }
   
   logger.info(`Updated ${type}: ${id}`, context);
+
+  try {
+    const { default: dbConnect } = await import('@/lib/dbConnect');
+    const { getSession } = await import('@/lib/session');
+    const { default: Log } = await import('@/models/Log');
+    
+    await dbConnect();
+    
+    let user = { id: 'system', name: 'System', username: 'System', role: 'system' };
+    if (request && typeof request.headers?.get === 'function') {
+      try {
+        const session = await getSession(request as any);
+        if (session) user = { ...user, ...session };
+      } catch (e) {}
+    }
+
+    const orderId = newValues.orderId || oldValues.orderId || undefined;
+
+    await (Log as any).logUserAction({
+      userId: user.id,
+      username: user.username || user.name || 'System',
+      userRole: user.role,
+      action: `${type}_update`,
+      resource: type,
+      resourceId: id,
+      details: { oldValues, newValues, orderId },
+      ipAddress,
+      userAgent,
+      severity: 'info'
+    });
+  } catch (error) {
+    logger.error(`Failed to save DB log for update ${type}`, error as Error);
+  }
 }
 
 /**
  * Log a delete event
  */
-export function logDelete(
+export async function logDelete(
   type: string,
   id: string,
   data?: Record<string, unknown>,
   request?: Request
-): void {
+): Promise<void> {
   const context: Record<string, unknown> = {
     type,
     id,
@@ -257,14 +373,47 @@ export function logDelete(
     action: 'delete'
   };
   
+  let ipAddress, userAgent;
   if (request) {
-    const clientId = request.headers.get('x-forwarded-for') || 
-                    request.headers.get('x-real-ip') || 
-                    'unknown';
-    context.clientId = clientId;
+    ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    userAgent = request.headers.get('user-agent') || 'unknown';
+    context.clientId = ipAddress;
   }
   
   logger.info(`Deleted ${type}: ${id}`, context);
+
+  try {
+    const { default: dbConnect } = await import('@/lib/dbConnect');
+    const { getSession } = await import('@/lib/session');
+    const { default: Log } = await import('@/models/Log');
+    
+    await dbConnect();
+    
+    let user = { id: 'system', name: 'System', username: 'System', role: 'system' };
+    if (request && typeof request.headers?.get === 'function') {
+      try {
+        const session = await getSession(request as any);
+        if (session) user = { ...user, ...session };
+      } catch (e) {}
+    }
+
+    const orderId = data?.orderId || undefined;
+
+    await (Log as any).logUserAction({
+      userId: user.id,
+      username: user.username || user.name || 'System',
+      userRole: user.role,
+      action: `${type}_delete`,
+      resource: type,
+      resourceId: id,
+      details: { oldValues: data, orderId },
+      ipAddress,
+      userAgent,
+      severity: 'warning'
+    });
+  } catch (error) {
+    logger.error(`Failed to save DB log for delete ${type}`, error as Error);
+  }
 }
 
 /**
