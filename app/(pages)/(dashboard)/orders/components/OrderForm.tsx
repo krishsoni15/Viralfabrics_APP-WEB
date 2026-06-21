@@ -2795,13 +2795,13 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
         }
       `}</style>
 
-      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
-        <div className={`relative w-full max-w-7xl max-h-[95vh] overflow-hidden rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
+      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-0 sm:p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
+        <div className={`relative w-full max-w-7xl min-h-screen sm:min-h-0 max-h-[100vh] sm:max-h-[95vh] overflow-hidden rounded-none sm:rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
           }`}>
           {/* Header */}
-          <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-6 border-b ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+          <div className={`flex items-center justify-between gap-3 p-4 sm:p-6 border-b ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
             }`}>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 flex-1 min-w-0">
+            <div className="flex flex-row items-center gap-3 sm:gap-4 flex-1 min-w-0">
               <div className="flex items-center space-x-2 sm:space-x-3">
                 {order ? (
                   <PencilIcon className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 flex-shrink-0" />
@@ -2847,7 +2847,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                   setIsClosing(false);
                 }, 200);
               }}
-              className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 flex-shrink-0 self-end sm:self-auto close-button-hover active:scale-95 ${isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-200'
+              className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 flex-shrink-0 close-button-hover active:scale-95 ${isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-200'
                 }`}
               title="Close (Esc)"
             >
@@ -2856,17 +2856,17 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
           </div>
 
           {/* Form */}
-          <form ref={formRef} onSubmit={handleSubmit} className={`overflow-y-auto max-h-[calc(95vh-140px)] custom-scrollbar ${isDarkMode
+          <form ref={formRef} onSubmit={handleSubmit} className={`overflow-y-auto max-h-[calc(100vh-140px)] sm:max-h-[calc(95vh-140px)] custom-scrollbar ${isDarkMode
               ? 'scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800'
               : 'scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100'
             }`}>
             <fieldset disabled={readOnly} className="space-y-8 contents">
-              <div className="p-6 space-y-8 pb-24">
+              <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 pb-20 sm:pb-24">
               {/* Basic Information - Enhanced Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {/* Order Type */}
                 <div>
-                  <label className="block text-sm font-medium mb-3">
+                  <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                     Order Type <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -2955,7 +2955,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                 {/* Arrival Date */}
                 <div>
-                  <label className="block text-sm font-medium mb-3">Arrival Date</label>
+                  <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Arrival Date</label>
                   <CustomDatePicker
                     value={formData.arrivalDate || ''}
                     onChange={(value) => handleFieldChange('arrivalDate', value)}
@@ -2967,7 +2967,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                 {/* PO Date */}
                 <div>
-                  <label className="block text-sm font-medium mb-3">PO Date</label>
+                  <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>PO Date</label>
                   <CustomDatePicker
                     value={formData.poDate || ''}
                     onChange={(value) => handleFieldChange('poDate', value)}
@@ -2979,7 +2979,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                 {/* Delivery Date */}
                 <div>
-                  <label className="block text-sm font-medium mb-3">Delivery Date</label>
+                  <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Delivery Date</label>
                   <CustomDatePicker
                     value={formData.deliveryDate || ''}
                     onChange={(value) => handleFieldChange('deliveryDate', value)}
@@ -2991,7 +2991,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                 {/* Party */}
                 <div>
-                  <label className="block text-sm font-medium mb-3">Party</label>
+                  <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Party</label>
                   <EnhancedDropdown
                     key={`party-dropdown-${Array.isArray(parties) ? parties.length : 0}-${deleteCounter}`}
                     options={filteredParties}
@@ -3035,7 +3035,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                 {/* Contact Name */}
                 <div>
-                  <label className="block text-sm font-medium mb-3">Contact Name</label>
+                  <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Contact Name</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -3065,7 +3065,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                 {/* Contact Phone */}
                 <div>
-                  <label className="block text-sm font-medium mb-3">Contact Phone</label>
+                  <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Contact Phone</label>
                   <div className="relative">
                     <input
                       type="tel"
@@ -3095,7 +3095,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                 {/* PO Number */}
                 <div>
-                  <label className="block text-sm font-medium mb-3">PO Number</label>
+                  <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>PO Number</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -3125,7 +3125,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                 {/* Style */}
                 <div>
-                  <label className="block text-sm font-medium mb-3">Style</label>
+                  <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Style</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -3163,12 +3163,38 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                 <div className="space-y-6">
                   {formData.items.map((item, index) => (
-                    <div key={index} className={`p-6 rounded-xl border transition-all duration-200 hover:shadow-lg ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+                    <div key={index} className={`p-4 sm:p-6 rounded-xl border transition-all duration-200 hover:shadow-lg ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
                       }`}>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                      {/* Item Header */}
+                      <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-300 dark:border-gray-700">
+                        <h4 className={`text-base sm:text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                          Item {index + 1}
+                        </h4>
+                        {!readOnly && (formData.items.length > 1) && (!order || !(formData.items[index] as any)?._id || (formData.items[index] as any)?._id?.startsWith('temp-') || isMaster) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (formData.items.length <= 1) {
+                                return;
+                              }
+                              removeItem(index);
+                            }}
+                            className={`p-2 rounded-lg border-2 transition-all duration-200 ${
+                              isDarkMode
+                                ? 'border-red-500 text-red-400 hover:bg-red-500 hover:text-white hover:scale-110'
+                                : 'border-red-300 text-red-600 hover:bg-red-500 hover:text-white hover:scale-110'
+                            }`}
+                            title="Remove Item"
+                          >
+                            <TrashIcon className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-6">
                         {/* Quality */}
                         <div>
-                          <label className="block text-sm font-medium mb-3">
+                          <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                             Quality <span className="text-red-500">*</span>
                           </label>
                           <EnhancedDropdown
@@ -3279,7 +3305,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                         {/* Quantity */}
                         <div>
-                          <label className="block text-sm font-medium mb-3">
+                          <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                             Quantity <span className="text-red-500">*</span>
                           </label>
                           <div className="relative">
@@ -3361,7 +3387,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                         {/* Weaver / Supplier Name */}
                         <div>
-                          <label className="block text-sm font-medium mb-3">Weaver Name</label>
+                          <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Weaver Name</label>
                           <div className="relative">
                             <input
                               type="text"
@@ -3390,7 +3416,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                         </div>
                         {/* Description */}
                         <div>
-                          <label className="block text-sm font-medium mb-3">Description</label>
+                          <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Description</label>
                           <div className="relative">
                             <input
                               type="text"
@@ -3419,7 +3445,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                         </div>
                         {/* Purchase Rate */}
                         <div>
-                          <label className="block text-sm font-medium mb-3">Purchase Rate</label>
+                          <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Purchase Rate</label>
                           <div className="relative">
                             <input
                               type="text"
@@ -3501,7 +3527,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                         {/* Mill Rate */}
                         <div>
-                          <label className="block text-sm font-medium mb-3">Mill Rate</label>
+                          <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Mill Rate</label>
                           <div className="relative">
                             <input
                               type="text"
@@ -3583,7 +3609,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
 
                         {/* Sales Rate */}
                         <div>
-                          <label className="block text-sm font-medium mb-3">Sales Rate</label>
+                          <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Sales Rate</label>
                           <div className="relative">
                             <input
                               type="text"
@@ -3661,36 +3687,6 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                               </div>
                             )}
                           </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-end justify-end">
-                          {!readOnly && (!order || !(formData.items[index] as any)?._id || (formData.items[index] as any)?._id?.startsWith('temp-') || isMaster) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                // ⚡ CRITICAL: Prevent deletion if only one item remains
-                                if (formData.items.length <= 1) {
-                                  return;
-                                }
-                                removeItem(index);
-                              }}
-                              disabled={formData.items.length <= 1}
-                              className={`p-3 rounded-lg border-2 transition-all duration-200 ${formData.items.length <= 1
-                                  ? // Disabled state
-                                  isDarkMode
-                                    ? 'border-gray-600 text-gray-500 cursor-not-allowed opacity-50'
-                                    : 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50'
-                                  : // Enabled state
-                                  isDarkMode
-                                    ? 'border-red-500 text-red-400 hover:bg-red-500 hover:text-white hover:scale-110'
-                                    : 'border-red-300 text-red-600 hover:bg-red-500 hover:text-white hover:scale-110'
-                                }`}
-                              title={formData.items.length <= 1 ? "At least one item is required" : "Remove Item"}
-                            >
-                              <TrashIcon className="h-5 w-5" />
-                            </button>
-                          )}
                         </div>
                       </div>
 
