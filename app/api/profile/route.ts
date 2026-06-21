@@ -74,14 +74,8 @@ export async function PUT(req: NextRequest) {
     if (typeof address === "string") update.address = address.trim();
     if (typeof profilePhoto === "string") update.profilePhoto = profilePhoto.trim();
     
-    // Only allow password changes for superadmin users
+    // Allow password changes for all authenticated users on their own profile
     if (typeof password === "string" && password.length > 0) {
-      if (session.role !== "superadmin") {
-        return new Response(
-          JSON.stringify({ message: "Password changes are restricted to superadmin users" }), 
-          { status: 403 }
-        );
-      }
       update.password = await bcrypt.hash(password, 10);
     }
 

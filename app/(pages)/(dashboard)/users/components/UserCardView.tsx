@@ -61,10 +61,10 @@ export default function UserCardView({
           >
             {/* User Avatar and Basic Info */}
             <div className="flex items-center space-x-3 mb-3">
-              <div className={`h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold overflow-hidden ${
+              <div className={`h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold overflow-hidden transition-all duration-300 shadow-md ${
                 isDarkMode
-                  ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
-                  : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white'
+                  ? 'bg-gradient-to-br from-purple-500 to-indigo-650 text-white'
+                  : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white'
               }`}>
                 {user.profilePhoto ? (
                   <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover" />
@@ -172,7 +172,7 @@ export default function UserCardView({
               </button>
               
               <div className="flex items-center space-x-1">
-                {user.role !== 'master' && (
+                {(user.role !== 'master' || currentUser?.role === 'master') && (
                   <button
                     onClick={() => onEditUser(user)}
                     className={`p-1.5 rounded-md transition-all duration-200 hover:scale-110 ${

@@ -93,6 +93,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
   const [selectedTheme, setSelectedTheme] = useState('blue');
   const [uploadingSelfPhoto, setUploadingSelfPhoto] = useState(false);
   const [showNavbarCamera, setShowNavbarCamera] = useState(false);
+  const [tempProfilePhoto, setTempProfilePhoto] = useState<string | null>(null);
 
   const handleUpdateProfilePhoto = async (photoUrl: string) => {
     try {
@@ -112,6 +113,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
           const updatedUser = { ...user, ...data.user };
           updateUser(updatedUser);
           localStorage.setItem('user', JSON.stringify(updatedUser));
+          setTempProfilePhoto(updatedUser.profilePhoto || '');
         }
       }
     } catch (error) {
@@ -142,7 +144,7 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
       const data = await response.json();
       if (data.success && (data.url || data.imageUrl)) {
         const url = data.url || data.imageUrl;
-        await handleUpdateProfilePhoto(url);
+        setTempProfilePhoto(url);
       }
     } catch (err) {
       console.error('Failed to upload profile photo:', err);
@@ -205,6 +207,13 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
     };
   }, []);
+
+  // Sync temp profile photo when profile modal opens or user profile photo changes
+  useEffect(() => {
+    if (showProfileModal && user) {
+      setTempProfilePhoto(user.profilePhoto || '');
+    }
+  }, [showProfileModal, user]);
 
   // Close dropdown when clicking outside or pressing Escape
   useEffect(() => {
@@ -548,8 +557,8 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                   aria-label="User profile menu"
                 >
                   <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-all duration-300 overflow-hidden ${isDarkMode
-                    ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white'
-                    : 'bg-gradient-to-br from-purple-600 to-purple-700 text-white'
+                    ? 'bg-gradient-to-br from-purple-500 to-indigo-650 text-white'
+                    : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white'
                     } ${sessionStatus === 'active'
                       ? 'border-green-500'
                       : sessionStatus === 'refreshing'
@@ -843,8 +852,8 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                   aria-label="User profile menu"
                 >
                   <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-semibold overflow-hidden ${isDarkMode
-                    ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white'
-                    : 'bg-gradient-to-br from-purple-600 to-purple-700 text-white'
+                    ? 'bg-gradient-to-br from-purple-500 to-indigo-650 text-white'
+                    : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white'
                     }`}>
                     {user?.profilePhoto ? (
                       <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover" />
@@ -1057,60 +1066,89 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
               <div className="flex flex-col items-center mb-6 border-b border-gray-150 dark:border-slate-700/50 pb-4">
                 <div className="relative group">
                   <div className={`h-24 w-24 rounded-full flex items-center justify-center text-3xl font-semibold overflow-hidden border-2 shadow-inner transition-all duration-300 ${isDarkMode
-                    ? 'bg-purple-900/20 text-white border-purple-500/30'
-                    : 'bg-purple-100 text-purple-800 border-purple-200'
+                    ? 'bg-gradient-to-br from-purple-500 to-indigo-650 text-white border-purple-500/30 shadow-slate-900/50'
+                    : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white border-purple-200 shadow-gray-200'
                     }`}>
-                    {user?.profilePhoto ? (
-                      <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover animate-fade-in" />
+                    {tempProfilePhoto ? (
+                      <img src={tempProfilePhoto} alt={user?.name || 'User'} className="w-full h-full object-cover animate-fade-in" />
                     ) : (
                       user ? getUserInitials(user.name) : 'U'
                     )}
                   </div>
-                  {user?.profilePhoto && (
+                  {tempProfilePhoto && (
                     <button
                       type="button"
-                      onClick={() => handleUpdateProfilePhoto('')}
-                      className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full shadow-md transition-all active:scale-90 hover:scale-110"
+                      onClick={() => setTempProfilePhoto('')}
+                      className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full shadow-md transition-all active:scale-95 hover:scale-110"
                       title="Remove photo"
                     >
                       <XMarkIcon className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
-                <div className="flex items-center space-x-2 mt-3">
-                  <label className={`relative px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 ${
-                    isDarkMode 
-                      ? 'border-slate-700 hover:border-slate-650 hover:bg-slate-700/50 text-gray-300' 
-                      : 'border-gray-300 hover:border-gray-400 hover:bg-gray-100 text-gray-700 shadow-sm'
-                  }`}>
-                    <CloudArrowUpIcon className="w-3.5 h-3.5 text-blue-500" />
-                    Upload File
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          await handleUploadSelfPhoto(file);
+                {tempProfilePhoto !== (user?.profilePhoto || '') ? (
+                  <div className="flex items-center space-x-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (tempProfilePhoto !== null) {
+                          await handleUpdateProfilePhoto(tempProfilePhoto);
                         }
-                        e.target.value = '';
                       }}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowNavbarCamera(true)}
-                    className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
+                      className="px-2.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                    >
+                      <CheckIcon className="w-3.5 h-3.5 text-white" />
+                      Save Photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTempProfilePhoto(user?.profilePhoto || '')}
+                      className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
+                        isDarkMode 
+                          ? 'border-slate-700 hover:bg-slate-700 text-gray-300' 
+                          : 'border-gray-300 hover:bg-gray-100 text-gray-700 shadow-sm'
+                      }`}
+                    >
+                      <XMarkIcon className="w-3.5 h-3.5 text-red-500" />
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2 mt-3">
+                    <label className={`relative px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 ${
                       isDarkMode 
                         ? 'border-slate-700 hover:border-slate-650 hover:bg-slate-700/50 text-gray-300' 
-                      : 'border-gray-300 hover:border-gray-400 hover:bg-gray-100 text-gray-700 shadow-sm'
-                    }`}
-                  >
-                    <CameraIcon className="w-3.5 h-3.5 text-emerald-500" />
-                    Camera
-                  </button>
-                </div>
+                        : 'border-gray-300 hover:border-gray-400 hover:bg-gray-100 text-gray-700 shadow-sm'
+                    }`}>
+                      <CloudArrowUpIcon className="w-3.5 h-3.5 text-blue-500" />
+                      Upload File
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            await handleUploadSelfPhoto(file);
+                          }
+                          e.target.value = '';
+                        }}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowNavbarCamera(true)}
+                      className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
+                        isDarkMode 
+                          ? 'border-slate-700 hover:border-slate-650 hover:bg-slate-700/50 text-gray-300' 
+                          : 'border-gray-300 hover:border-gray-400 hover:bg-gray-100 text-gray-700 shadow-sm'
+                      }`}
+                    >
+                      <CameraIcon className="w-3.5 h-3.5 text-emerald-500" />
+                      Camera
+                    </button>
+                  </div>
+                )}
                 {uploadingSelfPhoto && (
                   <div className="flex items-center gap-1.5 text-xs text-blue-500 animate-pulse mt-2">
                     <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -1156,17 +1194,15 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       }`}>
                       Name
                     </label>
-                    {user?.role === 'master' && (
-                      <button
-                        onClick={() => startEditing('name')}
-                        className={`p-1 rounded transition-all duration-300 ${isDarkMode
-                          ? 'text-gray-400 hover:bg-white/10'
-                          : 'text-gray-500 hover:bg-gray-100'
-                          }`}
-                      >
-                        <PencilIcon className="h-4 w-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => startEditing('name')}
+                      className={`p-1 rounded transition-all duration-300 ${isDarkMode
+                        ? 'text-gray-400 hover:bg-white/10'
+                        : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </button>
                   </div>
                   {editingField === 'name' ? (
                     <div className="flex items-center space-x-2">
@@ -1236,17 +1272,15 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       }`}>
                       Phone Number
                     </label>
-                    {user?.role === 'master' && (
-                      <button
-                        onClick={() => startEditing('phoneNumber')}
-                        className={`p-1 rounded transition-all duration-300 ${isDarkMode
-                          ? 'text-gray-400 hover:bg-white/10'
-                          : 'text-gray-500 hover:bg-gray-100'
-                          }`}
-                      >
-                        <PencilIcon className="h-4 w-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => startEditing('phoneNumber')}
+                      className={`p-1 rounded transition-all duration-300 ${isDarkMode
+                        ? 'text-gray-400 hover:bg-white/10'
+                        : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </button>
                   </div>
                   {editingField === 'phoneNumber' ? (
                     <div className="flex items-center space-x-2">
@@ -1299,17 +1333,15 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
                       }`}>
                       Address
                     </label>
-                    {user?.role === 'master' && (
-                      <button
-                        onClick={() => startEditing('address')}
-                        className={`p-1 rounded transition-all duration-300 ${isDarkMode
-                          ? 'text-gray-400 hover:bg-white/10'
-                          : 'text-gray-500 hover:bg-gray-100'
-                          }`}
-                      >
-                        <PencilIcon className="h-4 w-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => startEditing('address')}
+                      className={`p-1 rounded transition-all duration-300 ${isDarkMode
+                        ? 'text-gray-400 hover:bg-white/10'
+                        : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </button>
                   </div>
                   {editingField === 'address' ? (
                     <div className="flex items-start space-x-2">
@@ -1359,19 +1391,64 @@ export default function Navbar({ user, onLogout, isLoggingOut = false, onToggleS
 
                 {/* Password */}
                 <div>
-                  <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
-                    Password (Not Editable)
-                  </label>
-                  <input
-                    type="password"
-                    value="••••••••"
-                    disabled
-                    className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${isDarkMode
-                      ? 'bg-slate-700/50 border-slate-700 text-gray-400'
-                      : 'bg-gray-100 border-gray-200 text-gray-500'
-                      } cursor-not-allowed`}
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className={`block text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
+                      Password
+                    </label>
+                    <button
+                      onClick={() => startEditing('password')}
+                      className={`p-1 rounded transition-all duration-300 ${isDarkMode
+                        ? 'text-gray-400 hover:bg-white/10'
+                        : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {editingField === 'password' ? (
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="password"
+                        placeholder="Enter new password"
+                        value={editValues.password}
+                        onChange={(e) => setEditValues({ ...editValues, password: e.target.value })}
+                        className={`flex-1 px-3 py-2 rounded-lg border transition-colors duration-300 ${isDarkMode
+                          ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                          }`}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSaveField('password', e.currentTarget.value);
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleSaveField('password', editValues.password)}
+                        className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                      >
+                        <CheckIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setEditingField(null)}
+                        className={`p-2 rounded-lg transition-all duration-300 ${isDarkMode
+                          ? 'bg-gray-600 text-white hover:bg-gray-700'
+                          : 'bg-gray-600 text-white hover:bg-gray-700'
+                          }`}
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-350' : 'text-gray-500'
+                      }`}>
+                      ••••••••
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

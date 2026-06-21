@@ -59,6 +59,7 @@ export default function DashboardLayoutClient({
         role: sessionUser.role as UserRole, // Type assertion - role should be valid UserRole
         phoneNumber: sessionUser.phoneNumber,
         address: sessionUser.address,
+        profilePhoto: sessionUser.profilePhoto,
       };
       setUser(storeUser);
     }
