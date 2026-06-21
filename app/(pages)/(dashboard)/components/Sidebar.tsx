@@ -480,13 +480,14 @@ export default function Sidebar({
                   } shadow-lg backdrop-blur-sm`}
                 aria-label="User profile menu"
               >
-                <div className="h-8 w-8 rounded-full overflow-hidden flex items-center justify-center text-lg font-semibold transition-all duration-300" title="User Profile">
+                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-all duration-300 overflow-hidden ${isDarkMode
+                  ? 'bg-gradient-to-br from-purple-500 to-indigo-650 text-white border-purple-500/30'
+                  : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white border-purple-200'
+                  }`} title="User Profile">
                   {user?.profilePhoto ? (
                     <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover" />
                   ) : (
-                    <span className={isDarkMode ? 'text-white' : 'text-gray-700'}>
-                      {user ? getUserInitials(user.name) : 'U'}
-                    </span>
+                    user ? getUserInitials(user.name) : 'U'
                   )}
                 </div>
                 {shouldShowText && (

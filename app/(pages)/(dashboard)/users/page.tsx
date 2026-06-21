@@ -26,6 +26,7 @@ import { useDarkMode } from '../hooks/useDarkMode';
 import UserCardView from './components/UserCardView';
 import { useRealtimeSync } from '@/app/hooks/useRealtimeSync';
 import CameraModal from '../components/CameraModal';
+import { useAppStore } from '@/app/store/useAppStore';
 
 interface User {
   _id: string;
@@ -114,7 +115,7 @@ export default function UsersPage() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [screenSize, setScreenSize] = useState<number>(0);
-  const [currentUser, setCurrentUser] = useState<{ _id: string; username: string; role?: string } | null>(null);
+  const { user: currentUser, setUser: setStoreUser } = useAppStore();
   const [formData, setFormData] = useState<UserFormData>({
     name: '',
     username: '',
@@ -129,6 +130,24 @@ export default function UsersPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+
+  // Reset form
+  const resetForm = useCallback(() => {
+    setFormData({
+      name: '',
+      username: '',
+      password: '',
+      phoneNumber: '',
+      address: '',
+      role: 'user',
+      partyId: '',
+      profilePhoto: ''
+    });
+    setFormErrors({});
+    setShowPassword(false);
+    setPartySearch('');
+    setPartyDropdownOpen(false);
+  }, []);
 
   const handlePhotoUpload = async (file: File) => {
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -254,18 +273,7 @@ export default function UsersPage() {
   }, []);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Simple user check - no complex validation
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setCurrentUser({ _id: user._id, username: user.username, role: user.role });
-      } catch (error) {
-        // Silent error handling
-      }
-    }
-  }, []);
+
 
   // Track screen size
   useEffect(() => {
@@ -286,18 +294,22 @@ export default function UsersPage() {
           setShowAddPartyModal(false);
         } else if (showCreateModal) {
           setShowCreateModal(false);
+          resetForm();
         } else if (showEditModal) {
           setShowEditModal(false);
+          resetForm();
         } else if (showDeleteModal) {
           setShowDeleteModal(false);
+          setSelectedUser(null);
         } else if (showProfileModal) {
           setShowProfileModal(false);
+          setSelectedUser(null);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showAddPartyModal, showCreateModal, showEditModal, showDeleteModal, showProfileModal]);
+  }, [showAddPartyModal, showCreateModal, showEditModal, showDeleteModal, showProfileModal, resetForm]);
 
   const isLargeScreen = screenSize > 1000;
   const isMediumScreen = screenSize > 600;
@@ -793,7 +805,15 @@ export default function UsersPage() {
         
         // Update currentUser if the updated user is the current user
         if (currentUser && String(currentUser._id) === String(userIdToUpdate)) {
-          setCurrentUser({ _id: updatedUser._id, username: updatedUser.username });
+          setStoreUser({
+            _id: updatedUser._id,
+            name: updatedUser.name || formData.name,
+            username: updatedUser.username || formData.username,
+            role: updatedUser.role || formData.role,
+            phoneNumber: updatedUser.phoneNumber || formData.phoneNumber || '',
+            address: updatedUser.address || formData.address || '',
+            profilePhoto: updatedUser.profilePhoto || ''
+          });
           // Update localStorage as well
           try {
             const userStr = localStorage.getItem('user');
@@ -802,6 +822,10 @@ export default function UsersPage() {
               user._id = updatedUser._id;
               user.username = updatedUser.username;
               user.name = updatedUser.name;
+              user.role = updatedUser.role;
+              user.phoneNumber = updatedUser.phoneNumber;
+              user.address = updatedUser.address;
+              user.profilePhoto = updatedUser.profilePhoto;
               localStorage.setItem('user', JSON.stringify(user));
             }
           } catch (e) {
@@ -1000,23 +1024,7 @@ export default function UsersPage() {
     }
   }, [formData.role, parties.length, loadingParties, fetchParties]);
 
-  // Reset form
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      username: '',
-      password: '',
-      phoneNumber: '',
-      address: '',
-      role: 'user',
-      partyId: '',
-      profilePhoto: ''
-    });
-    setFormErrors({});
-    setShowPassword(false);
-    setPartySearch('');
-    setPartyDropdownOpen(false);
-  };
+
 
   // Save a new party created inline
   const handleSaveParty = async (e: React.FormEvent) => {
@@ -1279,6 +1287,7 @@ export default function UsersPage() {
             {/* Add User Button */}
             <button
               onClick={() => {
+                resetForm();
                 setShowCreateModal(true);
                 setValidationAlert(null);
               }}
@@ -1650,10 +1659,10 @@ export default function UsersPage() {
                 }`}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold overflow-hidden ${
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold overflow-hidden transition-all duration-300 shadow-md ${
                         isDarkMode
-                          ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
-                          : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white'
+                          ? 'bg-gradient-to-br from-purple-500 to-indigo-650 text-white'
+                          : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white'
                       }`}>
                         {user.profilePhoto ? (
                           <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover" />
@@ -1762,7 +1771,7 @@ export default function UsersPage() {
                   )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
-                      {user.role !== 'master' && (
+                      {(user.role !== 'master' || currentUser?.role === 'master') && (
                         <button
                           onClick={async () => {
                             // ⚡ FIX: Always get the latest user data from the list
@@ -2447,8 +2456,8 @@ export default function UsersPage() {
                   <div className="relative group">
                     <div className={`h-24 w-24 rounded-full flex items-center justify-center text-3xl font-semibold overflow-hidden border-2 shadow-inner transition-all duration-300 ${
                       isDarkMode
-                        ? 'bg-slate-750 border-slate-600 text-white shadow-slate-900/50'
-                        : 'bg-gray-100 border-gray-300 text-gray-700 shadow-gray-200'
+                        ? 'bg-gradient-to-br from-purple-500 to-indigo-650 text-white border-purple-500/30 shadow-slate-900/50'
+                        : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white border-purple-200 shadow-gray-200'
                     }`}>
                       {formData.profilePhoto ? (
                         <img src={formData.profilePhoto} alt="Profile Preview" className="w-full h-full object-cover animate-fade-in" />
@@ -2913,8 +2922,8 @@ export default function UsersPage() {
                   <div className="relative group">
                     <div className={`h-24 w-24 rounded-full flex items-center justify-center text-3xl font-semibold overflow-hidden border-2 shadow-inner transition-all duration-300 ${
                       isDarkMode
-                        ? 'bg-slate-750 border-slate-600 text-white shadow-slate-900/50'
-                        : 'bg-gray-100 border-gray-300 text-gray-700 shadow-gray-200'
+                        ? 'bg-gradient-to-br from-purple-500 to-indigo-650 text-white border-purple-500/30 shadow-slate-900/50'
+                        : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white border-purple-200 shadow-gray-200'
                     }`}>
                       {formData.profilePhoto ? (
                         <img src={formData.profilePhoto} alt="Profile Preview" className="w-full h-full object-cover animate-fade-in" />
@@ -3472,10 +3481,10 @@ export default function UsersPage() {
 
             <div className="p-6">
               <div className="flex items-center mb-6">
-                <div className={`h-16 w-16 rounded-full flex items-center justify-center text-xl font-semibold overflow-hidden ${
+                <div className={`h-16 w-16 rounded-full flex items-center justify-center text-xl font-semibold overflow-hidden transition-all duration-300 shadow-md ${
                   isDarkMode
-                    ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
-                    : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white'
+                    ? 'bg-gradient-to-br from-purple-500 to-indigo-650 text-white'
+                    : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white'
                 }`}>
                   {selectedUser.profilePhoto ? (
                     <img src={selectedUser.profilePhoto} alt={selectedUser.name} className="w-full h-full object-cover" />
