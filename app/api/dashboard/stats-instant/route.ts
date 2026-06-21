@@ -37,8 +37,12 @@ export async function GET(request: NextRequest) {
     const cacheKey = `dashboard-stats-${startDate || 'all'}-${endDate || 'all'}-${financialYear || 'all'}`;
     
     // Check cache first (using a Map for multiple filter combinations)
+    // ⚡ FIX: Respect no-cache header for real-time synchronization
+    const skipCache = request.headers.get('cache-control')?.includes('no-cache') || 
+                      request.headers.get('pragma')?.includes('no-cache');
+    
     const cached = getCacheMap().get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < dashboardCache.ttl) {
+    if (!skipCache && cached && Date.now() - cached.timestamp < dashboardCache.ttl) {
       const responseTime = Date.now() - startTime;
       // ⚡ ISR CACHING: Add cache tags
       const headers = {

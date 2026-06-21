@@ -71,7 +71,7 @@ async function performLogin(req: Request) {
         { name: username.trim() }
       ]
     })
-    .select('+password role _id name username phoneNumber address partyId createdAt updatedAt failedLoginAttempts accountLocked lockExpiresAt loginCount lastLogin')
+    .select('+password role _id name username phoneNumber address partyId profilePhoto createdAt updatedAt failedLoginAttempts accountLocked lockExpiresAt loginCount lastLogin')
     .maxTimeMS(3000); // 3 second timeout - faster
 
     if (!user) {
@@ -179,6 +179,7 @@ async function performLogin(req: Request) {
       address: user.address,
       role: user.role,
       partyId: user.partyId ? user.partyId.toString() : undefined,
+      profilePhoto: user.profilePhoto,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

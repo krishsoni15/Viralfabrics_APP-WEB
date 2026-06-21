@@ -34,6 +34,7 @@ interface SidebarProps {
   user?: {
     role: string;
     name: string;
+    profilePhoto?: string;
   } | null;
   onLogout?: () => void;
   isLoggingOut?: boolean;
@@ -479,12 +480,14 @@ export default function Sidebar({
                   } shadow-lg backdrop-blur-sm`}
                 aria-label="User profile menu"
               >
-                <div className="h-8 w-8 flex items-center justify-center text-lg font-semibold transition-all duration-300 ${
-                  isDarkMode 
-                    ? 'text-white' 
-                    : 'text-gray-700'
-                }" title="User Profile">
-                  {user ? getUserInitials(user.name) : 'U'}
+                <div className="h-8 w-8 rounded-full overflow-hidden flex items-center justify-center text-lg font-semibold transition-all duration-300" title="User Profile">
+                  {user?.profilePhoto ? (
+                    <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className={isDarkMode ? 'text-white' : 'text-gray-700'}>
+                      {user ? getUserInitials(user.name) : 'U'}
+                    </span>
+                  )}
                 </div>
                 {shouldShowText && (
                   <div className="flex-1 min-w-0 text-left">

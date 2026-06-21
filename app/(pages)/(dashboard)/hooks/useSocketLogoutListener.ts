@@ -3,6 +3,12 @@
 import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 
+// Singleton pattern variables to prevent duplicate socket connections and intervals
+let activeSocketHooks = 0;
+let globalSocket: Socket | null = null;
+let globalPollingInterval: any = null;
+let globalLogoutCallback: ((data?: any) => void) | null = null;
+
 /**
  * Hook to listen for real-time logout events via Socket.IO
  * When super admin logs out all users, this hook will immediately trigger logout
@@ -23,11 +29,26 @@ export function useSocketLogoutListener(onLogout: (data?: {
   const socketConnectedRef = useRef(false);
   const lastCheckedTimestampRef = useRef<string | null>(null);
 
+  // Keep the global callback updated with the latest function reference
+  useEffect(() => {
+    globalLogoutCallback = onLogout;
+  }, [onLogout]);
+
   useEffect(() => {
     // Only connect if we have a token (user is logged in)
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!token) {
       return;
+    }
+
+    activeSocketHooks++;
+
+    // Only set up connections if this is the FIRST hook instance
+    if (activeSocketHooks > 1) {
+      // Just return cleanup for subsequent hooks
+      return () => {
+        activeSocketHooks--;
+      };
     }
 
     // Polling fallback function (for Vercel/serverless where Socket.IO doesn't work)
@@ -91,6 +112,8 @@ export function useSocketLogoutListener(onLogout: (data?: {
           isPolling = false;
         }
       }, 10000); // ⚡ OPTIMIZATION: Poll every 10 seconds (was 2 seconds)
+      
+      globalPollingInterval = pollingIntervalRef.current;
     };
 
     const connect = () => {
@@ -153,9 +176,28 @@ export function useSocketLogoutListener(onLogout: (data?: {
           
           // Clear the socket reference to prevent reconnection attempts
           socketRef.current = null;
+          globalSocket = null;
           
-          // Trigger logout callback with event data (will show modal first)
-          onLogout(data);
+          // Trigger logout callback with event data using the latest global callback
+          if (globalLogoutCallback) {
+            globalLogoutCallback(data);
+          } else {
+            onLogout(data);
+          }
+        });
+
+        // 🌟 REAL-TIME DATA SYNC LISTENER
+        // Listens for the tiny empty ping from the server
+        socket.on('data_changed', (data: { module: string }) => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`🔄 Real-time data change detected for module: ${data.module}`);
+          }
+          
+          // Broadcast local events to the rest of the React app
+          // This tells useDataFetch to instantly and silently re-download data in the background
+          window.dispatchEvent(new CustomEvent('realtimeDataChanged', { detail: data }));
+          window.dispatchEvent(new CustomEvent('dashboardRefresh', { detail: data }));
+          window.dispatchEvent(new CustomEvent('orderChanged', { detail: data })); 
         });
 
         // Handle disconnection
@@ -233,18 +275,32 @@ export function useSocketLogoutListener(onLogout: (data?: {
 
     // Cleanup on unmount
     return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
+      activeSocketHooks--;
+
+      // Only actually disconnect and clear intervals if this was the LAST hook instance
+      if (activeSocketHooks === 0) {
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+        }
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        if (globalPollingInterval) {
+          clearInterval(globalPollingInterval);
+          globalPollingInterval = null;
+        }
+        if (socketRef.current) {
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
+        if (globalSocket) {
+          globalSocket.disconnect();
+          globalSocket = null;
+        }
+        globalLogoutCallback = null;
       }
     };
-  }, [onLogout]);
+  }, []); // Remove onLogout from dependency array to prevent re-running connection logic
 }
 

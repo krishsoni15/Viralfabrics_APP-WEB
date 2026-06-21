@@ -2419,17 +2419,21 @@ export default function DispatchForm({
         }
       `}</style>
 
-      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
-        <div className={`relative w-full max-w-7xl max-h-[95vh] overflow-hidden rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
+      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-0 sm:p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
+        <div className={`relative w-full max-w-7xl min-h-screen sm:min-h-0 max-h-[100vh] sm:max-h-[95vh] overflow-hidden rounded-none sm:rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
           }`}>
           {/* Loading Overlay for Loading Data */}
           {loadingExistingData && (
             <div className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-10">
-              <div className={`p-6 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'
+              <div className={`px-4 sm:px-6 py-3 sm:py-6 rounded-full sm:rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'
                 }`}>
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="mt-3 text-sm font-medium">Loading dispatch data...</p>
-                <p className="mt-1 text-xs text-gray-500">Please wait while we fetch your data</p>
+                <div className="flex items-center space-x-0 sm:flex-col sm:space-x-0 sm:space-y-3">
+                  <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-blue-500 sm:mx-auto"></div>
+                  <div className="hidden sm:block text-center">
+                    <p className="text-sm font-medium">Loading dispatch data...</p>
+                    <p className="mt-1 text-xs text-gray-500">Please wait while we fetch your data</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2437,11 +2441,15 @@ export default function DispatchForm({
           {/* Loading Overlay for Saving */}
           {saving && (
             <div className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-10">
-              <div className={`p-6 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'
+              <div className={`px-4 sm:px-6 py-3 sm:py-6 rounded-full sm:rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'
                 }`}>
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="mt-3 text-sm font-medium">Saving dispatch data...</p>
-                <p className="mt-1 text-xs text-gray-500">Please wait while we process your data</p>
+                <div className="flex items-center space-x-0 sm:flex-col sm:space-x-0 sm:space-y-3">
+                  <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-blue-500 sm:mx-auto"></div>
+                  <div className="hidden sm:block text-center">
+                    <p className="text-sm font-medium">Saving dispatch data...</p>
+                    <p className="mt-1 text-xs text-gray-500">Please wait while we process your data</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2648,9 +2656,11 @@ export default function DispatchForm({
 
                         <div className="space-y-4">
                           {/* ⚡ FIX: Quality & Finish Items - 3 columns with delete button in same row (like Mill Output) */}
-                          {(item.subItems || []).map((subItem, subIndex) => (
-                            <div key={subItem.id} className="space-y-4">
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {(item.subItems || []).map((subItem, subIndex) => {
+                            const showSubDelete = !readOnly && (!hasExistingData || item.id.startsWith('new-') || !subItem._id || isMaster);
+                            return (
+                              <div key={subItem.id} className="space-y-4">
+                                <div className={`grid grid-cols-1 ${showSubDelete ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
                                 {/* Sub-item Quality */}
                               <div>
                                 <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
@@ -2721,34 +2731,36 @@ export default function DispatchForm({
                               </div>
 
                               {/* ⚡ FIX: Delete button in same row - disabled if only one sub-item - bigger and properly aligned */}
-                              <div className="flex items-end">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
+                              {showSubDelete && (
+                                <div className="flex items-end">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
 
-                                    // Only allow deletion if there's more than one sub-item
-                                    if ((item.subItems || []).length <= 1) {
-                                      return;
-                                    }
+                                      // Only allow deletion if there's more than one sub-item
+                                      if ((item.subItems || []).length <= 1) {
+                                        return;
+                                      }
 
-                                    removeSubItem(item.id, subItem.id);
-                                  }}
-                                  disabled={readOnly || (item.subItems || []).length <= 1}
-                                  className={`w-full px-3 py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${(item.subItems || []).length <= 1
-                                    ? isDarkMode
-                                      ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
-                                      : 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'
-                                    : isDarkMode
-                                      ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
-                                      : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
-                                    }`}
-                                  title={(item.subItems || []).length <= 1 ? "Cannot delete - at least one quality & finish item required" : `Delete ${subIndex === 0 ? 'M1' : `M${subIndex + 1}`} row`}
-                                >
-                                  <TrashIcon className="h-5 w-5" />
-                                </button>
-                              </div>
+                                      removeSubItem(item.id, subItem.id);
+                                    }}
+                                    disabled={readOnly || (item.subItems || []).length <= 1}
+                                    className={`w-full px-3 py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${(item.subItems || []).length <= 1
+                                      ? isDarkMode
+                                        ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
+                                        : 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'
+                                      : isDarkMode
+                                        ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
+                                        : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
+                                      }`}
+                                    title={(item.subItems || []).length <= 1 ? "Cannot delete - at least one quality & finish item required" : `Delete ${subIndex === 0 ? 'M1' : `M${subIndex + 1}`} row`}
+                                  >
+                                    <TrashIcon className="h-5 w-5" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                               <div>
@@ -2947,7 +2959,8 @@ export default function DispatchForm({
                               </div>
                             </div>
                           </div>
-                          ))}
+                            );
+                          })}
 
                           {/* Add More Finished Meters Button - Full width horizontal design */}
                           {!readOnly && (

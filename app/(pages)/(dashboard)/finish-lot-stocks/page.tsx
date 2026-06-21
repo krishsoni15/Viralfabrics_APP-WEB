@@ -29,8 +29,10 @@ import {
   ChevronRightIcon
 } from '@heroicons/react/24/outline';
 import { useDarkMode } from '../hooks/useDarkMode';
+import { useSession } from '../hooks/useSession';
 import CameraModal from '../components/CameraModal';
 import ImagePreviewModal from '../components/ImagePreviewModal';
+import { useRealtimeSync } from '@/app/hooks/useRealtimeSync';
 
 interface FinishLotStock {
   _id: string;
@@ -50,6 +52,7 @@ interface QualityItem {
 export default function FinishLotStockPage() {
   const router = useRouter();
   const { isDarkMode, mounted } = useDarkMode();
+  const { isMaster } = useSession();
   const [isPending, startTransition] = useTransition();
 
   // Core Stock State
@@ -92,10 +95,7 @@ export default function FinishLotStockPage() {
   const [pendingImageFiles, setPendingImageFiles] = useState<Array<{ file: File; previewUrl: string }>>([]);
   const [showCamera, setShowCamera] = useState(false);
   const [dragActive, setDragActive] = useState(false);
-
-  // UI & UX State
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [submitting, setSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -149,8 +149,42 @@ export default function FinishLotStockPage() {
       const savedMode = localStorage.getItem('finishLotStocksViewMode');
       if (savedMode === 'cards' || savedMode === 'table') {
         setViewMode(savedMode);
+      } else {
+        const isMobile = window.innerWidth < 768;
+        setViewMode(isMobile ? 'cards' : 'table');
+      }
+
+      const savedSortBy = localStorage.getItem('finishLotStocksSortBy');
+      if (savedSortBy) {
+        setSortBy(savedSortBy);
+      }
+      const savedSortOrder = localStorage.getItem('finishLotStocksSortOrder');
+      if (savedSortOrder === 'asc' || savedSortOrder === 'desc') {
+        setSortOrder(savedSortOrder);
       }
     }
+  }, []);
+
+  // Save sort configuration to cache when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('finishLotStocksSortBy', sortBy);
+      localStorage.setItem('finishLotStocksSortOrder', sortOrder);
+    }
+  }, [sortBy, sortOrder]);
+
+  // Screen resize listener to auto-switch viewMode if user has no saved preference
+  useEffect(() => {
+    const handleResize = () => {
+      const savedMode = localStorage.getItem('finishLotStocksViewMode');
+      if (savedMode === 'cards' || savedMode === 'table') {
+        return; // Respect user preference
+      }
+      const isMobile = window.innerWidth < 768;
+      setViewMode(isMobile ? 'cards' : 'table');
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const handleViewModeChange = (mode: 'cards' | 'table') => {
@@ -613,6 +647,12 @@ export default function FinishLotStockPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // 🌟 REAL-TIME SYNC
+  useRealtimeSync(
+    () => fetchStocks(), 
+    showFormModal || showDeleteModal
+  );
+
   if (!mounted) return null;
 
   return (
@@ -643,125 +683,256 @@ export default function FinishLotStockPage() {
       {/* Main Content */}
       <div className="w-full pb-6">
         <div className={`border-2 shadow-xl overflow-hidden ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-white'}`}>
-          {/* Top Row: Search and Actions */}
-          <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-col gap-2 max-[900px]:gap-2 min-[900px]:flex-row min-[900px]:items-center min-[900px]:gap-3 ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'}`}>
-            <div className="flex flex-row items-center gap-2 min-[900px]:flex-1 min-[900px]:gap-3">
-              {/* Search Bar */}
-              <div className="flex-1 relative">
-                <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none z-10">
-                  <MagnifyingGlassIcon className={`h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search by quality name..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`w-full pl-10 pr-10 py-2 rounded-lg border text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                    }`}
-                />
-                {searchTerm && (
-                  <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 transform -translate-y-1/2 z-10 p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-white">
-                    <XMarkIcon className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-
-              {/* Sort Filter */}
-              <div className="flex items-center gap-2 relative flex-shrink-0 z-[40]">
-                <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Sort:</span>
-                <div className="relative sort-dropdown-container z-[40]" ref={sortDropdownRef}>
-                  <button
-                    onClick={() => setShowSortDropdown(!showSortDropdown)}
-                    className={`px-2 py-1.5 text-[11px] sm:text-xs font-medium rounded-lg border-2 transition-all duration-200 flex items-center gap-1.5 min-w-[70px] ${isDarkMode ? 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20 hover:border-white/40' : 'bg-gray-50 border-gray-400 text-gray-600 hover:bg-gray-100 hover:border-gray-500'
+          {/* Search and Controls Bar */}
+          <div className={`mb-4 sm:mb-6 flex flex-col gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-b transition-all duration-200 ${isDarkMode ? 'bg-[#1E2938] border-gray-700' : 'bg-white border-gray-200'}`}>
+            
+            {/* First Row - Search Bar & Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 z-10 relative">
+              <div className="flex-1 w-full flex items-center justify-between gap-2 sm:gap-3 order-1">
+                
+                {/* Search Bar Container */}
+                <div className="flex-grow w-full max-w-xl flex relative group">
+                  <div className="relative w-full">
+                    <MagnifyingGlassIcon className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                    
+                    <input
+                      type="text"
+                      placeholder="Search by quality name..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className={`w-full pl-10 pr-10 py-2 sm:py-2.5 rounded-lg border-2 transition-all duration-300 font-medium text-xs sm:text-sm outline-none ${
+                        isDarkMode
+                          ? 'bg-white/10 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-0'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-0'
                       }`}
+                    />
+                    
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
+                        title="Clear search"
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Add Button */}
+                <div className="flex items-center order-2 flex-shrink-0">
+                  <button
+                    onClick={() => handleOpenForm('create')}
+                    className={`inline-flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm shadow-md hover:shadow-lg ${
+                      isDarkMode
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
+                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
+                    }`}
+                    title="Add Stock Item"
                   >
-                    {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
-                    <ChevronDownIcon className={`h-3 w-3 transition-transform duration-300 ${showSortDropdown ? 'rotate-180' : ''}`} />
+                    <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 sm:mr-1.5" />
+                    <span className="font-medium hidden sm:inline">Add Stock Item</span>
                   </button>
-                  {showSortDropdown && (
-                    <div className={`absolute top-full left-0 mt-1 w-32 rounded-lg border shadow-xl z-[40] ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}`}>
-                      <button onClick={() => { handleSortChange('createdAt'); setSortOrder('desc'); setShowSortDropdown(false); }} className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors duration-200 first:rounded-t-lg ${sortOrder === 'desc' ? (isDarkMode ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-700') : (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')}`}>Newest</button>
-                      <button onClick={() => { handleSortChange('createdAt'); setSortOrder('asc'); setShowSortDropdown(false); }} className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors duration-200 last:rounded-b-lg ${sortOrder === 'asc' ? (isDarkMode ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-700') : (isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100')}`}>Oldest</button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
 
-            {/* View, Refresh, Add Buttons */}
-            <div className="flex items-center gap-3 max-[900px]:justify-between min-[900px]:flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>View:</span>
-                <div className={`flex rounded-lg border-2 overflow-hidden shadow-sm ${isDarkMode ? 'border-gray-600' : 'border-gray-300'}`}>
-                  <button onClick={() => handleViewModeChange('table')} className={`px-2 py-1.5 sm:py-2 text-xs font-medium flex items-center justify-center space-x-1 ${viewMode === 'table' ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'bg-gray-700 text-gray-300 border-r border-gray-600' : 'bg-white text-gray-700 border-r border-gray-300')}`}>
-                    <ListBulletIcon className="h-4 w-4" />
-                    <span className="hidden min-[400px]:inline">Table</span>
-                  </button>
-                  <button onClick={() => handleViewModeChange('cards')} className={`px-2 py-1.5 sm:py-2 text-xs font-medium flex items-center justify-center space-x-1 ${viewMode === 'cards' ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-white text-gray-700')}`}>
-                    <Squares2X2Icon className="h-4 w-4" />
-                    <span className="hidden min-[400px]:inline">Cards</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button onClick={fetchStocks} disabled={loading} className={`px-2.5 py-2 rounded-lg font-semibold flex items-center justify-center space-x-2 ${isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white border-gray-600' : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300'} border`}>
-                  <ArrowPathIcon className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
-                  <span className="hidden min-[430px]:inline text-sm">Refresh</span>
-                </button>
-                <button onClick={() => handleOpenForm('create')} className={`px-4 py-2 rounded-lg font-semibold bg-blue-600 hover:bg-blue-700 text-white flex items-center space-x-2`}>
-                  <PlusIcon className="h-5 w-5" />
-                  <span className="text-sm">Add Stock</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Row 2: Pagination Info */}
-          <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-col gap-2 max-[900px]:gap-2 min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'}`}>
-            <div className="flex flex-row items-center justify-between min-[900px]:items-center min-[900px]:space-x-3 lg:space-x-4">
-              <span className={`text-[10px] xs:text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Showing {Math.min((currentPage - 1) * limit + 1, totalCount)} to {Math.min(currentPage * limit, totalCount)} of {totalCount} items
-              </span>
-              <div className="flex items-center gap-2 relative flex-shrink-0 z-[40]" ref={limitDropdownRef}>
-                <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
-                <div className="relative">
-                  <button onClick={() => setShowLimitDropdown(!showLimitDropdown)} className={`px-2 py-1.5 text-xs font-medium rounded-lg border-2 flex items-center justify-between min-w-[70px] ${isDarkMode ? 'bg-white/10 border-white/30 text-gray-300' : 'bg-gray-50 border-gray-400 text-gray-600'}`}>
-                    <span>{limit}</span>
-                    <ChevronDownIcon className="h-4 w-4" />
-                  </button>
-                  {showLimitDropdown && (
-                    <div className={`absolute top-full left-0 mt-1 w-28 rounded-lg border shadow-xl z-[40] ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}`}>
-                      {[10, 20, 50, 100].map(option => (
-                        <button key={option} onClick={() => { setLimit(option); setCurrentPage(1); setShowLimitDropdown(false); }} className={`w-full text-left px-3 py-2 text-sm hover:bg-opacity-50 transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg ${limit === option ? (isDarkMode ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-700') : (isDarkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}`}>{option}</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Pagination Controls */}
-            {(totalPages > 1 || stocks.length > 0) && (
-              <div className="flex items-center justify-between w-full max-[900px]:w-full min-[900px]:justify-end min-[900px]:w-auto space-x-2 sm:space-x-3">
-                <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1 || loading} className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5 ${currentPage === 1 || loading ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed') : (isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300')}`}>
-                  Previous
-                </button>
-                <div className="flex items-center space-x-1 flex-1 justify-center max-[900px]:overflow-x-auto max-[900px]:scrollbar-hide">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).slice(
-                    Math.max(0, Math.min(currentPage - 3, totalPages - 5)),
-                    Math.min(totalPages, Math.max(5, currentPage + 2))
-                  ).map(page => (
-                    <button key={page} onClick={() => setCurrentPage(page)} disabled={loading} className={`px-2 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium ${currentPage === page ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300')}`}>
-                      {page}
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || loading} className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5 ${currentPage === totalPages || loading ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed') : (isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300')}`}>
-                  Next
-                </button>
+            {/* Micro search results indicator below Row 1 */}
+            {searchTerm && (
+              <div className={`text-xs -mt-1.5 font-semibold ${isDarkMode ? 'text-blue-450' : 'text-blue-600'}`}>
+                Found {totalCount} result{totalCount !== 1 ? 's' : ''} for "{searchTerm}"
               </div>
             )}
+
+            {/* Second Row - Filters & Actions */}
+            <div className="flex flex-row items-center justify-between gap-2 mt-1 sm:mt-0 w-full">
+              {/* Left Side: Sort Controls */}
+              <div className="flex items-center gap-2">
+                <span className={`text-xs sm:text-sm font-medium hidden sm:inline ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Sort:</span>
+                <div className={`flex rounded-lg border overflow-hidden ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <button
+                    onClick={() => { handleSortChange('createdAt'); setSortOrder('desc'); }}
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm transition-colors ${
+                      (sortBy === 'createdAt' && (sortOrder === 'desc' || !sortOrder))
+                        ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white' 
+                        : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                    title="Latest First"
+                  >
+                    Latest
+                  </button>
+                  <button
+                    onClick={() => { handleSortChange('createdAt'); setSortOrder('asc'); }}
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm transition-colors ${
+                      sortBy === 'createdAt' && sortOrder === 'asc'
+                        ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
+                        : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                    title="Oldest First"
+                  >
+                    Oldest
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Side: View Mode & Refresh */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className={`flex rounded-lg border overflow-hidden h-[36px] sm:h-[42px] ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <button
+                    onClick={() => handleViewModeChange('table')}
+                    className={`px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm transition-colors flex items-center justify-center ${viewMode === 'table' ? (isDarkMode ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-white') : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50')}`}
+                    title="Table View"
+                  >
+                    <ListBulletIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleViewModeChange('cards')}
+                    className={`px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm transition-colors flex items-center justify-center ${viewMode === 'cards' ? (isDarkMode ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-white') : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50')}`}
+                    title="Card View"
+                  >
+                    <Squares2X2Icon className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <button
+                  onClick={fetchStocks}
+                  disabled={loading}
+                  className={`group inline-flex items-center justify-center px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg font-medium transition-all duration-200 hover-lift text-xs sm:text-sm h-[36px] sm:h-[42px] ${loading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode
+                      ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                      : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  title="Refresh"
+                >
+                  <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : 'hover-rotate-icon'} sm:mr-1`} />
+                  <span className="font-medium hidden sm:inline">Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Pagination Row */}
+            <div className={`mt-2 pt-3 border-t flex flex-row items-center justify-between gap-2 text-xs sm:text-sm ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <div className="flex items-center space-x-2 sm:space-x-4">
+                {totalCount > 0 && (
+                  <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} whitespace-nowrap`}>
+                    <span className="hidden sm:inline">
+                      Showing {Math.min((currentPage - 1) * limit + 1, totalCount)} to {Math.min(currentPage * limit, totalCount)} of {totalCount} items
+                    </span>
+                    <span className="sm:hidden text-[10px]">
+                      {Math.min((currentPage - 1) * limit + 1, totalCount)}-{Math.min(currentPage * limit, totalCount)} of {totalCount}
+                    </span>
+                  </span>
+                )}
+
+                {/* Items per page dropdown */}
+                <div className="flex items-center space-x-1 sm:space-x-2">
+                  <span className={`text-[10px] xs:text-xs sm:text-sm hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
+                  <select
+                    value={limit}
+                    onChange={(e) => {
+                      setLimit(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className={`px-1.5 sm:px-2 py-0.5 rounded-lg border text-[10px] xs:text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-150 hover:scale-[1.02] focus:scale-[1.02] input-focus ${
+                      isDarkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white hover:border-blue-400' 
+                        : 'bg-white border-gray-300 text-gray-900 hover:border-blue-400'
+                    } ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    {[10, 20, 50, 100].map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Top Page Navigation */}
+              {totalPages > 1 && (
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1 || loading}
+                    className={`px-2 py-1 rounded-lg text-xs transition-all duration-150 hover:scale-105 active:scale-95 hover-lift shadow-sm hover:shadow-md ${currentPage === 1 || loading
+                        ? isDarkMode ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : isDarkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600 border border-slate-600' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'
+                      }`}
+                  >
+                    <span className="hidden xs:inline">Previous</span>
+                    <span className="xs:hidden">&larr;</span>
+                  </button>
+
+                  {/* Smart Page numbers */}
+                  <div className="flex items-center space-x-0.5">
+                    {(() => {
+                      const pages = [];
+                      if (totalPages <= 5) {
+                        for (let i = 1; i <= totalPages; i++) {
+                          pages.push(
+                            <button
+                              key={i}
+                              onClick={() => setCurrentPage(i)}
+                              disabled={loading}
+                              className={`h-6 w-6 sm:h-7 sm:w-7 rounded-md text-[10px] sm:text-xs font-semibold transition-colors duration-150 ${currentPage === i
+                                  ? isDarkMode ? 'bg-blue-600 text-white shadow-md' : 'bg-blue-500 text-white shadow-md'
+                                  : isDarkMode ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
+                                }`}
+                            >
+                              {i}
+                            </button>
+                          );
+                        }
+                      } else {
+                        // Complex pagination logic (same as Orders/Fabrics)
+                        if (currentPage > 2) {
+                          pages.push(
+                            <button key={1} onClick={() => setCurrentPage(1)} className={`h-6 w-6 sm:h-7 sm:w-7 rounded-md text-[10px] sm:text-xs font-semibold transition-colors duration-150 ${isDarkMode ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-slate-200 text-slate-700'}`}>1</button>
+                          );
+                          if (currentPage > 3) pages.push(<span key="dots1" className="px-1 text-[10px] sm:text-xs text-gray-500">...</span>);
+                        }
+
+                        for (let i = Math.max(1, currentPage - 1); i <= Math.min(totalPages, currentPage + 1); i++) {
+                          if (i === 1 && currentPage > 2) continue;
+                          if (i === totalPages && currentPage < totalPages - 1) continue;
+                          
+                          pages.push(
+                            <button
+                              key={i}
+                              onClick={() => setCurrentPage(i)}
+                              disabled={loading}
+                              className={`h-6 w-6 sm:h-7 sm:w-7 rounded-md text-[10px] sm:text-xs font-semibold transition-colors duration-150 ${currentPage === i
+                                  ? isDarkMode ? 'bg-blue-600 text-white shadow-md' : 'bg-blue-500 text-white shadow-md'
+                                  : isDarkMode ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
+                                }`}
+                            >
+                              {i}
+                            </button>
+                          );
+                        }
+
+                        if (currentPage < totalPages - 1) {
+                          if (currentPage < totalPages - 2) pages.push(<span key="dots2" className="px-1 text-[10px] sm:text-xs text-gray-500">...</span>);
+                          pages.push(
+                            <button key={totalPages} onClick={() => setCurrentPage(totalPages)} className={`h-6 w-6 sm:h-7 sm:w-7 rounded-md text-[10px] sm:text-xs font-semibold transition-colors duration-150 ${isDarkMode ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-slate-200 text-slate-700'}`}>{totalPages}</button>
+                          );
+                        }
+                      }
+                      return pages;
+                    })()}
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages || loading}
+                    className={`px-2 py-1 rounded-lg text-xs transition-all duration-150 hover:scale-105 active:scale-95 hover-lift shadow-sm hover:shadow-md ${currentPage === totalPages || loading
+                        ? isDarkMode ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : isDarkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600 border border-slate-600' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'
+                      }`}
+                  >
+                    <span className="hidden xs:inline">Next</span>
+                    <span className="xs:hidden">&rarr;</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className={`min-h-[400px] ${viewMode === 'cards' || loading || stocks.length === 0 ? 'p-4' : ''}`}>
@@ -1003,15 +1174,17 @@ export default function FinishLotStockPage() {
                             <PencilIcon className="h-3.5 w-3.5" />
                             <span>Edit</span>
                           </button>
-                          <button
-                            onClick={() => {
-                              setSelectedStock(stock);
-                              setShowDeleteModal(true);
-                            }}
-                            className="p-2 rounded-xl border border-red-500/20 text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-all cursor-pointer"
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </button>
+                          {isMaster && (
+                            <button
+                              onClick={() => {
+                                setSelectedStock(stock);
+                                setShowDeleteModal(true);
+                              }}
+                              className="p-2 rounded-xl border border-red-500/20 text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-all cursor-pointer"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1151,16 +1324,18 @@ export default function FinishLotStockPage() {
                               >
                                 <PencilIcon className="h-4.5 w-4.5" />
                               </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedStock(stock);
-                                  setShowDeleteModal(true);
-                                }}
-                                className="p-1.5 rounded-lg hover:bg-slate-700/10 dark:hover:bg-slate-200/10 text-red-500 transition-colors"
-                                title="Delete Stock"
-                              >
-                                <TrashIcon className="h-4.5 w-4.5" />
-                              </button>
+                              {isMaster && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedStock(stock);
+                                    setShowDeleteModal(true);
+                                  }}
+                                  className="p-1.5 rounded-lg hover:bg-slate-700/10 dark:hover:bg-slate-200/10 text-red-500 transition-colors"
+                                  title="Delete Stock"
+                                >
+                                  <TrashIcon className="h-4.5 w-4.5" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

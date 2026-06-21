@@ -14,6 +14,7 @@ export interface StoreUser {
   role: UserRole;
   phoneNumber?: string;
   address?: string;
+  profilePhoto?: string;
 }
 
 /**

@@ -60,8 +60,13 @@ export async function GET(request: NextRequest) {
     const search = url.searchParams.get('search') || '';
     const cacheKey = `qualities-${search || 'all'}-${limit}-${page}`;
     
+    // ⚡ FIX: Respect no-cache header or timestamp parameter for real-time synchronization
+    const skipCache = request.headers.get('cache-control')?.includes('no-cache') || 
+                      request.headers.get('pragma')?.includes('no-cache') ||
+                      url.searchParams.has('_t');
+    
     const cached = qualitiesCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+    if (!skipCache && cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
       // Return consistent structure: { success: true, data: [...], pagination: {...} }
       const cachedResponse = cached.data;
       return NextResponse.json({

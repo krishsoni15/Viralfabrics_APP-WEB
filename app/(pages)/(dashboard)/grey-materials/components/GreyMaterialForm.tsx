@@ -18,12 +18,14 @@ import {
 import ToastNotification, { useToast } from '../../components/ToastNotification';
 import CameraModal from '../../components/CameraModal';
 import ImagePreviewModal from '../../components/ImagePreviewModal';
+import { useSession } from '../../hooks/useSession';
 
 export default function GreyMaterialForm(props: any) {
   const { isDarkMode, onClose, onSave } = props;
   const item = props.item || props.greyMaterial;
   const isEditMode = !!item;
   const { toasts, showToast, removeToast } = useToast();
+  const { isMaster } = useSession();
   
   const [formData, setFormData] = useState(() => {
     let initialWeavers = [{
@@ -815,7 +817,7 @@ export default function GreyMaterialForm(props: any) {
                     <div className="flex justify-between items-center mb-4">
                       <span className="text-xs font-bold text-gray-500">WEAVER {index + 1}</span>
                       
-                      {formData.weavers.length > 1 && (
+                      {formData.weavers.length > 1 && (!weaver._id || isMaster) && (
                         <button
                           type="button"
                           onClick={() => removeWeaver(index)}

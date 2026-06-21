@@ -27,9 +27,13 @@ import {
   ListBulletIcon,
   DocumentArrowDownIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
   ArrowUpIcon,
   WifiIcon,
-  SignalSlashIcon
+  SignalSlashIcon,
+  ArchiveBoxIcon,
+  UserIcon,
+  PhoneIcon
 } from '@heroicons/react/24/outline';
 import OrderForm from './components/OrderForm';
 import ImagePreviewModal from '../components/ImagePreviewModal';
@@ -137,7 +141,11 @@ export default function OrdersClient({
   const [qualities, setQualities] = useState<Quality[]>(initialQualities);
   const [mills, setMills] = useState<Mill[]>(initialMills);
 
-  // Helper function to safely set orders (always ensure it's an array)
+  // Reference to always access latest orders without triggering re-renders
+  const ordersRef = useRef<Order[]>(initialOrders);
+  const deletedOrderIdsRef = useRef<Set<string>>(new Set());
+
+  // Safely update orders to prevent duplicate keys
   const setOrdersSafe = useCallback((ordersData: any) => {
     // ⚡ FIX: Filter out deleted orders before setting state
     const filterDeletedOrders = (ordersList: Order[]) => {
@@ -155,11 +163,6 @@ export default function OrdersClient({
         const result = ordersData(prevOrders);
         const safeOrders = Array.isArray(result) ? result : [];
         const filtered = filterDeletedOrders(safeOrders);
-        console.log('🔍 setOrdersSafe (updater) result:', {
-          resultLength: safeOrders.length,
-          filteredLength: filtered.length,
-          firstOrder: filtered[0]
-        });
         return filtered;
       });
       return;
@@ -168,15 +171,17 @@ export default function OrdersClient({
     // Otherwise, ensure it's an array and filter deleted orders
     const safeOrders = Array.isArray(ordersData) ? ordersData : [];
     const filtered = filterDeletedOrders(safeOrders);
-    console.log('🔍 setOrdersSafe called with:', {
-      originalData: ordersData,
-      isArray: Array.isArray(ordersData),
-      safeOrdersLength: safeOrders.length,
-      filteredLength: filtered.length,
-      firstOrder: filtered[0]
-    });
+    ordersRef.current = filtered;
     setOrders(filtered);
-    console.log('🔍 setOrders called, orders state should update');
+  }, []);
+
+  // Helper to force dashboard refresh across components and tabs
+  const triggerDashboardRefresh = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('dashboardRefresh'));
+      localStorage.setItem('dashboardRefresh', Date.now().toString());
+      localStorage.removeItem('dashboard-cache');
+    }
   }, []);
   // If we have initial data from server, we're already loaded
   const [loading, setLoading] = useState(initialOrders.length === 0);
@@ -184,14 +189,7 @@ export default function OrdersClient({
   const [initialLoadTime, setInitialLoadTime] = useState<number | null>(null);
   const [loadingPhase, setLoadingPhase] = useState<'critical' | 'secondary' | 'complete'>('critical');
 
-  // Debug orders state changes
-  useEffect(() => {
-    console.log('🔍 Orders state changed:', {
-      ordersLength: orders.length,
-      firstOrder: orders[0],
-      ordersLoaded
-    });
-  }, [orders, ordersLoaded]);
+  // Debug orders state changes removed
 
   // Set initial load time when component mounts
   useEffect(() => {
@@ -393,9 +391,6 @@ export default function OrdersClient({
   const [itemToDelete, setItemToDelete] = useState<{ orderId: string, itemId: string | number, itemName: string } | null>(null);
   const [deletingItem, setDeletingItem] = useState(false);
 
-  // ⚡ FIX: Track deleted order IDs to prevent them from reappearing
-  const deletedOrderIdsRef = useRef<Set<string>>(new Set());
-
   // Status change confirmation state
   const [showStatusConfirmModal, setShowStatusConfirmModal] = useState(false);
   const [isStatusModalClosing, setIsStatusModalClosing] = useState(false);
@@ -460,11 +455,15 @@ export default function OrdersClient({
   const [imageSlideDirection, setImageSlideDirection] = useState<'left' | 'right' | null>(null);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [selectedOrderForLogs, setSelectedOrderForLogs] = useState<Order | null>(null);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [showLabDataModal, setShowLabDataModal] = useState(false);
   const [selectedOrderForLabData, setSelectedOrderForLabData] = useState<Order | null>(null);
 
   // Scroll to top button state
   const [showScrollToTop, setShowScrollToTop] = useState(false);
+
+  // Mobile Filters toggle
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   // Offline detection state
   const [isOffline, setIsOffline] = useState(false);
@@ -526,10 +525,28 @@ export default function OrdersClient({
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
     if (typeof window !== 'undefined') {
       const savedViewMode = localStorage.getItem('ordersViewMode');
-      return savedViewMode === 'cards' ? 'cards' : 'table';
+      if (savedViewMode === 'cards' || savedViewMode === 'table') {
+        return savedViewMode;
+      }
+      return window.innerWidth >= 1024 ? 'table' : 'cards';
     }
     return 'table';
   });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const savedMode = localStorage.getItem('ordersViewMode');
+      if (savedMode === 'cards' || savedMode === 'table') {
+        return; // Respect user preference
+      }
+      const isDesktop = window.innerWidth >= 1024;
+      setViewMode(isDesktop ? 'table' : 'cards');
+    };
+    window.addEventListener('resize', handleResize);
+    // Initial check
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Professional helper functions for button states - declared early to maintain hooks order
   const hasMillInputs = useCallback((order: Order) => {
@@ -1524,6 +1541,35 @@ export default function OrdersClient({
     console.log('🔧 Current filters state:', filters);
   }, [filters]);
 
+  // 🌟 REAL-TIME DATA SYNC LISTENER (DEBOUNCED)
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const handleRealtimeSync = (e: any) => {
+      // If user is currently typing or editing in the modal form, do NOT interrupt them
+      if (showForm) return;
+      
+      // DEBOUNCE: When a user edits an order, the database might save the Order, GreyMaterial, and Party all at once.
+      // This sends 3 socket pings. The debounce ensures we only fetch from the API exactly ONCE after the dust settles.
+      if (timeoutId) clearTimeout(timeoutId);
+      
+      timeoutId = setTimeout(() => {
+        if (fetchOrdersRef.current) {
+          console.log("🔄 Real-time update detected, fetching new data in background...");
+          fetchOrdersRef.current(0, currentPage, itemsPerPage, true, filters, searchTerm);
+        }
+      }, 800); // 800ms wait to collect all simultaneous pings
+    };
+    
+    // Only listen to ONE event type, not all three!
+    window.addEventListener('realtimeDataChanged', handleRealtimeSync);
+    
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('realtimeDataChanged', handleRealtimeSync);
+    };
+  }, [currentPage, itemsPerPage, filters, searchTerm, showForm]);
+
   // ULTRA FAST fetch functions - 50ms target
   const fetchOrders = useCallback(async (retryCount = 0, page = currentPage, limit = itemsPerPage, forceRefresh = false, currentFilters = filters, searchQuery = searchTerm) => {
     const maxRetries = 3; // Three retries for better reliability
@@ -2276,11 +2322,16 @@ export default function OrdersClient({
   }, [searchParams, orders, router]);
 
   // Optimized function to fetch all order-related data in parallel
-  // ⚡ OPTIMIZED: Function to fetch all order-related data with localStorage cache
   const fetchAllOrderData = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
+
+      const currentOrders = ordersRef.current || [];
+      if (currentOrders.length === 0) return; // No orders to fetch data for
+
+      const orderIds = currentOrders.map(o => o.orderId).filter(Boolean).join(',');
+      const queryParam = orderIds ? `?orderIds=${orderIds}&limit=100` : '';
 
       // ⚡ INSTANT: Load from localStorage cache first!
       const processDataCache = localStorage.getItem('process-data-cache');
@@ -2320,19 +2371,19 @@ export default function OrdersClient({
 
       // Fetch all four endpoints in parallel for better performance
       const [millInputsResponse, millOutputsResponse, dispatchesResponse, greyInfoResponse] = await Promise.all([
-        fetch('/api/mill-inputs', {
+        fetch(`/api/mill-inputs${queryParam}`, {
           headers: { 'Authorization': `Bearer ${token}` },
           signal: controller.signal
         }),
-        fetch('/api/mill-outputs', {
+        fetch(`/api/mill-outputs${queryParam}`, {
           headers: { 'Authorization': `Bearer ${token}` },
           signal: controller.signal
         }),
-        fetch('/api/dispatch', {
+        fetch(`/api/dispatch${queryParam}`, {
           headers: { 'Authorization': `Bearer ${token}` },
           signal: controller.signal
         }),
-        fetch('/api/grey-info', {
+        fetch(`/api/grey-info${queryParam}`, {
           headers: { 'Authorization': `Bearer ${token}` },
           signal: controller.signal
         }).catch(() => ({ ok: false, json: () => Promise.resolve({ success: false, data: { greyInfo: [] } }) }))
@@ -2823,7 +2874,7 @@ export default function OrdersClient({
   }, [showForm]);
 
   // Mills fetching function for MillInputForm
-  const fetchMills = useCallback(async () => {
+  const fetchMills = useCallback(async (forceRefresh = false) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -2834,12 +2885,19 @@ export default function OrdersClient({
 
       setMillsLoading(true);
       console.log('Fetching mills from parent component...');
+      
+      const url = forceRefresh
+        ? `/api/mills?limit=100&page=1&_t=${Date.now()}`
+        : '/api/mills?limit=100&page=1';
+        
       // ⚡ OPTIMIZED: Use pagination (100 items per page)
-      const response = await fetch('/api/mills?limit=100&page=1', {
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          ...(forceRefresh ? { 'Cache-Control': 'no-cache' } : {})
+        },
+        ...(forceRefresh ? { cache: 'no-store' } : {})
       });
 
       if (response.ok) {
@@ -4147,6 +4205,7 @@ export default function OrdersClient({
             localStorage.removeItem('dashboard-cache');
           }
         }
+        triggerDashboardRefresh();
 
         // Trigger real-time update for Order Activity Log
         const event = new CustomEvent('orderUpdated', {
@@ -4472,6 +4531,7 @@ export default function OrdersClient({
           }
         });
         window.dispatchEvent(event);
+        triggerDashboardRefresh();
 
         // ⚡ FIX: Remove order from UI only after deletion is confirmed
         console.log('🗑️ Removing order from UI after successful deletion:', orderIdToDelete);
@@ -5510,24 +5570,10 @@ export default function OrdersClient({
           : 'bg-white border-gray-200'
           }`}>
         <div className="flex flex-col gap-2 sm:gap-3">
-          {/* Top Row - Create Order, Search, Quick Actions */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-stretch sm:items-center">
-            {/* Left Side - Create Order Button */}
-            <div className="flex items-center order-1 sm:order-1 w-full sm:w-auto">
-              <button
-                onClick={() => openFormWithData()}
-                className={`inline-flex items-center justify-center px-3 sm:px-4 py-2 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 w-full sm:w-auto text-xs sm:text-sm ${isDarkMode
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg'
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg'
-                  }`}
-              >
-                <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" />
-                <span className="font-medium">Create Order</span>
-              </button>
-            </div>
-
+          {/* Top Row - Search and Create Order */}
+          <div className="flex flex-row gap-2 sm:gap-3 items-stretch sm:items-center">
             {/* Center - Enhanced Search */}
-            <div className="flex-1 order-2 sm:order-2 min-w-0 w-full sm:w-auto">
+            <div className="flex-1 order-1 min-w-0">
               <div className="relative search-dropdown-container flex items-stretch overflow-visible">
                 {/* Search Type Dropdown */}
                 <div className="relative flex-shrink-0">
@@ -5708,33 +5754,80 @@ export default function OrdersClient({
               </div>
             </div>
 
-            {/* Right Side - Quick Actions Button */}
-            <div className="flex items-center order-3 sm:order-3 w-full sm:w-auto">
+            {/* Right Side - Create Order Button */}
+            <div className="flex items-center order-2 flex-shrink-0">
               <button
-                onClick={() => setShowQuickActions(!showQuickActions)}
-                className={`inline-flex items-center justify-center px-3 sm:px-4 py-2 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 w-full sm:w-auto text-xs sm:text-sm ${showQuickActions
-                  ? isDarkMode
-                    ? 'bg-white/20 border border-white/30 text-white'
-                    : 'bg-gray-200 border border-gray-400 text-gray-800'
-                  : isDarkMode
-                    ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
-                    : 'bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200'
+                onClick={() => openFormWithData()}
+                className={`inline-flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm ${isDarkMode
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg'
                   }`}
+                title="Create Order"
               >
-                <BoltIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" />
-                <span className="font-medium hidden sm:inline">Quick Actions</span>
-                <span className="font-medium sm:hidden">Actions</span>
+                <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 sm:mr-1.5" />
+                <span className="font-medium hidden sm:inline">Create Order</span>
               </button>
             </div>
           </div>
 
-          {/* Second Row - Filters and Controls */}
-          <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 items-start lg:items-center justify-between">
+          {/* Second Row - Mobile Toolbar & Desktop Filters */}
+          <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 items-start lg:items-center justify-between mt-1 sm:mt-0">
+            {/* Mobile Action Toolbar (Hidden on Desktop) */}
+            <div className="w-full sm:hidden flex items-center gap-2 order-1">
+              <button
+                onClick={() => setShowQuickActions(!showQuickActions)}
+                className={`flex-1 py-2 flex items-center justify-center rounded-lg border transition-colors active:scale-95 ${showQuickActions ? 'bg-blue-600 text-white border-blue-500' : isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
+                title="Quick Actions"
+              >
+                <BoltIcon className="h-5 w-5" />
+              </button>
+              
+              <button
+                onClick={() => setShowMobileFilters(!showMobileFilters)}
+                className={`flex-1 py-2 flex items-center justify-center rounded-lg border transition-colors active:scale-95 ${showMobileFilters ? 'bg-blue-600 text-white border-blue-500' : isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
+                title="Filters & Sort"
+              >
+                <div className="relative">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                  {/* Notification Badge for Active Filters */}
+                  {((filters.millId ? 1 : 0) + (filters.statusFilter !== 'pending' ? 1 : 0) + (filters.typeFilter !== 'all' ? 1 : 0) + (filters.fyFilter !== '' ? 1 : 0) + (filters.startDate || filters.endDate ? 1 : 0) + (searchTerm ? 1 : 0)) > 0 && (
+                    <span className={`absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-sm border ${isDarkMode ? 'border-gray-800 bg-red-500' : 'border-white bg-red-500'}`}>
+                      {((filters.millId ? 1 : 0) + (filters.statusFilter !== 'pending' ? 1 : 0) + (filters.typeFilter !== 'all' ? 1 : 0) + (filters.fyFilter !== '' ? 1 : 0) + (filters.startDate || filters.endDate ? 1 : 0) + (searchTerm ? 1 : 0))}
+                    </span>
+                  )}
+                </div>
+              </button>
+              
+              <div className={`flex rounded-lg border overflow-hidden flex-1 ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                <button
+                  onClick={() => handleViewModeChange('table')}
+                  className={`flex-1 py-2 flex items-center justify-center transition-colors active:scale-95 ${viewMode === 'table' ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'bg-gray-800 text-gray-300' : 'bg-white text-gray-700')}`}
+                >
+                  <ListBulletIcon className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => handleViewModeChange('cards')}
+                  className={`flex-1 py-2 flex items-center justify-center transition-colors active:scale-95 ${viewMode === 'cards' ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'bg-gray-800 text-gray-300' : 'bg-white text-gray-700')}`}
+                >
+                  <Squares2X2Icon className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <button
+                onClick={() => handleRefresh()}
+                disabled={refreshing}
+                className={`flex-1 py-2 flex items-center justify-center rounded-lg border transition-colors active:scale-95 ${refreshing ? 'opacity-50' : ''} ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
+                title="Refresh"
+              >
+                <ArrowPathIcon className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
             {/* Left Side - Filters and Search Results */}
-            <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 order-2 lg:order-1 w-full lg:w-auto">
+            <div className={`grid grid-cols-2 sm:flex sm:flex-row sm:flex-wrap gap-2 sm:gap-3 order-2 lg:order-1 w-full lg:w-auto ${!showMobileFilters ? 'hidden sm:flex' : ''}`}>
               {/* Search Results Indicator */}
               {searchTerm && (
-                <div className={`px-3 py-1 rounded-full text-xs font-medium ${isDarkMode
+                <div className={`col-span-2 sm:col-span-1 px-3 py-1 rounded-full text-xs font-medium ${isDarkMode
                   ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
                   : 'bg-blue-100 text-blue-700 border border-blue-200'
                   }`}>
@@ -5750,14 +5843,14 @@ export default function OrdersClient({
 
               {/* Sort Filter - Dropdown Style */}
               <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
-                <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                <span className={`text-[10px] xs:text-xs sm:text-sm font-medium whitespace-nowrap hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   Sort:
                 </span>
                 <div className="relative sort-dropdown-container flex-1 sm:flex-initial">
                   <button
                     onClick={() => setShowSortDropdown(!showSortDropdown)}
                     disabled={sortLoading}
-                    className={`w-full sm:w-auto px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 min-w-[80px] hover-lift ${isDarkMode
+                    className={`w-full sm:w-auto px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 min-w-[80px] whitespace-nowrap hover-lift ${isDarkMode
                       ? 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20 hover:border-white/40'
                       : 'bg-gray-50 border-gray-400 text-gray-600 hover:bg-gray-100 hover:border-gray-500'
                       } ${sortLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -5813,7 +5906,7 @@ export default function OrdersClient({
 
               {/* Status Filter - Dropdown Style */}
               <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
-                <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                <span className={`text-[10px] xs:text-xs sm:text-sm font-medium whitespace-nowrap hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                   Status:
                 </span>
@@ -5821,7 +5914,7 @@ export default function OrdersClient({
                   <button
                     onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                     disabled={filterLoading}
-                    className={`w-full sm:w-auto px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 min-w-[100px] hover-lift ${isDarkMode
+                    className={`w-full sm:w-auto px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 min-w-[100px] whitespace-nowrap hover-lift ${isDarkMode
                       ? 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20 hover:border-white/40'
                       : 'bg-gray-50 border-gray-400 text-gray-600 hover:bg-gray-100 hover:border-gray-500'
                       } ${filterLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -5874,14 +5967,14 @@ export default function OrdersClient({
 
               {/* Type Filter - Dropdown Style */}
               <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
-                <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                <span className={`text-[10px] xs:text-xs sm:text-sm font-medium whitespace-nowrap hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   Type:
                 </span>
                 <div className="relative type-dropdown-container flex-1 sm:flex-initial">
                   <button
                     onClick={() => setShowTypeDropdown(!showTypeDropdown)}
                     disabled={filterLoading}
-                    className={`w-full sm:w-auto px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 min-w-[110px] hover-lift ${isDarkMode
+                    className={`w-full sm:w-auto px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 min-w-[110px] whitespace-nowrap hover-lift ${isDarkMode
                       ? 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20 hover:border-white/40'
                       : 'bg-gray-50 border-gray-400 text-gray-600 hover:bg-gray-100 hover:border-gray-500'
                       } ${filterLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -5934,7 +6027,7 @@ export default function OrdersClient({
 
               {/* Financial Year Filter - Dropdown Style */}
               <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
-                <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                <span className={`text-[10px] xs:text-xs sm:text-sm font-medium whitespace-nowrap hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   FY:
                 </span>
                 <div className="relative fy-dropdown-container flex-1 sm:flex-initial">
@@ -5960,7 +6053,7 @@ export default function OrdersClient({
                       }
                     }}
                     disabled={filterLoading}
-                    className={`w-full sm:w-auto px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 min-w-[100px] hover-lift ${isDarkMode
+                    className={`w-full sm:w-auto px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border-2 transition-all duration-200 flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 min-w-[90px] whitespace-nowrap hover-lift ${isDarkMode
                       ? 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20 hover:border-white/40'
                       : 'bg-gray-50 border-gray-400 text-gray-600 hover:bg-gray-100 hover:border-gray-500'
                       } ${filterLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -6024,8 +6117,8 @@ export default function OrdersClient({
               </div>
 
               {/* Mill Filter - Enhanced Searchable Dropdown */}
-              <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
-                <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+                <span className={`text-[10px] xs:text-xs sm:text-sm font-medium whitespace-nowrap hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   Mill:
                 </span>
                 <div className="relative flex-1 sm:flex-initial min-w-0" ref={millDropdownRef}>
@@ -6227,7 +6320,8 @@ export default function OrdersClient({
 
               {/* Clear All Filters Button - Show when any filter is active */}
               {(filters.millId || filters.statusFilter !== 'pending' || filters.typeFilter !== 'all' || filters.fyFilter !== '' || searchTerm || filters.startDate || filters.endDate) && (
-                <button
+                <div className="col-span-2 sm:col-span-1 flex">
+                  <button
                   onClick={handleClearFilters}
                   disabled={filterLoading || sortLoading}
                   className={`inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all duration-200 active:scale-95 shadow-md whitespace-nowrap ${isDarkMode
@@ -6239,19 +6333,32 @@ export default function OrdersClient({
                   <XMarkIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span>Clear All Filters</span>
                 </button>
+              </div>
               )}
 
             </div>
 
-            {/* Right Side - View Toggle and Refresh */}
-            <div className="flex items-center gap-2 order-1 lg:order-2 w-full sm:w-auto justify-between sm:justify-start">
-              <span className={`text-xs sm:text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}>View:</span>
+            {/* Desktop Right Side Actions (Hidden on Mobile) */}
+            <div className="hidden sm:flex items-center gap-2 order-1 lg:order-2 w-auto justify-start">
+              <button
+                onClick={() => setShowQuickActions(!showQuickActions)}
+                className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm ${showQuickActions
+                  ? isDarkMode
+                    ? 'bg-white/20 border border-white/30 text-white'
+                    : 'bg-gray-200 border border-gray-400 text-gray-800'
+                  : isDarkMode
+                    ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                    : 'bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200'
+                  }`}
+              >
+                <BoltIcon className="h-4 w-4 mr-1.5" />
+                <span className="font-medium">Quick Actions</span>
+              </button>
               <div className={`flex rounded-lg border overflow-hidden ${isDarkMode ? 'border-gray-600' : 'border-gray-300'
                 }`}>
                 <button
                   onClick={() => handleViewModeChange('table')}
-                  className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-all duration-200 flex items-center gap-1 hover-lift active:scale-95 ${viewMode === 'table'
+                  className={`px-3 py-1.5 text-sm font-medium transition-all duration-200 flex items-center gap-1 hover-lift active:scale-95 ${viewMode === 'table'
                     ? isDarkMode
                       ? 'bg-blue-600 text-white badge-pulse'
                       : 'bg-blue-500 text-white badge-pulse'
@@ -6261,12 +6368,12 @@ export default function OrdersClient({
                     }`}
                   title="Table View"
                 >
-                  <ListBulletIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  <span className="hidden sm:inline">Table</span>
+                  <ListBulletIcon className="h-4 w-4" />
+                  <span>Table</span>
                 </button>
                 <button
                   onClick={() => handleViewModeChange('cards')}
-                  className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-all duration-200 flex items-center gap-1 hover-lift active:scale-95 ${viewMode === 'cards'
+                  className={`px-3 py-1.5 text-sm font-medium transition-all duration-200 flex items-center gap-1 hover-lift active:scale-95 ${viewMode === 'cards'
                     ? isDarkMode
                       ? 'bg-blue-600 text-white badge-pulse'
                       : 'bg-blue-500 text-white badge-pulse'
@@ -6276,16 +6383,16 @@ export default function OrdersClient({
                     }`}
                   title="Card View"
                 >
-                  <Squares2X2Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  <span className="hidden sm:inline">Cards</span>
+                  <Squares2X2Icon className="h-4 w-4" />
+                  <span>Cards</span>
                 </button>
               </div>
 
-              {/* Refresh Button - Icon only on small screens */}
+              {/* Refresh Button */}
               <button
                 onClick={() => handleRefresh()}
                 disabled={refreshing}
-                className={`group inline-flex items-center justify-center px-2 sm:px-3 py-1.5 rounded-lg font-medium transition-all duration-200 hover:scale-105 hover-lift text-[10px] xs:text-xs sm:text-sm ${refreshing
+                className={`group inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-medium transition-all duration-200 hover:scale-105 hover-lift text-sm ${refreshing
                   ? 'opacity-50 cursor-not-allowed'
                   : ''
                   } ${isDarkMode
@@ -6294,8 +6401,8 @@ export default function OrdersClient({
                   }`}
                 title="Refresh"
               >
-                <ArrowPathIcon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${refreshing ? 'animate-spin' : 'hover-rotate-icon'} sm:mr-1`} />
-                <span className="font-medium hidden sm:inline">Refresh</span>
+                <ArrowPathIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : 'hover-rotate-icon'} mr-1`} />
+                <span className="font-medium">Refresh</span>
               </button>
             </div>
           </div>
@@ -6309,17 +6416,17 @@ export default function OrdersClient({
 
 
       {/* Pagination Info Bar */}
-      <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:items-center sm:justify-between ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+      <div className={`px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-b flex flex-row flex-wrap items-center justify-between gap-2 sm:gap-4 ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
         }`}>
-        <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:items-center sm:space-x-3 lg:space-x-4">
-          <span className={`text-[10px] xs:text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+        <div className="flex flex-row items-center gap-2 sm:gap-3 lg:gap-4">
+          <span className={`text-[10px] xs:text-xs sm:text-sm whitespace-nowrap font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
             <span className="hidden sm:inline">Showing {paginationDisplayInfo.start} to {paginationDisplayInfo.end} of {paginationDisplayInfo.total} orders</span>
-            <span className="sm:hidden">{paginationDisplayInfo.start}-{paginationDisplayInfo.end} of {paginationDisplayInfo.total}</span>
+            <span className="sm:hidden">{paginationDisplayInfo.start}-{paginationDisplayInfo.end} <span className="opacity-75">of {paginationDisplayInfo.total}</span></span>
           </span>
 
           {/* Items per page dropdown */}
-          <div className="flex items-center space-x-2">
-            <span className={`text-[10px] xs:text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            <span className={`text-[10px] xs:text-xs sm:text-sm hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
             <select
               value={itemsPerPage}
               onChange={(e) => {
@@ -6345,7 +6452,7 @@ export default function OrdersClient({
 
         {/* Enhanced Navigation - Show when there are multiple pages */}
         {(totalPages > 1 || orders.length > 0) && (
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-1 sm:space-x-3 ml-auto">
             <button
               onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1 || isChangingPage || loading}
@@ -7544,17 +7651,17 @@ export default function OrdersClient({
         </>
       ) : (
         /* Enhanced Card Layout - Complete Order Information */
-        <div className="space-y-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5 xl:gap-6 px-1 sm:px-3 lg:px-4 py-2 sm:py-4">
           {!loading && !orderCreating && !tableLoading && !isChangingPage && !refreshing && !sortLoading && !filterLoading && !searchLoading && ordersLoaded && (currentOrders.length > 0 || (paginationInfo.totalCount > 0 && orders.length > 0)) ? (
             /* Show orders in card view */
             (currentOrders.length > 0 ? currentOrders : orders).map((order, orderIndex) => {
               const ordersToDisplay = currentOrders.length > 0 ? currentOrders : orders;
               return (
-                <div key={order._id} className={`${orderIndex < ordersToDisplay.length - 1 ? 'mb-4 sm:mb-6' : ''} relative animate-slide-in-up`} style={{ animationDelay: `${orderIndex * 50}ms`, opacity: 0 }}>
-                  <div className={`rounded-2xl border-2 shadow-xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover-lift ${deletingOrderId === String(order._id) ? 'opacity-60' : ''
+                <div key={order._id} className="relative flex flex-col h-full animate-slide-in-up" style={{ animationDelay: `${orderIndex * 50}ms`, opacity: 0 }}>
+                  <div className={`flex flex-col h-full rounded-2xl border transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-1 ${deletingOrderId === String(order._id) ? 'opacity-60' : ''
                     } ${isDarkMode
-                      ? 'bg-gradient-to-br from-gray-800 via-gray-800/95 to-gray-800/90 border-gray-600/50'
-                      : 'bg-gradient-to-br from-white via-gray-50/50 to-white border-gray-200'
+                      ? 'bg-[#1e293b] border-gray-700/60 hover:border-blue-500/30 hover:shadow-blue-900/20'
+                      : 'bg-white border-gray-200 hover:border-blue-500/30 hover:shadow-blue-500/10'
                     }`}>
                     {/* Loading overlay when deleting */}
                     {deletingOrderId === String(order._id) && (
@@ -7569,535 +7676,404 @@ export default function OrdersClient({
                       </div>
                     )}
 
-                    {/* Header - Order ID and Type - Mobile Optimized */}
-                    <div className={`p-3 sm:p-4 border-b-2 ${isDarkMode
-                      ? 'border-gray-600/50 bg-gradient-to-r from-gray-700/50 to-gray-800/50'
-                      : 'border-gray-200 bg-gradient-to-r from-blue-50/50 to-gray-50/50'
-                      }`}>
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className={`text-lg sm:text-xl font-extrabold truncate ${isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                              }`}>
-                              #{order.orderId ? getDisplayOrderId(order.orderId) : 'N/A'}
-                            </h3>
-                            <span className={`text-xs sm:text-sm px-2 py-0.5 sm:py-1 rounded-full font-semibold whitespace-nowrap ${isDarkMode ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-700'
-                              }`}>
-                              {order.items?.length || 0} {order.items?.length === 1 ? 'item' : 'items'}
+                    <div className="p-3 sm:p-3.5 flex flex-col flex-grow">
+                      {/* Top Header */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-lg sm:text-xl font-black tracking-tight ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                            #{order.orderId ? getDisplayOrderId(order.orderId) : 'N/A'}
+                          </span>
+                          <div className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${isDarkMode ? 'bg-slate-600' : 'bg-slate-300'}`}></div>
+                          <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-bold rounded-md ${
+                            order.orderType === 'Dying' 
+                              ? (isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700')
+                              : (isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700')
+                          }`}>
+                            {order.orderType || 'Not set'}
+                          </span>
+                        </div>
+                        
+                        {isParty ? (
+                          <div className={`px-2.5 py-1 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
+                            <span className={`text-xs font-bold uppercase tracking-wider ${
+                              order.status === 'delivered' ? (isDarkMode ? 'text-green-400' : 'text-green-600') : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
+                            }`}>
+                              {order.status || 'Pending'}
                             </span>
                           </div>
-                          <div className={`text-xs sm:text-sm font-medium ${order.orderType === 'Dying'
-                            ? isDarkMode ? 'text-orange-400' : 'text-orange-600'
-                            : isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                            }`}>
-                            {order.orderType || 'Not selected'}
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                             <button
+                              onClick={() => handleStatusChangeClick(order._id, 'pending', order.orderId)}
+                              disabled={changingStatus}
+                              className={`px-2 py-1 text-[10px] sm:text-xs font-bold rounded border transition-colors ${
+                                (order.status || 'pending') === 'pending'
+                                  ? (isDarkMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-600 text-white border-blue-600')
+                                  : (isDarkMode ? 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200')
+                              }`}
+                            >
+                              Pending
+                            </button>
+                            <button
+                              onClick={() => handleStatusChangeClick(order._id, 'delivered', order.orderId)}
+                              disabled={changingStatus}
+                              className={`px-2 py-1 text-[10px] sm:text-xs font-bold rounded border transition-colors ${
+                                order.status === 'delivered'
+                                  ? (isDarkMode ? 'bg-green-600 text-white border-green-500' : 'bg-green-600 text-white border-green-600')
+                                  : (isDarkMode ? 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200')
+                              }`}
+                            >
+                              Delivered
+                            </button>
                           </div>
-                        </div>
-                        {/* Status Buttons - Mobile Optimized */}
-                        <div className="flex items-center gap-2 sm:gap-2">
-                          <button
-                            onClick={() => handleStatusChangeClick(order._id, 'pending', order.orderId)}
-                            disabled={changingStatus || isParty}
-                            className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center shadow-md hover-lift ${(order.status || 'pending') === 'pending'
-                              ? isDarkMode
-                                ? 'bg-blue-600 text-white shadow-blue-600/50 badge-pulse'
-                                : 'bg-blue-600 text-white shadow-blue-600/30 badge-pulse'
-                              : isDarkMode
-                                ? 'bg-gray-700/50 text-gray-400 hover:bg-gray-600/50 border border-gray-600'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
-                              } ${changingStatus || isParty ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'active:scale-95'}`}
-                          >
-                            Pending
-                          </button>
-                          <button
-                            onClick={() => handleStatusChangeClick(order._id, 'delivered', order.orderId)}
-                            disabled={changingStatus || isParty}
-                            className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center shadow-md hover-lift ${order.status === 'delivered'
-                              ? isDarkMode
-                                ? 'bg-green-600 text-white shadow-green-600/50 badge-pulse'
-                                : 'bg-green-600 text-white shadow-green-600/30 badge-pulse'
-                              : isDarkMode
-                                ? 'bg-gray-700/50 text-gray-400 hover:bg-gray-600/50 border border-gray-600'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
-                              } ${changingStatus || isParty ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'active:scale-95'}`}
-                          >
-                            Delivered
-                          </button>
-                        </div>
+                        )}
                       </div>
-                    </div>
 
-                    {/* Order Details Section - Ultra Compact */}
-                    <div className="p-1.5 sm:p-2 space-y-1.5">
-                      {/* Complete Order Information - Ultra Compact Design */}
-                      <div className={`p-1.5 sm:p-2 rounded border ${isDarkMode
-                        ? 'bg-gray-700/10 border-gray-600/20'
-                        : 'bg-gray-50/30 border-gray-200/30'
-                        }`}>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-1 sm:gap-1.5">
-                          {/* All fields in ultra compact grid - No section header */}
-                          <div className={`p-1 sm:p-1.5 rounded border ${isDarkMode ? 'bg-gray-800/20 border-gray-600/10' : 'bg-white/80 border-gray-200/40'
-                            }`}>
-                            <span className={`text-[8px] sm:text-[9px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>PO</span>
-                            <div className={`text-[10px] sm:text-[11px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {order.poNumber || '—'}
-                            </div>
+                      {/* Order Info & Party Grid */}
+                      <div className={`pt-3 mb-2 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                        {/* PO, Style, Priority */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-1.5 flex-1">
+                            <span className={`text-[10px] sm:text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>PO:</span>
+                            <span className={`text-[11px] sm:text-xs font-bold truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>{order.poNumber || '—'}</span>
                           </div>
-                          <div className={`p-1 sm:p-1.5 rounded border ${isDarkMode ? 'bg-gray-800/20 border-gray-600/10' : 'bg-white/80 border-gray-200/40'
-                            }`}>
-                            <span className={`text-[8px] sm:text-[9px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Style</span>
-                            <div className={`text-[10px] sm:text-[11px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {order.styleNo || '—'}
-                            </div>
+                          <div className="flex items-center gap-1.5 flex-1 pl-2">
+                            <span className={`text-[10px] sm:text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Style:</span>
+                            <span className={`text-[11px] sm:text-xs font-bold truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>{order.styleNo || '—'}</span>
                           </div>
-                          <div className={`p-1 sm:p-1.5 rounded border ${isDarkMode ? 'bg-gray-800/20 border-gray-600/10' : 'bg-white/80 border-gray-200/40'
-                            }`}>
-                            <span className={`text-[8px] sm:text-[9px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Party</span>
-                            <div className={`text-[10px] sm:text-[11px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {order.priority && (
+                            <div className="flex items-center gap-1.5 flex-[0.8] pl-2">
+                              <span className={`text-[10px] sm:text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Prio:</span>
+                              <span className={`text-[11px] sm:text-xs font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>{order.priority}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Party Details */}
+                        <div className={`p-2 sm:p-2.5 rounded-xl border mb-2 ${isDarkMode ? 'bg-white/[0.015] border-gray-700' : 'bg-[#fbfcfd] border-gray-200'}`}>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[10px] sm:text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Party:</span>
+                            <span className={`text-[11px] sm:text-[13px] font-extrabold truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
                               {order.party && typeof order.party === 'object' ? order.party.name || '—' : order.party || '—'}
-                            </div>
+                            </span>
                           </div>
-                          <div className={`p-1 sm:p-1.5 rounded border ${isDarkMode ? 'bg-gray-800/20 border-gray-600/10' : 'bg-white/80 border-gray-200/40'
-                            }`}>
-                            <span className={`text-[8px] sm:text-[9px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Contact</span>
-                            <div className={`text-[10px] sm:text-[11px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {order.contactName || '—'}
+                          {(order.contactName || order.contactPhone) && (
+                            <div className="flex items-center flex-wrap gap-2.5 mt-1.5">
+                              {order.contactName && order.contactName !== 'Not selected' && (
+                                <div className="flex items-center gap-1">
+                                  <UserIcon className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                                  <span className={`text-[10px] sm:text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{order.contactName}</span>
+                                </div>
+                              )}
+                              {order.contactName && order.contactName !== 'Not selected' && order.contactPhone && order.contactPhone !== 'Not selected' && (
+                                <div className={`w-1 h-1 rounded-full ${isDarkMode ? 'bg-slate-600' : 'bg-slate-300'}`}></div>
+                              )}
+                              {order.contactPhone && order.contactPhone !== 'Not selected' && (
+                                <a href={`tel:${order.contactPhone}`} className="flex items-center gap-1 hover:opacity-80 transition-opacity">
+                                  <PhoneIcon className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                                  <span className={`text-[10px] sm:text-xs font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{order.contactPhone}</span>
+                                </a>
+                              )}
                             </div>
+                          )}
+                        </div>
+
+                        {/* Dates */}
+                        <div className="flex gap-2 mb-2">
+                          <div className={`flex-1 p-2 rounded-xl border flex flex-col items-center justify-center ${isDarkMode ? 'bg-white/[0.02] border-gray-700' : 'bg-[#f8fafc] border-gray-200'}`}>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <CalendarIcon className={`w-3 h-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                              <span className={`text-[9px] sm:text-[10px] font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Arrival</span>
+                            </div>
+                            <span className={`text-[10px] sm:text-[11px] font-extrabold ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>{formatDate(order.arrivalDate) === 'Not selected' ? '—' : formatDate(order.arrivalDate)}</span>
                           </div>
-                          <div className={`p-1 sm:p-1.5 rounded border ${isDarkMode ? 'bg-gray-800/20 border-gray-600/10' : 'bg-white/80 border-gray-200/40'
-                            }`}>
-                            <span className={`text-[8px] sm:text-[9px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Phone</span>
-                            <div className={`text-[10px] sm:text-[11px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {order.contactPhone || '—'}
+                          <div className={`flex-1 p-2 rounded-xl border flex flex-col items-center justify-center ${isDarkMode ? 'bg-white/[0.02] border-gray-700' : 'bg-[#f8fafc] border-gray-200'}`}>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <CalendarIcon className={`w-3 h-3 ${isDarkMode ? 'text-blue-400' : 'text-blue-500'}`} />
+                              <span className={`text-[9px] sm:text-[10px] font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>PO Date</span>
                             </div>
+                            <span className={`text-[10px] sm:text-[11px] font-extrabold ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>{formatDate(order.poDate) === 'Not selected' ? '—' : formatDate(order.poDate)}</span>
                           </div>
-                          <div className={`p-1 sm:p-1.5 rounded border ${isDarkMode ? 'bg-gray-800/20 border-gray-600/10' : 'bg-white/80 border-gray-200/40'
-                            }`}>
-                            <span className={`text-[8px] sm:text-[9px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Arrival</span>
-                            <div className={`text-[10px] sm:text-[11px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {formatDate(order.arrivalDate) === 'Not selected' ? '—' : formatDate(order.arrivalDate)}
+                          <div className={`flex-1 p-2 rounded-xl border flex flex-col items-center justify-center ${isDarkMode ? 'bg-white/[0.02] border-gray-700' : 'bg-[#f8fafc] border-gray-200'}`}>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <CalendarIcon className={`w-3 h-3 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                              <span className={`text-[9px] sm:text-[10px] font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Delivery</span>
                             </div>
-                          </div>
-                          <div className={`p-1 sm:p-1.5 rounded border ${isDarkMode ? 'bg-gray-800/20 border-gray-600/10' : 'bg-white/80 border-gray-200/40'
-                            }`}>
-                            <span className={`text-[8px] sm:text-[9px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>PO Date</span>
-                            <div className={`text-[10px] sm:text-[11px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {formatDate(order.poDate) === 'Not selected' ? '—' : formatDate(order.poDate)}
-                            </div>
-                          </div>
-                          <div className={`p-1 sm:p-1.5 rounded border ${isDarkMode ? 'bg-gray-800/20 border-gray-600/10' : 'bg-white/80 border-gray-200/40'
-                            }`}>
-                            <span className={`text-[8px] sm:text-[9px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Delivery</span>
-                            <div className={`text-[10px] sm:text-[11px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {formatDate(order.deliveryDate) === 'Not selected' ? '—' : formatDate(order.deliveryDate)}
-                            </div>
+                            <span className={`text-[10px] sm:text-[11px] font-black ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{formatDate(order.deliveryDate) === 'Not selected' ? '—' : formatDate(order.deliveryDate)}</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Items Section - Responsive Grid Showing All Items */}
+                      {/* Items */}
                       {order.items && order.items.length > 0 && (
-                        <div className={`p-1.5 sm:p-2 rounded border ${isDarkMode
-                          ? 'bg-gray-700/10 border-gray-600/20'
-                          : 'bg-gray-50/30 border-gray-200/30'
-                          }`}>
-                          <div className={`text-[9px] sm:text-[10px] font-bold mb-1.5 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <div className={`pt-2 mb-1 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                          <div className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                             Items ({order.items.length})
                           </div>
-
-                          {/* Responsive Grid - All Items Visible - More Compact */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1.5 sm:gap-2">
-                            {order.items.map((item, itemIndex) => (
-                              <div key={itemIndex} className={`${isDarkMode ? 'bg-gray-800/30 border-gray-600/20' : 'bg-white/90 border-gray-200/60'
-                                } rounded border shadow-sm overflow-hidden hover:shadow transition-shadow`}>
-                                <div className="p-1.5 sm:p-2 space-y-1.5">
-                                  {/* Item Image - Ultra Compact */}
-                                  <div className="relative group">
-                                    {item.imageUrls && item.imageUrls.length > 0 ? (
-                                      <div className="relative w-full aspect-square rounded overflow-hidden border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-700">
-                                        <img
-                                          src={item.imageUrls?.[0] || ''}
-                                          alt={`Item ${itemIndex + 1}`}
-                                          className="w-full h-full object-cover cursor-pointer transition-transform duration-200 group-hover:scale-105"
-                                          onClick={() => {
-                                            const imageUrls = item.imageUrls;
-                                            if (imageUrls && imageUrls.length > 0) {
-                                              handleImagePreview(imageUrls[0], `Item ${itemIndex + 1}`, imageUrls, 0);
-                                            }
-                                          }}
-                                        />
-                                        {item.imageUrls.length > 1 && (
-                                          <div className="absolute top-0.5 right-0.5 bg-blue-600 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center font-bold shadow border border-white dark:border-gray-800">
-                                            {item.imageUrls.length}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <div className={`w-full aspect-square rounded border flex items-center justify-center ${isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-100 border-gray-300'
-                                        }`}>
-                                        <PhotoIcon className={`h-6 w-6 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'
-                                          }`} />
+                          
+                          <div className="space-y-2">
+                            {order.items.slice(0, expandedItems[order._id as string] ? order.items.length : 1).map((item, itemIndex) => (
+                              <div key={itemIndex} className={`flex items-center p-2 sm:p-2.5 rounded-xl border ${isDarkMode ? 'bg-[#1e293b] border-gray-700' : 'bg-[#f8fafc] border-gray-200'}`}>
+                                {/* Image or Icon */}
+                                {item.imageUrls && item.imageUrls.length > 0 ? (
+                                  <div className="relative mr-2 sm:mr-2.5 cursor-pointer" onClick={() => handleImagePreview(item.imageUrls![0], `Item ${itemIndex + 1}`, item.imageUrls, 0)}>
+                                    <img src={item.imageUrls[0]} alt="Item" className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg object-cover ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`} />
+                                    {item.imageUrls.length > 1 && (
+                                      <div className={`absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-lg text-[8px] font-black text-white border-[1.5px] ${isDarkMode ? 'bg-blue-600 border-[#1e293b]' : 'bg-blue-600 border-white'}`}>
+                                        {item.imageUrls.length}
                                       </div>
                                     )}
                                   </div>
+                                ) : (
+                                  <div className={`mr-2 sm:mr-2.5 w-10 h-10 sm:w-11 sm:h-11 rounded-lg flex items-center justify-center ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                                    <ArchiveBoxIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                                  </div>
+                                )}
 
-                                  {/* Item Details - All Data Ultra Compact Grid */}
-                                  <div className="grid grid-cols-2 gap-1">
-                                    {/* Quality */}
-                                    <div className={`p-1 rounded border col-span-2 ${isDarkMode ? 'bg-gray-700/15 border-gray-600/15' : 'bg-gray-50/60 border-gray-200/40'
-                                      }`}>
-                                      <span className={`text-[8px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Quality</span>
-                                      <div className={`text-[10px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                        {item.quality && typeof item.quality === 'object' ? item.quality.name || '—' : '—'}
-                                      </div>
+                                {/* Details */}
+                                <div className="flex-1 mr-2 min-w-0">
+                                  <div className={`text-xs sm:text-sm font-extrabold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                                    {item.quality && typeof item.quality === 'object' ? item.quality.name || 'N/A' : 'N/A'}
+                                  </div>
+                                  <div className="flex items-center flex-wrap gap-1.5 mt-0.5 sm:mt-1">
+                                    <div className={`px-1.5 py-0.5 rounded-md border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'}`}>
+                                      <span className={`text-[9px] sm:text-[10px] font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>Qty: {item.quantity || '—'}</span>
                                     </div>
-
-                                    {/* Quantity */}
-                                    <div className={`p-1 rounded border ${isDarkMode ? 'bg-gray-700/15 border-gray-600/15' : 'bg-gray-50/60 border-gray-200/40'
-                                      }`}>
-                                      <span className={`text-[8px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Qty</span>
-                                      <div className={`text-[10px] font-extrabold mt-0.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                                        {item.quantity || 0}
-                                      </div>
-                                    </div>
-
-                                    {/* Description - if exists */}
                                     {item.description && (
-                                      <div className={`p-1 rounded border col-span-2 ${isDarkMode ? 'bg-gray-700/15 border-gray-600/15' : 'bg-gray-50/60 border-gray-200/40'
-                                        }`}>
-                                        <span className={`text-[8px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Desc</span>
-                                        <p className={`text-[9px] mt-0.5 line-clamp-1 truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                                          {item.description}
-                                        </p>
+                                      <div className={`px-1.5 py-0.5 rounded-md border max-w-[100px] sm:max-w-[150px] ${isDarkMode ? 'bg-slate-500/10 border-slate-500/20' : 'bg-slate-100 border-slate-300'}`}>
+                                        <span className={`text-[9px] sm:text-[10px] font-bold truncate block ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{item.description}</span>
                                       </div>
-                                    )}
-
-                                    {/* Weaver/Supplier Name */}
-                                    {item.weaverSupplierName && (
-                                      <div className={`p-1 rounded border col-span-2 ${isDarkMode ? 'bg-gray-700/15 border-gray-600/15' : 'bg-gray-50/60 border-gray-200/40'
-                                        }`}>
-                                        <span className={`text-[8px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Weaver</span>
-                                        <div className={`text-[10px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                          {item.weaverSupplierName}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Purchase Rate */}
-                                    {item.purchaseRate && (
-                                      <div className={`p-1 rounded border ${isDarkMode ? 'bg-gray-700/15 border-gray-600/15' : 'bg-gray-50/60 border-gray-200/40'
-                                        }`}>
-                                        <span className={`text-[8px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>P.Rate</span>
-                                        <div className={`text-[9px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
-                                          ₹{item.purchaseRate}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Mill Rate */}
-                                    {item.millRate && (
-                                      <div className={`p-1 rounded border ${isDarkMode ? 'bg-gray-700/15 border-gray-600/15' : 'bg-gray-50/60 border-gray-200/40'
-                                        }`}>
-                                        <span className={`text-[8px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>M.Rate</span>
-                                        <div className={`text-[9px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>
-                                          ₹{item.millRate}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Sales Rate */}
-                                    {item.salesRate && (
-                                      <div className={`p-1 rounded border col-span-2 ${isDarkMode ? 'bg-gray-700/15 border-gray-600/15' : 'bg-gray-50/60 border-gray-200/40'
-                                        }`}>
-                                        <span className={`text-[8px] font-semibold uppercase block ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>S.Rate</span>
-                                        <div className={`text-[9px] font-bold mt-0.5 truncate ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
-                                          ₹{item.salesRate}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Action Buttons - Ultra Compact */}
-                                  <div className="flex gap-1 pt-1 border-t border-gray-200 dark:border-gray-600">
-                                    {/* PDF Download Button - Only show for non-users */}
-                                    {!isUser && (
-                                      <button
-                                        onClick={() => handleDownloadItemPDF(order, item, itemIndex)}
-                                        className={`flex-1 px-1.5 py-1 text-[9px] font-bold rounded transition-all duration-200 hover-lift active:scale-95 ${isDarkMode
-                                          ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/40'
-                                          : 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-500'
-                                          }`}
-                                        title="Generate PDF"
-                                      >
-                                        <DocumentArrowDownIcon className="h-2.5 w-2.5 inline mr-0.5" />
-                                        PDF
-                                      </button>
-                                    )}
-
-                                    {isMaster && (
-                                      <button
-                                        onClick={() => handleDeleteItemClick(order._id, itemIndex, item.quality && typeof item.quality === 'object' ? item.quality.name || 'Item' : 'Item')}
-                                        className={`flex-1 px-1.5 py-1 text-[9px] font-bold rounded transition-all duration-200 hover-lift active:scale-95 delete-button-hover ${isDarkMode
-                                          ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-600/40'
-                                          : 'bg-red-600 text-white hover:bg-red-700 border border-red-500'
-                                          }`}
-                                        title="Delete item"
-                                      >
-                                        <TrashIcon className="h-2.5 w-2.5 inline mr-0.5" />
-                                        Del
-                                      </button>
                                     )}
                                   </div>
                                 </div>
+
+                                {/* Actions */}
+                                <div className="flex items-center gap-1.5">
+                                  {!isUser && (
+                                    <button
+                                      onClick={() => handleDownloadItemPDF(order, item, itemIndex)}
+                                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border transition-all hover-lift active:scale-95 ${isDarkMode ? 'bg-blue-600/15 border-blue-600/30' : 'bg-blue-50 border-blue-200'}`}
+                                      title="PDF"
+                                    >
+                                      <DocumentArrowDownIcon className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                                    </button>
+                                  )}
+                                  {isMaster && (
+                                    <button
+                                      onClick={() => handleDeleteItemClick(order._id, itemIndex, item.quality && typeof item.quality === 'object' ? item.quality.name || 'Item' : 'Item')}
+                                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border transition-all hover-lift active:scale-95 delete-button-hover ${isDarkMode ? 'bg-red-600/15 border-red-600/30' : 'bg-red-50 border-red-200'}`}
+                                      title="Delete"
+                                    >
+                                      <TrashIcon className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`} />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             ))}
+                            {order.items.length > 1 && (
+                              <button
+                                onClick={() => setExpandedItems(prev => ({ ...prev, [order._id as string]: !prev[order._id as string] }))}
+                                className={`w-full py-1.5 mt-1 text-[10px] sm:text-xs font-bold rounded-lg border border-dashed transition-colors flex items-center justify-center gap-1 ${isDarkMode ? 'text-gray-400 border-gray-600 hover:bg-gray-800' : 'text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                              >
+                                {expandedItems[order._id as string] ? (
+                                  <>
+                                    Show Less <ChevronUpIcon className="w-3 h-3" />
+                                  </>
+                                ) : (
+                                  <>
+                                    +{order.items.length - 1} More Item{order.items.length > 2 ? 's' : ''} <ChevronDownIcon className="w-3 h-3" />
+                                  </>
+                                )}
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
-                    </div>
 
-                    {/* Action Buttons - Mobile Optimized Grid */}
-                    <div className={`p-3 sm:p-4 border-t-2 ${isDarkMode
-                      ? 'border-gray-600/50 bg-gradient-to-br from-gray-700/30 to-gray-800/20'
-                      : 'border-gray-200 bg-gradient-to-br from-gray-50/50 to-white'
-                      }`}>
-                      <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 sm:gap-3">
-                        {/* Column 1: Add Grey Info, Add Mill Input, Mill Output, Dispatch */}
-                        <div className="space-y-2">
-                          <button
-                            type="button"
-                            key={`grey-info-card-${order._id}-${forceRender}`}
-                            onClick={() => handleGreyInfo(order)}
-                            disabled={loadingGreyInfo === order._id}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                handleGreyInfo(order);
-                              }
-                            }}
-                            className={`w-full px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center justify-center gap-1.5 sm:gap-2 relative disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${isDarkMode
-                              ? 'bg-gray-700/60 text-gray-200 border border-gray-600/50 hover:bg-gray-700 shadow-gray-900/20 focus:ring-offset-gray-800'
-                              : 'bg-gray-100 text-gray-800 border border-gray-300 hover:bg-gray-200 shadow-gray-200/50 focus:ring-offset-white'
+                      {/* Interactive Progress Pipeline */}
+                      <div className="my-2 mt-4">
+                        <div className="flex items-center justify-between px-2 sm:px-3">
+                          {/* Grey */}
+                          <div className="relative z-10 bg-inherit">
+                            <button
+                              onClick={() => handleGreyInfo(order)}
+                              disabled={loadingGreyInfo === order._id}
+                              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
+                                hasGreyInfo(order) 
+                                  ? (isDarkMode ? 'bg-slate-400/15 border-slate-400/80' : 'bg-slate-500/10 border-slate-500/80') 
+                                  : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
                               }`}
-                            title={hasGreyInfo(order) ? "Edit Grey Information" : "Add Grey Information"}
-                            aria-label={hasGreyInfo(order) ? "Edit Grey Information" : "Add Grey Information"}
-                          >
-                            {loadingGreyInfo === order._id ? (
-                              <>
-                                <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                                <span className="truncate">Loading...</span>
-                              </>
-                            ) : (
-                              <>
-                                <DocumentTextIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                                <span className="truncate">{hasGreyInfo(order) ? "Edit Grey Info" : "Add Grey Info"}</span>
-                              </>
-                            )}
-                            {/* Status indicator */}
-                            {loadingGreyInfo !== order._id && (
-                              <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
-                                } ${hasGreyInfo(order) ? 'bg-green-500 shadow-green-500/50' : 'bg-gray-400'
-                                }`} title={hasGreyInfo(order) ? "Data exists" : "No data"} />
-                            )}
-                          </button>
+                            >
+                              {loadingGreyInfo === order._id ? (
+                                <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasGreyInfo(order) ? (isDarkMode ? 'text-slate-300' : 'text-slate-600') : 'text-gray-500'}`} />
+                              ) : (
+                                <DocumentTextIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasGreyInfo(order) ? (isDarkMode ? 'text-slate-300' : 'text-slate-600') : 'text-gray-500'}`} />
+                              )}
+                            </button>
+                            {hasGreyInfo(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                          </div>
 
-                          <button
-                            key={`mill-input-card-${order._id}-${forceRender}`}
-                            onClick={() => handleMillInput(order)}
-                            disabled={loadingMillInput === order._id}
-                            className={`w-full px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md flex items-center justify-center gap-1.5 sm:gap-2 relative ${isDarkMode
-                              ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40 hover:bg-purple-600/40 shadow-purple-900/20'
-                              : 'bg-purple-100 text-purple-800 border border-purple-300 hover:bg-purple-200 shadow-purple-200/50'
-                              } ${loadingMillInput === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
-                            title={hasMillInputs(order) ? "Edit Mill Input" : "Add Mill Input"}
-                          >
-                            {loadingMillInput === order._id ? (
-                              <>
-                                <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                                <span className="truncate">Loading...</span>
-                              </>
-                            ) : (
-                              <>
-                                <CubeIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                                <span className="truncate">{hasMillInputs(order) ? "Mill Input" : "Add Input"}</span>
-                              </>
-                            )}
-                            {/* Status indicator */}
-                            {loadingMillInput !== order._id && (
-                              <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
-                                } ${hasMillInputs(order) ? 'bg-green-500 shadow-green-500/50' : 'bg-gray-400'
-                                }`} title={hasMillInputs(order) ? "Data exists" : "No data"} />
-                            )}
-                          </button>
+                          <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasLabData(order) ? 'bg-violet-500' : (hasGreyInfo(order) ? (isDarkMode ? 'bg-slate-300' : 'bg-slate-600') : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
 
-                          <button
-                            key={`mill-output-card-${order._id}-${forceRender}`}
-                            onClick={() => handleMillOutput(order)}
-                            disabled={loadingMillOutput === order._id}
-                            className={`w-full px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md flex items-center justify-center gap-1.5 sm:gap-2 relative ${isDarkMode
-                              ? 'bg-teal-600/30 text-teal-300 border border-teal-500/40 hover:bg-teal-600/40 shadow-teal-900/20'
-                              : 'bg-teal-100 text-teal-800 border border-teal-300 hover:bg-teal-200 shadow-teal-200/50'
-                              } ${loadingMillOutput === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
-                            title={hasMillOutputs(order) ? "Edit Mill Output" : "Add Mill Output"}
-                          >
-                            {loadingMillOutput === order._id ? (
-                              <>
-                                <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                                <span className="truncate">Loading...</span>
-                              </>
-                            ) : (
-                              <>
-                                <DocumentTextIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                                <span className="truncate">{hasMillOutputs(order) ? "Mill Output" : "Add Output"}</span>
-                              </>
-                            )}
-                            {/* Status indicator */}
-                            {loadingMillOutput !== order._id && (
-                              <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
-                                } ${hasMillOutputs(order) ? 'bg-green-500 shadow-green-500/50' : 'bg-gray-400'
-                                }`} title={hasMillOutputs(order) ? "Data exists" : "No data"} />
-                            )}
-                          </button>
-
-                          <button
-                            key={`dispatch-card-${order._id}-${forceRender}`}
-                            onClick={() => handleDispatch(order)}
-                            disabled={loadingDispatch === order._id}
-                            className={`w-full px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md flex items-center justify-center gap-1.5 sm:gap-2 relative ${isDarkMode
-                              ? 'bg-orange-600/30 text-orange-300 border border-orange-500/40 hover:bg-orange-600/40 shadow-orange-900/20'
-                              : 'bg-orange-100 text-orange-800 border border-orange-300 hover:bg-orange-200 shadow-orange-200/50'
-                              } ${loadingDispatch === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
-                            title={hasDispatches(order) ? "Edit Dispatch" : "Add Dispatch"}
-                          >
-                            {loadingDispatch === order._id ? (
-                              <>
-                                <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                                <span className="truncate">Loading...</span>
-                              </>
-                            ) : (
-                              <>
-                                <TruckIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                                <span className="truncate">{hasDispatches(order) ? "Dispatch" : "Add Dispatch"}</span>
-                              </>
-                            )}
-                            {/* Status indicator */}
-                            {loadingDispatch !== order._id && (
-                              <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
-                                } ${hasDispatches(order) ? 'bg-green-500 shadow-green-500/50' : 'bg-gray-400'
-                                }`} title={hasDispatches(order) ? "Data exists" : "No data"} />
-                            )}
-                          </button>
-                        </div>
-
-                        {/* Column 2: View Details, Edit, Lab Data, Delete, View Logs */}
-                        <div className="space-y-2">
-                          <button
-                            onClick={() => handleView(order)}
-                            className={`w-full px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md flex items-center justify-center gap-1.5 sm:gap-2 ${isDarkMode
-                              ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40 hover:bg-blue-600/40 shadow-blue-900/20'
-                              : 'bg-blue-100 text-blue-800 border border-blue-300 hover:bg-blue-200 shadow-blue-200/50'
-                              }`}
-                            title="View Order Details"
-                          >
-                            <EyeIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                            <span className="truncate">View</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleEdit(order)}
-                            className={`w-full px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md flex items-center justify-center gap-1.5 sm:gap-2 ${isDarkMode
-                              ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/40 shadow-emerald-900/20'
-                              : 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200 shadow-emerald-200/50'
-                              }`}
-                            title="Edit Order"
-                          >
-                            <PencilIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                            <span className="truncate">Edit</span>
-                          </button>
-
-                          <button
-                            key={`lab-card-${order._id}-${forceRender}`}
-                            onClick={() => {
-                              // ⚡ CRITICAL FIX: Always get the latest order from state to ensure lab data is current
-                              // This ensures that even if order was updated, we use the latest version
-                              const latestOrder = orders.find(o => o._id === order._id) || order;
-                              setSelectedOrderForLabData(latestOrder);
-                              setShowLabDataModal(true);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                // ⚡ CRITICAL FIX: Always get the latest order from state
+                          {/* Lab */}
+                          <div className="relative z-10 bg-inherit">
+                            <button
+                              onClick={() => {
                                 const latestOrder = orders.find(o => o._id === order._id) || order;
                                 setSelectedOrderForLabData(latestOrder);
                                 setShowLabDataModal(true);
-                              }
-                            }}
-                            className={`w-full px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 flex items-center justify-center gap-1.5 sm:gap-2 relative ${isDarkMode
-                              ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40 hover:bg-amber-600/40 shadow-amber-900/20 focus:ring-offset-gray-800'
-                              : 'bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 shadow-amber-200/50 focus:ring-offset-white'
+                              }}
+                              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
+                                hasLabData(order) 
+                                  ? 'bg-violet-500/15 border-violet-500' 
+                                  : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
                               }`}
-                            title={hasLabData(order) ? "Edit Lab Data" : "Add Lab Data"}
-                            aria-label={hasLabData(order) ? "Edit Lab Data" : "Add Lab Data"}
-                          >
-                            <BeakerIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                            <span className="truncate">{hasLabData(order) ? "Lab Data" : "Add Lab"}</span>
-                            {/* Status indicator */}
-                            <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
-                              } ${hasLabData(order) ? 'bg-green-500 shadow-green-500/50' : 'bg-gray-400'
-                              }`} title={hasLabData(order) ? "Data exists" : "No data"} />
-                          </button>
+                            >
+                              <BeakerIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasLabData(order) ? 'text-violet-500' : 'text-gray-500'}`} />
+                            </button>
+                            {hasLabData(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                          </div>
 
+                          <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasMillInputs(order) ? 'bg-cyan-500' : (hasLabData(order) ? 'bg-violet-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
+
+                          {/* Mill In */}
+                          <div className="relative z-10 bg-inherit">
+                            <button
+                              onClick={() => handleMillInput(order)}
+                              disabled={loadingMillInput === order._id}
+                              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
+                                hasMillInputs(order) 
+                                  ? 'bg-cyan-500/15 border-cyan-500' 
+                                  : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
+                              }`}
+                            >
+                              {loadingMillInput === order._id ? (
+                                <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasMillInputs(order) ? 'text-cyan-600' : 'text-gray-500'}`} />
+                              ) : (
+                                <CubeIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasMillInputs(order) ? 'text-cyan-600' : 'text-gray-500'}`} />
+                              )}
+                            </button>
+                            {hasMillInputs(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                          </div>
+
+                          <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasMillOutputs(order) ? 'bg-green-500' : (hasMillInputs(order) ? 'bg-cyan-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
+
+                          {/* Mill Out */}
+                          <div className="relative z-10 bg-inherit">
+                            <button
+                              onClick={() => handleMillOutput(order)}
+                              disabled={loadingMillOutput === order._id}
+                              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
+                                hasMillOutputs(order) 
+                                  ? 'bg-green-500/15 border-green-500' 
+                                  : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
+                              }`}
+                            >
+                              {loadingMillOutput === order._id ? (
+                                <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasMillOutputs(order) ? 'text-green-600' : 'text-gray-500'}`} />
+                              ) : (
+                                <DocumentTextIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasMillOutputs(order) ? 'text-green-600' : 'text-gray-500'}`} />
+                              )}
+                            </button>
+                            {hasMillOutputs(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                          </div>
+
+                          <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasDispatches(order) ? 'bg-orange-500' : (hasMillOutputs(order) ? 'bg-green-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
+
+                          {/* Dispatch */}
+                          <div className="relative z-10 bg-inherit">
+                            <button
+                              onClick={() => handleDispatch(order)}
+                              disabled={loadingDispatch === order._id}
+                              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
+                                hasDispatches(order) 
+                                  ? 'bg-orange-500/15 border-orange-500' 
+                                  : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
+                              }`}
+                            >
+                              {loadingDispatch === order._id ? (
+                                <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasDispatches(order) ? 'text-orange-500' : 'text-gray-500'}`} />
+                              ) : (
+                                <TruckIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasDispatches(order) ? 'text-orange-500' : 'text-gray-500'}`} />
+                              )}
+                            </button>
+                            {hasDispatches(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                          </div>
+                        </div>
+
+                        {/* Progress Labels */}
+                        <div className="flex justify-between px-1.5 sm:px-2 mt-1.5">
+                          <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasGreyInfo(order) ? (isDarkMode ? 'text-slate-300' : 'text-slate-600') : 'text-gray-500'}`}>Grey</span>
+                          <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasLabData(order) ? 'text-violet-500' : 'text-gray-500'}`}>Lab</span>
+                          <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasMillInputs(order) ? 'text-cyan-600' : 'text-gray-500'}`}>Mill In</span>
+                          <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasMillOutputs(order) ? 'text-green-600' : 'text-gray-500'}`}>Mill Out</span>
+                          <span className={`text-[8px] sm:text-[9px] font-bold w-11 text-center ${hasDispatches(order) ? 'text-orange-500' : 'text-gray-500'}`}>Dispatch</span>
+                        </div>
+                      </div>
+
+                      <div className="flex-grow"></div>
+
+                      {/* Timestamps */}
+                      <div className="flex items-center gap-1.5 mt-4 px-1">
+                        <ClockIcon className={`w-2.5 h-2.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                        <span className={`text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Created</span>
+                        <span className={`text-[9px] sm:text-[10px] flex-1 truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{new Date(order.createdAt).toLocaleString('en-IN', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}</span>
+                        <span className={`text-[8px] sm:text-[9px] mx-0.5 ${isDarkMode ? 'text-gray-600' : 'text-gray-300'}`}>•</span>
+                        <ArrowPathIcon className={`w-2.5 h-2.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+                        <span className={`text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Updated</span>
+                        <span className={`text-[9px] sm:text-[10px] flex-1 truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{new Date(order.updatedAt).toLocaleString('en-IN', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}</span>
+                      </div>
+
+                      {/* Footer Actions Divider */}
+                      <div className={`h-[1px] my-3 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />
+
+                      {/* Footer Actions */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleView(order)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${isDarkMode ? 'bg-blue-600/15 text-blue-400 hover:bg-blue-600/25' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                          >
+                            <EyeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <span className="text-[10px] sm:text-xs font-bold">Details</span>
+                          </button>
+                          <button
+                            onClick={() => handleViewLogs(order)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-white/5 border-gray-600 text-gray-300 hover:bg-white/10' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                          >
+                            <ChartBarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <span className="text-[10px] sm:text-xs font-bold">Logs</span>
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {!isParty && (
+                            <button
+                              onClick={() => handleEdit(order)}
+                              className={`p-1.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20' : 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'}`}
+                              title="Edit Order"
+                            >
+                              <PencilIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            </button>
+                          )}
                           {isMaster && (
                             <button
                               onClick={() => handleDeleteClick(order)}
                               disabled={deletingOrderId === String(order._id)}
-                              className={`w-full px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md flex items-center justify-center gap-1.5 sm:gap-2 delete-button-hover ${deletingOrderId === String(order._id)
-                                ? 'opacity-50 cursor-not-allowed'
-                                : ''
-                                } ${isDarkMode
-                                  ? 'bg-red-600/30 text-red-300 border border-red-500/40 hover:bg-red-600/40 shadow-red-900/20'
-                                  : 'bg-red-100 text-red-800 border border-red-300 hover:bg-red-200 shadow-red-200/50'
-                                 }`}
-                              title={deletingOrderId === String(order._id) ? "Deleting..." : "Delete Order"}
+                              className={`p-1.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-500 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'}`}
+                              title="Delete Order"
                             >
                               {deletingOrderId === String(order._id) ? (
-                                <>
-                                  <ArrowPathIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 animate-spin" />
-                                  <span className="truncate">Deleting...</span>
-                                </>
+                                <ArrowPathIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
                               ) : (
-                                <>
-                                  <TrashIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                                  <span className="truncate">Delete</span>
-                                </>
+                                <TrashIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                               )}
                             </button>
                           )}
-
-                          <button
-                            onClick={() => handleViewLogs(order)}
-                            className={`w-full px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 hover-lift active:scale-95 shadow-md flex items-center justify-center gap-1.5 sm:gap-2 ${isDarkMode
-                              ? 'bg-violet-600/30 text-violet-300 border border-violet-500/40 hover:bg-violet-600/40 shadow-violet-900/20'
-                              : 'bg-violet-100 text-violet-800 border border-violet-300 hover:bg-violet-200 shadow-violet-200/50'
-                              }`}
-                            title="View Logs"
-                          >
-                            <ChartBarIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                            <span className="truncate">Logs</span>
-                          </button>
                         </div>
                       </div>
 
                     </div>
                   </div>
-                  {/* Dark divider line between orders - bold */}
-                  {orderIndex < ordersToDisplay.length - 1 && (
-                    <div className={`h-1.5 w-full my-6 ${isDarkMode ? 'bg-gray-500' : 'bg-gray-500'
-                      }`} style={{
-                        boxShadow: isDarkMode ? '0 2px 4px rgba(0,0,0,0.5)' : '0 2px 4px rgba(0,0,0,0.2)'
-                      }}></div>
-                  )}
                 </div>
               );
             })
@@ -8126,9 +8102,33 @@ export default function OrdersClient({
                 </div>
               </div>
             </div>
-          ) : null}
+          ) : (
+            Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className={`flex flex-col h-[380px] rounded-2xl border animate-pulse ${isDarkMode ? 'bg-[#1e293b]/60 border-gray-700/60' : 'bg-gray-50 border-gray-200'}`}>
+                <div className="p-3 sm:p-3.5 flex flex-col h-full">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className={`h-6 w-24 rounded-lg ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
+                    <div className={`h-6 w-16 rounded-lg ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
+                  </div>
+                  <div className={`h-4 w-32 rounded mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
+                  
+                  <div className="flex gap-2 mb-4">
+                    <div className={`h-14 flex-1 rounded-xl ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200'}`}></div>
+                    <div className={`h-14 flex-1 rounded-xl ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200'}`}></div>
+                    <div className={`h-14 flex-1 rounded-xl ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200'}`}></div>
+                  </div>
 
-          {/* Card Layout Pagination removed - using top pagination only */}
+                  <div className={`h-4 w-16 rounded mb-2 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
+                  <div className={`h-16 w-full rounded-xl mb-4 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200'}`}></div>
+
+                  <div className="mt-auto">
+                    <div className={`h-8 w-full rounded-lg mb-4 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200'}`}></div>
+                    <div className={`h-10 w-full rounded-xl ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}          {/* Card Layout Pagination removed - using top pagination only */}
           {false && (
             <div className={`mt-8 px-3 sm:px-4 py-2 sm:py-3 border-t flex justify-center items-center ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
               }`}>
@@ -8330,6 +8330,7 @@ export default function OrdersClient({
           onSuccess={async (updatedOrderData?: any) => {
             // ⚡ IMMEDIATE: Close modal first for instant feedback
             setShowForm(false);
+            triggerDashboardRefresh();
             const wasEditing = !!editingOrder;
             const orderId = editingOrder?._id;
             setEditingOrder(null);
@@ -9875,6 +9876,7 @@ export default function OrdersClient({
               }
             }}
             onSuccess={async (operationType?: 'add' | 'edit' | 'delete') => {
+              triggerDashboardRefresh();
               const orderId = selectedOrderForMillInputForm?.orderId;
 
               if (orderId) {
@@ -10160,6 +10162,7 @@ export default function OrdersClient({
             setLoadingMillOutput(null); // Clear loading state
           }}
           onSuccess={async (operationType?: 'add' | 'edit' | 'delete') => {
+            triggerDashboardRefresh();
             const orderId = selectedOrderForMillOutput?.orderId;
 
             // ⚡ FIX: Removed router.refresh() - it causes full page reload
@@ -10327,6 +10330,7 @@ export default function OrdersClient({
             setLoadingDispatch(null); // Clear loading state
           }}
           onSuccess={async (operationType?: 'add' | 'edit' | 'delete') => {
+            triggerDashboardRefresh();
             const orderId = selectedOrderForDispatch?.orderId;
 
             // ⚡ FIX: Removed router.refresh() - it causes full page reload
@@ -10507,6 +10511,7 @@ export default function OrdersClient({
             setLoadingGreyInfo(null); // Clear loading state when modal closes
           }}
           onSuccess={async (savedEntries?: any[]) => {
+            triggerDashboardRefresh();
             // ⚡ IMMEDIATE UI UPDATE: Update orders list and state instantly
             if (selectedOrderForGreyInfo?._id || selectedOrderForGreyInfo?.orderId) {
               const order = selectedOrderForGreyInfo;

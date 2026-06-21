@@ -12,6 +12,7 @@ interface User {
   role: string;
   isActive: boolean;
   partyId?: { _id: string; name: string } | string;
+  profilePhoto?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -60,12 +61,16 @@ export default function UserCardView({
           >
             {/* User Avatar and Basic Info */}
             <div className="flex items-center space-x-3 mb-3">
-              <div className={`h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold ${
+              <div className={`h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold overflow-hidden ${
                 isDarkMode
                   ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
                   : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white'
               }`}>
-                {getUserInitials(user.name)}
+                {user.profilePhoto ? (
+                  <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                  getUserInitials(user.name)
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className={`text-sm font-medium truncate ${

@@ -31,6 +31,7 @@ export interface IUser extends Document {
     employeeId?: string;
     notes?: string;
   };
+  profilePhoto?: string;
   createdAt: Date;
   updatedAt: Date;
   
@@ -115,6 +116,11 @@ const UserSchema = new Schema<IUser>({
     type: String,
     trim: true,
     maxlength: [200, "Address cannot exceed 200 characters"]
+  },
+  profilePhoto: {
+    type: String,
+    trim: true,
+    default: ''
   },
   role: {
     type: String,
@@ -481,6 +487,7 @@ UserSchema.virtual('fullProfile').get(function() {
     email: this.email,
     phoneNumber: this.phoneNumber,
     address: this.address,
+    profilePhoto: this.profilePhoto,
     role: this.role,
     isActive: this.isActive,
     lastLogin: this.lastLogin,

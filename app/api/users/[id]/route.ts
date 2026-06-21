@@ -66,7 +66,7 @@ export async function PUT(
     // Require superadmin access
     const session = await requireSuperAdmin(req);
 
-    const { name, username, password, role, phoneNumber, address, partyId } = await req.json();
+    const { name, username, password, role, phoneNumber, address, partyId, profilePhoto } = await req.json();
     
     // Validation
     const errors: string[] = [];
@@ -138,6 +138,7 @@ export async function PUT(
     if (role === "master" && session.role === "master") update.role = role;
     if (typeof phoneNumber === "string") update.phoneNumber = phoneNumber.trim();
     if (typeof address === "string") update.address = address.trim();
+    if (typeof profilePhoto === "string") update.profilePhoto = profilePhoto.trim();
     if (typeof password === "string" && password.length > 0) {
       update.password = await bcrypt.hash(password, 10);
     }

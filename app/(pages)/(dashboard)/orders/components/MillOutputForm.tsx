@@ -1971,18 +1971,22 @@ export default function MillOutputForm({
         }
       `}</style>
 
-      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
-        <div className={`relative w-full max-w-7xl max-h-[95vh] overflow-hidden rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
+      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-0 sm:p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
+        <div className={`relative w-full max-w-7xl min-h-screen sm:min-h-0 max-h-[100vh] sm:max-h-[95vh] overflow-hidden rounded-none sm:rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
           }`}>
 
           {/* Loading Overlay for Loading Data */}
           {loadingData && (
             <div className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-10">
-              <div className={`p-6 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'
+              <div className={`px-4 sm:px-6 py-3 sm:py-6 rounded-full sm:rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'
                 }`}>
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="mt-3 text-sm font-medium">Loading mill output data...</p>
-                <p className="mt-1 text-xs text-gray-500">Please wait while we fetch your data</p>
+                <div className="flex items-center space-x-0 sm:flex-col sm:space-x-0 sm:space-y-3">
+                  <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-blue-500 sm:mx-auto"></div>
+                  <div className="hidden sm:block text-center">
+                    <p className="text-sm font-medium">Loading mill output data...</p>
+                    <p className="mt-1 text-xs text-gray-500">Please wait while we fetch your data</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1990,11 +1994,15 @@ export default function MillOutputForm({
           {/* Loading Overlay for Saving */}
           {saving && (
             <div className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-10">
-              <div className={`p-6 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'
+              <div className={`px-4 sm:px-6 py-3 sm:py-6 rounded-full sm:rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'
                 }`}>
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="mt-3 text-sm font-medium">Saving mill output data...</p>
-                <p className="mt-1 text-xs text-gray-500">Please wait while we process your data</p>
+                <div className="flex items-center space-x-0 sm:flex-col sm:space-x-0 sm:space-y-3">
+                  <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-blue-500 sm:mx-auto"></div>
+                  <div className="hidden sm:block text-center">
+                    <p className="text-sm font-medium">Saving mill output data...</p>
+                    <p className="mt-1 text-xs text-gray-500">Please wait while we process your data</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2059,9 +2067,11 @@ export default function MillOutputForm({
               <div>
 
                 <div className="space-y-6">
-                  {formData.millOutputItems.map((item, itemIndex) => (
-                    <div key={item.id} id={`mill-output-item-${item.id}`} className={`p-6 rounded-xl border transition-all duration-200 hover:shadow-lg ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
-                      }`}>
+                  {formData.millOutputItems.map((item, itemIndex) => {
+                    const showM1Delete = !readOnly && (!hasExistingData || item.id.startsWith('new-') || isMaster) && item.additionalFinishedMtr.length > 0;
+                    return (
+                      <div key={item.id} id={`mill-output-item-${item.id}`} className={`p-6 rounded-xl border transition-all duration-200 hover:shadow-lg ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+                        }`}>
                       {/* ⚡ FIX: Item header with number and delete button - only show if multiple items */}
                       {formData.millOutputItems.length > 1 && (
                         <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-300 dark:border-gray-600">
@@ -2153,7 +2163,7 @@ export default function MillOutputForm({
                         </h6>
                         <div className="space-y-4">
                           {/* M1 Fields (Always visible) - 3 columns with delete button - Full Width Horizontal Layout */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className={`grid grid-cols-1 ${showM1Delete ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
                             {/* Quality for M1 */}
                             <div>
                               <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
@@ -2276,40 +2286,32 @@ export default function MillOutputForm({
                             </div>
 
                             {/* ⚡ FIX: Delete button for M1 only - disabled if only M1 exists (no M2) */}
-                            <div className="flex items-end">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-
-                                  // Only allow deletion if M2 exists (so M2 can move to M1)
-                                  if (item.additionalFinishedMtr.length === 0) {
-                                    return;
-                                  }
-
-                                  // Delete only M1 (main entry) - M2 will move to M1
-                                  removeMainFinishedMtr(item.id);
-                                }}
-                                disabled={readOnly || item.additionalFinishedMtr.length === 0}
-                                className={`w-full px-3 py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${item.additionalFinishedMtr.length === 0
-                                  ? isDarkMode
-                                    ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
-                                    : 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'
-                                  : isDarkMode
-                                    ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
-                                    : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
-                                  }`}
-                                title={item.additionalFinishedMtr.length === 0 ? "Cannot delete - at least one entry (M1) required" : "Delete M1 only (M2 will move to M1 if exists)"}
-                              >
-                                <TrashIcon className="h-5 w-5" />
-                              </button>
-                            </div>
+                            {showM1Delete && (
+                              <div className="flex items-end">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    removeMainFinishedMtr(item.id);
+                                  }}
+                                  className={`w-full px-3 py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${isDarkMode
+                                      ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
+                                      : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
+                                    }`}
+                                  title="Delete M1 only (M2 will move to M1 if exists)"
+                                >
+                                  <TrashIcon className="h-5 w-5" />
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           {/* Additional Fields (M2, M3, M4, etc.) - 3 columns with delete button in same row - Full Width Horizontal Layout */}
-                          {item.additionalFinishedMtr.map((additional, index) => (
-                            <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {item.additionalFinishedMtr.map((additional, index) => {
+                            const showAdditionalDelete = !readOnly && (!hasExistingData || item.id.startsWith('new-') || isMaster);
+                            return (
+                              <div key={index} className={`grid grid-cols-1 ${showAdditionalDelete ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
                               {/* Quality for Additional Meters */}
                               <div>
                                 <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
@@ -2411,38 +2413,28 @@ export default function MillOutputForm({
                               </div>
 
                               {/* ⚡ FIX: Delete button in same row - enabled when multiple entries exist (like dispatch) */}
-                              <div className="flex items-end">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-
-                                    // Only allow deletion if there's more than one entry (M1 + at least one additional)
-                                    const totalEntries = 1 + (item.additionalFinishedMtr.length || 0);
-                                    if (totalEntries <= 1) {
-                                      return;
-                                    }
-
-                                    // Remove additional meter (M2, M3, etc.)
-                                    removeAdditionalFinishedMtr(item.id, index);
-                                  }}
-                                  disabled={readOnly || 1 + (item.additionalFinishedMtr.length || 0) <= 1}
-                                  className={`w-full px-3 py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${1 + (item.additionalFinishedMtr.length || 0) <= 1
-                                    ? isDarkMode
-                                      ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
-                                      : 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'
-                                    : isDarkMode
-                                      ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
-                                      : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
-                                    }`}
-                                  title={1 + (item.additionalFinishedMtr.length || 0) <= 1 ? "Cannot delete - at least one entry required" : `Delete M${index + 2} row`}
-                                >
-                                  <TrashIcon className="h-5 w-5" />
-                                </button>
-                              </div>
+                              {showAdditionalDelete && (
+                                <div className="flex items-end">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      removeAdditionalFinishedMtr(item.id, index);
+                                    }}
+                                    className={`w-full px-3 py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${isDarkMode
+                                        ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
+                                        : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
+                                      }`}
+                                    title={`Delete M${index + 2} row`}
+                                  >
+                                    <TrashIcon className="h-5 w-5" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -2463,7 +2455,8 @@ export default function MillOutputForm({
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Add Item Card */}
                   {!readOnly && (

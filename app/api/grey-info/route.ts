@@ -22,17 +22,27 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get('orderId');
+    const orderIds = searchParams.get('orderIds');
 
     let greyInfoEntries;
     
     // ⚡ OPTIMIZED: Query without populate (fetch related data separately - MUCH faster)
-    const query: any = orderId ? { orderId } : {};
+    let query: any = {};
+    if (orderId) {
+      query.orderId = orderId;
+    } else if (orderIds) {
+      const ids = orderIds.split(',').map(id => id.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        query.orderId = { $in: ids };
+      }
+    }
+    
     const queryBuilder = GreyInfo.find(query)
       .select('orderId order quality quantity chalanNo numberOfPieces date weaverName createdAt updatedAt')
       .sort({ createdAt: -1 });
     
-    // Only apply limit when fetching all (not when filtering by orderId)
-    if (!orderId) {
+    // Only apply limit when fetching all (not when filtering by orderId or orderIds)
+    if (!orderId && !orderIds) {
       queryBuilder.limit(1000);
     }
     
@@ -41,11 +51,11 @@ export async function GET(request: NextRequest) {
       .maxTimeMS(2000);
     
     // ⚡ Fetch related data separately (batch queries - no N+1)
-    const orderIds = [...new Set(greyInfoEntries.map((gi: any) => gi.order).filter(Boolean))];
+    const uniqueOrderIds = [...new Set(greyInfoEntries.map((gi: any) => gi.order).filter(Boolean))];
     const qualityIds = [...new Set(greyInfoEntries.map((gi: any) => gi.quality).filter(Boolean))];
     
     const [orders, qualities] = await Promise.all([
-      orderIds.length > 0 ? Order.find({ _id: { $in: orderIds } })
+      uniqueOrderIds.length > 0 ? Order.find({ _id: { $in: uniqueOrderIds } })
         .select('_id orderId')
         .lean()
         .maxTimeMS(1000) : Promise.resolve([]),

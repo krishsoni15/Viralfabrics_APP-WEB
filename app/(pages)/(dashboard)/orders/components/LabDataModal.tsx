@@ -1044,16 +1044,16 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate, 
   if (!isOpen || !mounted) return null;
 
   return (
-    <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
-      <div ref={modalContentRef} className={`relative w-full max-w-6xl max-h-[95vh] overflow-y-auto rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
+    <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-0 sm:p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
+      <div ref={modalContentRef} className={`relative w-full max-w-6xl min-h-screen sm:min-h-0 max-h-[100vh] sm:max-h-[95vh] overflow-y-auto rounded-none sm:rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
         }`}>
         {/* ⚡ FIX: Better loading indicator with descriptive message */}
         {loadingData && (
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm z-10 flex items-center justify-center">
-            <div className={`px-6 py-4 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg`}>
-              <div className="flex items-center space-x-3">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                <div className="flex flex-col">
+            <div className={`px-4 sm:px-6 py-3 sm:py-4 rounded-full sm:rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg`}>
+              <div className="flex items-center space-x-0 sm:space-x-3">
+                <div className="animate-spin rounded-full h-8 w-8 sm:h-6 sm:w-6 border-b-2 border-blue-500"></div>
+                <div className="hidden sm:flex flex-col">
                   <span className={`text-base font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                     Loading Lab Data...
                   </span>

@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the user to ensure they still exist
-    const user = await User.findById(decoded.id).select('_id username name role partyId email phoneNumber address');
+    const user = await User.findById(decoded.id).select('_id username name role partyId email phoneNumber address profilePhoto');
     if (!user) {
       return unauthorized('User not found');
     }
@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
         address: user.address,
         role: user.role,
         partyId: user.partyId ? user.partyId.toString() : undefined,
+        profilePhoto: user.profilePhoto,
         exp: exp // Include expiration time
       }
     }), { 

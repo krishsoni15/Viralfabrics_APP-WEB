@@ -106,6 +106,7 @@ export default function OrderDetailsPage() {
   const [qualities, setQualities] = useState<Quality[]>([]);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // ⚡ FIX: Prevent modal flickering - refs to track if modal is opening/closing
   const modalOperationRef = useRef({
@@ -158,13 +159,15 @@ export default function OrderDetailsPage() {
 
         // Fetch critical order data first for instant display
         try {
-          const orderResponse = await fetch(`/api/orders/${orderMongoId}`, {
+          const timestamp = Date.now();
+          const orderResponse = await fetch(`/api/orders/${orderMongoId}?t=${timestamp}`, {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Accept': 'application/json',
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache'
             },
-            cache: 'no-cache', // Ensure fresh data
+            cache: 'no-store', // Ensure fresh data
             method: 'GET'
           });
 
@@ -216,9 +219,9 @@ export default function OrderDetailsPage() {
 
           // Fetch order-specific data if order is available
           order && Promise.all([
-            fetch(`/api/mill-inputs?orderId=${order.orderId}`, {
-              headers: { 'Authorization': `Bearer ${token}` },
-              cache: 'no-cache' // Fresh data for order-specific info
+            fetch(`/api/mill-inputs?orderId=${order.orderId}&t=${Date.now()}`, {
+              headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+              cache: 'no-store' // Fresh data for order-specific info
             })
               .then(res => res.json())
               .then(data => {
@@ -232,9 +235,9 @@ export default function OrderDetailsPage() {
                 setLoadingSections(prev => ({ ...prev, millInputs: false }));
               }),
 
-            fetch(`/api/mill-outputs?orderId=${order.orderId}`, {
-              headers: { 'Authorization': `Bearer ${token}` },
-              cache: 'no-cache' // Fresh data for order-specific info
+            fetch(`/api/mill-outputs?orderId=${order.orderId}&t=${Date.now()}`, {
+              headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+              cache: 'no-store' // Fresh data for order-specific info
             })
               .then(res => res.json())
               .then(data => {
@@ -242,9 +245,9 @@ export default function OrderDetailsPage() {
                 setLoadingSections(prev => ({ ...prev, millOutputs: false }));
               }),
 
-            fetch(`/api/dispatch?orderId=${order.orderId}`, {
-              headers: { 'Authorization': `Bearer ${token}` },
-              cache: 'no-cache' // Fresh data for order-specific info
+            fetch(`/api/dispatch?orderId=${order.orderId}&t=${Date.now()}`, {
+              headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+              cache: 'no-store' // Fresh data for order-specific info
             })
               .then(res => res.json())
               .then(data => {
@@ -252,9 +255,9 @@ export default function OrderDetailsPage() {
                 setLoadingSections(prev => ({ ...prev, dispatches: false }));
               }),
 
-            fetch(`/api/grey-info?orderId=${encodeURIComponent(order.orderId)}`, {
-              headers: { 'Authorization': `Bearer ${token}` },
-              cache: 'no-cache' // Fresh data for order-specific info
+            fetch(`/api/grey-info?orderId=${encodeURIComponent(order.orderId)}&t=${Date.now()}`, {
+              headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+              cache: 'no-store' // Fresh data for order-specific info
             })
               .then(res => res.json())
               .then(data => {
@@ -272,7 +275,37 @@ export default function OrderDetailsPage() {
 
       fetchAllOrderData();
     }
-  }, [orderMongoId, order?.orderId, loading]);
+  }, [orderMongoId, order?.orderId, loading, refreshTrigger]);
+
+  // ⚡ FIX: Add Real-Time event listeners for Dashboard Refresh
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    
+    const handleRealtimeSync = () => {
+      // Debounce the refresh
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setRefreshTrigger(prev => prev + 1);
+      }, 500);
+    };
+
+    window.addEventListener('dashboardRefresh', handleRealtimeSync);
+    window.addEventListener('realtimeDataChanged', handleRealtimeSync);
+    
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'dashboardRefresh') {
+        handleRealtimeSync();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('dashboardRefresh', handleRealtimeSync);
+      window.removeEventListener('realtimeDataChanged', handleRealtimeSync);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
 
   const party = typeof order?.party === 'string' ? null : order?.party;

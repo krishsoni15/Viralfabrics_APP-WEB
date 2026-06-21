@@ -1662,273 +1662,262 @@ export default function WeaverSamplesViewPage() {
                   {/* Sample Details Grid */}
                   <div 
                     id={`sample-details-${sample._id}`}
-                    className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5 min-[400px]:gap-2 sm:gap-2 md:gap-3"
+                    className="grid grid-cols-2 md:grid-cols-5 gap-1.5 min-[400px]:gap-2 sm:gap-2 md:gap-3"
                   >
-                    {sample.greighWidth > 0 && (
-                      <div 
-                        id={`detail-greigh-width-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <CubeIconOutline className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Greigh Width</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.greighWidth}"
-                        </p>
-                      </div>
-                    )}
-                    {sample.finishWidth > 0 && (
-                      <div 
-                        id={`detail-finish-width-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <CubeIconOutline className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Finish Width</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.finishWidth}"
-                        </p>
-                      </div>
-                    )}
-                    {sample.weight > 0 && (
-                      <div 
-                        id={`detail-weight-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <ScaleIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Weight</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.weight} KG
-                        </p>
-                      </div>
-                    )}
-                    {sample.gsm > 0 && (
-                      <div 
-                        id={`detail-gsm-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <CubeIconOutline className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">GSM</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.gsm}
-                        </p>
-                      </div>
-                    )}
-                    {sample.greighRate > 0 && (
-                      <div 
-                        id={`detail-greigh-rate-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <CurrencyDollarIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Greigh Rate</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          ₹{sample.greighRate}
-                        </p>
-                      </div>
-                    )}
-                    {sample.count > 0 && (
-                      <div 
-                        id={`detail-count-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <HashtagIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Count</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.count}
-                        </p>
-                      </div>
-                    )}
-                    {sample.reed > 0 && (
-                      <div 
-                        id={`detail-reed-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <HashtagIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Reed</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.reed}
-                        </p>
-                      </div>
-                    )}
-                    {sample.pick > 0 && (
-                      <div 
-                        id={`detail-pick-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <HashtagIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Pick</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.pick}
-                        </p>
-                      </div>
-                    )}
-                    {sample.content && (
-                      <div 
-                        id={`detail-content-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <CubeIconOutline className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Content</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.content}
-                        </p>
-                      </div>
-                    )}
-                    {sample.danier && (
-                      <div 
-                        id={`detail-danier-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <HashtagIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Danier</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.danier}
-                        </p>
-                      </div>
-                    )}
-                    {sample.rack && (
-                      <div 
-                        id={`detail-rack-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <CubeIconOutline className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Rack</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.rack}
-                        </p>
-                      </div>
-                    )}
-                    {sample.note?.trim() && (
-                      <div 
-                        id={`detail-note-${sample._id}`}
-                        className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
-                          isDarkMode 
-                            ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
-                            : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
-                        }`}
-                      >
-                        <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
-                          isDarkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          <DocumentTextIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                          <span className="leading-tight">Note</span>
-                        </p>
-                        <p className={`text-sm min-[400px]:text-base md:text-lg font-medium line-clamp-3 ${
-                          isDarkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          {sample.note}
-                        </p>
-                      </div>
-                    )}
+                    {/* Greigh Width */}
+                    <div 
+                      id={`detail-greigh-width-${sample._id}`}
+                      className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
+                        isDarkMode 
+                          ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <CubeIconOutline className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                        <span className="leading-tight">Greigh Width</span>
+                      </p>
+                      <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {sample.greighWidth > 0 ? `${sample.greighWidth}"` : '-'}
+                      </p>
+                    </div>
+
+                    {/* Finish Width */}
+                    <div 
+                      id={`detail-finish-width-${sample._id}`}
+                      className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
+                        isDarkMode 
+                          ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <CubeIconOutline className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                        <span className="leading-tight">Finish Width</span>
+                      </p>
+                      <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {sample.finishWidth > 0 ? `${sample.finishWidth}"` : '-'}
+                      </p>
+                    </div>
+
+                    {/* Weight */}
+                    <div 
+                      id={`detail-weight-${sample._id}`}
+                      className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
+                        isDarkMode 
+                          ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <ScaleIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                        <span className="leading-tight">Weight</span>
+                      </p>
+                      <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {sample.weight > 0 ? `${sample.weight} KG` : '-'}
+                      </p>
+                    </div>
+
+                    {/* GSM */}
+                    <div 
+                      id={`detail-gsm-${sample._id}`}
+                      className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
+                        isDarkMode 
+                          ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <CubeIconOutline className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                        <span className="leading-tight">GSM</span>
+                      </p>
+                      <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {sample.gsm > 0 ? sample.gsm : '-'}
+                      </p>
+                    </div>
+
+                    {/* Greigh Rate */}
+                    <div 
+                      id={`detail-greigh-rate-${sample._id}`}
+                      className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
+                        isDarkMode 
+                          ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <CurrencyDollarIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                        <span className="leading-tight">Greigh Rate</span>
+                      </p>
+                      <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {sample.greighRate > 0 ? `₹${sample.greighRate}` : '-'}
+                      </p>
+                    </div>
+
+                    {/* Count */}
+                    <div 
+                      id={`detail-count-${sample._id}`}
+                      className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
+                        isDarkMode 
+                          ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <HashtagIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                        <span className="leading-tight">Count</span>
+                      </p>
+                      <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {sample.count > 0 ? sample.count : '-'}
+                      </p>
+                    </div>
+
+                    {/* Reed */}
+                    <div 
+                      id={`detail-reed-${sample._id}`}
+                      className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
+                        isDarkMode 
+                          ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <HashtagIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                        <span className="leading-tight">Reed</span>
+                      </p>
+                      <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {sample.reed > 0 ? sample.reed : '-'}
+                      </p>
+                    </div>
+
+                    {/* Pick */}
+                    <div 
+                      id={`detail-pick-${sample._id}`}
+                      className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
+                        isDarkMode 
+                          ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <HashtagIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                        <span className="leading-tight">Pick</span>
+                      </p>
+                      <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {sample.pick > 0 ? sample.pick : '-'}
+                      </p>
+                    </div>
+
+                    {/* Content */}
+                    <div 
+                      id={`detail-content-${sample._id}`}
+                      className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
+                        isDarkMode 
+                          ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <CubeIconOutline className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                        <span className="leading-tight">Content</span>
+                      </p>
+                      <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {sample.content || '-'}
+                      </p>
+                    </div>
+
+                    {/* Danier */}
+                    <div 
+                      id={`detail-danier-${sample._id}`}
+                      className={`p-1.5 min-[400px]:p-2 sm:p-2.5 md:p-3 rounded-lg transition-all hover:scale-105 ${
+                        isDarkMode 
+                          ? 'bg-gray-700/60 border border-gray-600 hover:border-blue-500' 
+                          : 'bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <p className={`text-[9px] min-[400px]:text-[10px] sm:text-[10px] md:text-xs font-semibold uppercase mb-0.5 flex items-center space-x-0.5 min-[400px]:space-x-1 ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        <HashtagIcon className="h-2 w-2 min-[400px]:h-2.5 min-[400px]:w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+                        <span className="leading-tight">Danier</span>
+                      </p>
+                      <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {sample.danier || '-'}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Rack & Note Row */}
+                  {(sample.rack || sample.note?.trim()) && (
+                    <div className={`mt-3 pt-3 border-t ${
+                      isDarkMode ? 'border-gray-700/60' : 'border-gray-200'
+                    } flex flex-col gap-3`}>
+                      {sample.rack && (
+                        <div className="flex items-center space-x-2">
+                          <div className={`flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            isDarkMode 
+                              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
+                              : 'bg-blue-50/70 text-blue-700 border border-blue-100'
+                          }`}>
+                            <CubeIconOutline className="h-3 w-3" />
+                            <span>Rack:</span>
+                            <span className="font-bold">{sample.rack}</span>
+                          </div>
+                        </div>
+                      )}
+                      {sample.note?.trim() && (
+                        <div className={`p-2.5 rounded-lg text-xs leading-relaxed ${
+                          isDarkMode 
+                            ? 'bg-gray-800/40 text-gray-300 border border-gray-700/40' 
+                            : 'bg-gray-50 text-gray-600 border border-gray-200/60'
+                        }`}>
+                          <div className="flex items-center space-x-1 mb-1 font-semibold uppercase text-[10px] tracking-wider text-gray-500">
+                            <DocumentTextIcon className="h-3 w-3" />
+                            <span>Note</span>
+                          </div>
+                          <p className="whitespace-pre-wrap">{sample.note}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               );

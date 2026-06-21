@@ -65,8 +65,13 @@ export async function GET(req: NextRequest) {
     const skip = (page - 1) * limit;
     const cacheKey = `parties-${search || 'all'}-${limit}-${page}`;
     
+    // ⚡ FIX: Respect no-cache header or timestamp parameter for real-time synchronization
+    const skipCache = req.headers.get('cache-control')?.includes('no-cache') || 
+                      req.headers.get('pragma')?.includes('no-cache') ||
+                      searchParams.has('_t');
+    
     const cached = partiesCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+    if (!skipCache && cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
       // Return consistent structure: { success: true, data: [...], pagination: {...} }
       const cachedResponse = cached.data;
       return new Response(JSON.stringify({

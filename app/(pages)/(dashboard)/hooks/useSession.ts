@@ -9,6 +9,7 @@ export interface SessionUser {
   role: string;
   phoneNumber?: string;
   address?: string;
+  profilePhoto?: string;
 }
 
 export function useSession() {

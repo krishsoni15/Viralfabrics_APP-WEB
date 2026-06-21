@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
       role: 1,
       isActive: 1,
       partyId: 1,
+      profilePhoto: 1,
       createdAt: 1
     })
     .populate('partyId', 'name')
@@ -140,7 +141,7 @@ export async function POST(req: NextRequest) {
 
     const session = await requireSuperAdmin(req);
 
-    const { name, username, password, role: newUserRole, phoneNumber, address, partyId } = await req.json();
+    const { name, username, password, role: newUserRole, phoneNumber, address, partyId, profilePhoto } = await req.json();
 
     // Validation
     const errors: string[] = [];
@@ -200,6 +201,7 @@ export async function POST(req: NextRequest) {
       phoneNumber?: string;
       address?: string;
       partyId?: string;
+      profilePhoto?: string;
     } = {
       name: name.trim(),
       username: username.trim(),
@@ -207,6 +209,7 @@ export async function POST(req: NextRequest) {
       role: targetRole,
       phoneNumber: phoneNumber ? phoneNumber.trim() : undefined,
       address: address ? address.trim() : undefined,
+      profilePhoto: profilePhoto ? profilePhoto.trim() : undefined,
     };
 
     if (targetRole === "party" && partyId) {
@@ -222,6 +225,7 @@ export async function POST(req: NextRequest) {
       phoneNumber: created.phoneNumber,
       address: created.address,
       role: created.role,
+      profilePhoto: created.profilePhoto,
       createdAt: created.createdAt,
       updatedAt: created.updatedAt,
     };
