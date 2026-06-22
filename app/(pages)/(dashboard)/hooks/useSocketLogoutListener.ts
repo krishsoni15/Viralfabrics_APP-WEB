@@ -28,6 +28,7 @@ export function useSocketLogoutListener(onLogout: (data?: {
   const pollingIntervalRef = useRef<any>(null);
   const socketConnectedRef = useRef(false);
   const lastCheckedTimestampRef = useRef<string | null>(null);
+  const lastCheckedDataChangeTimestampRef = useRef<string | null>(null);
 
   // Keep the global callback updated with the latest function reference
   useEffect(() => {
@@ -53,7 +54,7 @@ export function useSocketLogoutListener(onLogout: (data?: {
 
     // Polling fallback function (for Vercel/serverless where Socket.IO doesn't work)
     const startPolling = () => {
-      // ⚡ OPTIMIZATION: Poll every 10 seconds instead of 2 seconds (reduces load by 80%)
+      // ⚡ OPTIMIZATION: Poll every 8 seconds instead of 10 for slightly faster updates on Vercel
       // Also add request deduplication to prevent multiple simultaneous requests
       let isPolling = false;
       
@@ -66,21 +67,43 @@ export function useSocketLogoutListener(onLogout: (data?: {
         isPolling = true;
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+          const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 second timeout
           
-          const response = await fetch('/api/auth/logout-all-status', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Cache-Control': 'no-cache'
-            },
-            cache: 'no-store',
-            signal: controller.signal
-          });
+          // Poll both endpoints in parallel for efficiency
+          const [logoutRes, dataChangeRes] = await Promise.all([
+            fetch('/api/auth/logout-all-status', {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Cache-Control': 'no-cache'
+              },
+              cache: 'no-store',
+              signal: controller.signal
+            }).catch(err => {
+              if (process.env.NODE_ENV === 'development') {
+                console.warn('Logout check error:', err);
+              }
+              return null;
+            }),
+            fetch('/api/realtime/data-changed-status', {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Cache-Control': 'no-cache'
+              },
+              cache: 'no-store',
+              signal: controller.signal
+            }).catch(err => {
+              if (process.env.NODE_ENV === 'development') {
+                console.warn('Data sync check error:', err);
+              }
+              return null;
+            })
+          ]);
 
           clearTimeout(timeoutId);
 
-          if (response.ok) {
-            const data = await response.json();
+          // 1. Process logout status
+          if (logoutRes && logoutRes.ok) {
+            const data = await logoutRes.json();
             
             if (data.shouldLogout && data.logoutAllTimestamp) {
               // Only trigger if this is a new logout-all (timestamp changed)
@@ -103,6 +126,29 @@ export function useSocketLogoutListener(onLogout: (data?: {
               }
             }
           }
+
+          // 2. Process data change status
+          if (dataChangeRes && dataChangeRes.ok) {
+            const data = await dataChangeRes.json();
+            if (data.success && data.lastChange) {
+              const { module, timestamp } = data.lastChange;
+              
+              if (lastCheckedDataChangeTimestampRef.current !== timestamp) {
+                const isFirstLoad = lastCheckedDataChangeTimestampRef.current === null;
+                lastCheckedDataChangeTimestampRef.current = timestamp;
+                
+                // Only trigger sync events if this isn't the first check (avoid double loading on page mount)
+                if (!isFirstLoad) {
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`🔄 Real-time data change detected (polling fallback) for module: ${module}`);
+                  }
+                  window.dispatchEvent(new CustomEvent('realtimeDataChanged', { detail: { module } }));
+                  window.dispatchEvent(new CustomEvent('dashboardRefresh', { detail: { module } }));
+                  window.dispatchEvent(new CustomEvent('orderChanged', { detail: { module } }));
+                }
+              }
+            }
+          }
         } catch (error) {
           // Ignore polling errors - continue polling
           if (error instanceof Error && error.name !== 'AbortError') {
@@ -111,7 +157,7 @@ export function useSocketLogoutListener(onLogout: (data?: {
         } finally {
           isPolling = false;
         }
-      }, 10000); // ⚡ OPTIMIZATION: Poll every 10 seconds (was 2 seconds)
+      }, 8000); // ⚡ OPTIMIZATION: Poll every 8 seconds (was 10 seconds)
       
       globalPollingInterval = pollingIntervalRef.current;
     };

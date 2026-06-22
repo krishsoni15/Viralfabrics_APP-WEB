@@ -1,29 +1,50 @@
 import mongoose, { type Mongoose } from "mongoose";
+import SystemConfig from "../models/SystemConfig";
 
 // 🌟 100% Risk-Free Global Database Watcher
 // This plugin automatically tells the frontend when data changes, without touching any API files.
 mongoose.plugin((schema) => {
   const emitChange = function (this: any) {
     try {
-      if ((global as any).io) {
-        // Find the name of the table that was just modified (e.g. "Order", "GreyMaterial")
-        const modelName = this.constructor?.modelName || this.model?.modelName || 'unknown';
-        
-        // ⚡ CRITICAL FIX: Only emit for actual business data!
-        // If we emit for 'Log' or 'User' (which save on every API call), it creates an infinite refresh loop!
-        const whitelistedModels = [
-          'Order', 'Party', 'Mill', 'Quality', 'GreyMaterial', 
-          'Dispatch', 'Fabric', 'GreyInfo', 'MillOutput', 'Process', 
-          'Sample', 'Sampling', 'FinishLotStock', 'Lab'
-        ];
+      const modelName = this.constructor?.modelName || this.model?.modelName || 'unknown';
+      
+      // ⚡ CRITICAL FIX: Only emit for actual business data!
+      // If we emit for 'Log' or 'User' (which save on every API call), it creates an infinite refresh loop!
+      const whitelistedModels = [
+        'Order', 'Party', 'Mill', 'Quality', 'GreyMaterial', 
+        'Dispatch', 'Fabric', 'GreyInfo', 'MillOutput', 'Process', 
+        'Sample', 'Sampling', 'FinishLotStock', 'Lab'
+      ];
 
-        if (whitelistedModels.includes(modelName)) {
-          // Broadcast the tiny empty ping to all connected clients
+      if (whitelistedModels.includes(modelName)) {
+        // 1. Broadcast the tiny empty ping to all connected Socket.IO clients (for local / custom server)
+        if ((global as any).io) {
           (global as any).io.emit('data_changed', { module: modelName });
+        }
+
+        // 2. Write to MongoDB SystemConfig so serverless environments (Vercel) can poll and detect updates
+        try {
+          SystemConfig.findOneAndUpdate(
+            { key: 'last_data_change' },
+            { 
+              key: 'last_data_change',
+              value: {
+                module: modelName,
+                timestamp: new Date().toISOString()
+              }
+            },
+            { upsert: true, new: true }
+          ).maxTimeMS(2000).catch((err) => {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('Real-time sync last_data_change write failed (non-critical):', err);
+            }
+          });
+        } catch (dbErr) {
+          // Silent catch to guarantee main DB operations never fail
         }
       }
     } catch (error) {
-      // Strict try/catch ensures database saves NEVER fail even if Socket is down
+      // Strict try/catch ensures database saves NEVER fail even if Socket or SystemConfig is down
       if (process.env.NODE_ENV === 'development') {
         console.warn('Real-time sync silent failure:', error);
       }

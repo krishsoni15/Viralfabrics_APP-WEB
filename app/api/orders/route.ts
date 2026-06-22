@@ -31,17 +31,7 @@ function parseDateString(dateString: string | undefined | null): Date | undefine
   return isNaN(date.getTime()) ? undefined : date;
 }
 
-// Simple in-memory cache for frequently accessed data
-const queryCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL = 30 * 1000; // 30 seconds cache
-
-// Export function to clear cache (used by renumber route)
-export function clearOrdersCache() {
-  queryCache.clear();
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🗑️ Orders cache cleared');
-  }
-}
+import { queryCache, CACHE_TTL } from "@/lib/ordersCache";
 
 // Ensure all models are registered
 const models = { Order, Party, Quality, Counter };

@@ -5,7 +5,7 @@ import Counter from '@/models/Counter';
 import { Lab, GreyInfo, MillInput, MillOutput, Dispatch } from '@/models';
 import { getSession } from '@/lib/session';
 import mongoose from 'mongoose';
-import { clearOrdersCache } from '../route';
+import { clearOrdersCache } from '@/lib/ordersCache';
 
 export async function POST(request: NextRequest) {
   try {
