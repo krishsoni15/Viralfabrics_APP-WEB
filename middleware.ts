@@ -23,6 +23,7 @@ const PUBLIC_ROUTES = [
   '/api/health',
   '/api/fix-grey-materials',
   '/api/copy-fabrics',
+  '/api/proxy-image',
   '/login',
   '/_next',
   '/icons',

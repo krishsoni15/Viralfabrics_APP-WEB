@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { verifyToken, TokenPayload } from '@/lib/auth';
 import { unauthorized } from '@/lib/http';
+import dbConnect from "@/lib/dbConnect";
+import User from "@/models/User";
 
 export async function GET(
   request: NextRequest,
@@ -66,13 +68,30 @@ export async function GET(
       return unauthorized('Invalid token or session expired');
     }
 
-    // Return minimal user info for session validation
+    // Fetch complete user profile from database
+    await dbConnect();
+    const userDoc = await User.findById(decoded.id)
+      .select('_id name username email phoneNumber address role partyId profilePhoto createdAt updatedAt');
+    
+    if (!userDoc) {
+      return unauthorized('User not found');
+    }
+
     return new Response(JSON.stringify({
       success: true,
       user: {
-        id: decoded.id,
-        username: decoded.username,
-        role: decoded.role
+        _id: userDoc._id.toString(),
+        id: userDoc._id.toString(),
+        name: userDoc.name,
+        username: userDoc.username,
+        email: userDoc.email,
+        phoneNumber: userDoc.phoneNumber,
+        address: userDoc.address,
+        role: userDoc.role,
+        partyId: userDoc.partyId ? userDoc.partyId.toString() : undefined,
+        profilePhoto: userDoc.profilePhoto,
+        createdAt: userDoc.createdAt,
+        updatedAt: userDoc.updatedAt,
       }
     }), { 
       status: 200, 
