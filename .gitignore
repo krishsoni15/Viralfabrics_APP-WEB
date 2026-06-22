@@ -51,4 +51,4 @@ yarn-error.log*
 .env*.local
 
 # Mobile app (excluded from web repo)
-# /mobile-app
+/mobile-app
