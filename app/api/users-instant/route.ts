@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
       role: 1,
       isActive: 1,
       partyId: 1,
+      profilePhoto: 1,
       createdAt: 1
     })
     .populate('partyId', 'name')

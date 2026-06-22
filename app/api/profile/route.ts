@@ -81,6 +81,16 @@ export async function PUT(req: NextRequest) {
 
     const updated = await User.findByIdAndUpdate(session.id, update, { new: true }).select("-password");
     if (!updated) return new Response("Not found", { status: 404 });
+
+    // Clear in-memory users cache to reflect the profile update instantly
+    try {
+      const { usersCacheNormal, usersCacheInstant } = require("../users/cache");
+      usersCacheNormal.clear();
+      usersCacheInstant.clear();
+    } catch (e) {
+      console.warn("Failed to clear users cache in profile update:", e);
+    }
+
     return new Response(JSON.stringify({ message: "Profile updated", user: updated }), { status: 200 });
   } catch (error: unknown) {
     if (error instanceof Error) {

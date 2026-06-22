@@ -235,6 +235,8 @@ export async function POST(req: NextRequest) {
 
     // Clear in-memory users cache
     usersCache.clear();
+    const { usersCacheInstant } = require("./cache");
+    usersCacheInstant.clear();
 
     // ⚡ FIX: Properly invalidate Next.js cache
     const { revalidateTag, revalidatePath } = await import('next/cache');
