@@ -560,7 +560,7 @@ UserSchema.index({
   name: "idx_user_text_search"
 });
 
-if (mongoose.models.User && !mongoose.models.User.schema.paths.partyId) {
+if (mongoose.models.User && (!mongoose.models.User.schema.paths.partyId || !mongoose.models.User.schema.paths.profilePhoto)) {
   delete mongoose.models.User;
 }
 
