@@ -1,37 +1,43 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const url = req.nextUrl.searchParams.get('url');
-  if (!url) {
-    return new Response(JSON.stringify({ message: 'Missing url parameter' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Security: only proxy URLs from our S3 bucket
-  if (!url.startsWith('https://viralfabrics-bucket.s3.')) {
-    return new Response(JSON.stringify({ message: 'Forbidden' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      return new Response(`Failed to fetch from S3: ${res.statusText}`, { status: res.status });
+    const { searchParams } = new URL(req.url);
+    const targetUrl = searchParams.get('url');
+
+    if (!targetUrl) {
+      return new NextResponse('Missing url parameter', { status: 400 });
     }
-    const buffer = await res.arrayBuffer();
-    return new Response(buffer, {
+
+    // Validate the URL is somewhat safe (http/https)
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      return new NextResponse('Invalid URL', { status: 400 });
+    }
+
+    // Fetch the image from the external source
+    const response = await fetch(targetUrl);
+    
+    if (!response.ok) {
+      return new NextResponse(`Failed to fetch image: ${response.statusText}`, { status: response.status });
+    }
+
+    // Pipe the response body and forward the content type
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    const buffer = await response.arrayBuffer();
+
+    return new NextResponse(buffer, {
+      status: 200,
       headers: {
-        'Content-Type': res.headers.get('Content-Type') || 'image/jpeg',
-        'Cache-Control': 'public, max-age=31536000',
+        'Content-Type': contentType,
+        // Allow CORS for this endpoint just in case, though it's usually same-origin
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=86400',
       },
     });
   } catch (error: any) {
-    return new Response(`Proxy error: ${error.message}`, { status: 500 });
+    console.error('Image Proxy Error:', error);
+    return new NextResponse(`Internal Server Error: ${error.message}`, { status: 500 });
   }
 }

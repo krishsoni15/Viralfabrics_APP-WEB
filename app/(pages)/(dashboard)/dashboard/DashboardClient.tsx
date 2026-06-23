@@ -16,10 +16,10 @@ import DashboardFilters from './components/DashboardFilters';
 import PieChart from './components/PieChart';
 import DeliveredSoonTable from './components/DeliveredSoonTable';
 import DashboardSkeleton from './components/DashboardSkeleton';
-import { Loading, ErrorState, EmptyState } from '@/app/components/feedback';
+import { ErrorState } from '@/app/components/feedback';
 import { useDataFetch } from '@/app/hooks/useDataFetch';
-import { fetchDashboardStats } from '@/lib/serverFetch';
 import { formatNumber } from './utils/formatNumber';
+import { useAppStore } from '@/app/store/useAppStore';
 
 interface DashboardStats {
   totalOrders: number;
@@ -67,7 +67,8 @@ export default function DashboardClient({ initialStats }: DashboardClientProps) 
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isDarkMode, mounted } = useDarkMode();
-  const { isAuthenticated, isLoading: authLoading, isSuperAdmin } = useAuthSession();
+  const { isAuthenticated, isLoading: authLoading, isSuperAdmin, isMaster } = useAuthSession();
+  const { isBackupDownloading: isDownloading, setIsBackupModalOpen } = useAppStore();
 
   // Initialize filters from URL params
   const [filters, setFilters] = useState<DashboardFilters>(() => {
@@ -78,7 +79,6 @@ export default function DashboardClient({ initialStats }: DashboardClientProps) 
     };
   });
   const [showScrollToTop, setShowScrollToTop] = useState(false);
-  const [backupLoading, setBackupLoading] = useState(false);
 
   // Sync filters when URL params change (only on mount or when URL changes externally)
   useEffect(() => {
@@ -271,34 +271,6 @@ export default function DashboardClient({ initialStats }: DashboardClientProps) 
     router.push('/orders');
   }, [router]);
 
-  // Backup handler — downloads a ZIP with JSON + CSV + Excel
-  const handleBackup = useCallback(async () => {
-    setBackupLoading(true);
-    try {
-      const response = await fetch('/api/backup');
-      if (!response.ok) throw new Error('Backup failed');
-
-      const blob = await response.blob();
-      const contentDisposition = response.headers.get('Content-Disposition');
-      const filenameMatch = contentDisposition?.match(/filename="?([^"]+)"?/);
-      const filename = filenameMatch?.[1] || 'ViralFabrics_Backup.zip';
-
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      console.error('Backup download failed:', err);
-      alert('Failed to download backup. Please try again.');
-    } finally {
-      setBackupLoading(false);
-    }
-  }, []);
-
   // Handle scroll to top button visibility
   useEffect(() => {
     const handleScroll = () => {
@@ -394,24 +366,20 @@ export default function DashboardClient({ initialStats }: DashboardClientProps) 
             />
           </div>
 
-          {/* Backup Button (Superadmin Only) */}
-          {isSuperAdmin && (
+          {/* Backup Button (Master Only) */}
+          {isMaster && (
             <div className="flex w-full lg:w-auto justify-end sm:justify-start lg:justify-end">
               <button
-                onClick={handleBackup}
-                disabled={backupLoading}
+                onClick={() => setIsBackupModalOpen(true)}
+                disabled={isDownloading}
                 className={`w-full sm:w-auto h-[58px] sm:h-[62px] flex items-center justify-center gap-2 px-6 rounded-xl text-sm font-semibold transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed ${isDarkMode
                   ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-100 border border-slate-600 shadow-black/20'
                   : 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-slate-200/50'
                   }`}
               >
-                {backupLoading ? (
-                  <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isDarkMode ? 'border-emerald-400' : 'border-emerald-500'}`} />
-                ) : (
-                  <ArrowDownTrayIcon className={`h-5 w-5 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-500'}`} strokeWidth={2} />
-                )}
+                <ArrowDownTrayIcon className={`h-5 w-5 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-500'}`} strokeWidth={2} />
                 <span className="tracking-wide">
-                  {backupLoading ? 'Generating...' : 'Download Backup'}
+                  Download Backup
                 </span>
               </button>
             </div>
@@ -518,6 +486,7 @@ export default function DashboardClient({ initialStats }: DashboardClientProps) 
           <DeliveredSoonTable isDarkMode={isDarkMode} />
         </div>
       </div>
+
 
       {/* Scroll to Top Button */}
       {showScrollToTop && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ExclamationTriangleIcon, XMarkIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 import Sidebar from './components/Sidebar';
@@ -11,6 +11,9 @@ import { useSocketLogoutListener } from './hooks/useSocketLogoutListener';
 import { useAppStore, type StoreUser } from '@/app/store/useAppStore';
 import type { UserRole } from '@/constants/enums';
 import '@/lib/errorHandler'; // Setup global error handler
+import JSZip from 'jszip';
+import BackupModal from '@/components/dashboard/BackupModal';
+import { HardDrive, CheckCircle, Loader2, X } from 'lucide-react';
 
 import GlobalSkeleton from './components/GlobalSkeleton';
 
@@ -23,7 +26,21 @@ export default function SuperAdminLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, setUser } = useAppStore();
+  const {
+    user,
+    setUser,
+    isBackupModalOpen,
+    setIsBackupModalOpen,
+    isBackupDownloading,
+    setIsBackupDownloading,
+    backupProgress,
+    setBackupProgress,
+    backupStatusText,
+    setBackupStatusText
+  } = useAppStore();
+  const abortBackupRef = useRef(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const isMaster = user?.role === 'master';
   const [isLoading, setIsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showLogoutAllModal, setShowLogoutAllModal] = useState(false);
@@ -431,6 +448,170 @@ export default function SuperAdminLayout({
     }
   }, []);
 
+  const handleBackupConfirm = useCallback(async (includeImages: boolean) => {
+    setIsBackupModalOpen(false); // Close modal immediately
+    setIsBackupDownloading(true);
+    setBackupProgress(0);
+    abortBackupRef.current = false;
+    setBackupStatusText('Downloading textual data...');
+    try {
+      const response = await fetch('/api/backup');
+      if (!response.ok) throw new Error('Backup failed');
+
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filenameMatch = contentDisposition?.match(/filename="?([^"]+)"?/);
+      let filename = filenameMatch?.[1] || 'ViralFabrics_Backup.zip';
+
+      setBackupStatusText('Reading backup files...');
+      const zip = await JSZip.loadAsync(blob);
+      const jsonFile = zip.file(/JSON\/full_backup\.json$/)[0];
+      
+      if (jsonFile) {
+         setBackupStatusText('Generating Organized Folders...');
+         const jsonStr = await jsonFile.async("string");
+         const backupData = JSON.parse(jsonStr);
+         const collections = backupData.collections || {};
+         
+         const organizedRoot = zip.folder('Organized Client Backup');
+         const imageUrlsToFetch: { url: string, folder: string, filename: string }[] = [];
+         
+         const processDoc = (doc: any, collectionName: string, idField: string, imageExtractionFn: (d: any) => string[]) => {
+            if (!doc) return;
+            const docId = doc[idField] || doc._id?.$oid || doc._id || 'unknown';
+            const safeId = String(docId).replace(/[^a-zA-Z0-9_-]/g, '_');
+            const docFolder = `Organized Client Backup/${collectionName}/${safeId}`;
+            
+            organizedRoot?.folder(collectionName)?.folder(safeId)?.file('details.json', JSON.stringify(doc, null, 2));
+            
+            if (includeImages) {
+               const urls = imageExtractionFn(doc) || [];
+               urls.forEach((url, idx) => {
+                  if (typeof url === 'string' && url.trim() !== '') {
+                     const extMatch = url.match(/\\.([^.?]+)(\\?.*)?$/);
+                     const ext = extMatch ? extMatch[1] : 'jpg';
+                     imageUrlsToFetch.push({ url, folder: `${docFolder}/images`, filename: `image_${idx + 1}.${ext}` });
+                  }
+               });
+            }
+         };
+
+         // Orders
+         (collections.orders || []).forEach((order: any) => {
+            processDoc(order, 'Orders', 'orderId', (d) => {
+               const urls: string[] = [];
+               if (d.items && Array.isArray(d.items)) {
+                  d.items.forEach((item: any) => {
+                     if (item.imageUrls && Array.isArray(item.imageUrls)) {
+                        urls.push(...item.imageUrls);
+                     }
+                  });
+               }
+               return urls;
+            });
+         });
+
+         // Dispatches
+         (collections.dispatches || []).forEach((dispatch: any) => {
+            processDoc(dispatch, 'Dispatches', 'dispatchNo', (d) => d.photos || []);
+         });
+
+         // Labs
+         (collections.labs || []).forEach((lab: any) => {
+            processDoc(lab, 'Labs', 'labId', (d) => (d.attachments || []).map((a: any) => a.url));
+         });
+
+         // Samples
+         (collections.samples || []).forEach((sample: any) => {
+            processDoc(sample, 'Samples', 'sampleId', (d) => d.images || []);
+         });
+
+         // Samplings
+         (collections.samplings || []).forEach((sampling: any) => {
+            processDoc(sampling, 'Samplings', 'samplingNo', (d) => d.images || []);
+         });
+
+         // GreyMaterials
+         (collections.greyMaterials || []).forEach((gm: any) => {
+            processDoc(gm, 'GreyMaterials', 'materialId', (d) => d.images || []);
+         });
+
+         // FinishLotStocks
+         (collections.finishLotStocks || []).forEach((fls: any) => {
+            processDoc(fls, 'FinishLotStocks', 'lotId', (d) => d.images || []);
+         });
+
+         // Fabrics
+         (collections.fabrics || []).forEach((fab: any) => {
+            processDoc(fab, 'Fabrics', 'fabricId', (d) => d.images || []);
+         });
+
+         // Users
+         (collections.users || []).forEach((user: any) => {
+            processDoc(user, 'Users', 'email', (d) => d.profilePhoto ? [d.profilePhoto] : []);
+         });
+
+         // Fetch images
+         if (includeImages) {
+            const total = imageUrlsToFetch.length;
+            if (total > 0) {
+               setBackupStatusText(`Fetching ${total} media files...`);
+               let fetched = 0;
+               const chunkSize = 5;
+               for (let i = 0; i < total; i += chunkSize) {
+                  if (abortBackupRef.current) throw new Error('BACKUP_CANCELLED');
+                  const chunk = imageUrlsToFetch.slice(i, i + chunkSize);
+                  await Promise.all(chunk.map(async (item) => {
+                     if (abortBackupRef.current) return;
+                     try {
+                        const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(item.url)}`);
+                        if (res.ok) {
+                           const imgBlob = await res.blob();
+                           zip.folder(item.folder)?.file(item.filename, imgBlob);
+                        }
+                     } catch (e) {
+                        console.warn("Failed to fetch image", item.url);
+                     }
+                     fetched++;
+                  }));
+                  setBackupProgress(Math.floor((fetched / total) * 100));
+                  setBackupStatusText(`Fetching media files (${fetched}/${total})...`);
+               }
+            }
+         }
+      }
+      
+      if (abortBackupRef.current) throw new Error('BACKUP_CANCELLED');
+      
+      setBackupProgress(100);
+      setBackupStatusText('Zipping files (This might take a moment)...');
+      const finalZipBlob = await zip.generateAsync({ type: "blob" });
+      if (abortBackupRef.current) throw new Error('BACKUP_CANCELLED');
+
+      if (includeImages) {
+        filename = filename.replace('.zip', '_WithMedia.zip');
+      }
+      const url = window.URL.createObjectURL(finalZipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => setIsBackupDownloading(false), 3000);
+    } catch (err: any) {
+      if (err.message === 'BACKUP_CANCELLED') {
+        console.log('Backup was cancelled by the user.');
+        setIsBackupDownloading(false);
+      } else {
+        console.error('Backup download failed:', err);
+        alert('Failed to download backup. Please try again.');
+        setIsBackupDownloading(false);
+      }
+    }
+  }, [setIsBackupModalOpen, setIsBackupDownloading, setBackupProgress, setBackupStatusText]);
+
   // Memoize main content margin calculation
   const mainContentMargin = useMemo(() => {
     if (screenSize < 800) {
@@ -796,6 +977,125 @@ export default function SuperAdminLayout({
                   }`}
               >
                 Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMaster && (
+        <BackupModal
+          isOpen={isBackupModalOpen}
+          onClose={() => setIsBackupModalOpen(false)}
+          onConfirm={handleBackupConfirm}
+          isDownloading={false}
+          progress={backupProgress}
+          statusText={backupStatusText}
+        />
+      )}
+
+      {/* Floating Backup Progress Toast */}
+      {isMaster && isBackupDownloading && (
+        <div className="fixed top-24 right-4 sm:right-8 z-50 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-5 transition-all duration-500 transform translate-y-0 opacity-100">
+          
+          <button
+            onClick={() => {
+              if (backupProgress < 100) {
+                setShowCancelConfirm(true);
+              } else {
+                setIsBackupDownloading(false);
+              }
+            }}
+            className="absolute top-3 right-3 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors"
+            title={backupProgress < 100 ? "Cancel Backup" : "Close"}
+          >
+            <X size={16} strokeWidth={2.5} />
+          </button>
+
+          <div className="flex items-center justify-between mb-3 pr-6">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <HardDrive className="text-indigo-600 dark:text-indigo-400" size={16} />
+              System Backup
+            </h4>
+            <div className="flex items-center gap-2">
+              {backupProgress < 100 && (
+                <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                  {Math.round(backupProgress)}%
+                </span>
+              )}
+              {backupProgress >= 100 ? (
+                <CheckCircle size={18} className="text-emerald-500" />
+              ) : (
+                <Loader2 size={18} className="text-indigo-600 animate-spin" />
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate pr-4">
+            {backupProgress >= 100 ? "Backup Completed!" : backupStatusText}
+          </p>
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+            <div 
+              className="bg-indigo-600 h-1.5 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${backupProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Backup Confirmation Modal */}
+      {isMaster && showCancelConfirm && (
+        <div className="fixed inset-0 flex items-center justify-center z-[100] bg-black/50 backdrop-blur-sm">
+          <div className={`rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border ${isDarkMode
+              ? 'bg-slate-900 border-slate-800 text-slate-100'
+              : 'bg-white border-slate-200 text-slate-900'
+            }`}>
+            
+            {/* Header */}
+            <div className={`px-6 py-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full ${isDarkMode ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-500'}`}>
+                  <ExclamationTriangleIcon className="h-6 w-6" />
+                </div>
+                <h3 className="text-lg font-bold">
+                  Cancel Backup
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-6">
+              <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                Are you sure you want to cancel the system backup? Any progress will be lost and the download will be stopped.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className={`px-6 py-4 border-t flex justify-end gap-3 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
+              <button
+                type="button"
+                onClick={() => setShowCancelConfirm(false)}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${isDarkMode
+                    ? 'text-slate-300 hover:bg-slate-800'
+                    : 'text-slate-700 hover:bg-slate-100 border border-slate-200 bg-white'
+                  }`}
+              >
+                Keep Running
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  abortBackupRef.current = true;
+                  setShowCancelConfirm(false);
+                }}
+                className="px-5 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors shadow-lg shadow-rose-500/20"
+              >
+                Cancel Backup
               </button>
             </div>
           </div>

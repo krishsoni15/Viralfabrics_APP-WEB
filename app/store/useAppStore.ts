@@ -42,6 +42,16 @@ export interface AppState {
   setCache: (key: string, data: any) => void;
   getCache: (key: string, ttl?: number) => any | null;
   clearCache: (key?: string) => void;
+
+  // Backup state
+  isBackupModalOpen: boolean;
+  setIsBackupModalOpen: (open: boolean) => void;
+  isBackupDownloading: boolean;
+  setIsBackupDownloading: (downloading: boolean) => void;
+  backupProgress: number;
+  setBackupProgress: (progress: number) => void;
+  backupStatusText: string;
+  setBackupStatusText: (text: string) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -62,12 +72,12 @@ export const useAppStore = create<AppState>()(
       // Cache state
       cache: {},
       setCache: (key, data) =>
-        set((state) => ({
-          cache: {
-            ...state.cache,
-            [key]: { data, timestamp: Date.now() },
-          },
-        })),
+         set((state) => ({
+           cache: {
+             ...state.cache,
+             [key]: { data, timestamp: Date.now() },
+           },
+         })),
       getCache: (key, ttl = 300000) => {
         const cached = get().cache[key];
         if (!cached) return null;
@@ -88,6 +98,16 @@ export const useAppStore = create<AppState>()(
           set({ cache: {} });
         }
       },
+
+      // Backup state
+      isBackupModalOpen: false,
+      setIsBackupModalOpen: (isBackupModalOpen) => set({ isBackupModalOpen }),
+      isBackupDownloading: false,
+      setIsBackupDownloading: (isBackupDownloading) => set({ isBackupDownloading }),
+      backupProgress: 0,
+      setBackupProgress: (backupProgress) => set({ backupProgress }),
+      backupStatusText: '',
+      setBackupStatusText: (backupStatusText) => set({ backupStatusText }),
     }),
     {
       name: 'app-storage',

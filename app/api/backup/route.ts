@@ -24,6 +24,9 @@ import QualityName from '@/models/QualityName';
 import WeaverQualityName from '@/models/WeaverQualityName';
 import SamplingWeaver from '@/models/SamplingWeaver';
 import SystemConfig from '@/models/SystemConfig';
+import FinishLotStock from '@/models/FinishLotStock';
+import GreyMaterial from '@/models/GreyMaterial';
+import Sampling from '@/models/Sampling';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -107,6 +110,7 @@ export async function GET() {
             mills, millInputs, millOutputs, dispatches, processes,
             logs, users, counters, samples, weavers,
             qualityNames, weaverQualityNames, samplingWeavers, systemConfigs,
+            finishLotStocks, greyMaterials, samplings
         ] = await Promise.all([
             Order.find({}).lean(),
             Party.find({}).lean(),
@@ -128,6 +132,9 @@ export async function GET() {
             WeaverQualityName.find({}).lean(),
             SamplingWeaver.find({}).lean(),
             SystemConfig.find({}).lean(),
+            FinishLotStock.find({}).lean(),
+            GreyMaterial.find({}).lean(),
+            Sampling.find({}).lean(),
         ]);
 
         // Collection map for iteration
@@ -136,6 +143,7 @@ export async function GET() {
             mills, millInputs, millOutputs, dispatches, processes,
             logs, users, counters, samples, weavers,
             qualityNames, weaverQualityNames, samplingWeavers, systemConfigs,
+            finishLotStocks, greyMaterials, samplings
         };
 
         // Timestamp for filenames
@@ -158,7 +166,7 @@ export async function GET() {
 
         // ─── Create ZIP ──────────────────────────────────────────────
         const zip = new JSZip();
-        const root = zip.folder(folderName)!;
+        const root = zip.folder('Bulk Developer Backup')!;
 
         // ──────── 1. JSON folder ─────────────────────────────────────
         const jsonFolder = root.folder('JSON')!;

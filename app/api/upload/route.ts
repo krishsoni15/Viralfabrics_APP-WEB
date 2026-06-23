@@ -48,6 +48,78 @@ export async function POST(req: NextRequest) {
       }), { status: 401 });
     }
     
+    // Check if the client is requesting a pre-signed URL (content-type is JSON)
+    const contentTypeHeader = req.headers.get('content-type') || '';
+    if (contentTypeHeader.includes('application/json')) {
+      try {
+        const body = await req.json();
+        const { fileName: originalFileName, fileType, folder = 'general', weaverId } = body;
+        
+        if (!originalFileName || !fileType) {
+          return new Response(JSON.stringify({
+            success: false,
+            message: 'fileName and fileType are required for pre-signed URL generation'
+          }), { 
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Check AWS S3 configuration
+        if (!process.env.S3_ACCESS_KEY_ID || !process.env.S3_SECRET_ACCESS_KEY || !process.env.S3_BUCKET_NAME || !process.env.S3_REGION) {
+          console.error('AWS S3 configuration missing for pre-signed URL');
+          return new Response(JSON.stringify({
+            success: false,
+            message: 'Upload service configuration error'
+          }), { status: 500 });
+        }
+
+        let fileName: string;
+        if ((folder === 'sampling' || folder === 'weaver') && weaverId) {
+          const timestamp = Date.now().toString();
+          const sanitizedFileName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+          fileName = `sample/${weaverId}/${timestamp}-${sanitizedFileName}`;
+        } else {
+          fileName = `uploads/${folder}/${Date.now().toString()}-${originalFileName}`;
+        }
+
+        const client = getS3Client();
+        const uploadParams = {
+          Bucket: process.env.S3_BUCKET_NAME!,
+          Key: fileName,
+          ContentType: fileType,
+        };
+
+        const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+        const command = new PutObjectCommand(uploadParams);
+        const uploadUrl = await getSignedUrl(client as any, command, { expiresIn: 3600 });
+
+        const region = process.env.S3_REGION || 'us-east-1';
+        const bucketName = process.env.S3_BUCKET_NAME!;
+        const publicUrl = region === 'us-east-1' 
+          ? `https://${bucketName}.s3.amazonaws.com/${fileName}`
+          : `https://${bucketName}.s3.${region}.amazonaws.com/${fileName}`;
+
+        return new Response(JSON.stringify({
+          success: true,
+          presigned: true,
+          uploadUrl,
+          url: publicUrl,
+          imageUrl: publicUrl,
+          public_id: fileName
+        }), { 
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (jsonErr: any) {
+        console.error('Error generating pre-signed URL:', jsonErr);
+        return new Response(JSON.stringify({
+          success: false,
+          message: `Failed to generate pre-signed URL: ${jsonErr.message}`
+        }), { status: 500 });
+      }
+    }
+
     // Set a longer timeout for file uploads
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for uploads

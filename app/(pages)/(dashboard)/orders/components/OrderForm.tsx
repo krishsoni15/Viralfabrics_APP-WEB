@@ -2181,16 +2181,12 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
     }
 
     // Log file details for debugging
-    console.log('Uploading file:', {
+    console.log('Uploading file via pre-signed URL:', {
       name: file.name,
       size: file.size,
       type: file.type,
       extension: file.name.split('.').pop()
     });
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('folder', folder);
 
     const token = localStorage.getItem('token');
     if (!token) {
@@ -2198,60 +2194,53 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
     }
 
     try {
+      // 1. Request pre-signed upload URL from the serverless API
       const response = await fetch('/api/upload', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
-          // Don't set Content-Type - browser will set it with boundary for FormData
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
-        body: formData
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type || 'image/jpeg',
+          folder: folder
+        })
       });
 
       if (!response.ok) {
-        let errorData: any = {};
-        let responseText = '';
-
-        try {
-          // Try to get response as text first to see what we're dealing with
-          responseText = await response.text();
-          console.error('Upload error response text:', responseText);
-
-          // Try to parse as JSON
-          if (responseText) {
-            try {
-              errorData = JSON.parse(responseText);
-            } catch (parseError) {
-              // If not JSON, use the text as the message
-              errorData = { message: responseText || `Upload failed with status ${response.status}` };
-            }
-          } else {
-            errorData = { message: `Upload failed with status ${response.status} ${response.statusText}` };
-          }
-        } catch (e) {
-          console.error('Error reading response:', e);
-          errorData = { message: `Upload failed with status ${response.status} ${response.statusText}` };
-        }
-
-        console.error('Upload error details:', {
-          status: response.status,
-          statusText: response.statusText,
-          errorData: errorData,
-          responseText: responseText,
-          errorMessage: errorData?.message || errorData?.error || responseText
-        });
-
-        const errorMessage = errorData?.message || errorData?.error || responseText || `Upload failed: ${response.status} ${response.statusText}`;
-        throw new Error(errorMessage);
+        const errorText = await response.text();
+        throw new Error(`Failed to generate pre-signed URL: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
-      if (data.success && (data.url || data.imageUrl)) {
-        return data.url || data.imageUrl;
-      } else {
-        throw new Error(data.message || 'Upload failed: No URL received');
+      if (!data.success || !data.uploadUrl) {
+        throw new Error(data.message || 'Failed to get upload URL');
       }
+
+      const { uploadUrl, url } = data;
+
+      // 2. Upload file content directly to S3 via pre-signed PUT
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type || 'image/jpeg'
+        },
+        body: file // Upload direct binary payload
+      });
+
+      if (!uploadRes.ok) {
+        let uploadErrText = '';
+        try {
+          uploadErrText = await uploadRes.text();
+        } catch (_) {}
+        console.error('S3 PUT upload error response:', uploadErrText);
+        throw new Error(`Direct upload to S3 failed with status ${uploadRes.status}. Please check S3 CORS settings if this persists.`);
+      }
+
+      return url;
     } catch (error: any) {
-      // Re-throw with more context if it's not already an Error with message
+      console.error('Upload flow error:', error);
       if (error instanceof Error) {
         throw error;
       }
