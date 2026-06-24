@@ -2827,7 +2827,8 @@ export default function MillInputForm({
       console.log('✅ Update completed - keeping current form state (no reload needed)');
 
       // ⚡ OPTIMIZED: Close immediately after showing success (no artificial delay)
-      onSuccess(wasUpdating ? 'edit' : 'add');
+      const operationType = formData.millItems.length === 0 ? 'delete' : (wasUpdating ? 'edit' : 'add');
+      onSuccess(operationType);
       setTimeout(() => {
         setSuccessMessage('');
         onClose();
@@ -3409,9 +3410,11 @@ export default function MillInputForm({
 
                 <div className="space-y-4 sm:space-y-6">
                   {/* ⚡ CRITICAL: Render items in order - oldest at top (index 0 = Mill Item 1), newest at bottom */}
-                  {formData.millItems.map((item, itemIndex) => (
-                    <div key={item.id} id={`mill-item-${item.id}`} className={`p-4 sm:p-6 rounded-xl border transition-all duration-200 hover:shadow-lg ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
-                      }`}>
+                  {formData.millItems.map((item, itemIndex) => {
+                    const showM1Delete = !readOnly && (!hasExistingData || item.id.startsWith('new-') || isMaster) && item.additionalMeters.length > 0;
+                    return (
+                      <div key={item.id} id={`mill-item-${item.id}`} className={`p-4 sm:p-6 rounded-xl border transition-all duration-200 hover:shadow-lg ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+                        }`}>
                       {/* ⚡ FIX: Item header with number and delete button - only show if multiple items */}
                       {formData.millItems.length > 1 && (
                         <div className="flex items-center justify-between mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-gray-300 dark:border-gray-600">
@@ -3500,7 +3503,7 @@ export default function MillInputForm({
 
                         <div className="space-y-3 sm:space-y-4">
                           {/* M1 and P1 Fields (Always visible) - Responsive grid: 1 col mobile, 2 col tablet, 5 col desktop */}
-                          <div className={`grid grid-cols-1 sm:grid-cols-2 ${(!readOnly && (!hasExistingData || item.id.startsWith('new-') || isMaster)) ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3 sm:gap-4`}>
+                          <div className={`grid grid-cols-1 sm:grid-cols-2 ${showM1Delete ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3 sm:gap-4`}>
                             {/* Quality for M1 */}
                             <div>
                               <div className="flex items-center justify-between mb-1.5 sm:mb-2">
@@ -3725,24 +3728,20 @@ export default function MillInputForm({
                               </div>
                             </div>
 
-                            {/* ⚡ FIX: Delete button for M1 only - disabled if only M1 exists (no M2) */}
-                            {(!readOnly && (!hasExistingData || item.id.startsWith('new-') || isMaster)) && (
+                            {/* ⚡ FIX: Delete button for M1 only - only show if there are additional cuts (M2, M3, etc.) */}
+                            {showM1Delete && (
                               <div className="flex items-end sm:col-span-2 lg:col-span-1">
                                 <button
                                   type="button"
                                   onClick={() => {
                                     removeMainMillItem(item.id);
                                   }}
-                                  disabled={readOnly || item.additionalMeters.length === 0}
-                                  className={`w-full px-3 py-2.5 sm:py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${item.additionalMeters.length === 0
-                                    ? isDarkMode
-                                      ? 'border-gray-600/50 text-gray-500 bg-gray-800/50 cursor-not-allowed opacity-60'
-                                      : 'border-gray-300 text-gray-400 bg-gray-100 cursor-not-allowed opacity-60'
-                                    : isDarkMode
+                                  disabled={readOnly}
+                                  className={`w-full px-3 py-2.5 sm:py-3 rounded-lg border transition-all duration-150 flex items-center justify-center ${isDarkMode
                                       ? 'border-red-600/50 text-red-400 hover:bg-red-900/30 hover:border-red-500 hover:text-red-300 bg-red-900/10'
                                       : 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 hover:text-red-700 bg-red-50/50'
                                     }`}
-                                  title={item.additionalMeters.length === 0 ? "Cannot delete - at least one entry (M1) required" : "Delete M1 only (M2 will move to M1 if exists)"}
+                                  title="Delete M1 only (M2 will move to M1 if exists)"
                                 >
                                   <TrashIcon className="h-5 w-5" />
                                 </button>
@@ -4024,7 +4023,8 @@ export default function MillInputForm({
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Add Item Card */}
                   {!readOnly && (

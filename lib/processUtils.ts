@@ -1,23 +1,24 @@
 // Process utilities and constants for the CRM system
 
 // Default process priorities based on your requirements
-// Higher number = higher priority
+// Lower number = higher priority (1 is highest, 16 is lowest)
 export const DEFAULT_PROCESS_PRIORITIES = {
-  'Lot No Greigh': 1,
-  'Charkha': 2,
-  'Drum': 3,
-  'Soflina WR': 4,
-  'long jet': 5,
-  'setting': 6,
-  'In Dyeing': 7,
-  'jigar': 8,
-  'in printing': 9,
-  'loop': 10,
-  'washing': 11,
-  'Finish': 12,
-  'folding': 13,
-  'ready to dispatch': 14,
-  'In House': 15  // Highest priority - shows first
+  'FOB Send': 1,
+  'In House': 2,
+  'ready to dispatch': 3,
+  'folding': 4,
+  'Finish': 5,
+  'washing': 6,
+  'loop': 7,
+  'in printing': 8,
+  'jigar': 9,
+  'In Dyeing': 10,
+  'setting': 11,
+  'long jet': 12,
+  'Soflina WR': 13,
+  'Drum': 14,
+  'Charkha': 15,
+  'Lot No Greigh': 16
 } as const;
 
 // Process names as array for easy iteration
@@ -38,20 +39,28 @@ export interface ProcessWithMetadata extends ProcessData {
   updatedAt: Date;
 }
 
-// Utility function to get process priority
+// Utility function to get process priority (case-insensitive)
 export function getProcessPriority(processName: string): number {
-  return DEFAULT_PROCESS_PRIORITIES[processName as keyof typeof DEFAULT_PROCESS_PRIORITIES] || 0;
+  if (!processName) return 0;
+  const nameLower = processName.trim().toLowerCase();
+  const foundKey = Object.keys(DEFAULT_PROCESS_PRIORITIES).find(
+    key => key.toLowerCase() === nameLower
+  );
+  if (foundKey) {
+    return DEFAULT_PROCESS_PRIORITIES[foundKey as keyof typeof DEFAULT_PROCESS_PRIORITIES];
+  }
+  return 0;
 }
 
-// Utility function to sort processes by priority (highest first)
+// Utility function to sort processes by priority (highest first / lower number first)
 export function sortProcessesByPriority(processes: string[]): string[] {
   return processes.sort((a, b) => {
     const priorityA = getProcessPriority(a);
     const priorityB = getProcessPriority(b);
     
-    // If both have priorities, sort by priority (higher first)
+    // If both have priorities, sort by priority (lower number first)
     if (priorityA > 0 && priorityB > 0) {
-      return priorityB - priorityA;
+      return priorityA - priorityB;
     }
     
     // If only one has priority, prioritize it
@@ -94,32 +103,33 @@ export function isValidProcessPriority(priority: number): boolean {
 export function getProcessColor(processName: string, isDarkMode: boolean = false): string {
   const priority = getProcessPriority(processName);
   
-  // Color mapping based on priority ranges
-  if (priority >= 12) {
-    // High priority (ready to dispatch, folding, Finish)
+  if (priority === 0) {
+    return isDarkMode 
+      ? 'bg-gray-600/20 text-gray-300 border border-gray-500/30'
+      : 'bg-gray-100 text-gray-700 border border-gray-200';
+  }
+
+  // Color mapping based on priority ranges (1-5: High, 6-9: Med-High, 10-13: Med, 14-16: Low)
+  if (priority <= 5) {
+    // High priority (ready to dispatch, folding, Finish, In House, FOB Send)
     return isDarkMode 
       ? 'bg-green-600/20 text-green-300 border border-green-500/30'
       : 'bg-green-100 text-green-700 border border-green-200';
-  } else if (priority >= 8) {
+  } else if (priority <= 9) {
     // Medium-high priority (washing, loop, in printing, jigar)
     return isDarkMode 
       ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30'
       : 'bg-blue-100 text-blue-700 border border-blue-200';
-  } else if (priority >= 4) {
+  } else if (priority <= 13) {
     // Medium priority (In Dyeing, setting, long jet, Soflina WR)
     return isDarkMode 
       ? 'bg-yellow-600/20 text-yellow-300 border border-yellow-500/30'
       : 'bg-yellow-100 text-yellow-700 border border-yellow-200';
-  } else if (priority >= 1) {
+  } else {
     // Low priority (Drum, Charkha, Lot No Greigh)
     return isDarkMode 
       ? 'bg-orange-600/20 text-orange-300 border border-orange-500/30'
       : 'bg-orange-100 text-orange-700 border border-orange-200';
-  } else {
-    // Unknown priority
-    return isDarkMode 
-      ? 'bg-gray-600/20 text-gray-300 border border-gray-500/30'
-      : 'bg-gray-100 text-gray-700 border border-gray-200';
   }
 }
 
@@ -127,16 +137,16 @@ export function getProcessColor(processName: string, isDarkMode: boolean = false
 export function getProcessStatusText(processName: string): string {
   const priority = getProcessPriority(processName);
   
-  if (priority >= 12) {
+  if (priority === 0) return 'Unknown';
+
+  if (priority <= 5) {
     return 'Near Completion';
-  } else if (priority >= 8) {
+  } else if (priority <= 9) {
     return 'In Progress';
-  } else if (priority >= 4) {
+  } else if (priority <= 13) {
     return 'Processing';
-  } else if (priority >= 1) {
-    return 'Initial Stage';
   } else {
-    return 'Unknown';
+    return 'Initial Stage';
   }
 }
 

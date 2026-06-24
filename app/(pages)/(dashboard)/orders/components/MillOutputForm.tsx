@@ -1645,13 +1645,13 @@ export default function MillOutputForm({
       setSuccessMessage('Mill output data saved successfully!');
 
       // Determine operation type before updating hasExistingData
-      const operationType = hasExistingData ? 'edit' : 'add';
+      const operationType = formData.millOutputItems.length === 0 ? 'delete' : (hasExistingData ? 'edit' : 'add');
 
       // ⚡ CRITICAL: Mark that we just updated to prevent reloading deleted items
       justUpdatedRef.current = true;
 
       // ⚡ OPTIMIZED: Immediately update local state for better UX
-      setHasExistingData(true);
+      setHasExistingData(operationType !== 'delete');
 
       // ⚡ FIX: DON'T reload from API after update - keep current form state
       console.log('✅ Update completed - keeping current form state (deletions already applied)');

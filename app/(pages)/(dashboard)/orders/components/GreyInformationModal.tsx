@@ -1363,6 +1363,13 @@ export default function GreyInformationModal({
 
     if (!order) return;
 
+    // Validate that each entry has a selected quality
+    const hasInvalidEntry = entries.some(entry => !entry.qualityId || String(entry.qualityId).trim() === '');
+    if (hasInvalidEntry) {
+      showCustomAlert('Quality Name is required for all entries', 'error');
+      return;
+    }
+
     setIsSubmitting(true);
     submittingRef.current = true;
     setLoading(true);
@@ -1746,7 +1753,7 @@ export default function GreyInformationModal({
                     <div>
                       <label className={`block text-base font-semibold mb-3 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'
                         }`}>
-                        Quality Name
+                        Quality Name <span className="text-red-500">*</span>
                       </label>
                       <div className="relative" ref={el => { qualityDropdownRefs.current[entry.id] = el; }}>
                         <input

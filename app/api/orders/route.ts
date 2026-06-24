@@ -13,6 +13,7 @@ import { revalidateTag, revalidatePath } from 'next/cache';
 import { clearDashboardCache } from '@/lib/dashboardCache';
 import { apiRateLimiter, writeRateLimiter, checkRateLimitOrError } from "@/lib/rateLimit";
 import { sanitizeSearchQuery } from "@/lib/sanitize";
+import { sortProcessesByPriority } from "@/lib/processUtils";
 
 // Helper function to convert YYYY-MM-DD string to Date object at UTC midnight
 function parseDateString(dateString: string | undefined | null): Date | undefined {
@@ -698,7 +699,7 @@ export async function GET(request: NextRequest) {
           const millInputs = await MillInput.find({
             order: { $in: orderIds }
           })
-            .select('order mill millDate chalanNo greighMtr pcs quality processName')
+            .select('order mill millDate chalanNo greighMtr pcs quality processName additionalMeters')
             .lean()
             .maxTimeMS(1000); // ⚡ Reduced to 1 second
 
@@ -1153,47 +1154,78 @@ export async function GET(request: NextRequest) {
             }
 
             // Attach quality-specific process data from mill inputs
-            const millInputData = millInputMap.get(order._id.toString());
-            if (millInputData) {
+            const millInputsForOrder = millInputMap.get(order._id.toString()) || [];
+            if (millInputsForOrder.length > 0) {
               const itemQualityId = item.quality?._id?.toString() || item.quality?.toString();
               const itemQualityName = item.quality?.name || item.quality;
 
-              // Find process data for this specific quality
               let qualityProcessData = null;
+              const allProcesses: string[] = [];
 
-              // Check main quality
-              if (millInputData.quality?._id?.toString() === itemQualityId ||
-                millInputData.quality?.name === itemQualityName) {
-                qualityProcessData = {
-                  mainProcess: millInputData.processName || '',
-                  additionalProcesses: []
-                };
+              for (const millInputData of millInputsForOrder) {
+                const inputQualityId = millInputData.quality?.toString();
+                const inputQualityName = inputQualityId ? qualityMap.get(inputQualityId)?.name : null;
+
+                // Check main quality
+                if (inputQualityId === itemQualityId || inputQualityName === itemQualityName) {
+                  if (millInputData.processName && millInputData.processName.trim() !== '') {
+                    allProcesses.push(millInputData.processName.trim());
+                  }
+                }
+
+                // Check additional meters
+                if (millInputData.additionalMeters && Array.isArray(millInputData.additionalMeters)) {
+                  millInputData.additionalMeters.forEach((additional: any) => {
+                    const addQualityId = additional.quality?.toString();
+                    const addQualityName = addQualityId ? qualityMap.get(addQualityId)?.name : null;
+
+                    if (addQualityId === itemQualityId || addQualityName === itemQualityName) {
+                      if (additional.processName && additional.processName.trim() !== '') {
+                        allProcesses.push(additional.processName.trim());
+                      }
+                    }
+                  });
+                }
               }
 
-              // Check additional meters for this quality
-              if (!qualityProcessData && millInputData.additionalMeters) {
-                const matchingAdditional = millInputData.additionalMeters.find((additional: any) =>
-                  additional.quality?._id?.toString() === itemQualityId ||
-                  additional.quality?.name === itemQualityName
-                );
+              // Remove duplicates and sort by priority using centralized utility
+              const uniqueProcesses = [...new Set(allProcesses)];
+              const sortedProcesses = sortProcessesByPriority(uniqueProcesses);
 
-                if (matchingAdditional) {
+              if (sortedProcesses.length > 0) {
+                qualityProcessData = {
+                  mainProcess: sortedProcesses[0], // Highest priority process
+                  additionalProcesses: sortedProcesses.slice(1) // Rest of the processes
+                };
+              } else {
+                // Fallback to all processes if no quality-specific match
+                const fallbackProcesses: string[] = [];
+                for (const millInputData of millInputsForOrder) {
+                  if (millInputData.processName && millInputData.processName.trim() !== '') {
+                    fallbackProcesses.push(millInputData.processName.trim());
+                  }
+                  if (millInputData.additionalMeters && Array.isArray(millInputData.additionalMeters)) {
+                    millInputData.additionalMeters.forEach((additional: any) => {
+                      if (additional.processName && additional.processName.trim() !== '') {
+                        fallbackProcesses.push(additional.processName.trim());
+                      }
+                    });
+                  }
+                }
+                const uniqueFallback = [...new Set(fallbackProcesses)];
+                const sortedFallback = sortProcessesByPriority(uniqueFallback);
+                if (sortedFallback.length > 0) {
                   qualityProcessData = {
-                    mainProcess: matchingAdditional.processName || '',
-                    additionalProcesses: []
+                    mainProcess: sortedFallback[0],
+                    additionalProcesses: sortedFallback.slice(1)
                   };
                 }
               }
 
-              // If no quality-specific data found, use the main process data as fallback
-              if (!qualityProcessData) {
-                qualityProcessData = {
-                  mainProcess: millInputData.processName || '',
-                  additionalProcesses: millInputData.additionalMeters?.map((additional: any) => additional.processName || '') || []
-                };
-              }
-
-              item.processData = qualityProcessData;
+              item.processData = qualityProcessData || {
+                mainProcess: '',
+                additionalProcesses: []
+              };
             } else {
               // Initialize empty process data structure
               item.processData = {

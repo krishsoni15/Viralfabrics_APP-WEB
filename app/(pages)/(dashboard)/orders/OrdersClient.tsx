@@ -80,41 +80,43 @@ const getHighestPriorityProcess = (processData: any, qualityName?: string) => {
 
   const allProcesses = [
     processData.mainProcess,
-    ...processData.additionalProcesses
-  ].filter(process => process && process.trim() !== '');
+    ...(processData.additionalProcesses || [])
+  ].filter((process): process is string => !!process && process.trim() !== '');
 
   if (allProcesses.length === 0) return null;
 
-  // Define process priority order (higher number = higher priority)
-  const processPriority = [
-    'Lot No Greigh',    // 1
-    'Charkha',          // 2
-    'Drum',             // 3
-    'Soflina WR',       // 4
-    'long jet',         // 5
-    'setting',          // 6
-    'In Dyeing',        // 7
-    'jigar',            // 8
-    'in printing',      // 9
-    'loop',             // 10
-    'washing',          // 11
-    'Finish',           // 12
-    'folding',          // 13
-    'ready to dispatch', // 14
-    'In House'          // 15 - Highest priority, shows first
-  ];
+  const priorityMap: { [key: string]: number } = {
+    'fob send': 1,
+    'in house': 2,
+    'ready to dispatch': 3,
+    'folding': 4,
+    'finish': 5,
+    'washing': 6,
+    'loop': 7,
+    'in printing': 8,
+    'jigar': 9,
+    'in dyeing': 10,
+    'setting': 11,
+    'long jet': 12,
+    'soflina wr': 13,
+    'drum': 14,
+    'charkha': 15,
+    'lot no greigh': 16
+  };
 
-  // Sort by priority (highest number first) and return the first one
-  const sortedProcesses = allProcesses.sort((a, b) => {
-    const aIndex = processPriority.indexOf(a);
-    const bIndex = processPriority.indexOf(b);
-    if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
-    if (aIndex === -1) return 1;
-    if (bIndex === -1) return -1;
-    return bIndex - aIndex; // Higher index = higher priority
-  });
+  let highestProcess = allProcesses[0];
+  let minPriority = 999;
 
-  return sortedProcesses[0]; // Return highest priority process
+  for (const p of allProcesses) {
+    const key = p.toLowerCase().trim();
+    const prio = priorityMap[key] !== undefined ? priorityMap[key] : 99;
+    if (prio <= minPriority) {
+      minPriority = prio;
+      highestProcess = p;
+    }
+  }
+
+  return highestProcess;
 };
 
 interface OrdersClientProps {
@@ -550,22 +552,19 @@ export default function OrdersClient({
 
   // Professional helper functions for button states - declared early to maintain hooks order
   const hasMillInputs = useCallback((order: Order) => {
-    // Check both order.millInputs property and orderMillInputs state
+    if (!order) return false;
+
+    // ⚡ FIRST: Check state (most reliable - already loaded)
+    const orderMillInputsState = orderMillInputs[order.orderId] || orderMillInputs[String(order._id)];
+    if (orderMillInputsState !== undefined) {
+      return Array.isArray(orderMillInputsState) && orderMillInputsState.length > 0;
+    }
+
+    // Check both order.millInputs property
     const orderMillInputsProperty = (order as any).millInputs;
-    const orderMillInputsState = orderMillInputs[order.orderId];
-
     const hasPropertyData = Array.isArray(orderMillInputsProperty) && orderMillInputsProperty.length > 0;
-    const hasStateData = Array.isArray(orderMillInputsState) && orderMillInputsState.length > 0;
 
-    console.log('🔍 hasMillInputs check:', {
-      orderId: order.orderId,
-      hasPropertyData,
-      hasStateData,
-      propertyLength: orderMillInputsProperty?.length || 0,
-      stateLength: orderMillInputsState?.length || 0
-    });
-
-    return hasPropertyData || hasStateData;
+    return hasPropertyData;
   }, [forceRender, orderMillInputs]);
 
   // ⚡ FIXED: Check mill outputs (like hasMillInputs - check state first)
@@ -574,10 +573,8 @@ export default function OrdersClient({
 
     // ⚡ FIRST: Check state (most reliable - already loaded)
     const orderMillOutputsState = orderMillOutputs[order.orderId] || orderMillOutputs[String(order._id)];
-    const hasStateData = Array.isArray(orderMillOutputsState) && orderMillOutputsState.length > 0;
-
-    if (hasStateData) {
-      return true;
+    if (orderMillOutputsState !== undefined) {
+      return Array.isArray(orderMillOutputsState) && orderMillOutputsState.length > 0;
     }
 
     // ⚡ SECOND: Check order property (in case API includes it)
@@ -618,10 +615,8 @@ export default function OrdersClient({
 
     // ⚡ FIRST: Check state (most reliable - already loaded)
     const orderDispatchesState = orderDispatches[order.orderId] || orderDispatches[String(order._id)];
-    const hasStateData = Array.isArray(orderDispatchesState) && orderDispatchesState.length > 0;
-
-    if (hasStateData) {
-      return true;
+    if (orderDispatchesState !== undefined) {
+      return Array.isArray(orderDispatchesState) && orderDispatchesState.length > 0;
     }
 
     // ⚡ SECOND: Check order property (in case API includes it)
@@ -652,6 +647,7 @@ export default function OrdersClient({
         }
       } catch (e) { }
     }
+
 
     return false;
   }, [forceRender, orderDispatches]);
@@ -2448,8 +2444,8 @@ export default function OrdersClient({
       // Process mill outputs - ⚡ IMMEDIATE UPDATE for button text
       const millOutputsData = await millOutputsResponse.json();
       let groupedOutputs: { [key: string]: any[] } = {};
-      if (millOutputsData.success && millOutputsData.data && Array.isArray(millOutputsData.data)) {
-        millOutputsData.data.forEach((output: any) => {
+      if (millOutputsData.success && millOutputsData.data && Array.isArray(millOutputsData.data.millOutputs)) {
+        millOutputsData.data.millOutputs.forEach((output: any) => {
           // Use orderId as primary key, also store with MongoDB _id
           const orderId = output.orderId || (output.order?._id ? String(output.order._id) : null);
           const orderMongoId = output.order?._id ? String(output.order._id) : null;
@@ -2480,8 +2476,8 @@ export default function OrdersClient({
       // Process dispatches - ⚡ IMMEDIATE UPDATE for button text
       const dispatchesData = await dispatchesResponse.json();
       let groupedDispatches: { [key: string]: any[] } = {};
-      if (dispatchesData.success && dispatchesData.data && Array.isArray(dispatchesData.data)) {
-        dispatchesData.data.forEach((dispatch: any) => {
+      if (dispatchesData.success && dispatchesData.data && Array.isArray(dispatchesData.data.dispatches)) {
+        dispatchesData.data.dispatches.forEach((dispatch: any) => {
           // Use orderId as primary key, also store with MongoDB _id
           const orderId = dispatch.orderId || (dispatch.order?._id ? String(dispatch.order._id) : null);
           const orderMongoId = dispatch.order?._id ? String(dispatch.order._id) : null;
@@ -4708,25 +4704,23 @@ export default function OrdersClient({
   const hasGreyInfo = useCallback((order: Order) => {
     if (!order) return false;
 
-    // ⚡ FIRST: Check order property from batch fetch (most reliable - from orders API)
-    const orderGreyInfoProperty = (order as any).greyInformation;
-    const hasPropertyData = Array.isArray(orderGreyInfoProperty) && orderGreyInfoProperty.length > 0;
-    if (hasPropertyData) {
-      return true;
+    // ⚡ FIRST: Check fast check result (instant - no API call needed)
+    if (order.orderId && greyInfoExists[order.orderId] !== undefined) {
+      return greyInfoExists[order.orderId] === true;
     }
 
-    // ⚡ SECOND: Check fast check result (instant - no API call needed)
-    if (order.orderId && greyInfoExists[order.orderId] === true) {
-      return true;
-    }
-
-    // ⚡ THIRD: Check state (most reliable - already loaded)
+    // ⚡ SECOND: Check state (most reliable - already loaded)
     const orderGreyInfoStateByOrderId = orderGreyInfo[order.orderId];
     const orderGreyInfoStateById = orderGreyInfo[String(order._id)];
     const orderGreyInfoState = orderGreyInfoStateByOrderId || orderGreyInfoStateById;
-    const hasStateData = Array.isArray(orderGreyInfoState) && orderGreyInfoState.length > 0;
+    if (orderGreyInfoState !== undefined) {
+      return Array.isArray(orderGreyInfoState) && orderGreyInfoState.length > 0;
+    }
 
-    if (hasStateData) {
+    // ⚡ THIRD: Check order property from batch fetch (most reliable - from orders API)
+    const orderGreyInfoProperty = (order as any).greyInformation;
+    const hasPropertyData = Array.isArray(orderGreyInfoProperty) && orderGreyInfoProperty.length > 0;
+    if (hasPropertyData) {
       return true;
     }
 
@@ -9184,7 +9178,7 @@ export default function OrdersClient({
               // Immediate UI update based on operation type
               setOrders(prevOrders =>
                 prevOrders.map(order => {
-                  if (order._id === orderId) {
+                  if (order._id?.toString() === orderId?.toString()) {
                     const updatedOrder = { ...order };
 
                     if (operationType === 'delete' || operationType === 'deleteAll') {
@@ -9217,14 +9211,18 @@ export default function OrdersClient({
                       // Mark as having lab data (will be updated with real data from API)
                       updatedOrder.labData = [{ _id: 'temp', order: orderId, createdAt: new Date() }];
                       // Also mark items as having lab data for immediate UI update
-                      updatedOrder.items = updatedOrder.items.map(item => ({
-                        ...item,
-                        labData: item.labData || {
-                          labSendDate: new Date().toISOString().split('T')[0],
-                          sampleNumber: '',
-                          approvalDate: ''
-                        }
-                      }));
+                      updatedOrder.items = updatedOrder.items.map(item => {
+                        const hasSendDate = item.labData && item.labData.labSendDate;
+                        return {
+                          ...item,
+                          labData: hasSendDate ? item.labData : {
+                            ...item.labData,
+                            labSendDate: new Date().toISOString().split('T')[0],
+                            sampleNumber: item.labData?.sampleNumber || '',
+                            approvalDate: item.labData?.approvalDate || ''
+                          }
+                        };
+                      });
                     }
 
                     return updatedOrder;
@@ -9772,7 +9770,7 @@ export default function OrdersClient({
               // Immediate UI update based on operation type
               setOrders(prevOrders =>
                 prevOrders.map(order => {
-                  if (order._id === orderId) {
+                  if (order._id?.toString() === orderId?.toString()) {
                     const updatedOrder = { ...order };
 
                     if (operationType === 'delete' || operationType === 'deleteAll') {
@@ -9804,14 +9802,18 @@ export default function OrdersClient({
                       // Mark as having lab data (will be updated with real data from API)
                       updatedOrder.labData = [{ _id: 'temp', order: orderId, createdAt: new Date() }];
                       // Also mark items as having lab data for immediate UI update
-                      updatedOrder.items = updatedOrder.items.map(item => ({
-                        ...item,
-                        labData: item.labData || {
-                          labSendDate: new Date().toISOString().split('T')[0],
-                          sampleNumber: '',
-                          approvalDate: ''
-                        }
-                      }));
+                      updatedOrder.items = updatedOrder.items.map(item => {
+                        const hasSendDate = item.labData && item.labData.labSendDate;
+                        return {
+                          ...item,
+                          labData: hasSendDate ? item.labData : {
+                            ...item.labData,
+                            labSendDate: new Date().toISOString().split('T')[0],
+                            sampleNumber: item.labData?.sampleNumber || '',
+                            approvalDate: item.labData?.approvalDate || ''
+                          }
+                        };
+                      });
                     }
 
                     return updatedOrder;

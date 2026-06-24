@@ -3,6 +3,21 @@ import { jwtVerify } from "jose";
 import { checkBodySizeLimit } from "@/lib/bodySizeLimit";
 
 /**
+ * Add CORS headers to API responses
+ */
+function withCors(response: NextResponse | Response, req: NextRequest): any {
+  if (req.nextUrl.pathname.startsWith('/api/')) {
+    const origin = req.headers.get('origin') || '*';
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, Pragma, X-Requested-With');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    response.headers.set('Access-Control-Max-Age', '86400');
+  }
+  return response;
+}
+
+/**
  * JWT Payload interface for type safety
  */
 interface JWTPayload {
@@ -82,17 +97,17 @@ export async function middleware(req: NextRequest) {
   // Check request body size limit
   const sizeLimitError = checkBodySizeLimit(req);
   if (sizeLimitError) {
-    return sizeLimitError;
+    return withCors(sizeLimitError, req);
   }
 
   // Skip public routes
   if (matchesRoute(pathname, PUBLIC_ROUTES)) {
-    return NextResponse.next();
+    return withCors(NextResponse.next(), req);
   }
 
   // Handle CORS preflight requests (OPTIONS)
   if (req.method === 'OPTIONS') {
-    return NextResponse.next();
+    return withCors(new NextResponse(null, { status: 204 }), req);
   }
 
   // Only apply auth check to API routes and protected pages
@@ -103,19 +118,20 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Get token from Authorization header or cookies
+  // Get token from Authorization header, cookies, or query parameters
   const authHeader = req.headers.get("authorization");
   const cookieToken = req.cookies.get('auth-token')?.value;
-  const token = authHeader?.split(" ")[1] || cookieToken;
+  const queryToken = req.nextUrl.searchParams.get("token");
+  const token = authHeader?.split(" ")[1] || cookieToken || queryToken || undefined;
 
   // Check for token presence
   if (!token) {
     // For API routes, return 401
     if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
+      return withCors(NextResponse.json(
         { success: false, message: "Unauthorized - No token provided", timestamp: new Date().toISOString() },
         { status: 401 }
-      );
+      ), req);
     }
     // For pages, redirect to login (but not if already on login to prevent loops)
     if (pathname !== '/login') {
@@ -132,10 +148,10 @@ export async function middleware(req: NextRequest) {
   const JWT_SECRET = process.env.JWT_SECRET;
   if (!JWT_SECRET) {
     console.error('JWT_SECRET is not configured');
-    return NextResponse.json(
+    return withCors(NextResponse.json(
       { success: false, message: "Server configuration error", timestamp: new Date().toISOString() },
       { status: 500 }
-    );
+    ), req);
   }
 
   try {
@@ -145,10 +161,10 @@ export async function middleware(req: NextRequest) {
     // Validate payload structure
     if (!isValidPayload(payload)) {
       if (pathname.startsWith('/api/')) {
-        return NextResponse.json(
+        return withCors(NextResponse.json(
           { success: false, message: "Invalid token structure", timestamp: new Date().toISOString() },
           { status: 401 }
-        );
+        ), req);
       }
       return NextResponse.redirect(new URL('/login', req.url));
     }
@@ -158,10 +174,10 @@ export async function middleware(req: NextRequest) {
       if (payload.role !== "superadmin" && payload.role !== "master") {
         // For API routes, return 403 JSON
         if (pathname.startsWith('/api/')) {
-          return NextResponse.json(
+          return withCors(NextResponse.json(
             { success: false, message: "Access denied - Superadmin required", timestamp: new Date().toISOString() },
             { status: 403 }
-          );
+          ), req);
         }
         // For page routes, redirect to access denied
         return NextResponse.redirect(new URL('/access-denied', req.url));
@@ -181,7 +197,7 @@ export async function middleware(req: NextRequest) {
       response.headers.set('x-login-time', String(payload.iat));
     }
 
-    return response;
+    return withCors(response, req);
 
   } catch (error) {
     // Token verification failed
@@ -190,10 +206,10 @@ export async function middleware(req: NextRequest) {
     // Check if token is expired
     if (errorMessage.includes('exp claim') || errorMessage.includes('expired')) {
       if (pathname.startsWith('/api/')) {
-        return NextResponse.json(
+        return withCors(NextResponse.json(
           { success: false, message: "Token expired", timestamp: new Date().toISOString() },
           { status: 401 }
-        );
+        ), req);
       }
       if (pathname !== '/login') {
         return NextResponse.redirect(new URL('/login?reason=expired', req.url));
@@ -203,10 +219,10 @@ export async function middleware(req: NextRequest) {
     }
 
     if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
+      return withCors(NextResponse.json(
         { success: false, message: "Invalid token", timestamp: new Date().toISOString() },
         { status: 401 }
-      );
+      ), req);
     }
     // For pages, redirect to login (but not if already on login)
     if (pathname !== '/login') {

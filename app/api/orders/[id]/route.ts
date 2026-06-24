@@ -9,6 +9,7 @@ import { logOrderChange, logView } from "@/lib/logger";
 import { CACHE_TAGS, getCacheHeaders, CACHE_DURATIONS } from "@/lib/cacheConfig";
 import { revalidateTag, revalidatePath } from 'next/cache';
 import { clearDashboardCache } from '@/lib/dashboardCache';
+import { sortProcessesByPriority } from "@/lib/processUtils";
 
 // Helper function to convert YYYY-MM-DD string to Date object at UTC midnight
 function parseDateString(dateString: string | undefined | null): Date | undefined {
@@ -279,41 +280,13 @@ export async function GET(
               }
             }
 
-            // Remove duplicates and sort by priority
+            // Remove duplicates and sort by priority using centralized utility
             const uniqueProcesses = [...new Set(allProcesses)];
-
-            // Define process priority order (higher number = higher priority)
-            const processPriority = [
-              'Lot No Greigh',    // 1
-              'Charkha',          // 2
-              'Drum',             // 3
-              'Soflina WR',       // 4
-              'long jet',         // 5
-              'setting',          // 6
-              'In Dyeing',        // 7
-              'jigar',            // 8
-              'in printing',      // 9
-              'loop',             // 10
-              'washing',          // 11
-              'Finish',           // 12
-              'folding',          // 13
-              'ready to dispatch', // 14
-              'In House'          // 15 - Highest priority, shows first
-            ];
-
-            // Sort by priority (highest number first)
-            const sortedProcesses = uniqueProcesses.sort((a, b) => {
-              const aIndex = processPriority.indexOf(a);
-              const bIndex = processPriority.indexOf(b);
-              if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
-              if (aIndex === -1) return 1;
-              if (bIndex === -1) return -1;
-              return bIndex - aIndex; // Higher index = higher priority
-            });
+            const sortedProcesses = sortProcessesByPriority(uniqueProcesses);
 
             if (sortedProcesses.length > 0) {
               qualityProcessData = {
-                mainProcess: sortedProcesses[0], // Highest priority process
+                mainProcess: sortedProcesses[0], // Highest priority process (index 0 is highest priority)
                 additionalProcesses: sortedProcesses.slice(1) // Rest of the processes
               };
             }
@@ -336,34 +309,7 @@ export async function GET(
               });
 
               const uniqueFallbackProcesses = [...new Set(fallbackProcesses)];
-
-              // Define process priority order (higher number = higher priority)
-              const processPriority = [
-                'Lot No Greigh',    // 1
-                'Charkha',          // 2
-                'Drum',             // 3
-                'Soflina WR',       // 4
-                'long jet',         // 5
-                'setting',          // 6
-                'In Dyeing',        // 7
-                'jigar',            // 8
-                'in printing',      // 9
-                'loop',             // 10
-                'washing',          // 11
-                'Finish',           // 12
-                'folding',          // 13
-                'ready to dispatch' // 14
-              ];
-
-              // Sort by priority (highest number first)
-              const sortedFallbackProcesses = uniqueFallbackProcesses.sort((a, b) => {
-                const aIndex = processPriority.indexOf(a);
-                const bIndex = processPriority.indexOf(b);
-                if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
-                if (aIndex === -1) return 1;
-                if (bIndex === -1) return -1;
-                return bIndex - aIndex; // Higher index = higher priority
-              });
+              const sortedFallbackProcesses = sortProcessesByPriority(uniqueFallbackProcesses);
 
               if (sortedFallbackProcesses.length > 0) {
                 qualityProcessData = {
