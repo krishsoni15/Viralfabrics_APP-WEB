@@ -52,3 +52,4 @@ yarn-error.log*
 
 # Mobile app (excluded from web repo)
 /mobile-app
+.claude/settings.local.json
