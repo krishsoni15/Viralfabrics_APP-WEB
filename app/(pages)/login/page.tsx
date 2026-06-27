@@ -708,7 +708,7 @@ function LoginForm() {
         {/* Animated Fabric Grid Pattern Overlay */}
         <div className="absolute inset-0 opacity-10 mix-blend-overlay" style={{ backgroundImage: 'radial-gradient(circle, #fff 10%, transparent 11%)', backgroundSize: '20px 20px' }} />
 
-        <div className="flex flex-col items-center justify-center pt-16 pb-24 px-4 relative z-10">
+        <div className="flex flex-col items-center justify-center pt-8 pb-16 px-4 relative z-10">
           {/* Dark Mode Toggle - Top Right of Left Side (Mobile) */}
           <div className="absolute top-4 right-4 z-20">
             <button

@@ -28,7 +28,6 @@ export function useSocketLogoutListener(onLogout: (data?: {
   const pollingIntervalRef = useRef<any>(null);
   const socketConnectedRef = useRef(false);
   const lastCheckedTimestampRef = useRef<string | null>(null);
-  const lastCheckedDataChangeTimestampRef = useRef<string | null>(null);
 
   // Keep the global callback updated with the latest function reference
   useEffect(() => {
@@ -53,63 +52,47 @@ export function useSocketLogoutListener(onLogout: (data?: {
     }
 
     // Polling fallback function (for Vercel/serverless where Socket.IO doesn't work)
+    // Only polls for logout-all status — data-change auto-refresh has been intentionally removed
+    // to prevent unwanted page reloads when new deployments are pushed.
     const startPolling = () => {
-      // ⚡ OPTIMIZATION: Poll every 8 seconds instead of 10 for slightly faster updates on Vercel
-      // Also add request deduplication to prevent multiple simultaneous requests
       let isPolling = false;
-      
+
       pollingIntervalRef.current = setInterval(async () => {
         // Prevent duplicate requests
         if (isPolling) {
           return;
         }
-        
+
         isPolling = true;
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 second timeout
-          
-          // Poll both endpoints in parallel for efficiency
-          const [logoutRes, dataChangeRes] = await Promise.all([
-            fetch('/api/auth/logout-all-status', {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Cache-Control': 'no-cache'
-              },
-              cache: 'no-store',
-              signal: controller.signal
-            }).catch(err => {
-              if (process.env.NODE_ENV === 'development') {
-                console.warn('Logout check error:', err);
-              }
-              return null;
-            }),
-            fetch('/api/realtime/data-changed-status', {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Cache-Control': 'no-cache'
-              },
-              cache: 'no-store',
-              signal: controller.signal
-            }).catch(err => {
-              if (process.env.NODE_ENV === 'development') {
-                console.warn('Data sync check error:', err);
-              }
-              return null;
-            })
-          ]);
+
+          const logoutRes = await fetch('/api/auth/logout-all-status', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Cache-Control': 'no-cache'
+            },
+            cache: 'no-store',
+            signal: controller.signal
+          }).catch(err => {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('Logout check error:', err);
+            }
+            return null;
+          });
 
           clearTimeout(timeoutId);
 
-          // 1. Process logout status
+          // Process logout status
           if (logoutRes && logoutRes.ok) {
             const data = await logoutRes.json();
-            
+
             if (data.shouldLogout && data.logoutAllTimestamp) {
               // Only trigger if this is a new logout-all (timestamp changed)
               if (lastCheckedTimestampRef.current !== data.logoutAllTimestamp) {
                 lastCheckedTimestampRef.current = data.logoutAllTimestamp;
-                
+
                 // Clear polling
                 if (pollingIntervalRef.current) {
                   clearInterval(pollingIntervalRef.current);
@@ -126,29 +109,6 @@ export function useSocketLogoutListener(onLogout: (data?: {
               }
             }
           }
-
-          // 2. Process data change status
-          if (dataChangeRes && dataChangeRes.ok) {
-            const data = await dataChangeRes.json();
-            if (data.success && data.lastChange) {
-              const { module, timestamp } = data.lastChange;
-              
-              if (lastCheckedDataChangeTimestampRef.current !== timestamp) {
-                const isFirstLoad = lastCheckedDataChangeTimestampRef.current === null;
-                lastCheckedDataChangeTimestampRef.current = timestamp;
-                
-                // Only trigger sync events if this isn't the first check (avoid double loading on page mount)
-                if (!isFirstLoad) {
-                  if (process.env.NODE_ENV === 'development') {
-                    console.log(`🔄 Real-time data change detected (polling fallback) for module: ${module}`);
-                  }
-                  window.dispatchEvent(new CustomEvent('realtimeDataChanged', { detail: { module } }));
-                  window.dispatchEvent(new CustomEvent('dashboardRefresh', { detail: { module } }));
-                  window.dispatchEvent(new CustomEvent('orderChanged', { detail: { module } }));
-                }
-              }
-            }
-          }
         } catch (error) {
           // Ignore polling errors - continue polling
           if (error instanceof Error && error.name !== 'AbortError') {
@@ -157,8 +117,8 @@ export function useSocketLogoutListener(onLogout: (data?: {
         } finally {
           isPolling = false;
         }
-      }, 8000); // ⚡ OPTIMIZATION: Poll every 8 seconds (was 10 seconds)
-      
+      }, 8000); // Poll every 8 seconds
+
       globalPollingInterval = pollingIntervalRef.current;
     };
 
@@ -232,19 +192,10 @@ export function useSocketLogoutListener(onLogout: (data?: {
           }
         });
 
-        // 🌟 REAL-TIME DATA SYNC LISTENER
-        // Listens for the tiny empty ping from the server
-        socket.on('data_changed', (data: { module: string }) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`🔄 Real-time data change detected for module: ${data.module}`);
-          }
-          
-          // Broadcast local events to the rest of the React app
-          // This tells useDataFetch to instantly and silently re-download data in the background
-          window.dispatchEvent(new CustomEvent('realtimeDataChanged', { detail: data }));
-          window.dispatchEvent(new CustomEvent('dashboardRefresh', { detail: data }));
-          window.dispatchEvent(new CustomEvent('orderChanged', { detail: data })); 
-        });
+        // 🚫 data_changed Socket.IO handler intentionally removed.
+        // Auto-refreshing page data when server-side changes are detected caused unwanted
+        // reloads whenever a new deployment was pushed. Data is fetched fresh on user
+        // navigation and explicit refreshes — no silent background reload needed.
 
         // Handle disconnection
         socket.on('disconnect', (reason) => {

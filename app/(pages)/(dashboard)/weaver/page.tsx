@@ -3384,4 +3384,3 @@ export default function WeaverPage() {
     </ErrorBoundary>
   );
 }
-

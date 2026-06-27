@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, TokenPayload } from '@/lib/auth';
 import { unauthorized } from '@/lib/http';
 import dbConnect from "@/lib/dbConnect";
@@ -77,7 +77,15 @@ export async function GET(
       return unauthorized('User not found');
     }
 
-    return new Response(JSON.stringify({
+    // Calculate remaining token lifetime so the cookie expiry matches
+    const now = Math.floor(Date.now() / 1000);
+    const tokenExp = decoded.exp ?? now + 7 * 24 * 60 * 60; // fallback: 7 days
+    const remainingSeconds = Math.max(tokenExp - now, 0);
+
+    const isHttps = request.headers.get('x-forwarded-proto') === 'https' ||
+      request.url.startsWith('https://');
+
+    const response = NextResponse.json({
       success: true,
       user: {
         _id: userDoc._id.toString(),
@@ -93,13 +101,27 @@ export async function GET(
         createdAt: userDoc.createdAt,
         updatedAt: userDoc.updatedAt,
       }
-    }), { 
-      status: 200, 
+    }, {
+      status: 200,
       headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate', // Don't cache - need fresh validation
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       }
     });
+
+    // Re-set the auth-token cookie to keep it alive — this prevents the cookie from expiring
+    // while localStorage still holds a valid token, which would cause middleware to log the user out.
+    if (remainingSeconds > 0) {
+      const token = request.headers.get('authorization')!.substring(7);
+      response.cookies.set('auth-token', token, {
+        httpOnly: true,
+        secure: isHttps,
+        sameSite: 'lax',
+        maxAge: remainingSeconds,
+        path: '/',
+      });
+    }
+
+    return response;
 
   } catch (error) {
     // Only return 401 for actual authentication failures

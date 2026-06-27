@@ -4289,8 +4289,8 @@ export default function FabricsPage() {
                                 )}
 
                                 {/* Items count badge - Responsive */}
-                                <div className="absolute top-2 left-2 sm:top-3 sm:left-3">
-                                  <span className={`text-xs sm:text-sm px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full font-medium shadow-lg ${isDarkMode
+                                <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2">
+                                  <span className={`text-[10px] sm:text-xs px-1 py-0.5 sm:px-1.5 rounded-full font-medium shadow-md ${isDarkMode
                                       ? 'bg-green-600 text-white'
                                       : 'bg-green-100 text-green-800 border border-green-200'
                                     }`}>

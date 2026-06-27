@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, TokenPayload } from '@/lib/auth';
 import { SignJWT } from "jose";
 import { unauthorized } from '@/lib/http';
@@ -65,8 +65,11 @@ export async function POST(request: NextRequest) {
       exp = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
     }
 
+    const isHttps = request.headers.get('x-forwarded-proto') === 'https' ||
+      request.url.startsWith('https://');
+
     // Return the new token with expiration time
-    return new Response(JSON.stringify({
+    const response = NextResponse.json({
       success: true,
       token: newToken,
       user: {
@@ -81,13 +84,25 @@ export async function POST(request: NextRequest) {
         profilePhoto: user.profilePhoto,
         exp: exp // Include expiration time
       }
-    }), { 
+    }, { 
       status: 200, 
       headers: {
-        'Content-Type': 'application/json',
         'Cache-Control': 'no-cache'
       }
     });
+
+    // Sync the new token into the auth-token cookie so the cookie and localStorage stay in sync.
+    // Without this, the old (shorter-lived) cookie would expire, causing middleware to log the user out
+    // even though they just refreshed to a valid 30-day token in localStorage.
+    response.cookies.set('auth-token', newToken, {
+      httpOnly: true,
+      secure: isHttps,
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60, // 30 days — matches the new token lifetime
+      path: '/',
+    });
+
+    return response;
 
   } catch (error) {
     return unauthorized('Session refresh failed');

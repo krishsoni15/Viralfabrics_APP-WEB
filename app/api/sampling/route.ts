@@ -162,8 +162,8 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getSession(req);
-    if (!session || (session.role !== 'master' && session.role !== 'superadmin')) {
-      return Response.json({ success: false, message: 'Access denied - Only master/superadmin can delete samplings' }, { status: 403 });
+    if (!session || session.role !== 'master') {
+      return Response.json({ success: false, message: 'Access denied - Only master can delete samplings' }, { status: 403 });
     }
 
     await dbConnect();

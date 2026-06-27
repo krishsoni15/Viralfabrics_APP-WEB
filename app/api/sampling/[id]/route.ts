@@ -70,7 +70,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession(req);
-    if (!session || (session.role !== 'master' && session.role !== 'superadmin')) {
+    if (!session || session.role !== 'master') {
       return Response.json({ success: false, message: 'Access denied' }, { status: 403 });
     }
 

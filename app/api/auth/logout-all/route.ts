@@ -11,15 +11,15 @@ export async function POST(request: NextRequest) {
   try {
     await dbConnect();
     
-    // Only super admin can logout all users
-    const session = await requireSuperAdmin(request);
+    // Allow any authenticated user to logout all users
+    const session = await getSession(request);
     
     if (!session) {
       return new Response(JSON.stringify({ 
         success: false, 
-        message: 'Unauthorized - Super admin access required' 
+        message: 'Unauthorized' 
       }), { 
-        status: 403,
+        status: 401,
         headers: { 'Content-Type': 'application/json' }
       });
     }

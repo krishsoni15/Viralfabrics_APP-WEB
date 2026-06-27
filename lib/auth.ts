@@ -12,6 +12,7 @@ export interface TokenPayload {
   partyId?: string;
   iat?: number; // Issued at timestamp
   loginTime?: number; // Original login timestamp (for logout-all check)
+  exp?: number; // Expiration timestamp
 }
 
 export async function verifyToken(token: string, checkLogoutAll: boolean = true): Promise<TokenPayload | null> {
@@ -87,6 +88,7 @@ export async function verifyToken(token: string, checkLogoutAll: boolean = true)
       partyId: (payload as Record<string, unknown>).partyId as string | undefined,
       iat: payload.iat as number | undefined,
       loginTime: (payload as Record<string, unknown>).loginTime as number | undefined,
+      exp: payload.exp as number | undefined,
     };
   } catch (error) {
     return null;

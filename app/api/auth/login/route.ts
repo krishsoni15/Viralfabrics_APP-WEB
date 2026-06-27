@@ -237,12 +237,16 @@ async function performLogin(req: Request) {
     
     // Set token in httpOnly cookie for middleware access
     // This ensures middleware can validate the token on page navigation
+    // Use protocol-aware secure flag: HTTPS = secure, HTTP = not secure (for local network deployments)
+    const isHttps = req.headers.get('x-forwarded-proto') === 'https' ||
+      req.url.startsWith('https://');
+    const cookieMaxAge = rememberMe ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60; // 30 days or 7 days
     try {
       response.cookies.set('auth-token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isHttps,
         sameSite: 'lax',
-        maxAge: rememberMe ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60, // 30 days or 7 days
+        maxAge: cookieMaxAge,
         path: '/',
       });
     } catch (cookieError) {
