@@ -27,8 +27,22 @@ export async function GET(req: NextRequest) {
     const skip = (page - 1) * limit;
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const status = searchParams.get('status') || 'all';
     
     const query: any = {};
+
+    if (status === 'open') {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { piece: { $gt: 0 } },
+          { meter: { $gt: 0 } }
+        ]
+      });
+    } else if (status === 'sold') {
+      query.piece = 0;
+      query.meter = 0;
+    }
     
     if (search) {
       const or: any[] = [
