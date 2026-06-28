@@ -96,6 +96,93 @@ interface LogsResponse {
   };
 }
 
+// Sub-component for rendering visual property changes (Visual Diff)
+function VisualDiffViewer({ oldValues, newValues, isDarkMode }: { oldValues: any, newValues: any, isDarkMode: boolean }) {
+  const diffs = useMemo(() => {
+    const oldObj = oldValues && typeof oldValues === 'object' ? oldValues : {};
+    const newObj = newValues && typeof newValues === 'object' ? newValues : {};
+    
+    // Get unique set of keys from both old and new values
+    const allKeys = Array.from(new Set([...Object.keys(oldObj), ...Object.keys(newObj)]));
+    const result: Array<{ key: string; type: 'added' | 'removed' | 'modified' | 'unchanged'; oldVal: string; newVal: string }> = [];
+    
+    for (const key of allKeys) {
+      if (key === 'password') continue; // Skip security sensitive keys
+      const oldVal = oldObj[key];
+      const newVal = newObj[key];
+      
+      const oldValStr = oldVal !== undefined ? (typeof oldVal === 'object' ? JSON.stringify(oldVal) : String(oldVal)) : '';
+      const newValStr = newVal !== undefined ? (typeof newVal === 'object' ? JSON.stringify(newVal) : String(newVal)) : '';
+      
+      if (oldVal === undefined) {
+        result.push({ key, type: 'added', oldVal: '', newVal: newValStr });
+      } else if (newVal === undefined) {
+        result.push({ key, type: 'removed', oldVal: oldValStr, newVal: '' });
+      } else if (oldValStr !== newValStr) {
+        result.push({ key, type: 'modified', oldVal: oldValStr, newVal: newValStr });
+      }
+    }
+    return result;
+  }, [oldValues, newValues]);
+
+  if (diffs.length === 0) {
+    return (
+      <div className={`p-4 rounded-xl text-sm ${isDarkMode ? 'bg-gray-800/50 text-gray-400' : 'bg-gray-50 text-gray-500'} italic text-center border ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+        No specific property changes detailed in this log.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+      {diffs.map(({ key, type, oldVal, newVal }) => (
+        <div 
+          key={key} 
+          className={`p-3 rounded-xl border ${
+            isDarkMode ? 'border-gray-700/60 bg-gray-850/50' : 'border-gray-200/60 bg-white/50'
+          } shadow-sm transition-all hover:scale-[1.005]`}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-md ${
+              isDarkMode ? 'bg-gray-750 text-gray-300' : 'bg-gray-100 text-gray-700'
+            }`}>
+              {key}
+            </span>
+            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+              type === 'added' 
+                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                : type === 'removed'
+                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+            }`}>
+              {type}
+            </span>
+          </div>
+          
+          <div className="space-y-1">
+            {type !== 'added' && (
+              <div className="flex items-start text-xs font-mono">
+                <span className="text-red-500 mr-2 select-none font-bold font-mono">-</span>
+                <span className={`line-through break-all ${isDarkMode ? 'text-red-400/80' : 'text-red-650/80'}`}>
+                  {oldVal || '(empty)'}
+                </span>
+              </div>
+            )}
+            {type !== 'removed' && (
+              <div className="flex items-start text-xs font-mono">
+                <span className="text-green-500 mr-2 select-none font-bold font-mono">+</span>
+                <span className={`break-all ${isDarkMode ? 'text-green-400' : 'text-green-650'}`}>
+                  {newVal || '(empty)'}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function LogsPage() {
   const { user, isLoading: sessionLoading } = useSession();
   const router = useRouter();
@@ -115,12 +202,17 @@ export default function LogsPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [totalLogs, setTotalLogs] = useState(0);
   const [autoLoadAll, setAutoLoadAll] = useState(false);
-  const [isInfiniteScrollEnabled] = useState(true); // Default true, toggle checkbox removed as redundant
+  const [isInfiniteScrollEnabled] = useState(true); 
   const [sortField, setSortField] = useState('timestamp');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
-  // Optimized fetch logs with better caching and performance
+  // High-fidelity details modal states
+  const [selectedLog, setSelectedLog] = useState<Log | null>(null);
+  const [isCopying, setIsCopying] = useState(false);
+  const [showRawJson, setShowRawJson] = useState(false);
+
+  // Fetch logs with pagination
   const fetchLogs = useCallback(async (loadMore = false) => {
     try {
       if (loadMore) {
@@ -137,9 +229,9 @@ export default function LogsPage() {
         return;
       }
       
-      // Build query parameters with optimized settings
+      // Build query parameters
       const params = new URLSearchParams();
-      params.append('limit', '100'); // Increased for better performance
+      params.append('limit', '100'); 
       params.append('includeStats', 'true');
       
       if (dateFilter !== 'all') {
@@ -151,7 +243,6 @@ export default function LogsPage() {
         params.append('cursor', nextCursor);
       }
       
-      // Add timeout and abort controller for better performance
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
       
@@ -178,7 +269,6 @@ export default function LogsPage() {
       
       if (data.success) {
         if (loadMore) {
-          // Append new logs to existing ones and remove duplicates
           setLogs(prevLogs => {
             const newLogs = data.logs || [];
             const existingIds = new Set(prevLogs.map(log => log._id));
@@ -186,18 +276,15 @@ export default function LogsPage() {
             return [...prevLogs, ...uniqueNewLogs];
           });
         } else {
-          // Replace logs for new search/filter
           setLogs(data.logs || []);
         }
         
-        // Update pagination state
         if (data.pagination) {
           setHasMore(data.pagination.hasMore);
           setNextCursor(data.pagination.nextCursor);
           setTotalLogs(data.pagination.total);
         }
         
-        // Update stats only on first load
         if (!loadMore && data.statistics) {
           setStats(data.statistics);
         }
@@ -216,14 +303,14 @@ export default function LogsPage() {
     }
   }, [dateFilter, nextCursor]);
 
-  // Load logs on component mount
+  // Load logs on mount
   useEffect(() => {
     if (user && !sessionLoading) {
       fetchLogs(false);
     }
   }, [user, sessionLoading, dateFilter]);
 
-  // Infinite scroll functionality
+  // Infinite scroll
   useEffect(() => {
     if (!isInfiniteScrollEnabled) return;
 
@@ -232,7 +319,6 @@ export default function LogsPage() {
       const windowHeight = window.innerHeight;
       const documentHeight = document.documentElement.scrollHeight;
       
-      // Load more when user is near bottom (within 200px)
       if (scrollTop + windowHeight >= documentHeight - 200) {
         if (hasMore && !isLoadingMore && !isLoading) {
           loadMoreLogs();
@@ -244,7 +330,7 @@ export default function LogsPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [hasMore, isLoadingMore, isLoading, isInfiniteScrollEnabled]);
 
-  // Auto-load all logs if enabled (disabled for infinite scroll)
+  // Auto-load all (non-infinite scroll backup)
   useEffect(() => {
     if (autoLoadAll && hasMore && !isLoadingMore && logs.length > 0 && !isInfiniteScrollEnabled) {
       const loadAllLogs = async () => {
@@ -256,30 +342,35 @@ export default function LogsPage() {
     }
   }, [autoLoadAll, hasMore, isLoadingMore, logs.length, isInfiniteScrollEnabled]);
 
-  // Function to load more logs
   const loadMoreLogs = () => {
     if (hasMore && !isLoadingMore && !isLoading) {
       fetchLogs(true);
     }
   };
 
-  // Redirect if not authenticated
+  // Redirect to login if not auth'd
   useEffect(() => {
     if (!sessionLoading && !isLoading && !user) {
       router.push('/login');
     }
   }, [sessionLoading, isLoading, user, router]);
 
-  // Optimized filtering and sorting with useMemo for better performance
+  // Copy helper
+  const handleCopyJson = (details: any) => {
+    if (!details) return;
+    navigator.clipboard.writeText(JSON.stringify(details, null, 2));
+    setIsCopying(true);
+    setTimeout(() => setIsCopying(false), 2000);
+  };
+
+  // Filtering & Sorting (checks details stringified to enable advanced query payload search)
   const filteredAndSortedLogs = useMemo(() => {
     return logs
       .filter(log => {
-        // Exclude routine page view logs
         if (log.action === 'view' && log.resource === 'log') {
           return false;
         }
         
-        // Only show important operations (exclude routine views)
         const importantActions = [
           'login', 'logout', 'login_failed', 'password_change', 'password_reset',
           'user_create', 'user_update', 'user_delete', 'user_activate', 'user_deactivate',
@@ -287,7 +378,7 @@ export default function LogsPage() {
           'lab_create', 'lab_update', 'lab_delete', 'lab_status_change',
           'party_create', 'party_update', 'party_delete',
           'quality_create', 'quality_update', 'quality_delete',
-          'fabric_create', 'fabric_update', 'fabric_delete', // Added fabric operations
+          'fabric_create', 'fabric_update', 'fabric_delete', 
           'file_upload', 'file_delete', 'file_download',
           'system_backup', 'system_restore', 'system_config_change',
           'export', 'import', 'search', 'filter'
@@ -297,19 +388,24 @@ export default function LogsPage() {
           return false;
         }
         
+        // Deep search check inside logs details payload
+        const detailsString = log.details ? JSON.stringify(log.details).toLowerCase() : '';
         const matchesSearch = searchTerm === '' || 
           log.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
           log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          log.resource.toLowerCase().includes(searchTerm.toLowerCase());
+          log.resource.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (log.resourceId && log.resourceId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (log.ipAddress && log.ipAddress.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (log.userAgent && log.userAgent.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          detailsString.includes(searchTerm.toLowerCase());
         
         const matchesAction = actionFilter === 'all' || log.action === actionFilter;
         const matchesSuccess = successFilter === 'all' || 
           (successFilter === 'success' && log.success) ||
           (successFilter === 'failed' && !log.success);
         
-        const matchesUserRole = userRoleFilter === 'all' || 
-          (userRoleFilter === 'user' && log.userRole === 'user') ||
-          (userRoleFilter === 'superadmin' && log.userRole === 'superadmin');
+        // Clean dynamic role filter checking
+        const matchesUserRole = userRoleFilter === 'all' || log.userRole === userRoleFilter;
         
         return matchesSearch && matchesAction && matchesSuccess && matchesUserRole;
       })
@@ -317,13 +413,11 @@ export default function LogsPage() {
         let aValue: any = a[sortField as keyof Log];
         let bValue: any = b[sortField as keyof Log];
         
-        // Handle timestamp sorting
         if (sortField === 'timestamp') {
           aValue = new Date(aValue).getTime();
           bValue = new Date(bValue).getTime();
         }
         
-        // Handle string sorting
         if (typeof aValue === 'string') {
           aValue = aValue.toLowerCase();
           bValue = bValue.toLowerCase();
@@ -337,22 +431,18 @@ export default function LogsPage() {
       });
   }, [logs, searchTerm, actionFilter, successFilter, userRoleFilter, sortField, sortDirection]);
 
-  // Ensure we don't show more logs than total
   const displayLogs = useMemo(() => {
     return filteredAndSortedLogs.slice(0, Math.min(filteredAndSortedLogs.length, totalLogs));
   }, [filteredAndSortedLogs, totalLogs]);
 
-  // Get unique actions for filter dropdown
   const uniqueActions = useMemo(() => {
     return [...new Set(logs.map(log => log.action))].sort();
   }, [logs]);
 
-  // Optimized utility functions with useCallback
   const formatTimestamp = useCallback((timestamp: string) => {
     return new Date(timestamp).toLocaleString();
   }, []);
 
-  // Get severity icon
   const getSeverityIcon = useCallback((severity: string) => {
     switch (severity) {
       case 'error':
@@ -366,19 +456,14 @@ export default function LogsPage() {
     }
   }, []);
 
-  // Get action icon based on action type
   const getActionIcon = useCallback((action: string) => {
     const actionLower = action.toLowerCase();
-    
-    // Authentication actions
-    if (actionLower.includes('login') || actionLower.includes('signin')) {
-      return <LogIn className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
+    if (actionLower.includes('login')) {
+      return <LogIn className="w-4 h-4 text-blue-650 dark:text-blue-400" />;
     }
-    if (actionLower.includes('logout') || actionLower.includes('signout')) {
+    if (actionLower.includes('logout')) {
       return <LogOut className="w-4 h-4 text-orange-600 dark:text-orange-400" />;
     }
-    
-    // User management actions
     if (actionLower.includes('create') || actionLower.includes('add')) {
       return <Plus className="w-4 h-4 text-green-600 dark:text-green-400" />;
     }
@@ -388,244 +473,113 @@ export default function LogsPage() {
     if (actionLower.includes('delete') || actionLower.includes('remove')) {
       return <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />;
     }
-    if (actionLower.includes('view') || actionLower.includes('read') || actionLower.includes('get')) {
+    if (actionLower.includes('view')) {
       return <Eye className="w-4 h-4 text-purple-600 dark:text-purple-400" />;
     }
-    
-    // Security actions
-    if (actionLower.includes('auth') || actionLower.includes('authenticate')) {
-      return <Shield className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />;
-    }
-    if (actionLower.includes('lock') || actionLower.includes('secure')) {
-      return <Lock className="w-4 h-4 text-red-600 dark:text-red-400" />;
-    }
-    if (actionLower.includes('unlock') || actionLower.includes('access')) {
-      return <Unlock className="w-4 h-4 text-green-600 dark:text-green-400" />;
-    }
-    
-    // Data operations
-    if (actionLower.includes('export') || actionLower.includes('download')) {
-      return <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
-    }
-    if (actionLower.includes('import') || actionLower.includes('upload')) {
-      return <Upload className="w-4 h-4 text-green-600 dark:text-green-400" />;
-    }
-    if (actionLower.includes('refresh') || actionLower.includes('reload')) {
-      return <RefreshCw className="w-4 h-4 text-orange-600 dark:text-orange-400" />;
-    }
-    
-    // Default action icon
     return <ActivityIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />;
   }, []);
 
-  // Get resource icon based on resource type
   const getResourceIcon = useCallback((resource: string) => {
     const resourceLower = resource.toLowerCase();
-    
-    // User-related resources
-    if (resourceLower.includes('user') || resourceLower.includes('profile')) {
+    if (resourceLower.includes('user')) {
       return <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
     }
-    if (resourceLower.includes('admin') || resourceLower.includes('superadmin')) {
-      return <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400" />;
-    }
-    
-    // Order-related resources
     if (resourceLower.includes('order')) {
       return <ShoppingBag className="w-4 h-4 text-green-600 dark:text-green-400" />;
     }
     if (resourceLower.includes('fabric')) {
       return <Package className="w-4 h-4 text-orange-600 dark:text-orange-400" />;
     }
-    
-    // Lab-related resources
     if (resourceLower.includes('lab')) {
       return <TestTube className="w-4 h-4 text-red-600 dark:text-red-400" />;
     }
-    if (resourceLower.includes('test') || resourceLower.includes('experiment')) {
-      return <Microscope className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />;
-    }
-    
-    // System resources
     if (resourceLower.includes('log')) {
       return <FileText className="w-4 h-4 text-gray-600 dark:text-gray-400" />;
     }
     if (resourceLower.includes('system') || resourceLower.includes('config')) {
       return <Settings className="w-4 h-4 text-gray-600 dark:text-gray-400" />;
     }
-    if (resourceLower.includes('database') || resourceLower.includes('db')) {
-      return <Database className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
-    }
-    
-    // Dashboard and analytics
-    if (resourceLower.includes('dashboard') || resourceLower.includes('home')) {
-      return <Home className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
-    }
-    if (resourceLower.includes('analytics') || resourceLower.includes('stats')) {
-      return <BarChart3 className="w-4 h-4 text-green-600 dark:text-green-400" />;
-    }
-    
-    // Communication resources
-    if (resourceLower.includes('email') || resourceLower.includes('mail')) {
-      return <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
-    }
-    if (resourceLower.includes('phone') || resourceLower.includes('call')) {
-      return <Phone className="w-4 h-4 text-green-600 dark:text-green-400" />;
-    }
-    if (resourceLower.includes('notification') || resourceLower.includes('alert')) {
-      return <BellIcon className="w-4 h-4 text-orange-600 dark:text-orange-400" />;
-    }
-    
-    // Location and shipping
-    if (resourceLower.includes('address') || resourceLower.includes('location')) {
-      return <MapPin className="w-4 h-4 text-red-600 dark:text-red-400" />;
-    }
-    if (resourceLower.includes('shipping') || resourceLower.includes('delivery')) {
-      return <Truck className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
-    }
-    
-    // Financial resources
-    if (resourceLower.includes('payment') || resourceLower.includes('billing')) {
-      return <CreditCard className="w-4 h-4 text-green-600 dark:text-green-400" />;
-    }
-    if (resourceLower.includes('price') || resourceLower.includes('cost')) {
-      return <DollarSign className="w-4 h-4 text-green-600 dark:text-green-400" />;
-    }
-    
-    // Manufacturing and production
-    if (resourceLower.includes('factory') || resourceLower.includes('production')) {
-      return <Factory className="w-4 h-4 text-gray-600 dark:text-gray-400" />;
-    }
-    if (resourceLower.includes('quality') || resourceLower.includes('qc')) {
-      return <Target className="w-4 h-4 text-purple-600 dark:text-purple-400" />;
-    }
-    
-    // Default resource icon
     return <Hash className="w-4 h-4 text-gray-600 dark:text-gray-400" />;
   }, []);
 
-  // Get action background color based on action type
   const getActionBgColor = useCallback((action: string) => {
     const actionLower = action.toLowerCase();
-    
-    // Authentication actions
-    if (actionLower.includes('login') || actionLower.includes('signin')) {
+    if (actionLower.includes('login')) {
       return isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100';
     }
-    if (actionLower.includes('logout') || actionLower.includes('signout')) {
+    if (actionLower.includes('logout')) {
       return isDarkMode ? 'bg-orange-900/30' : 'bg-orange-100';
     }
-    
-    // User management actions
     if (actionLower.includes('create') || actionLower.includes('add')) {
       return isDarkMode ? 'bg-green-900/30' : 'bg-green-100';
     }
-    if (actionLower.includes('update') || actionLower.includes('edit') || actionLower.includes('modify')) {
+    if (actionLower.includes('update') || actionLower.includes('edit')) {
       return isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100';
     }
-    if (actionLower.includes('delete') || actionLower.includes('remove')) {
+    if (actionLower.includes('delete')) {
       return isDarkMode ? 'bg-red-900/30' : 'bg-red-100';
     }
-    if (actionLower.includes('view') || actionLower.includes('read') || actionLower.includes('get')) {
-      return isDarkMode ? 'bg-purple-900/30' : 'bg-purple-100';
-    }
-    
-    // Security actions
-    if (actionLower.includes('auth') || actionLower.includes('authenticate')) {
-      return isDarkMode ? 'bg-indigo-900/30' : 'bg-indigo-100';
-    }
-    if (actionLower.includes('lock') || actionLower.includes('secure')) {
-      return isDarkMode ? 'bg-red-900/30' : 'bg-red-100';
-    }
-    if (actionLower.includes('unlock') || actionLower.includes('access')) {
-      return isDarkMode ? 'bg-green-900/30' : 'bg-green-100';
-    }
-    
-    // Default action background
     return isDarkMode ? 'bg-purple-900/30' : 'bg-purple-100';
   }, [isDarkMode]);
 
-  // Get user role icon based on user role
   const getUserRoleIcon = useCallback((userRole: string) => {
-    const roleLower = userRole.toLowerCase();
-    
+    const roleLower = userRole?.toLowerCase() || '';
     if (roleLower.includes('master')) {
-      return <Shield className="w-4 h-4 text-red-600 dark:text-red-400" />;
+      return <Shield className="w-4.5 h-4.5 text-red-600 dark:text-red-400" />;
     }
-    if (roleLower.includes('superadmin') || roleLower.includes('admin')) {
-      return <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400" />;
+    if (roleLower.includes('superadmin')) {
+      return <Shield className="w-4.5 h-4.5 text-indigo-600 dark:text-indigo-400" />;
     }
-    
-    // Default user icon
-    return <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
+    if (roleLower.includes('admin')) {
+      return <Shield className="w-4.5 h-4.5 text-purple-650 dark:text-purple-400" />;
+    }
+    if (roleLower.includes('party')) {
+      return <Users className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" />;
+    }
+    return <User className="w-4.5 h-4.5 text-blue-650 dark:text-blue-400" />;
   }, []);
 
-  // Get user role background color based on user role
   const getUserRoleBgColor = useCallback((userRole: string) => {
-    const roleLower = userRole.toLowerCase();
-    
+    const roleLower = userRole?.toLowerCase() || '';
     if (roleLower.includes('master')) {
       return isDarkMode ? 'bg-red-900/30' : 'bg-red-100';
     }
-    if (roleLower.includes('superadmin') || roleLower.includes('admin')) {
+    if (roleLower.includes('superadmin')) {
+      return isDarkMode ? 'bg-indigo-900/30' : 'bg-indigo-100';
+    }
+    if (roleLower.includes('admin')) {
       return isDarkMode ? 'bg-purple-900/30' : 'bg-purple-100';
     }
-    
-    // Default user background
+    if (roleLower.includes('party')) {
+      return isDarkMode ? 'bg-emerald-900/30' : 'bg-emerald-100';
+    }
     return isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100';
   }, [isDarkMode]);
 
-  // Get resource background color based on resource type
   const getResourceBgColor = useCallback((resource: string) => {
     const resourceLower = resource.toLowerCase();
-    
-    // User-related resources
-    if (resourceLower.includes('user') || resourceLower.includes('profile')) {
+    if (resourceLower.includes('user')) {
       return isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100';
     }
-    if (resourceLower.includes('admin') || resourceLower.includes('superadmin')) {
-      return isDarkMode ? 'bg-purple-900/30' : 'bg-purple-100';
-    }
-    
-    // Order-related resources
     if (resourceLower.includes('order')) {
       return isDarkMode ? 'bg-green-900/30' : 'bg-green-100';
     }
     if (resourceLower.includes('fabric')) {
       return isDarkMode ? 'bg-orange-900/30' : 'bg-orange-100';
     }
-    
-    // Lab-related resources
     if (resourceLower.includes('lab')) {
       return isDarkMode ? 'bg-red-900/30' : 'bg-red-100';
     }
-    if (resourceLower.includes('test') || resourceLower.includes('experiment')) {
-      return isDarkMode ? 'bg-indigo-900/30' : 'bg-indigo-100';
-    }
-    
-    // System resources
-    if (resourceLower.includes('log')) {
-      return isDarkMode ? 'bg-gray-900/30' : 'bg-gray-100';
-    }
-    if (resourceLower.includes('system') || resourceLower.includes('config')) {
-      return isDarkMode ? 'bg-gray-900/30' : 'bg-gray-100';
-    }
-    if (resourceLower.includes('database') || resourceLower.includes('db')) {
-      return isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100';
-    }
-    
-    // Default resource background
     return isDarkMode ? 'bg-gray-900/30' : 'bg-gray-100';
   }, [isDarkMode]);
 
-  // Get success status
   const getSuccessStatus = useCallback((success: boolean) => {
     return success ? (
       <div className="flex items-center">
         <div className={`w-6 h-6 rounded-lg flex items-center justify-center mr-2 ${
           isDarkMode ? 'bg-green-900/30' : 'bg-green-50'
         }`}>
-          <CheckCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
+          <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
         </div>
         <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${
           isDarkMode 
@@ -640,7 +594,7 @@ export default function LogsPage() {
         <div className={`w-6 h-6 rounded-lg flex items-center justify-center mr-2 ${
           isDarkMode ? 'bg-red-900/30' : 'bg-red-50'
         }`}>
-          <XCircle className="w-3 h-3 text-red-600 dark:text-red-400" />
+          <XCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
         </div>
         <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${
           isDarkMode 
@@ -653,7 +607,6 @@ export default function LogsPage() {
     );
   }, [isDarkMode]);
 
-  // Show skeleton when loading
   if (sessionLoading || isLoading) {
     return <LogsPageSkeleton />;
   }
@@ -670,11 +623,7 @@ export default function LogsPage() {
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mb-6`}>{error}</p>
             <button 
               onClick={() => fetchLogs(false)}
-              className={`px-6 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                isDarkMode 
-                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
-              }`}
+              className={`px-6 py-3 text-sm font-medium rounded-xl transition-all duration-205 bg-blue-600 text-white hover:bg-blue-700 shadow-sm`}
             >
               Try Again
             </button>
@@ -687,69 +636,66 @@ export default function LogsPage() {
   return (
     <div className={`min-h-screen ${isDarkMode ? 'bg-[#1D293D]' : 'bg-gradient-to-br from-blue-50 via-white to-indigo-50'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        
         {/* Header */}
         <div className="mb-6 sm:mb-8">
           <div className={`inline-flex items-center px-4 py-2 rounded-full ${isDarkMode ? 'bg-gray-800' : 'bg-white/80 backdrop-blur-sm'} shadow-sm border ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} mb-3 sm:mb-4`}>
-            <span className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">🔒 Important Activity Logs</span>
+            <span className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">🔒 Secure Activity Audit Logs</span>
           </div>
           <h1 className={`text-2xl sm:text-4xl font-bold mb-2 sm:mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
             System Activity Monitor
           </h1>
-          <p className={`text-sm sm:text-lg ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Critical system operations and user actions (excluding routine page views)
+          <p className={`text-xs sm:text-base ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            Audit trail of system activity, logins, and critical updates (fabrics, orders, profiles) filtered by administrative roles.
           </p>
         </div>
 
         {/* Statistics */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-            {/* Total Logs */}
             <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-white/90 backdrop-blur-sm'} rounded-2xl shadow-lg border ${isDarkMode ? 'border-gray-700' : 'border-gray-200/50'} p-4 sm:p-6 hover:shadow-xl transition-all duration-300`}>
               <div className="flex items-center">
                 <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100'} flex items-center justify-center mr-3 sm:mr-4`}>
                   <ActivityIcon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <p className={`text-xs sm:text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Logs</p>
+                  <p className={`text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Logs</p>
                   <p className={`text-xl sm:text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{stats.total}</p>
                 </div>
               </div>
             </div>
 
-            {/* Successful */}
             <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-white/90 backdrop-blur-sm'} rounded-2xl shadow-lg border ${isDarkMode ? 'border-gray-700' : 'border-gray-200/50'} p-4 sm:p-6 hover:shadow-xl transition-all duration-300`}>
               <div className="flex items-center">
                 <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${isDarkMode ? 'bg-green-900/30' : 'bg-green-100'} flex items-center justify-center mr-3 sm:mr-4`}>
                   <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                  <p className={`text-xs sm:text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Successful</p>
+                  <p className={`text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Successful</p>
                   <p className={`text-xl sm:text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{stats.successful}</p>
                 </div>
               </div>
             </div>
 
-            {/* Failed */}
             <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-white/90 backdrop-blur-sm'} rounded-2xl shadow-lg border ${isDarkMode ? 'border-gray-700' : 'border-gray-200/50'} p-4 sm:p-6 hover:shadow-xl transition-all duration-300`}>
               <div className="flex items-center">
                 <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${isDarkMode ? 'bg-red-900/30' : 'bg-red-100'} flex items-center justify-center mr-3 sm:mr-4`}>
                   <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 dark:text-red-400" />
                 </div>
                 <div>
-                  <p className={`text-xs sm:text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Failed</p>
+                  <p className={`text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Failed Actions</p>
                   <p className={`text-xl sm:text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{stats.failed}</p>
                 </div>
               </div>
             </div>
 
-            {/* Unique Users */}
             <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-white/90 backdrop-blur-sm'} rounded-2xl shadow-lg border ${isDarkMode ? 'border-gray-700' : 'border-gray-200/50'} p-4 sm:p-6 hover:shadow-xl transition-all duration-300`}>
               <div className="flex items-center">
                 <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${isDarkMode ? 'bg-purple-900/30' : 'bg-purple-100'} flex items-center justify-center mr-3 sm:mr-4`}>
                   <User className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div>
-                  <p className={`text-xs sm:text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Unique Users</p>
+                  <p className={`text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Unique Users</p>
                   <p className={`text-xl sm:text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{stats.uniqueUsers}</p>
                 </div>
               </div>
@@ -761,7 +707,7 @@ export default function LogsPage() {
         <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-white/90 backdrop-blur-sm'} rounded-2xl shadow-lg border ${isDarkMode ? 'border-gray-700' : 'border-gray-200/50'} mb-6 sm:mb-8`}>
           <div className="p-4 sm:p-6 md:p-8">
             <div className="flex items-center justify-between mb-4 sm:mb-6">
-              <h3 className={`text-lg sm:text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} flex items-center`}>
+              <h3 className={`text-base sm:text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} flex items-center`}>
                 <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100'} flex items-center justify-center mr-2.5 sm:mr-3`}>
                   <Search className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />
                 </div>
@@ -786,20 +732,19 @@ export default function LogsPage() {
             </div>
             
             <div className="space-y-4">
-              {/* Search input with toggle on mobile */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1 space-y-2">
                   <label className={`block text-xs sm:text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    🔍 Search
+                    🔍 Search logs, payloads & metadata
                   </label>
                   <div className="relative">
                     <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
                     <input
                       type="text"
-                      placeholder="Search logs..."
+                      placeholder="Search by user, action, order ID, changes, IP..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className={`w-full pl-10 pr-4 py-2.5 sm:py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
+                      className={`w-full pl-10 pr-4 py-2.5 sm:py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-205 ${
                         isDarkMode 
                           ? 'border-gray-600 bg-gray-700 text-white hover:border-gray-500' 
                           : 'border-gray-300 bg-white text-gray-900 hover:border-gray-400 shadow-sm'
@@ -808,14 +753,13 @@ export default function LogsPage() {
                   </div>
                 </div>
                 
-                {/* Mobile Filter Toggle Button */}
                 <div className="flex md:hidden items-end">
                   <button
                     onClick={() => setShowMobileFilters(!showMobileFilters)}
                     className={`w-full py-2.5 px-4 rounded-xl border font-medium text-xs sm:text-sm transition-all duration-200 flex items-center justify-center space-x-2 ${
                       isDarkMode 
                         ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' 
-                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 shadow-sm'
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-55 shadow-sm'
                     }`}
                   >
                     <span>⚙️</span>
@@ -830,9 +774,8 @@ export default function LogsPage() {
                 </div>
               </div>
 
-              {/* Collapsible Dropdowns container */}
+              {/* Advanced Dropdown selectors (expanded with Admin and Party roles) */}
               <div className={`${showMobileFilters ? 'grid' : 'hidden md:grid'} grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6`}>
-                {/* Date Filter */}
                 <div className="space-y-2">
                   <label className={`block text-xs sm:text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     📅 Date Range
@@ -842,8 +785,8 @@ export default function LogsPage() {
                     onChange={(e) => setDateFilter(e.target.value)}
                     className={`w-full px-3 py-2.5 sm:py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                       isDarkMode 
-                        ? 'border-gray-600 bg-gray-700 text-white hover:border-gray-500' 
-                        : 'border-gray-300 bg-white text-gray-900 hover:border-gray-400 shadow-sm'
+                        ? 'border-gray-600 bg-gray-700 text-white' 
+                        : 'border-gray-300 bg-white text-gray-900 shadow-sm'
                     }`}
                   >
                     <option value="all">All Time</option>
@@ -853,7 +796,6 @@ export default function LogsPage() {
                   </select>
                 </div>
 
-                {/* Action Filter */}
                 <div className="space-y-2">
                   <label className={`block text-xs sm:text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     ⚡ Action
@@ -863,8 +805,8 @@ export default function LogsPage() {
                     onChange={(e) => setActionFilter(e.target.value)}
                     className={`w-full px-3 py-2.5 sm:py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                       isDarkMode 
-                        ? 'border-gray-600 bg-gray-700 text-white hover:border-gray-500' 
-                        : 'border-gray-300 bg-white text-gray-900 hover:border-gray-400 shadow-sm'
+                        ? 'border-gray-600 bg-gray-700 text-white' 
+                        : 'border-gray-300 bg-white text-gray-900 shadow-sm'
                     }`}
                   >
                     <option value="all">All Actions</option>
@@ -874,7 +816,6 @@ export default function LogsPage() {
                   </select>
                 </div>
 
-                {/* Success Filter */}
                 <div className="space-y-2">
                   <label className={`block text-xs sm:text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     ✅ Status
@@ -884,8 +825,8 @@ export default function LogsPage() {
                     onChange={(e) => setSuccessFilter(e.target.value)}
                     className={`w-full px-3 py-2.5 sm:py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                       isDarkMode 
-                        ? 'border-gray-600 bg-gray-700 text-white hover:border-gray-500' 
-                        : 'border-gray-300 bg-white text-gray-900 hover:border-gray-400 shadow-sm'
+                        ? 'border-gray-600 bg-gray-700 text-white' 
+                        : 'border-gray-300 bg-white text-gray-900 shadow-sm'
                     }`}
                   >
                     <option value="all">All Status</option>
@@ -894,7 +835,6 @@ export default function LogsPage() {
                   </select>
                 </div>
 
-                {/* User Role Filter */}
                 <div className="space-y-2">
                   <label className={`block text-xs sm:text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     👤 User Role
@@ -904,14 +844,16 @@ export default function LogsPage() {
                     onChange={(e) => setUserRoleFilter(e.target.value)}
                     className={`w-full px-3 py-2.5 sm:py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
                       isDarkMode 
-                        ? 'border-gray-600 bg-gray-700 text-white hover:border-gray-500' 
-                        : 'border-gray-300 bg-white text-gray-900 hover:border-gray-400 shadow-sm'
+                        ? 'border-gray-600 bg-gray-700 text-white' 
+                        : 'border-gray-300 bg-white text-gray-900 shadow-sm'
                     }`}
                   >
-                    <option value="all">All Users</option>
+                    <option value="all">All Roles</option>
                     <option value="master">Master</option>
                     <option value="superadmin">Super Admin</option>
+                    <option value="admin">Admin</option>
                     <option value="user">User</option>
+                    <option value="party">Party</option>
                   </select>
                 </div>
               </div>
@@ -921,15 +863,14 @@ export default function LogsPage() {
 
         {/* Logs Table / Cards Container */}
         <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-white/90 backdrop-blur-sm'} rounded-2xl shadow-lg border ${isDarkMode ? 'border-gray-700' : 'border-gray-200/50'} overflow-hidden`}>
-          {/* Section Header */}
           <div className={`px-4 sm:px-6 md:px-8 py-4 sm:py-6 border-b ${isDarkMode ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h2 className={`text-lg sm:text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} flex items-center`}>
+                <h2 className={`text-base sm:text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} flex items-center`}>
                   <div className={`w-8 h-8 rounded-lg ${isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100'} flex items-center justify-center mr-3`}>
                     <span className="text-blue-600 dark:text-blue-400 text-sm">🔒</span>
                   </div>
-                  Activity Logs ({displayLogs.length} of {totalLogs} total)
+                  Activity Audit Logs ({displayLogs.length} of {totalLogs} total)
                 </h2>
                 {totalLogs > 0 && (
                   <div className="mt-2">
@@ -944,7 +885,7 @@ export default function LogsPage() {
                           style={{ width: `${Math.min((logs.length / totalLogs) * 100, 100)}%` }}
                         ></div>
                       </div>
-                      <span className={`font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      <span className={`font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         {logs.length} of {totalLogs} loaded
                       </span>
                     </div>
@@ -985,81 +926,49 @@ export default function LogsPage() {
                   <th 
                     className={`px-4 py-3 text-left text-xs font-semibold ${isDarkMode ? 'text-gray-300 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-100'} uppercase tracking-wider cursor-pointer transition-colors w-24`}
                     onClick={() => {
-                      if (sortField === 'username') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('username');
-                        setSortDirection('asc');
-                      }
+                      setSortField('username');
+                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
                     }}
                   >
                     <div className="flex items-center space-x-1">
                       <span>👤 User</span>
-                      {sortField === 'username' && (
-                        <span className="text-blue-500">
-                          {sortDirection === 'asc' ? '↑' : '↓'}
-                        </span>
-                      )}
+                      {sortField === 'username' && <span className="text-blue-500">{sortDirection === 'asc' ? '↑' : '↓'}</span>}
                     </div>
                   </th>
                   <th 
                     className={`px-4 py-3 text-left text-xs font-semibold ${isDarkMode ? 'text-gray-300 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-100'} uppercase tracking-wider cursor-pointer transition-colors w-32`}
                     onClick={() => {
-                      if (sortField === 'timestamp') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('timestamp');
-                        setSortDirection('desc');
-                      }
+                      setSortField('timestamp');
+                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
                     }}
                   >
                     <div className="flex items-center space-x-1">
                       <span>🕒 Date & Time</span>
-                      {sortField === 'timestamp' && (
-                        <span className="text-blue-500">
-                          {sortDirection === 'asc' ? '↑' : '↓'}
-                        </span>
-                      )}
+                      {sortField === 'timestamp' && <span className="text-blue-500">{sortDirection === 'asc' ? '↑' : '↓'}</span>}
                     </div>
                   </th>
                   <th 
                     className={`px-4 py-3 text-left text-xs font-semibold ${isDarkMode ? 'text-gray-300 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-100'} uppercase tracking-wider cursor-pointer transition-colors w-28`}
                     onClick={() => {
-                      if (sortField === 'action') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('action');
-                        setSortDirection('asc');
-                      }
+                      setSortField('action');
+                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
                     }}
                   >
                     <div className="flex items-center space-x-1">
                       <span>⚡ Action</span>
-                      {sortField === 'action' && (
-                        <span className="text-blue-500">
-                          {sortDirection === 'asc' ? '↑' : '↓'}
-                        </span>
-                      )}
+                      {sortField === 'action' && <span className="text-blue-500">{sortDirection === 'asc' ? '↑' : '↓'}</span>}
                     </div>
                   </th>
                   <th 
                     className={`px-4 py-3 text-left text-xs font-semibold ${isDarkMode ? 'text-gray-300 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-100'} uppercase tracking-wider cursor-pointer transition-colors w-24`}
                     onClick={() => {
-                      if (sortField === 'resource') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('resource');
-                        setSortDirection('asc');
-                      }
+                      setSortField('resource');
+                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
                     }}
                   >
                     <div className="flex items-center space-x-1">
                       <span>📁 Resource</span>
-                      {sortField === 'resource' && (
-                        <span className="text-blue-500">
-                          {sortDirection === 'asc' ? '↑' : '↓'}
-                        </span>
-                      )}
+                      {sortField === 'resource' && <span className="text-blue-500">{sortDirection === 'asc' ? '↑' : '↓'}</span>}
                     </div>
                   </th>
                   <th className={`px-4 py-3 text-left text-xs font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} uppercase tracking-wider w-20`}>
@@ -1072,17 +981,23 @@ export default function LogsPage() {
               </thead>
               <tbody className={`${isDarkMode ? 'bg-gray-800 divide-gray-700' : 'bg-white divide-gray-200'} divide-y`}>
                 {displayLogs.map((log: Log, index: number) => (
-                  <tr key={`${log._id}-${index}`} className={`${isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-55/80'} transition-all duration-200 border-l-4 border-transparent hover:border-l-blue-500`}>
+                  <tr 
+                    key={`${log._id}-${index}`} 
+                    onClick={() => setSelectedLog(log)}
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedLog(log); }}
+                    className={`cursor-pointer ${isDarkMode ? 'hover:bg-gray-700/80 focus:bg-gray-700' : 'hover:bg-gray-50 focus:bg-gray-100'} transition-all duration-200 border-l-4 border-transparent hover:border-l-blue-500 outline-none`}
+                  >
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className={`w-8 h-8 ${getUserRoleBgColor(log.userRole)} rounded-lg flex items-center justify-center mr-3`}>
+                        <div className={`w-8 h-8 ${getUserRoleBgColor(log.userRole)} rounded-lg flex items-center justify-center mr-3 shadow-inner`}>
                           {getUserRoleIcon(log.userRole)}
                         </div>
                         <div>
-                          <div className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'} truncate max-w-16`}>
+                          <div className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} truncate max-w-16`}>
                             {log.username}
                           </div>
-                          <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} capitalize`}>
+                          <div className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} capitalize font-semibold`}>
                             {log.userRole}
                           </div>
                         </div>
@@ -1090,7 +1005,7 @@ export default function LogsPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className={`w-8 h-8 ${isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100'} rounded-lg flex items-center justify-center mr-3`}>
+                        <div className={`w-8 h-8 ${isDarkMode ? 'bg-blue-900/20' : 'bg-blue-100/50'} rounded-lg flex items-center justify-center mr-3`}>
                           <ClockIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                         </div>
                         <div>
@@ -1131,8 +1046,8 @@ export default function LogsPage() {
                             {log.resource}
                           </div>
                           {log.resourceId && (
-                            <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {log.resourceId}
+                            <div className={`text-[10px] font-mono ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              ID: {log.resourceId.slice(-6)}
                             </div>
                           )}
                         </div>
@@ -1169,18 +1084,18 @@ export default function LogsPage() {
             </table>
           </div>
 
-          {/* Mobile Card List View */}
+          {/* Mobile Card List View (Clickable Cards) */}
           <div className="block md:hidden divide-y divide-gray-100 dark:divide-gray-700/50">
             {displayLogs.map((log: Log, index: number) => (
               <div 
                 key={`${log._id}-mobile-${index}`} 
-                className={`p-4 ${
+                onClick={() => setSelectedLog(log)}
+                className={`p-4 cursor-pointer active:scale-[0.99] transition-all ${
                   isDarkMode 
                     ? 'hover:bg-gray-750 bg-gray-800' 
-                    : 'hover:bg-gray-50/50 bg-white'
-                } transition-all duration-205 border-l-4 border-transparent hover:border-l-blue-500`}
+                    : 'hover:bg-gray-50 bg-white'
+                } border-l-4 border-transparent hover:border-l-blue-500`}
               >
-                {/* Row 1: User & Timestamp */}
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-center space-x-2.5">
                     <div className={`w-8 h-8 ${getUserRoleBgColor(log.userRole)} rounded-lg flex items-center justify-center`}>
@@ -1190,14 +1105,14 @@ export default function LogsPage() {
                       <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} block`}>
                         {log.username}
                       </span>
-                      <span className={`text-xxs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} capitalize`}>
+                      <span className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} capitalize font-semibold`}>
                         {log.userRole}
                       </span>
                     </div>
                   </div>
                   
                   <div className="text-right flex flex-col items-end">
-                    <span className={`text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'} flex items-center`}>
+                    <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} flex items-center`}>
                       <ClockIcon className="w-3.5 h-3.5 mr-1 text-blue-500" />
                       {new Date(log.timestamp).toLocaleTimeString('en-US', { 
                         hour: 'numeric', 
@@ -1205,7 +1120,7 @@ export default function LogsPage() {
                         hour12: true 
                       })}
                     </span>
-                    <span className={`text-xxs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <span className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                       {new Date(log.timestamp).toLocaleDateString('en-US', { 
                         month: 'short', 
                         day: 'numeric', 
@@ -1215,9 +1130,7 @@ export default function LogsPage() {
                   </div>
                 </div>
 
-                {/* Row 2: Action & Resource Flow */}
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                  {/* Action Badge */}
                   <div className="flex items-center">
                     <div className={`w-6 h-6 rounded-md ${getActionBgColor(log.action)} flex items-center justify-center mr-1.5`}>
                       {getActionIcon(log.action)}
@@ -1229,10 +1142,8 @@ export default function LogsPage() {
                     </span>
                   </div>
 
-                  {/* Arrow Separator */}
                   <span className="text-gray-400 text-xs">→</span>
 
-                  {/* Resource Badge */}
                   <div className="flex items-center">
                     <div className={`w-6 h-6 rounded-md ${getResourceBgColor(log.resource)} flex items-center justify-center mr-1.5`}>
                       {getResourceIcon(log.resource)}
@@ -1243,21 +1154,18 @@ export default function LogsPage() {
                       {log.resource}
                     </span>
                     {log.resourceId && (
-                      <span className={`ml-1.5 text-xxs ${isDarkMode ? 'text-gray-550' : 'text-gray-400'} font-mono`}>
+                      <span className={`ml-1.5 text-[10px] ${isDarkMode ? 'text-gray-450' : 'text-gray-450'} font-mono`}>
                         ({log.resourceId.slice(-6)})
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Row 3: Status & Level (Split by separator) */}
                 <div className="flex items-center justify-between border-t pt-2.5 mt-2.5 border-gray-100 dark:border-gray-700/50">
-                  {/* Status Pill */}
                   <div>
                     {getSuccessStatus(log.success)}
                   </div>
 
-                  {/* Level / Severity Indicator */}
                   <div className="flex items-center">
                     <div className={`w-6 h-6 rounded-md flex items-center justify-center mr-1.5 ${
                       log.severity === 'critical' || log.severity === 'error' 
@@ -1295,7 +1203,6 @@ export default function LogsPage() {
             </div>
           )}
 
-          {/* Enhanced Infinite Scroll Loading Indicator */}
           {isLoadingMore && (
             <div className={`px-8 py-8 border-t ${isDarkMode ? 'border-gray-700 bg-gray-700/50' : 'border-gray-200 bg-gray-50'}`}>
               <div className="text-center">
@@ -1313,6 +1220,211 @@ export default function LogsPage() {
           )}
         </div>
       </div>
+
+      {/* Details Modal */}
+      {selectedLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity duration-300">
+          <div 
+            className={`relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border ${
+              isDarkMode 
+                ? 'bg-gray-800/95 border-gray-750 text-white' 
+                : 'bg-white/95 border-gray-200 text-gray-900'
+            } shadow-2xl flex flex-col`}
+          >
+            {/* Modal Header */}
+            <div className={`p-5 border-b flex items-center justify-between ${
+              isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-150 bg-gray-50'
+            }`}>
+              <div className="flex items-center space-x-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  getActionBgColor(selectedLog.action)
+                }`}>
+                  {getActionIcon(selectedLog.action)}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold capitalize">
+                    {selectedLog.action.replace(/_/g, ' ')}
+                  </h3>
+                  <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Resource: <span className="font-semibold">{selectedLog.resource}</span>
+                  </p>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  setSelectedLog(null);
+                  setShowRawJson(false);
+                }}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  isDarkMode ? 'hover:bg-gray-700 text-gray-400 hover:text-white' : 'hover:bg-gray-150 text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                <span className="text-base font-bold">✕</span>
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Metadata Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-150'}`}>
+                  <p className={`text-[10px] uppercase tracking-wider font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>User</p>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <div className={`w-5 h-5 rounded-md flex items-center justify-center ${getUserRoleBgColor(selectedLog.userRole)}`}>
+                      {getUserRoleIcon(selectedLog.userRole)}
+                    </div>
+                    <span className="text-sm font-bold truncate">{selectedLog.username}</span>
+                  </div>
+                </div>
+                
+                <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-150'}`}>
+                  <p className={`text-[10px] uppercase tracking-wider font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Date & Time</p>
+                  <p className="text-sm font-bold mt-1.5">{formatTimestamp(selectedLog.timestamp)}</p>
+                </div>
+                
+                <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-150'}`}>
+                  <p className={`text-[10px] uppercase tracking-wider font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>IP Address</p>
+                  <p className="text-sm font-bold mt-1.5 truncate font-mono">{selectedLog.ipAddress || 'Unknown'}</p>
+                </div>
+
+                <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-150'} col-span-2`}>
+                  <p className={`text-[10px] uppercase tracking-wider font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>User Agent</p>
+                  <p className="text-xs font-semibold mt-1 truncate" title={selectedLog.userAgent}>{selectedLog.userAgent || 'Unknown'}</p>
+                </div>
+
+                <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-150'}`}>
+                  <p className={`text-[10px] uppercase tracking-wider font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Severity & Status</p>
+                  <div className="flex items-center space-x-2 mt-1.5">
+                    <span className="text-sm capitalize font-bold">{selectedLog.severity}</span>
+                    <span className="text-xs">•</span>
+                    <span className={`text-xs font-bold ${selectedLog.success ? 'text-green-500' : 'text-red-500'}`}>
+                      {selectedLog.success ? 'Success' : 'Failed'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {selectedLog.resourceId && (
+                <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-150'} flex justify-between items-center`}>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Target Resource ID</p>
+                    <p className="text-sm font-mono mt-1 select-all">{selectedLog.resourceId}</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedLog.resourceId || '');
+                    }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      isDarkMode 
+                        ? 'border-gray-600 hover:bg-gray-700 text-gray-300' 
+                        : 'border-gray-200 hover:bg-white text-gray-600 shadow-sm'
+                    }`}
+                  >
+                    Copy ID
+                  </button>
+                </div>
+              )}
+
+              {selectedLog.details && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b pb-2 border-gray-200 dark:border-gray-700">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                      {showRawJson ? 'Raw JSON Payload' : 'Changes Audit trail'}
+                    </h4>
+                    
+                    <div className="flex items-center space-x-3">
+                      <button 
+                        onClick={() => setShowRawJson(!showRawJson)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
+                          isDarkMode 
+                            ? 'border-gray-600 hover:bg-gray-700 text-gray-300' 
+                            : 'border-gray-200 hover:bg-white text-gray-600 shadow-sm'
+                        }`}
+                      >
+                        {showRawJson ? 'Show Visual Diff' : 'Show Raw JSON'}
+                      </button>
+
+                      <button 
+                        onClick={() => handleCopyJson(selectedLog.details)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
+                          isCopying
+                            ? 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400'
+                            : isDarkMode 
+                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' 
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                        }`}
+                      >
+                        <span>{isCopying ? '✓ Copied' : 'Copy JSON'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {showRawJson ? (
+                    <pre className={`p-4 rounded-xl border text-xs font-mono overflow-x-auto max-h-64 ${
+                      isDarkMode 
+                        ? 'bg-gray-900 border-gray-750 text-gray-300' 
+                        : 'bg-gray-55 border-gray-200 text-gray-850'
+                    }`}>
+                      {JSON.stringify(selectedLog.details, null, 2)}
+                    </pre>
+                  ) : (
+                    <VisualDiffViewer 
+                      oldValues={selectedLog.details.oldValues ?? (selectedLog.action.includes('delete') ? selectedLog.details : null)} 
+                      newValues={selectedLog.details.newValues ?? (selectedLog.action.includes('create') ? selectedLog.details : null)}
+                      isDarkMode={isDarkMode} 
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Modal Footer */}
+            <div className={`p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3 ${
+              isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-150 bg-gray-50'
+            }`}>
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <button
+                  onClick={() => {
+                    setSearchTerm(selectedLog.username);
+                    setSelectedLog(null);
+                  }}
+                  className={`flex-1 sm:flex-initial text-center px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
+                    isDarkMode 
+                      ? 'border-gray-600 hover:bg-gray-700 text-gray-300' 
+                      : 'border-gray-200 hover:bg-white text-gray-600 shadow-sm'
+                  }`}
+                >
+                  Filter by User
+                </button>
+                <button
+                  onClick={() => {
+                    setActionFilter(selectedLog.action);
+                    setSelectedLog(null);
+                  }}
+                  className={`flex-1 sm:flex-initial text-center px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
+                    isDarkMode 
+                      ? 'border-gray-600 hover:bg-gray-700 text-gray-300' 
+                      : 'border-gray-200 hover:bg-white text-gray-600 shadow-sm'
+                  }`}
+                >
+                  Filter by Action
+                </button>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  setSelectedLog(null);
+                  setShowRawJson(false);
+                }}
+                className="w-full sm:w-auto text-center px-6 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm"
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

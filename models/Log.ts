@@ -75,7 +75,7 @@ const LogSchema = new Schema<ILog>({
   userRole: {
     type: String,
     required: [true, "User role is required"],
-    enum: ['superadmin', 'user', 'system'],
+    enum: ['master', 'superadmin', 'admin', 'user', 'party', 'system'],
     index: true
   },
   action: {

@@ -51,7 +51,14 @@ export async function GET(request: NextRequest) {
     
     if (userId) filter.userId = userId;
     if (username) filter.username = { $regex: username, $options: 'i' };
-    if (action) filter.action = action;
+    
+    // Handle action filter and exclude routine page views ('view' action)
+    if (action) {
+      filter.action = action;
+    } else {
+      filter.action = { $ne: 'view' };
+    }
+    
     if (resource) filter.resource = resource;
     if (resourceId) filter.resourceId = resourceId;
     if (success !== undefined) filter.success = success === 'true';
@@ -61,22 +68,6 @@ export async function GET(request: NextRequest) {
     if (excludeAction) {
       filter.action = { $ne: excludeAction };
     }
-    
-    // Exclude routine page view logs and only show important operations
-    const importantActions = [
-      'login', 'logout', 'login_failed', 'password_change', 'password_reset',
-      'user_create', 'user_update', 'user_delete', 'user_activate', 'user_deactivate',
-      'order_create', 'order_update', 'order_delete', 'order_status_change',
-      'lab_create', 'lab_update', 'lab_delete', 'lab_status_change',
-      'party_create', 'party_update', 'party_delete',
-      'quality_create', 'quality_update', 'quality_delete',
-      'file_upload', 'file_delete', 'file_download',
-      'system_backup', 'system_restore', 'system_config_change',
-      'export', 'import', 'search', 'filter'
-    ];
-    
-    // Only show important actions
-    filter.action = { $in: importantActions };
     
     // Date range filter
     if (startDate || endDate) {
