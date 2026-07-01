@@ -178,9 +178,9 @@ export default function Sidebar({
       }
     ];
 
-    // Show only Dashboard for party users
+    // Show only Dashboard and Orders for party users
     if (user?.role === 'party') {
-      return items.filter(item => item.name === 'Dashboard');
+      return items.filter(item => item.name === 'Dashboard' || item.name === 'Orders');
     }
 
     // Only show Users, Fabrics, Grey Material, Finish Lot Stock, and Weaver for superadmin and master

@@ -5558,11 +5558,10 @@ export default function OrdersClient({
       </div>
 
       {/* Filters */}
-      {!isParty ? (
-        <div className={`p-2 sm:p-3 md:p-4 rounded-lg border ${isDarkMode
-          ? 'bg-white/5 border-white/10'
-          : 'bg-white border-gray-200'
-          }`}>
+      <div className={`p-2 sm:p-3 md:p-4 rounded-lg border ${isDarkMode
+        ? 'bg-white/5 border-white/10'
+        : 'bg-white border-gray-200'
+        }`}>
         <div className="flex flex-col gap-2 sm:gap-3">
           {/* Top Row - Search and Create Order */}
           <div className="flex flex-row gap-2 sm:gap-3 items-stretch sm:items-center">
@@ -5749,19 +5748,21 @@ export default function OrdersClient({
             </div>
 
             {/* Right Side - Create Order Button */}
-            <div className="flex items-center order-2 flex-shrink-0">
-              <button
-                onClick={() => openFormWithData()}
-                className={`inline-flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm ${isDarkMode
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg'
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg'
-                  }`}
-                title="Create Order"
-              >
-                <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 sm:mr-1.5" />
-                <span className="font-medium hidden sm:inline">Create Order</span>
-              </button>
-            </div>
+            {!isParty && (
+              <div className="flex items-center order-2 flex-shrink-0">
+                <button
+                  onClick={() => openFormWithData()}
+                  className={`inline-flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm ${isDarkMode
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg'
+                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg'
+                    }`}
+                  title="Create Order"
+                >
+                  <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 sm:mr-1.5" />
+                  <span className="font-medium hidden sm:inline">Create Order</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Second Row - Mobile Toolbar & Desktop Filters */}
@@ -6111,7 +6112,8 @@ export default function OrdersClient({
               </div>
 
               {/* Mill Filter - Enhanced Searchable Dropdown */}
-              <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+              {!isParty && (
+                <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
                 <span className={`text-[10px] xs:text-xs sm:text-sm font-medium whitespace-nowrap hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   Mill:
                 </span>
@@ -6299,6 +6301,7 @@ export default function OrdersClient({
                   )}
                 </div>
               </div>
+              )}
 
               {/* Loading Indicator for Filters */}
               {(sortLoading || filterLoading) && (
@@ -6402,11 +6405,6 @@ export default function OrdersClient({
           </div>
         </div>
         </div>
-      ) : (
-        <div className={`p-4 rounded-lg border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-200'} shadow-sm`}> 
-          <div className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Party Order Summary</div>
-        </div>
-      )}
 
 
       {/* Pagination Info Bar */}

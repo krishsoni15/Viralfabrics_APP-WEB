@@ -55,26 +55,6 @@ export default async function OrdersPage({
   const payload = token ? await verifyToken(token) : null;
   const isPartyUser = payload?.role === 'party';
 
-  if (isPartyUser) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
-        <div className="max-w-md w-full p-8 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-900 shadow-md">
-          <div className="w-16 h-16 bg-blue-500/10 text-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <svg className="w-8 h-8 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Orders Portal</h2>
-          <p className="text-sm text-gray-650 dark:text-gray-450 mb-6 leading-relaxed">
-            Your personalized order portal is under development. In the future, all your fabric orders, processing stages, and details will be tracked here.
-          </p>
-          <div className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-500 border border-blue-500/20">
-            Coming Soon
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   let initialOrders: any[] = [];
   let initialParties: any[] = [];

@@ -6,7 +6,6 @@ import { verifyToken } from '@/lib/auth';
 import { fetchDashboardStatsAction, fetchOrdersAction, fetchPartiesAction, fetchQualitiesAction, fetchMillsAction } from '@/app/actions/dataActions';
 import DashboardSkeleton from './components/DashboardSkeleton';
 import OrdersTableSkeleton from '../orders/components/OrdersTableSkeleton';
-import PartyDashboard from './components/PartyDashboard';
 
 // Lazy load client component (must be in client component, not server)
 const DashboardClient = dynamic(() => import('./DashboardClient'), {
@@ -35,28 +34,12 @@ export default async function DashboardPage({
 }) {
   const params = await searchParams;
   
-  // Determine current user role from token so we can render a simplified party view
+  // Determine current user role from token
   const cookieStore = await cookies();
   const headersList = await headers();
   const authHeader = headersList.get('authorization') || cookieStore.get('auth-token')?.value;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
   const payload = token ? await verifyToken(token) : null;
-  const isPartyUser = payload?.role === 'party';
-
-  if (isPartyUser && payload) {
-    return (
-      <PartyDashboard
-        user={{
-          id: payload.id,
-          username: payload.username,
-          role: payload.role,
-          name: payload.name,
-          phoneNumber: payload.phoneNumber,
-          address: payload.address,
-        }}
-      />
-    );
-  }
 
   // Fetch dashboard stats on server using server action (direct DB access)
   let initialStats = null;
