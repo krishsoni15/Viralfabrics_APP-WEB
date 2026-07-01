@@ -294,9 +294,15 @@ export function useAuthSession(): AuthSession {
 
       clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        // Session refresh failed - logout
+      if (response.status === 401 || response.status === 403) {
+        // Session refresh failed with explicit auth error - logout
         immediateLogout();
+        return false;
+      }
+
+      if (!response.ok) {
+        // Ignore network or database timeout errors and fail-open
+        isRefreshingRef.current = false;
         return false;
       }
 

@@ -39,8 +39,8 @@ async function checkLogoutStatus(token: string): Promise<void> {
 
     clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      // Token is invalid - logout immediately
+    if (response.status === 401 || response.status === 403) {
+      // Token is invalid/expired - logout immediately
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
