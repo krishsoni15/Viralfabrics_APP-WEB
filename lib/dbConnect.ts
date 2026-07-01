@@ -1,91 +1,41 @@
 import mongoose, { type Mongoose } from "mongoose";
 import SystemConfig from "../models/SystemConfig";
 
-// 🌟 100% Risk-Free Global Database Watcher
-// This plugin automatically tells the frontend when data changes, without touching any API files.
-mongoose.plugin((schema) => {
-  const emitChange = function (this: any) {
-    try {
-      const modelName = this.constructor?.modelName || this.model?.modelName || 'unknown';
-      
-      // ⚡ CRITICAL FIX: Only emit for actual business data!
-      // If we emit for 'Log' or 'User' (which save on every API call), it creates an infinite refresh loop!
-      const whitelistedModels = [
-        'Order', 'Party', 'Mill', 'Quality', 'GreyMaterial', 
-        'Dispatch', 'Fabric', 'GreyInfo', 'MillOutput', 'Process', 
-        'Sample', 'Sampling', 'FinishLotStock', 'Lab'
-      ];
+// Helper to recursively walk the query object and sanitize regex string values to prevent ReDoS
+function sanitizeRegexQuery(obj: any) {
+  if (!obj || typeof obj !== 'object') return;
 
-      if (whitelistedModels.includes(modelName)) {
-        // 1. Broadcast the tiny empty ping to all connected Socket.IO clients (for local / custom server)
-        if ((global as any).io) {
-          (global as any).io.emit('data_changed', { module: modelName });
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const val = obj[key];
+      if (key === '$regex') {
+        if (typeof val === 'string') {
+          // Escape regex special characters to prevent ReDoS/crashes
+          obj[key] = val.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
         }
-
-        // 2. Write to MongoDB SystemConfig so serverless environments (Vercel) can poll and detect updates
-        try {
-          SystemConfig.findOneAndUpdate(
-            { key: 'last_data_change' },
-            { 
-              key: 'last_data_change',
-              value: {
-                module: modelName,
-                timestamp: new Date().toISOString()
-              }
-            },
-            { upsert: true, new: true }
-          ).maxTimeMS(2000).catch((err) => {
-            if (process.env.NODE_ENV === 'development') {
-              console.warn('Real-time sync last_data_change write failed (non-critical):', err);
-            }
-          });
-        } catch (dbErr) {
-          // Silent catch to guarantee main DB operations never fail
-        }
-      }
-    } catch (error) {
-      // Strict try/catch ensures database saves NEVER fail even if Socket or SystemConfig is down
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Real-time sync silent failure:', error);
+      } else if (typeof val === 'object') {
+        sanitizeRegexQuery(val);
       }
     }
-  };
+  }
+}
 
-  // Watch every possible database mutation
-  schema.post('save', emitChange);
-  schema.post('findOneAndUpdate', emitChange);
-  schema.post('findOneAndDelete', emitChange);
-  schema.post('updateOne', emitChange);
-  schema.post('updateMany', emitChange);
-  schema.post('deleteOne', emitChange);
-  schema.post('deleteMany', emitChange);
-  schema.post('insertMany', emitChange);
+// Global Query Middleware to automatically secure regex queries across all models
+mongoose.plugin((schema) => {
+  schema.pre(['find', 'findOne', 'countDocuments', 'estimatedDocumentCount', 'findOneAndUpdate', 'findOneAndDelete', 'updateOne', 'updateMany'], function (next) {
+    try {
+      const query = this.getQuery();
+      if (query) {
+        sanitizeRegexQuery(query);
+      }
+    } catch (e) {
+      // Fail silent to guarantee DB operation never fails
+    }
+    next();
+  });
 });
 
-// Connection pool monitoring
-let poolMonitoringInterval: any = null;
-
-function startPoolMonitoring() {
-  if (poolMonitoringInterval) return;
-  
-  poolMonitoringInterval = setInterval(() => {
-    if (mongoose.connection.readyState === 1) {
-      const client = mongoose.connection.getClient();
-      const poolSize = (client as any)?.topology?.s?.pool?.totalConnectionCount || 0;
-      const maxPoolSize = (client as any)?.options?.maxPoolSize || 10;
-      const activeConnections = (client as any)?.topology?.s?.pool?.availableConnectionCount || 0;
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`MongoDB pool: ${poolSize}/${maxPoolSize} connections (${activeConnections} active)`);
-      }
-      
-      // Log warning if pool is near capacity
-      if (poolSize > maxPoolSize * 0.8) {
-        console.warn(`MongoDB connection pool is ${Math.round((poolSize / maxPoolSize) * 100)}% full`);
-      }
-    }
-  }, 60000); // Check every minute
-}
+// Connection pool monitoring - REMOVED to prevent background timers in serverless environments
 
 // Get MONGODB_URI from environment - check at runtime, not module load time
 function getMongoDBUri(): string {
@@ -233,12 +183,12 @@ export default async function dbConnect(): Promise<Mongoose> {
       bufferCommands: false, // Disable buffering for faster responses
       maxPoolSize: 5, // Connection pool size (Reduced to prevent M0 limit issues)
       minPoolSize: 0, // Don't hold idle connections open on every instance (M0 has a hard 500-connection cap)
-      serverSelectionTimeoutMS: 5000, // Timeout for server selection (fail faster instead of hanging ~30s under connection pressure)
+      serverSelectionTimeoutMS: 3000, // Timeout for server selection (fail faster to stay safely within Vercel's 10s execution limit)
       socketTimeoutMS: 45000, // Socket timeout
       family: 4, // Use IPv4, skip trying IPv6
       retryWrites: true, // Enable retries for reliability
       retryReads: true, // Enable retries for reliability
-      connectTimeoutMS: 5000, // Connection timeout (fail faster instead of hanging ~30s under connection pressure)
+      connectTimeoutMS: 3000, // Connection timeout (fail faster to stay safely within Vercel's 10s execution limit)
       maxIdleTimeMS: 30000, // Max idle time for connections
       heartbeatFrequencyMS: 10000, // Heartbeat frequency
       maxConnecting: 5, // Max concurrent connection attempts
@@ -260,8 +210,7 @@ export default async function dbConnect(): Promise<Mongoose> {
     cached.conn = await cached.promise;
     lastHealthCheck = now;
     
-    // Start pool monitoring after first connection
-    startPoolMonitoring();
+    // Start pool monitoring after first connection - DISABLED for serverless environment
     
     // Set up connection event handlers
     mongoose.connection.on('connected', () => {

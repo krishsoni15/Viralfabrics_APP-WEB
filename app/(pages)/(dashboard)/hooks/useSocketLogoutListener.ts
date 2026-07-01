@@ -43,11 +43,38 @@ export function useSocketLogoutListener(onLogout: (data?: {
 
     activeSocketHooks++;
 
+    // Shared cleanup function
+    const performCleanup = () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      if (globalPollingInterval) {
+        clearInterval(globalPollingInterval);
+        globalPollingInterval = null;
+      }
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      if (globalSocket) {
+        globalSocket.disconnect();
+        globalSocket = null;
+      }
+      globalLogoutCallback = null;
+    };
+
     // Only set up connections if this is the FIRST hook instance
     if (activeSocketHooks > 1) {
       // Just return cleanup for subsequent hooks
       return () => {
         activeSocketHooks--;
+        if (activeSocketHooks === 0) {
+          performCleanup();
+        }
       };
     }
 
@@ -280,26 +307,7 @@ export function useSocketLogoutListener(onLogout: (data?: {
 
       // Only actually disconnect and clear intervals if this was the LAST hook instance
       if (activeSocketHooks === 0) {
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-        }
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-        if (globalPollingInterval) {
-          clearInterval(globalPollingInterval);
-          globalPollingInterval = null;
-        }
-        if (socketRef.current) {
-          socketRef.current.disconnect();
-          socketRef.current = null;
-        }
-        if (globalSocket) {
-          globalSocket.disconnect();
-          globalSocket = null;
-        }
-        globalLogoutCallback = null;
+        performCleanup();
       }
     };
   }, []); // Remove onLogout from dependency array to prevent re-running connection logic

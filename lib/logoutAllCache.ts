@@ -9,8 +9,8 @@ interface CacheEntry {
   triggeredBy?: string;
 }
 
-// Cache with 30 second TTL (matches the client polling interval, reduces DB load under connection pressure)
-const CACHE_TTL_MS = 30000; // 30 seconds
+// Cache with 5 second TTL (balances database load reduction with quick consistency across serverless instances)
+const CACHE_TTL_MS = 5000; // 5 seconds
 let cache: CacheEntry | null = null;
 
 /**
