@@ -244,13 +244,13 @@ export default async function dbConnect(): Promise<Mongoose> {
     const opts: mongoose.ConnectOptions = {
       bufferCommands: false, // Disable buffering for faster responses
       maxPoolSize: 5, // Connection pool size (Reduced to prevent M0 limit issues)
-      minPoolSize: 1, // Keep minimum connections open
-      serverSelectionTimeoutMS: 10000, // Timeout for server selection
+      minPoolSize: 0, // Don't hold idle connections open on every instance (M0 has a hard 500-connection cap)
+      serverSelectionTimeoutMS: 5000, // Timeout for server selection (fail faster instead of hanging ~30s under connection pressure)
       socketTimeoutMS: 45000, // Socket timeout
       family: 4, // Use IPv4, skip trying IPv6
       retryWrites: true, // Enable retries for reliability
       retryReads: true, // Enable retries for reliability
-      connectTimeoutMS: 10000, // Connection timeout
+      connectTimeoutMS: 5000, // Connection timeout (fail faster instead of hanging ~30s under connection pressure)
       maxIdleTimeMS: 30000, // Max idle time for connections
       heartbeatFrequencyMS: 10000, // Heartbeat frequency
       maxConnecting: 5, // Max concurrent connection attempts
@@ -265,7 +265,7 @@ export default async function dbConnect(): Promise<Mongoose> {
       }),
     };
 
-    cached.promise = connectWithRetry(MONGODB_URI, opts, 3);
+    cached.promise = connectWithRetry(MONGODB_URI, opts, 2);
   }
 
   try {

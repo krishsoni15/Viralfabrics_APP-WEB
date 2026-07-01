@@ -117,7 +117,7 @@ export function useSocketLogoutListener(onLogout: (data?: {
         } finally {
           isPolling = false;
         }
-      }, 8000); // Poll every 8 seconds
+      }, 30000); // Poll every 30 seconds (logout-all is a rare admin action, no need for sub-10s freshness)
 
       globalPollingInterval = pollingIntervalRef.current;
     };
@@ -244,16 +244,20 @@ export function useSocketLogoutListener(onLogout: (data?: {
       }
     };
 
-    // ⚡ VERCEL DETECTION: Vercel serverless doesn't support persistent WebSocket connections.
-    // Skip Socket.IO on Vercel and go straight to polling (which works everywhere).
-    const isVercel = typeof window !== 'undefined' && (
+    // ⚡ SERVERLESS DETECTION: Vercel and AWS Amplify Hosting compute don't reliably support
+    // persistent WebSocket connections. Skip Socket.IO entirely on these platforms and go
+    // straight to polling (which works everywhere) instead of wasting ~10s per page load
+    // waiting for a Socket.IO connection that will never succeed.
+    const isServerlessHost = typeof window !== 'undefined' && (
       window.location.hostname.includes('vercel.app') ||
       window.location.hostname.includes('vercel.com') ||
-      process.env.NEXT_PUBLIC_VERCEL === '1'
+      window.location.hostname.includes('amplifyapp.com') ||
+      process.env.NEXT_PUBLIC_VERCEL === '1' ||
+      process.env.NEXT_PUBLIC_AMPLIFY_HOSTING === '1'
     );
 
-    if (isVercel) {
-      // On Vercel: skip Socket.IO entirely, use polling directly
+    if (isServerlessHost) {
+      // On Vercel/Amplify: skip Socket.IO entirely, use polling directly
       startPolling();
       return;
     }
