@@ -92,37 +92,25 @@ function getMongoDBUri(): string {
   const MONGODB_URI = process.env.MONGODB_URI;
   
   if (!MONGODB_URI) {
-    // Comprehensive debugging for AWS Amplify
-    console.error('=== MONGODB_URI DEBUG INFO ===');
-    console.error('NODE_ENV:', process.env.NODE_ENV);
-    console.error('Total env vars:', Object.keys(process.env).length);
-    
-    // Log all env vars that might be related
-    const relatedKeys = Object.keys(process.env).filter(key => 
-      key.includes('MONGO') || 
-      key.includes('JWT') || 
-      key.includes('NODE') ||
-      key.includes('AMPLIFY') ||
-      key.includes('AWS')
-    );
-    console.error('Related env vars:', relatedKeys);
-    
-    // Log first 20 env var keys (to see what's available)
-    const allKeys = Object.keys(process.env).slice(0, 20);
-    console.error('First 20 env var keys:', allKeys);
-    
-    // Check if it's set with different casing
-    const mongoUriLower = process.env.mongodb_uri;
-    const mongoUriUpper = process.env.MONGODB_URI;
-    console.error('MONGODB_URI (upper):', mongoUriUpper ? 'SET' : 'NOT SET');
-    console.error('mongodb_uri (lower):', mongoUriLower ? 'SET' : 'NOT SET');
-    
-    console.error('=== END DEBUG INFO ===');
-    
+    // Verbose diagnostics are dev-only to avoid fingerprinting env var names in production logs.
+    if (process.env.NODE_ENV !== 'production') {
+      const relatedKeys = Object.keys(process.env).filter(key =>
+        key.includes('MONGO') ||
+        key.includes('JWT') ||
+        key.includes('NODE') ||
+        key.includes('AMPLIFY') ||
+        key.includes('AWS')
+      );
+      console.error('MONGODB_URI is not set. Related env vars found:', relatedKeys.length ? relatedKeys : '(none)');
+      if (process.env.mongodb_uri) {
+        console.error('Found lowercase "mongodb_uri" instead — env var names are case-sensitive.');
+      }
+    }
+
     const errorMessage = process.env.NODE_ENV === 'production'
       ? "MONGODB_URI environment variable is not configured. Please set it in AWS Amplify → App settings → Environment variables, then redeploy."
       : "Please add MONGODB_URI to .env file";
-    
+
     throw new Error(errorMessage);
   }
   
