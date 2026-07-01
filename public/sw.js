@@ -2,7 +2,7 @@
 // Using build time ensures each deployment gets a unique version
 // This allows new deployments to be detected while keeping old cache as fallback
 // IMPORTANT: This version should match the deployment version from the server
-const BUILD_VERSION = 'v1782927114060';
+const BUILD_VERSION = 'v1782927673973';
 const CACHE_NAME = 'viral-fabrics-' + BUILD_VERSION;
 const STATIC_CACHE = 'viral-fabrics-static-' + BUILD_VERSION;
 const DYNAMIC_CACHE = 'viral-fabrics-dynamic-' + BUILD_VERSION;

@@ -9,9 +9,9 @@ import { logLogin, logger } from "@/lib/logger";
 export async function POST(req: NextRequest) {
   // Rate limiting removed - allow unlimited login attempts as requested
 
-  // Set a timeout for the entire login process
+  // Set a timeout for the entire login process (8 seconds to fail gracefully under Vercel's 10s serverless limit)
   const timeoutPromise = new Promise<NextResponse>((_, reject) => {
-    setTimeout(() => reject(new Error('Login timeout')), 30000); // 30 seconds timeout - more generous
+    setTimeout(() => reject(new Error('Login timeout')), 8000);
   });
 
   try {

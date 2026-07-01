@@ -83,9 +83,9 @@ export function useAuthSession(): AuthSession {
     // Create validation promise for deduplication
     const validationPromise = (async () => {
 
-    // Retry configuration
-    const MAX_RETRIES = 3;
-    const RETRY_DELAYS = [1000, 2000, 3000]; // Exponential backoff
+    // Retry configuration (limited to 1 to reduce serverless invocation count and billing)
+    const MAX_RETRIES = 1;
+    const RETRY_DELAYS = [1000]; // Exponential backoff
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
