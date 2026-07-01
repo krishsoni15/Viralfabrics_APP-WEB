@@ -1,0 +1,16 @@
+# EAS Build ignores
+# Prevent local android/ios directories from being uploaded
+# EAS generates these fresh during cloud builds
+android/
+ios/
+
+# Node modules are reinstalled on EAS
+node_modules/
+
+# Git metadata
+.git/
+
+# Development files
+.expo/
+.claude/
+*.log
