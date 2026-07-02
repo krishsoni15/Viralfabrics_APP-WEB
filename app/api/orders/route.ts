@@ -52,12 +52,13 @@ export async function GET(request: NextRequest) {
     // Removed verbose session logging
 
     // Connect to database with timeout (increased for reliability)
+    let timeoutId: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
         dbConnect(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Database connection timeout')), 15000)
-        )
+        new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Database connection timeout')), 15000);
+        })
       ]);
     } catch (dbError: any) {
       // If connection fails, try to use cached data if available
@@ -75,6 +76,10 @@ export async function GET(request: NextRequest) {
         }, { headers: getCacheHeaders(CACHE_DURATIONS.ORDERS_LIST) });
       }
       throw dbError;
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     }
 
     const { searchParams } = new URL(request.url);
@@ -1603,12 +1608,20 @@ export async function POST(req: NextRequest) {
     // Use the new sequential order creation method with timeout
     // Temporarily bypass schema validation for status
     const orderPromise = (Order as IOrderModel).createOrder(orderData);
-    const order = await Promise.race([
-      orderPromise,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Order creation timeout')), 15000)
-      )
-    ]) as IOrder & { _id: string };
+    let timeoutId: NodeJS.Timeout | undefined;
+    let order;
+    try {
+      order = await Promise.race([
+        orderPromise,
+        new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Order creation timeout')), 15000);
+        })
+      ]) as IOrder & { _id: string };
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
 
     // ⚡ ULTRA-FAST: Fetch order without populate (fetch related data separately)
     const fetchedOrder = await Order.findById(order._id)

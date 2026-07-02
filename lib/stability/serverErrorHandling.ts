@@ -54,8 +54,9 @@ export async function safeDbOperation<T>(
   timeout: number = 5000,
   errorMessage: string = 'Database operation failed'
 ): Promise<T> {
+  let timeoutId: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       reject(new Error(`${errorMessage}: Operation timed out after ${timeout}ms`));
     }, timeout);
   });
@@ -73,6 +74,10 @@ export async function safeDbOperation<T>(
     }
 
     throw error;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 

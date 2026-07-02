@@ -19,12 +19,13 @@ export async function GET(
     
     // Check logout all timestamp when validating
     let decoded: TokenPayload | null = null;
+    let timeoutId: NodeJS.Timeout | undefined;
     try {
       decoded = await Promise.race([
         verifyToken(token, true), // Check logout all timestamp
-        new Promise<null>((_, reject) => 
-          setTimeout(() => reject(new Error('Token verification timeout')), 5000) // 5 second timeout (increased from 3s)
-        )
+        new Promise<null>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Token verification timeout')), 5000); // 5 second timeout (increased from 3s)
+        })
       ]) as TokenPayload | null;
     } catch (error) {
       // Distinguish between different error types
@@ -68,6 +69,10 @@ export async function GET(
       
       // Invalid token - return 401 (only for actual auth failures)
       return unauthorized('Invalid token or session expired');
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     }
     
     if (!decoded) {
