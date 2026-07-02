@@ -10,8 +10,9 @@ export async function POST(req: NextRequest) {
   // Rate limiting removed - allow unlimited login attempts as requested
 
   // Set a timeout for the entire login process (8 seconds to fail gracefully under Vercel's 10s serverless limit)
+  let timeoutId: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<NextResponse>((_, reject) => {
-    setTimeout(() => reject(new Error('Login timeout')), 8000);
+    timeoutId = setTimeout(() => reject(new Error('Login timeout')), 8000);
   });
 
   try {
@@ -28,6 +29,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       message: error instanceof Error ? error.message : "Login failed. Please try again." 
     }, { status: 500 });
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 

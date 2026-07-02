@@ -160,7 +160,7 @@ const PieChart = memo(function PieChart({
   return (
     <div 
       onClick={handleCardClick}
-      className={`relative z-10 rounded-xl border shadow-lg p-6 2xl:p-5 transition-all duration-300 ${
+      className={`relative z-10 rounded-xl border shadow-lg p-6 2xl:p-5 transition-all duration-300 min-w-0 ${
       isDarkMode 
           ? 'bg-slate-800/90 border-slate-600 shadow-slate-900/50 backdrop-blur-sm hover:bg-slate-800 hover:shadow-xl hover:scale-[1.02] hover:border-slate-500' 
           : 'bg-white/90 border-gray-200 shadow-gray-200/50 backdrop-blur-sm hover:bg-white hover:shadow-xl hover:scale-[1.02] hover:border-gray-300'
@@ -221,9 +221,9 @@ const PieChart = memo(function PieChart({
               </div>
             </div>
           </div>
-        ) : !isLoading && filteredData.length > 0 ? (
+        ) : !isLoading && filteredData.length > 0 && screenWidth > 0 ? (
           <div onClick={(e) => e.stopPropagation()} className="w-full h-full" style={{ position: 'relative', zIndex: 1 }}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <RechartsPieChart>
               <Pie
                 data={filteredData}

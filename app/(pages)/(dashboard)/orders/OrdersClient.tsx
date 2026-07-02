@@ -274,9 +274,41 @@ export default function OrdersClient({
     return {};
   });
   const [processDataLoading, setProcessDataLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      const searchOrderId = sessionStorage.getItem('ordersPageSearchOrder');
+      const searchTime = sessionStorage.getItem('ordersPageSearchTime');
+      if (searchOrderId && searchTime) {
+        const timeDiff = Date.now() - parseInt(searchTime);
+        if (timeDiff < 30000 && timeDiff > 0) {
+          return searchOrderId;
+        }
+      }
+    } catch (e) { }
+    try {
+      return localStorage.getItem('ordersSearchTerm') || '';
+    } catch (e) { }
+    return '';
+  });
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchType, setSearchType] = useState('all'); // all, orderId, poNumber, styleNo, party, quality, mill
+  const [searchType, setSearchType] = useState(() => {
+    if (typeof window === 'undefined') return 'all';
+    try {
+      const searchOrderId = sessionStorage.getItem('ordersPageSearchOrder');
+      const searchTime = sessionStorage.getItem('ordersPageSearchTime');
+      if (searchOrderId && searchTime) {
+        const timeDiff = Date.now() - parseInt(searchTime);
+        if (timeDiff < 30000 && timeDiff > 0) {
+          return 'orderId';
+        }
+      }
+    } catch (e) { }
+    try {
+      return localStorage.getItem('ordersSearchType') || 'all';
+    } catch (e) { }
+    return 'all';
+  }); // all, orderId, poNumber, styleNo, party, quality, mill
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
@@ -284,19 +316,6 @@ export default function OrdersClient({
   // Mill filter search state
   const [millSearchTerm, setMillSearchTerm] = useState('');
   const [showMillDropdown, setShowMillDropdown] = useState(false);
-
-  // Load search state from localStorage on mount
-  useEffect(() => {
-    const savedSearchTerm = localStorage.getItem('ordersSearchTerm');
-    const savedSearchType = localStorage.getItem('ordersSearchType');
-
-    if (savedSearchTerm) {
-      setSearchTerm(savedSearchTerm);
-    }
-    if (savedSearchType) {
-      setSearchType(savedSearchType);
-    }
-  }, []);
 
   // Save search state to localStorage
   useEffect(() => {
@@ -699,16 +718,67 @@ export default function OrdersClient({
   }, []);
 
   // Filters
-  const [filters, setFilters] = useState({
-    orderFilter: 'latest_first', // latest_first, oldest_first - default to latest first (by creation date)
-    typeFilter: 'all', // all, Dying, Printing
-    statusFilter: 'pending', // all, pending, delivered - default to pending
-    fyFilter: '', // Financial year filter (e.g. "2526", "legacy", or "" for all)
-    orderType: '', // For API compatibility
-    status: 'pending', // For API compatibility - default to pending
-    startDate: '', // For API compatibility
-    endDate: '', // For API compatibility
-    millId: '' // Mill filter
+  const [filters, setFilters] = useState(() => {
+    const defaultFilters = {
+      orderFilter: 'latest_first', // latest_first, oldest_first - default to latest first (by creation date)
+      typeFilter: 'all', // all, Dying, Printing
+      statusFilter: 'pending', // all, pending, delivered - default to pending
+      fyFilter: '', // Financial year filter (e.g. "2526", "legacy", or "" for all)
+      orderType: '', // For API compatibility
+      status: 'pending', // For API compatibility - default to pending
+      startDate: '', // For API compatibility
+      endDate: '', // For API compatibility
+      millId: '' // Mill filter
+    };
+
+    if (typeof window === 'undefined') return defaultFilters;
+
+    // Check URL parameters first (e.g. from redirect)
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlStatus = urlParams.get('status');
+      if (urlStatus) {
+        return {
+          ...defaultFilters,
+          statusFilter: urlStatus,
+          status: urlStatus
+        };
+      }
+    } catch (e) { }
+
+    // Check sessionStorage filters next
+    try {
+      const filterToDelivered = sessionStorage.getItem('ordersPageFilterToDelivered');
+      const filterStatus = sessionStorage.getItem('ordersPageFilterStatus');
+      const filterType = sessionStorage.getItem('ordersPageFilterType');
+      const filterTime = sessionStorage.getItem('ordersPageFilterTime');
+
+      if (filterStatus && filterTime) {
+        const timeDiff = Date.now() - parseInt(filterTime);
+        if (timeDiff < 30000 && timeDiff > 0) {
+          const typeFilterValue = filterType && ['Dying', 'Printing'].includes(filterType) ? filterType : 'all';
+          const statusFilterValue = filterStatus === 'pending' ? 'pending' : filterStatus === 'delivered' ? 'delivered' : 'all';
+          return {
+            ...defaultFilters,
+            statusFilter: statusFilterValue,
+            status: statusFilterValue === 'all' ? '' : statusFilterValue,
+            typeFilter: typeFilterValue,
+            orderType: typeFilterValue === 'all' ? '' : typeFilterValue
+          };
+        }
+      } else if (filterToDelivered === 'true' && filterTime) {
+        const timeDiff = Date.now() - parseInt(filterTime);
+        if (timeDiff < 30000 && timeDiff > 0) {
+          return {
+            ...defaultFilters,
+            statusFilter: 'delivered',
+            status: 'delivered'
+          };
+        }
+      }
+    } catch (e) { }
+
+    return defaultFilters;
   });
 
 
@@ -1569,7 +1639,7 @@ export default function OrdersClient({
   // ULTRA FAST fetch functions - 50ms target
   const fetchOrders = useCallback(async (retryCount = 0, page = currentPage, limit = itemsPerPage, forceRefresh = false, currentFilters = filters, searchQuery = searchTerm) => {
     const maxRetries = 3; // Three retries for better reliability
-    const baseTimeout = 5000; // 5 second timeout for better reliability
+    const baseTimeout = 15000; // 15 second timeout to prevent aborting slow cloud DB queries on cold starts
     const timeoutIncrement = 2000; // Add 2 seconds per retry
 
     try {
@@ -1657,7 +1727,7 @@ export default function OrdersClient({
 
       if (!response.ok) {
         // Check for session/auth errors - redirect to login immediately (no error message)
-        if (response.status === 401 || response.status === 403 || response.status === 503 || response.status === 500 || response.status === 502) {
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
@@ -1800,9 +1870,8 @@ export default function OrdersClient({
       }
     } catch (error: any) {
       // Check for session/auth errors - redirect to login immediately
-      if (error.message?.includes('503') || error.message?.includes('401') || error.message?.includes('403') ||
-        error.message?.includes('Session expired') || error.message?.includes('Unauthorized') ||
-        error.message?.includes('500') || error.message?.includes('502')) {
+      if (error.message?.includes('401') || error.message?.includes('403') ||
+        error.message?.includes('Session expired') || error.message?.includes('Unauthorized')) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';
@@ -1952,6 +2021,16 @@ export default function OrdersClient({
     });
     if (statusParam) {
       console.log('🔧 URL status parameter found:', statusParam);
+      
+      if (!isInitialized) {
+        console.log('🔧 App is not initialized yet. Skipping URL param fetch because initializeAllData will handle it.');
+        return;
+      }
+
+      if (filters.statusFilter === statusParam && filters.status === statusParam) {
+        return;
+      }
+
       setFilters(prevFilters => {
         const newFilters = {
           ...prevFilters,
@@ -1978,7 +2057,7 @@ export default function OrdersClient({
         });
       }, 100);
     }
-  }, [searchParams, fetchOrders, itemsPerPage]);
+  }, [searchParams, fetchOrders, itemsPerPage, isInitialized, filters.statusFilter, filters.status]);
 
   // Handle sessionStorage flag for filtering to delivered orders (without URL parameters)
   useEffect(() => {
@@ -1990,36 +2069,47 @@ export default function OrdersClient({
     // Handle old delivered filter (for backward compatibility)
     if (filterToDelivered === 'true' && filterTime && !filterStatus) {
       const timeDiff = Date.now() - parseInt(filterTime);
-      // Only apply filter if it's recent (within last 5 seconds)
-      if (timeDiff < 5000 && timeDiff > 0) {
+      // Only apply filter if it's recent (within last 30 seconds)
+      if (timeDiff < 30000 && timeDiff > 0) {
         console.log('🔧 Setting filter to delivered from dashboard click');
-        setFilters(prevFilters => {
-          const newFilters = {
-            ...prevFilters,
-            statusFilter: 'delivered',
-            status: 'delivered'
-          };
-          console.log('🔧 Setting filters to delivered:', newFilters);
-          return newFilters;
-        });
+        
+        // Clean up sessionStorage IMMEDIATELY to prevent loop
+        sessionStorage.removeItem('ordersPageFilterToDelivered');
+        sessionStorage.removeItem('ordersPageFilterTime');
 
-        // Trigger data refresh with delivered filter
-        setTimeout(() => {
-          console.log('🔧 Triggering data refresh with delivered filter');
-          fetchOrders(0, 1, itemsPerPage, true, {
-            orderFilter: 'latest_first',
-            typeFilter: 'all',
-            statusFilter: 'delivered',
-            fyFilter: '',
-            orderType: '',
-            status: 'delivered',
-            startDate: '',
-            endDate: '',
-            millId: ''
+        if (!isInitialized) {
+          console.log('🔧 App is not initialized yet. Skipping direct fetch because initializeAllData will handle it.');
+          return;
+        }
+
+        if (filters.statusFilter !== 'delivered') {
+          setFilters(prevFilters => {
+            const newFilters = {
+              ...prevFilters,
+              statusFilter: 'delivered',
+              status: 'delivered'
+            };
+            console.log('🔧 Setting filters to delivered:', newFilters);
+            return newFilters;
           });
-        }, 100);
 
-        // Clean up sessionStorage after applying filter
+          // Trigger data refresh with delivered filter
+          setTimeout(() => {
+            console.log('🔧 Triggering data refresh with delivered filter');
+            fetchOrders(0, 1, itemsPerPage, true, {
+              orderFilter: 'latest_first',
+              typeFilter: 'all',
+              statusFilter: 'delivered',
+              fyFilter: '',
+              orderType: '',
+              status: 'delivered',
+              startDate: '',
+              endDate: '',
+              millId: ''
+            });
+          }, 100);
+        }
+      } else {
         sessionStorage.removeItem('ordersPageFilterToDelivered');
         sessionStorage.removeItem('ordersPageFilterTime');
       }
@@ -2028,8 +2118,8 @@ export default function OrdersClient({
     // Handle new pie chart segment click filters (status + type)
     if (filterStatus && filterTime) {
       const timeDiff = Date.now() - parseInt(filterTime);
-      // Only apply filter if it's recent (within last 5 seconds)
-      if (timeDiff < 5000 && timeDiff > 0) {
+      // Only apply filter if it's recent (within last 30 seconds)
+      if (timeDiff < 30000 && timeDiff > 0) {
         const typeFilterValue = filterType && ['Dying', 'Printing'].includes(filterType) ? filterType : 'all';
         const statusFilterValue = filterStatus === 'pending' ? 'pending' : filterStatus === 'delivered' ? 'delivered' : 'all';
 
@@ -2041,52 +2131,60 @@ export default function OrdersClient({
           segment: filterType || 'card-click'
         });
 
-        setFilters(prevFilters => {
-          const newFilters = {
-            ...prevFilters,
-            statusFilter: statusFilterValue,
-            status: statusFilterValue,
-            typeFilter: typeFilterValue,
-            orderType: typeFilterValue === 'all' ? '' : typeFilterValue
-          };
-          console.log('✅ Filters updated from pie chart:', {
-            statusFilter: newFilters.statusFilter,
-            typeFilter: newFilters.typeFilter,
-            status: newFilters.status,
-            orderType: newFilters.orderType
-          });
-          return newFilters;
-        });
+        // Clean up sessionStorage IMMEDIATELY to prevent loop
+        sessionStorage.removeItem('ordersPageFilterStatus');
+        sessionStorage.removeItem('ordersPageFilterType');
+        sessionStorage.removeItem('ordersPageFilterTime');
 
-        // Trigger data refresh with filters - use a slightly longer delay to ensure state is updated
-        setTimeout(() => {
-          console.log('🔄 Triggering data refresh with pie chart filters:', {
-            typeFilter: typeFilterValue,
-            statusFilter: statusFilterValue,
-            orderType: typeFilterValue === 'all' ? '' : typeFilterValue,
-            status: statusFilterValue
-          });
-          fetchOrders(0, 1, itemsPerPage, true, {
-            orderFilter: 'latest_first',
-            typeFilter: typeFilterValue,
-            statusFilter: statusFilterValue,
-            fyFilter: '',
-            orderType: typeFilterValue === 'all' ? '' : typeFilterValue,
-            status: statusFilterValue,
-            startDate: '',
-            endDate: '',
-            millId: ''
-          });
-        }, 150);
+        if (!isInitialized) {
+          console.log('🔧 App is not initialized yet. Skipping direct fetch because initializeAllData will handle it.');
+          return;
+        }
 
-        // Clean up sessionStorage after applying filter
-        setTimeout(() => {
-          sessionStorage.removeItem('ordersPageFilterStatus');
-          sessionStorage.removeItem('ordersPageFilterType');
-          sessionStorage.removeItem('ordersPageFilterTime');
-        }, 1000);
+        if (filters.statusFilter !== statusFilterValue || filters.typeFilter !== typeFilterValue) {
+          setFilters(prevFilters => {
+            const newFilters = {
+              ...prevFilters,
+              statusFilter: statusFilterValue,
+              status: statusFilterValue === 'all' ? '' : statusFilterValue,
+              typeFilter: typeFilterValue,
+              orderType: typeFilterValue === 'all' ? '' : typeFilterValue
+            };
+            console.log('✅ Filters updated from pie chart:', {
+              statusFilter: newFilters.statusFilter,
+              typeFilter: newFilters.typeFilter,
+              status: newFilters.status,
+              orderType: newFilters.orderType
+            });
+            return newFilters;
+          });
+
+          // Trigger data refresh with filters - use a slightly longer delay to ensure state is updated
+          setTimeout(() => {
+            console.log('🔄 Triggering data refresh with pie chart filters:', {
+              typeFilter: typeFilterValue,
+              statusFilter: statusFilterValue,
+              orderType: typeFilterValue === 'all' ? '' : typeFilterValue,
+              status: statusFilterValue === 'all' ? '' : statusFilterValue
+            });
+            fetchOrders(0, 1, itemsPerPage, true, {
+              orderFilter: 'latest_first',
+              typeFilter: typeFilterValue,
+              statusFilter: statusFilterValue,
+              fyFilter: '',
+              orderType: typeFilterValue === 'all' ? '' : typeFilterValue,
+              status: statusFilterValue === 'all' ? '' : statusFilterValue,
+              startDate: '',
+              endDate: '',
+              millId: ''
+            });
+          }, 150);
+        }
       } else {
         console.warn('⚠️ Pie chart filter expired or invalid:', { timeDiff, filterStatus, filterType });
+        sessionStorage.removeItem('ordersPageFilterStatus');
+        sessionStorage.removeItem('ordersPageFilterType');
+        sessionStorage.removeItem('ordersPageFilterTime');
       }
     }
 
@@ -2096,29 +2194,37 @@ export default function OrdersClient({
 
     if (searchOrderId && searchTime) {
       const timeDiff = Date.now() - parseInt(searchTime);
-      // Only apply search if it's recent (within last 5 seconds)
-      if (timeDiff < 5000 && timeDiff > 0) {
+      // Only apply search if it's recent (within last 30 seconds)
+      if (timeDiff < 30000 && timeDiff > 0) {
         console.log('🔍 Setting order search from Delivered Soon table:', searchOrderId);
-        setSearchTerm(searchOrderId);
-        setSearchType('orderId'); // Set search type to orderId
+        
+        // Clean up sessionStorage IMMEDIATELY to prevent loop
+        sessionStorage.removeItem('ordersPageSearchOrder');
+        sessionStorage.removeItem('ordersPageSearchTime');
 
-        // Trigger search after a short delay to ensure state is updated
-        setTimeout(() => {
-          console.log('🔍 Triggering search for order:', searchOrderId);
-          const searchQuery = `orderId:${searchOrderId}`;
-          fetchOrders(0, 1, itemsPerPage, true, filters, searchQuery);
-        }, 200);
+        if (!isInitialized) {
+          console.log('🔧 App is not initialized yet. Skipping search fetch because initializeAllData will handle it.');
+          return;
+        }
 
-        // Clean up sessionStorage after applying search
-        setTimeout(() => {
-          sessionStorage.removeItem('ordersPageSearchOrder');
-          sessionStorage.removeItem('ordersPageSearchTime');
-        }, 1000);
+        if (searchTerm !== searchOrderId || searchType !== 'orderId') {
+          setSearchTerm(searchOrderId);
+          setSearchType('orderId'); // Set search type to orderId
+
+          // Trigger search after a short delay to ensure state is updated
+          setTimeout(() => {
+            console.log('🔍 Triggering search for order:', searchOrderId);
+            const searchQuery = `orderId:${searchOrderId}`;
+            fetchOrders(0, 1, itemsPerPage, true, filters, searchQuery);
+          }, 200);
+        }
       } else {
         console.warn('⚠️ Order search expired or invalid:', { timeDiff, searchOrderId });
+        sessionStorage.removeItem('ordersPageSearchOrder');
+        sessionStorage.removeItem('ordersPageSearchTime');
       }
     }
-  }, [fetchOrders, itemsPerPage, filters]);
+  }, [fetchOrders, itemsPerPage, filters, isInitialized, searchTerm, searchType]);
 
   // Use server-side pagination info
   const totalPages = useMemo(() => {
@@ -2738,7 +2844,7 @@ export default function OrdersClient({
           return;
         }
         // Check for session/auth errors - redirect to login immediately
-        if (response.status === 401 || response.status === 403 || response.status === 503 || response.status === 500 || response.status === 502) {
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
@@ -2822,7 +2928,7 @@ export default function OrdersClient({
       if (!response.ok) {
         if (response.status === 401) return; // Skip on auth error
         // Check for session/auth errors - redirect to login immediately
-        if (response.status === 401 || response.status === 403 || response.status === 503 || response.status === 500 || response.status === 502) {
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
@@ -3021,7 +3127,8 @@ export default function OrdersClient({
 
         if (fetchOrdersRef.current) {
           try {
-            await fetchOrdersRef.current(0, 1, itemsPerPage, true, filters, searchTerm);
+            const formattedSearchQuery = searchType !== 'all' && searchTerm ? `${searchType}:${searchTerm.trim()}` : searchTerm.trim();
+            await fetchOrdersRef.current(0, 1, itemsPerPage, true, filters, formattedSearchQuery);
             ordersLoadedSuccessfully = true;
             console.log('✅ Orders loaded via fetchOrdersRef');
           } catch (error) {
@@ -3056,8 +3163,9 @@ export default function OrdersClient({
           if (filters.orderFilter && filters.orderFilter !== 'latest_first') {
             url.searchParams.append('sort', filters.orderFilter);
           }
-          if (searchTerm) {
-            url.searchParams.append('search', searchTerm);
+          const formattedSearchQuery = searchType !== 'all' && searchTerm ? `${searchType}:${searchTerm.trim()}` : searchTerm.trim();
+          if (formattedSearchQuery) {
+            url.searchParams.append('search', formattedSearchQuery);
           }
           url.searchParams.append('t', Date.now().toString());
 
@@ -7809,7 +7917,7 @@ export default function OrdersClient({
                                 {/* Image or Icon */}
                                 {item.imageUrls && item.imageUrls.length > 0 ? (
                                   <div className="relative mr-2 sm:mr-2.5 cursor-pointer" onClick={() => handleImagePreview(item.imageUrls![0], `Item ${itemIndex + 1}`, item.imageUrls, 0)}>
-                                    <img src={item.imageUrls[0]} alt="Item" className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg object-cover ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`} />
+                                    <img src={item.imageUrls[0]} alt="Item" loading="lazy" className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg object-cover ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`} />
                                     {item.imageUrls.length > 1 && (
                                       <div className={`absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-lg text-[8px] font-black text-white border-[1.5px] ${isDarkMode ? 'bg-blue-600 border-[#1e293b]' : 'bg-blue-600 border-white'}`}>
                                         {item.imageUrls.length}

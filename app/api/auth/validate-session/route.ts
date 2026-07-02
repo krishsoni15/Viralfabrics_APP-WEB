@@ -19,18 +19,25 @@ export async function GET(
     
     // Check logout all timestamp when validating
     let decoded: TokenPayload | null = null;
+    let timeoutId: NodeJS.Timeout | undefined;
     try {
       decoded = await Promise.race([
         verifyToken(token, true), // Check logout all timestamp
-        new Promise<null>((_, reject) => 
-          setTimeout(() => reject(new Error('Token verification timeout')), 5000) // 5 second timeout (increased from 3s)
-        )
+        new Promise<null>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Token verification timeout')), 5000); // 5 second timeout (increased from 3s)
+        })
       ]) as TokenPayload | null;
     } catch (error) {
       // Distinguish between different error types
       if (error instanceof Error) {
         // Database connection errors - return 503 (Service Unavailable) with retry flag
-        if (error.message.includes('database') || error.message.includes('connection') || error.message.includes('MongoDB')) {
+        if (
+          error.message.includes('database') || 
+          error.message.includes('connection') || 
+          error.message.includes('MongoDB') ||
+          error.message.includes('buffering') ||
+          error.message.includes('Mongoose')
+        ) {
           return new Response(JSON.stringify({
             success: false,
             error: 'Database connection failed',
@@ -62,6 +69,10 @@ export async function GET(
       
       // Invalid token - return 401 (only for actual auth failures)
       return unauthorized('Invalid token or session expired');
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     }
     
     if (!decoded) {
@@ -129,7 +140,13 @@ export async function GET(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
     // Check if it's a database/connection error
-    if (errorMessage.includes('database') || errorMessage.includes('connection') || errorMessage.includes('MongoDB')) {
+    if (
+      errorMessage.includes('database') || 
+      errorMessage.includes('connection') || 
+      errorMessage.includes('MongoDB') ||
+      errorMessage.includes('buffering') ||
+      errorMessage.includes('Mongoose')
+    ) {
       return new Response(JSON.stringify({
         success: false,
         error: 'Database connection failed',
