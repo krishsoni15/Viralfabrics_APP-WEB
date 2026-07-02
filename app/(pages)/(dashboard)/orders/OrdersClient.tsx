@@ -1569,7 +1569,7 @@ export default function OrdersClient({
   // ULTRA FAST fetch functions - 50ms target
   const fetchOrders = useCallback(async (retryCount = 0, page = currentPage, limit = itemsPerPage, forceRefresh = false, currentFilters = filters, searchQuery = searchTerm) => {
     const maxRetries = 3; // Three retries for better reliability
-    const baseTimeout = 5000; // 5 second timeout for better reliability
+    const baseTimeout = 15000; // 15 second timeout to prevent aborting slow cloud DB queries on cold starts
     const timeoutIncrement = 2000; // Add 2 seconds per retry
 
     try {
@@ -1657,7 +1657,7 @@ export default function OrdersClient({
 
       if (!response.ok) {
         // Check for session/auth errors - redirect to login immediately (no error message)
-        if (response.status === 401 || response.status === 403 || response.status === 503 || response.status === 500 || response.status === 502) {
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
@@ -1800,9 +1800,8 @@ export default function OrdersClient({
       }
     } catch (error: any) {
       // Check for session/auth errors - redirect to login immediately
-      if (error.message?.includes('503') || error.message?.includes('401') || error.message?.includes('403') ||
-        error.message?.includes('Session expired') || error.message?.includes('Unauthorized') ||
-        error.message?.includes('500') || error.message?.includes('502')) {
+      if (error.message?.includes('401') || error.message?.includes('403') ||
+        error.message?.includes('Session expired') || error.message?.includes('Unauthorized')) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';
@@ -1993,6 +1992,11 @@ export default function OrdersClient({
       // Only apply filter if it's recent (within last 5 seconds)
       if (timeDiff < 5000 && timeDiff > 0) {
         console.log('🔧 Setting filter to delivered from dashboard click');
+        
+        // Clean up sessionStorage IMMEDIATELY to prevent loop
+        sessionStorage.removeItem('ordersPageFilterToDelivered');
+        sessionStorage.removeItem('ordersPageFilterTime');
+
         setFilters(prevFilters => {
           const newFilters = {
             ...prevFilters,
@@ -2018,8 +2022,7 @@ export default function OrdersClient({
             millId: ''
           });
         }, 100);
-
-        // Clean up sessionStorage after applying filter
+      } else {
         sessionStorage.removeItem('ordersPageFilterToDelivered');
         sessionStorage.removeItem('ordersPageFilterTime');
       }
@@ -2041,11 +2044,16 @@ export default function OrdersClient({
           segment: filterType || 'card-click'
         });
 
+        // Clean up sessionStorage IMMEDIATELY to prevent loop
+        sessionStorage.removeItem('ordersPageFilterStatus');
+        sessionStorage.removeItem('ordersPageFilterType');
+        sessionStorage.removeItem('ordersPageFilterTime');
+
         setFilters(prevFilters => {
           const newFilters = {
             ...prevFilters,
             statusFilter: statusFilterValue,
-            status: statusFilterValue,
+            status: statusFilterValue === 'all' ? '' : statusFilterValue,
             typeFilter: typeFilterValue,
             orderType: typeFilterValue === 'all' ? '' : typeFilterValue
           };
@@ -2064,7 +2072,7 @@ export default function OrdersClient({
             typeFilter: typeFilterValue,
             statusFilter: statusFilterValue,
             orderType: typeFilterValue === 'all' ? '' : typeFilterValue,
-            status: statusFilterValue
+            status: statusFilterValue === 'all' ? '' : statusFilterValue
           });
           fetchOrders(0, 1, itemsPerPage, true, {
             orderFilter: 'latest_first',
@@ -2072,21 +2080,17 @@ export default function OrdersClient({
             statusFilter: statusFilterValue,
             fyFilter: '',
             orderType: typeFilterValue === 'all' ? '' : typeFilterValue,
-            status: statusFilterValue,
+            status: statusFilterValue === 'all' ? '' : statusFilterValue,
             startDate: '',
             endDate: '',
             millId: ''
           });
         }, 150);
-
-        // Clean up sessionStorage after applying filter
-        setTimeout(() => {
-          sessionStorage.removeItem('ordersPageFilterStatus');
-          sessionStorage.removeItem('ordersPageFilterType');
-          sessionStorage.removeItem('ordersPageFilterTime');
-        }, 1000);
       } else {
         console.warn('⚠️ Pie chart filter expired or invalid:', { timeDiff, filterStatus, filterType });
+        sessionStorage.removeItem('ordersPageFilterStatus');
+        sessionStorage.removeItem('ordersPageFilterType');
+        sessionStorage.removeItem('ordersPageFilterTime');
       }
     }
 
@@ -2099,6 +2103,11 @@ export default function OrdersClient({
       // Only apply search if it's recent (within last 5 seconds)
       if (timeDiff < 5000 && timeDiff > 0) {
         console.log('🔍 Setting order search from Delivered Soon table:', searchOrderId);
+        
+        // Clean up sessionStorage IMMEDIATELY to prevent loop
+        sessionStorage.removeItem('ordersPageSearchOrder');
+        sessionStorage.removeItem('ordersPageSearchTime');
+
         setSearchTerm(searchOrderId);
         setSearchType('orderId'); // Set search type to orderId
 
@@ -2108,14 +2117,10 @@ export default function OrdersClient({
           const searchQuery = `orderId:${searchOrderId}`;
           fetchOrders(0, 1, itemsPerPage, true, filters, searchQuery);
         }, 200);
-
-        // Clean up sessionStorage after applying search
-        setTimeout(() => {
-          sessionStorage.removeItem('ordersPageSearchOrder');
-          sessionStorage.removeItem('ordersPageSearchTime');
-        }, 1000);
       } else {
         console.warn('⚠️ Order search expired or invalid:', { timeDiff, searchOrderId });
+        sessionStorage.removeItem('ordersPageSearchOrder');
+        sessionStorage.removeItem('ordersPageSearchTime');
       }
     }
   }, [fetchOrders, itemsPerPage, filters]);
@@ -2738,7 +2743,7 @@ export default function OrdersClient({
           return;
         }
         // Check for session/auth errors - redirect to login immediately
-        if (response.status === 401 || response.status === 403 || response.status === 503 || response.status === 500 || response.status === 502) {
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
@@ -2822,7 +2827,7 @@ export default function OrdersClient({
       if (!response.ok) {
         if (response.status === 401) return; // Skip on auth error
         // Check for session/auth errors - redirect to login immediately
-        if (response.status === 401 || response.status === 403 || response.status === 503 || response.status === 500 || response.status === 502) {
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
@@ -7809,7 +7814,7 @@ export default function OrdersClient({
                                 {/* Image or Icon */}
                                 {item.imageUrls && item.imageUrls.length > 0 ? (
                                   <div className="relative mr-2 sm:mr-2.5 cursor-pointer" onClick={() => handleImagePreview(item.imageUrls![0], `Item ${itemIndex + 1}`, item.imageUrls, 0)}>
-                                    <img src={item.imageUrls[0]} alt="Item" className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg object-cover ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`} />
+                                    <img src={item.imageUrls[0]} alt="Item" loading="lazy" className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg object-cover ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`} />
                                     {item.imageUrls.length > 1 && (
                                       <div className={`absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-lg text-[8px] font-black text-white border-[1.5px] ${isDarkMode ? 'bg-blue-600 border-[#1e293b]' : 'bg-blue-600 border-white'}`}>
                                         {item.imageUrls.length}

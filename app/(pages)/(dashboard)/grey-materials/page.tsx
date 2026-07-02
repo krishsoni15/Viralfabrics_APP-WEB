@@ -553,7 +553,7 @@ export default function GreyMaterialsPage() {
 
       if (!response.ok) {
         // Check for session/auth errors - redirect to login immediately
-        if (response.status === 401 || response.status === 403 || response.status === 503 || response.status === 500 || response.status === 502) {
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
@@ -882,7 +882,7 @@ export default function GreyMaterialsPage() {
       cleanup();
 
       // Check for session/auth errors - redirect to login immediately
-      if (error.message?.includes('503') || error.message?.includes('401') || error.message?.includes('403') ||
+      if (error.message?.includes('401') || error.message?.includes('403') ||
         error.message?.includes('Session expired') || error.message?.includes('Unauthorized')) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -1015,7 +1015,7 @@ export default function GreyMaterialsPage() {
 
       if (!response.ok) {
         // Check for session/auth errors - redirect to login immediately
-        if (response.status === 401 || response.status === 403 || response.status === 503 || response.status === 500 || response.status === 502) {
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
@@ -1071,7 +1071,7 @@ export default function GreyMaterialsPage() {
 
       if (!response.ok) {
         // Check for session/auth errors - redirect to login immediately
-        if (response.status === 401 || response.status === 403 || response.status === 503 || response.status === 500 || response.status === 502) {
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
@@ -1132,7 +1132,7 @@ export default function GreyMaterialsPage() {
 
       if (!response.ok) {
         // Check for session/auth errors - redirect to login immediately
-        if (response.status === 401 || response.status === 403 || response.status === 503 || response.status === 500 || response.status === 502) {
+        if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';

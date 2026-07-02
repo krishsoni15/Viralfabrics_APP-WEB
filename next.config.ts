@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
         : ['localhost:3000'],
       bodySizeLimit: '10mb', // Increased to 10MB for image uploads
     },
-    optimizeCss: true,
+    optimizeCss: false,
   },
 
   // External packages that should not be bundled
