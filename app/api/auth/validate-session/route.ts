@@ -30,7 +30,13 @@ export async function GET(
       // Distinguish between different error types
       if (error instanceof Error) {
         // Database connection errors - return 503 (Service Unavailable) with retry flag
-        if (error.message.includes('database') || error.message.includes('connection') || error.message.includes('MongoDB')) {
+        if (
+          error.message.includes('database') || 
+          error.message.includes('connection') || 
+          error.message.includes('MongoDB') ||
+          error.message.includes('buffering') ||
+          error.message.includes('Mongoose')
+        ) {
           return new Response(JSON.stringify({
             success: false,
             error: 'Database connection failed',
@@ -129,7 +135,13 @@ export async function GET(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
     // Check if it's a database/connection error
-    if (errorMessage.includes('database') || errorMessage.includes('connection') || errorMessage.includes('MongoDB')) {
+    if (
+      errorMessage.includes('database') || 
+      errorMessage.includes('connection') || 
+      errorMessage.includes('MongoDB') ||
+      errorMessage.includes('buffering') ||
+      errorMessage.includes('Mongoose')
+    ) {
       return new Response(JSON.stringify({
         success: false,
         error: 'Database connection failed',

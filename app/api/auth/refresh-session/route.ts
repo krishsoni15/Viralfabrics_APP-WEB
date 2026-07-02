@@ -104,7 +104,55 @@ export async function POST(request: NextRequest) {
 
     return response;
 
-  } catch (error) {
-    return unauthorized('Session refresh failed');
+  } catch (error: any) {
+    console.error('Session refresh route error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    // ⚡ FIX: Distinguish database connection/timeout errors from actual token verification errors
+    // Returning 401 for database connection errors causes the client to log out active users
+    if (
+      errorMessage.includes('database') ||
+      errorMessage.includes('connection') ||
+      errorMessage.includes('MongoDB') ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('buffering') ||
+      errorMessage.includes('Mongoose')
+    ) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Database connection error during session refresh',
+        retry: true
+      }), {
+        status: 503,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      });
+    }
+
+    // For signature verification failures, expired claims, or invalid keys: return 401 Unauthorized
+    if (
+      errorMessage.includes('expired') ||
+      errorMessage.includes('claim') ||
+      errorMessage.includes('signature') ||
+      errorMessage.includes('invalid') ||
+      errorMessage.includes('JWT')
+    ) {
+      return unauthorized('Session refresh failed - invalid token');
+    }
+
+    // For other unexpected errors, return 500 instead of 401 to prevent false logouts
+    return new Response(JSON.stringify({
+      success: false,
+      error: errorMessage || 'Session refresh failed',
+      retry: true
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      }
+    });
   }
 }
