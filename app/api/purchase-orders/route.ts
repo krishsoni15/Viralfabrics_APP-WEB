@@ -176,8 +176,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get financial year
-    const fyCode = getCurrentFinancialYear();
+    // Get financial year based on poDate
+    const parsedPoDate = poDate ? new Date(poDate) : new Date();
+    const fyCode = getCurrentFinancialYear(parsedPoDate);
 
     // Build counter key based on company
     const counterKey = companyHeader === 'Viral Fabrics'
@@ -185,8 +186,8 @@ export async function POST(request: NextRequest) {
       : 'po_viral_enterprise';
 
     // Get next FY-scoped sequence number (auto-resets per FY)
-    const { sequence } = await (Counter as any).getNextFYSequence(counterKey);
-    const poNumber = String(sequence).padStart(3, '0');
+    const { sequence } = await (Counter as any).getNextFYSequence(counterKey, parsedPoDate);
+    const poNumber = `FY${fyCode}-${String(sequence).padStart(3, '0')}`;
 
     const collation = { locale: 'en', strength: 2 };
 

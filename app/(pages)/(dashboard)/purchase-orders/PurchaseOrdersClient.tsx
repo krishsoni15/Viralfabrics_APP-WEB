@@ -31,6 +31,7 @@ import {
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useAppStore } from '@/app/store/useAppStore';
 import { generatePurchaseOrderPDF, getPurchaseOrderPDFFileName } from '@/lib/poPdfGenerator';
+import { getDisplayOrderId } from '@/utils/orders';
 
 // Company header configs
 const COMPANY_HEADERS: Record<string, {
@@ -791,6 +792,10 @@ export default function PurchaseOrdersClient() {
   // Toast
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
+  // Next PO Number (only relevant in Create mode)
+  const [nextPONumber, setNextPONumber] = useState<string>('');
+  const [loadingNextPONumber, setLoadingNextPONumber] = useState(false);
+
   // Form state
   const [formData, setFormData] = useState({
     companyHeader: 'Viral Fabrics' as string,
@@ -838,6 +843,38 @@ export default function PurchaseOrdersClient() {
       'Authorization': `Bearer ${token}`
     };
   }, []);
+
+  // Fetch next PO number preview on Create Mode
+  useEffect(() => {
+    if (showModal && !editingPO) {
+      const fetchNextPONumber = async () => {
+        setLoadingNextPONumber(true);
+        try {
+          const params = new URLSearchParams({
+            companyHeader: formData.companyHeader,
+            poDate: formData.poDate
+          });
+          const res = await fetch(`/api/purchase-orders/next-number?${params.toString()}`, {
+            headers: getHeaders()
+          });
+          const data = await res.json();
+          if (data.success && data.data?.poNumber) {
+            setNextPONumber(data.data.poNumber);
+          } else {
+            setNextPONumber('');
+          }
+        } catch (error) {
+          console.error('Error fetching next PO number:', error);
+          setNextPONumber('');
+        } finally {
+          setLoadingNextPONumber(false);
+        }
+      };
+      fetchNextPONumber();
+    } else {
+      setNextPONumber('');
+    }
+  }, [showModal, editingPO, formData.companyHeader, formData.poDate, getHeaders]);
 
   // Fetch purchase orders (supports silent background refresh without loading skeleton blink)
   const fetchPOs = useCallback(async (pageNum = page, isSilent = false) => {
@@ -970,7 +1007,7 @@ export default function PurchaseOrdersClient() {
 
       if (data.success) {
         setToast({
-          message: editingPO ? 'Purchase order updated!' : `PO #${data.data?.poNumber || ''} created successfully!`,
+          message: editingPO ? 'Purchase order updated!' : `PO #${getDisplayOrderId(data.data?.poNumber) || ''} created successfully!`,
           type: 'success'
         });
         setShowModal(false);
@@ -1497,7 +1534,7 @@ export default function PurchaseOrdersClient() {
                         <tr key={po._id} className={`${hoverBg} transition-colors`}>
                           {/* 1. PO No & Company Header */}
                           <td className="px-4 py-4">
-                            <div className="font-bold text-blue-600 dark:text-blue-400 text-base">#{po.poNumber}</div>
+                            <div className="font-bold text-blue-600 dark:text-blue-400 text-base">#{getDisplayOrderId(po.poNumber)}</div>
                             <button
                               onClick={() => setSelectedCompanyInfo(companyInfo)}
                               title="Click to view full company details"
@@ -1727,7 +1764,7 @@ export default function PurchaseOrdersClient() {
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-base font-bold text-blue-600 dark:text-blue-400">#{po.poNumber}</span>
+                          <span className="text-base font-bold text-blue-600 dark:text-blue-400">#{getDisplayOrderId(po.poNumber)}</span>
                           <button
                             onClick={() => setSelectedCompanyInfo(companyInfo)}
                             className={`inline-flex px-2.5 py-0.5 text-xs font-bold rounded-full cursor-pointer hover:scale-105 transition-all ${
@@ -1998,7 +2035,7 @@ export default function PurchaseOrdersClient() {
                 <div>
                   <div className="flex items-center gap-2.5">
                     <h3 className={`text-base sm:text-lg font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                      PO #{pdfPreviewPO.poNumber} Preview
+                      PO #{getDisplayOrderId(pdfPreviewPO.poNumber)} Preview
                     </h3>
                     <span className={`inline-flex px-2.5 py-0.5 text-xs font-bold rounded-full border shadow-sm ${
                       pdfPreviewPO.companyHeader === 'Viral Fabrics'
@@ -2041,7 +2078,7 @@ export default function PurchaseOrdersClient() {
                 <iframe
                   src={pdfBlobUrl}
                   className={`w-full h-full rounded-xl border shadow-md ${isDarkMode ? 'border-slate-800' : 'border-slate-300 bg-white'}`}
-                  title={`PO-${pdfPreviewPO.poNumber}-PDF`}
+                  title={`PO-${getDisplayOrderId(pdfPreviewPO.poNumber)}-PDF`}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -2092,7 +2129,10 @@ export default function PurchaseOrdersClient() {
             <div className={`sticky top-0 z-10 px-5 py-4 border-b ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-gray-200 bg-white'} flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl`}>
               <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full sm:hidden" />
               <h2 className={`text-lg font-bold ${textPrimary}`}>
-                {editingPO ? 'Edit Purchase Order' : 'Create Purchase Order'}
+                {editingPO 
+                  ? `Edit Purchase Order #${getDisplayOrderId(editingPO.poNumber)}` 
+                  : `Create Purchase Order #${loadingNextPONumber ? '...' : (getDisplayOrderId(nextPONumber) || '...')}`
+                }
               </h2>
               <button onClick={() => !saving && setShowModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">
                 <XMarkIcon className={`w-5 h-5 ${textSecondary}`} />
@@ -2408,7 +2448,7 @@ export default function PurchaseOrdersClient() {
                   <ClockIcon className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-purple-600 dark:text-purple-400">PO #{selectedAuditPO.poNumber} Audit Info</h3>
+                  <h3 className="text-base font-bold text-purple-600 dark:text-purple-400">PO #{getDisplayOrderId(selectedAuditPO.poNumber)} Audit Info</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{selectedAuditPO.companyHeader}</p>
                 </div>
               </div>

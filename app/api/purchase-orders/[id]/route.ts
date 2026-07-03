@@ -2,6 +2,7 @@ import dbConnect from "@/lib/dbConnect";
 import PurchaseOrder from "@/models/PurchaseOrder";
 import Broker from "@/models/Broker";
 import Supplier from "@/models/Supplier";
+import Counter, { getCurrentFinancialYear } from "@/models/Counter";
 import { getSession } from "@/lib/session";
 import { type NextRequest } from "next/server";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/response";
@@ -67,12 +68,40 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    // Don't allow changing poNumber, companyHeader, or financialYear
+    const existingPO = await PurchaseOrder.findById(id);
+    if (!existingPO) {
+      return Response.json(
+        { success: false, message: 'Purchase order not found' },
+        { status: 404 }
+      );
+    }
+
+    // Don't allow changing poNumber, companyHeader, or financialYear unless date/company changes
     const { poNumber, companyHeader, financialYear, _id, ...updateData } = body;
 
     // Handle poDate conversion
     if (updateData.poDate) {
       updateData.poDate = new Date(updateData.poDate);
+    }
+
+    // Check if companyHeader or poDate is changing in a way that shifts financial year/company
+    const newCompanyHeader = body.companyHeader || existingPO.companyHeader;
+    const newPoDate = updateData.poDate || existingPO.poDate;
+    
+    const newFyCode = getCurrentFinancialYear(newPoDate);
+    const existingFyCode = existingPO.financialYear;
+
+    if (newFyCode !== existingFyCode || newCompanyHeader !== existingPO.companyHeader) {
+      // Build counter key based on company
+      const counterKey = newCompanyHeader === 'Viral Fabrics'
+        ? 'po_viral_fabrics'
+        : 'po_viral_enterprise';
+
+      // Get next FY-scoped sequence number (auto-resets per FY)
+      const { sequence } = await (Counter as any).getNextFYSequence(counterKey, newPoDate);
+      updateData.poNumber = `FY${newFyCode}-${String(sequence).padStart(3, '0')}`;
+      updateData.financialYear = newFyCode;
+      updateData.companyHeader = newCompanyHeader;
     }
 
     // Uppercase GSTIN

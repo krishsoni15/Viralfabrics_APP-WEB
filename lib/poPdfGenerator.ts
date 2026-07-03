@@ -26,6 +26,17 @@ function formatDateDDMMYYYY(date: Date | string | null | undefined): string {
   return `${day}/${month}/${year}`;
 }
 
+export function cleanPoNumber(poNumber?: string | null): string {
+  if (!poNumber) return '';
+  const idStr = String(poNumber).trim();
+  const parts = idStr.split(/[\/\-\s]+/);
+  const lastPart = parts[parts.length - 1];
+  if (lastPart && /^\d+$/.test(lastPart)) {
+    return lastPart;
+  }
+  return idStr.replace(/^FY\s*-?\s*/i, '');
+}
+
 export function generatePurchaseOrderPDF(po: any): jsPDF {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -85,7 +96,7 @@ export function generatePurchaseOrderPDF(po: any): jsPDF {
   doc.setFont('helvetica', 'normal');
   doc.text('PO No. : ', margin, y);
   doc.setFont('helvetica', 'bold');
-  doc.text(String(po.poNumber || ''), margin + 17, y);
+  doc.text(cleanPoNumber(po.poNumber), margin + 17, y);
   // Underline for PO No
   doc.setLineWidth(0.3);
   doc.line(margin + 17, y + 1, margin + 62, y + 1);
@@ -318,6 +329,6 @@ export function getPurchaseOrderPDFFileName(po: any): string {
   const company = (po.companyHeader || 'VIRAL_FABRICS')
     .toUpperCase()
     .replace(/\s+/g, '_');
-  const num = po.poNumber || '000';
+  const num = cleanPoNumber(po.poNumber) || '000';
   return `PURCHASE_ORDER_${company}_${num}.pdf`;
 }
