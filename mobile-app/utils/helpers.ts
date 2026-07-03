@@ -75,7 +75,8 @@ export function resolveImageUrl(photoPath: string | undefined | null): string {
       const parts = resolvedUrl.split('?url=');
       resultUrl = `${parts[0]}?url=${encodeURIComponent(decodeURIComponent(parts[1]))}`;
     } else {
-      resultUrl = encodeURI(resolvedUrl);
+      let cleanUrl = resolvedUrl.replace(/%%20/g, '%20').replace(/%2520/g, '%20').replace(/%%/g, '%');
+      resultUrl = encodeURI(cleanUrl);
     }
     // Explicitly replace parentheses to prevent Fresco image loader bugs on Android
     return resultUrl.replace(/\(/g, '%28').replace(/\)/g, '%29');

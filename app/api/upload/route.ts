@@ -67,13 +67,18 @@ export async function POST(req: NextRequest) {
           }), { status: 500 });
         }
 
+        const sanitizedFileName = originalFileName
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-zA-Z0-9.-]/g, '_')
+          .replace(/_+/g, '_');
+
         let fileName: string;
         if ((folder === 'sampling' || folder === 'weaver') && weaverId) {
           const timestamp = Date.now().toString();
-          const sanitizedFileName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
           fileName = `sample/${weaverId}/${timestamp}-${sanitizedFileName}`;
         } else {
-          fileName = `uploads/${folder}/${Date.now().toString()}-${originalFileName}`;
+          fileName = `uploads/${folder}/${Date.now().toString()}-${sanitizedFileName}`;
         }
 
         const client = getS3Client();
@@ -244,16 +249,21 @@ export async function POST(req: NextRequest) {
       // Structure: sample/{weaverId}/timestamp-filename.jpg
       // All image types (PNG, JPEG, JPG) go directly in the weaver's folder
       // For other folders: uploads/{folder}/
+      const sanitizedFileName = (file.name || 'image.jpg')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(/_+/g, '_');
+
       let fileName: string;
       if ((folder === 'sampling' || folder === 'weaver') && weaverId) {
         // Sample images: sample/{weaverId}/filename
         // All images go directly in weaver folder - simple structure
         const timestamp = Date.now().toString();
-        const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         fileName = `sample/${weaverId}/${timestamp}-${sanitizedFileName}`;
       } else {
         // Other folders: uploads/{folder}/
-        fileName = `uploads/${folder}/${Date.now().toString()}-${file.name}`;
+        fileName = `uploads/${folder}/${Date.now().toString()}-${sanitizedFileName}`;
       }
       
       // Get S3 client (will throw if credentials are invalid)
