@@ -2169,7 +2169,7 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
     setValidationMessage({ type: 'success', text: 'Image added! Click Save to upload to AWS.' });
   };
 
-  // Upload single file to S3
+  // Upload single file to S3 via backend API (bypasses browser S3 CORS)
   const uploadFileToS3 = async (file: File, folder: string = 'general'): Promise<string> => {
     // Validate file before upload
     if (!file || !(file instanceof File)) {
@@ -2180,70 +2180,50 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
       throw new Error('Cannot upload empty file');
     }
 
-    // Log file details for debugging
-    console.log('Uploading file via pre-signed URL:', {
+    console.log('Uploading file to server:', {
       name: file.name,
       size: file.size,
-      type: file.type,
-      extension: file.name.split('.').pop()
+      type: file.type
     });
 
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('Authentication token not found. Please log in again.');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const uploadFormData = new FormData();
+    uploadFormData.append('file', file);
+    uploadFormData.append('folder', folder);
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     try {
-      // 1. Request pre-signed upload URL from the serverless API
+      // 1. Direct FormData upload to server endpoint (prevents browser S3 CORS issues)
       const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileType: file.type || 'image/jpeg',
-          folder: folder
-        })
+        headers,
+        body: uploadFormData
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to generate pre-signed URL: ${response.status} ${errorText}`);
+        let errorMessage = `Upload failed with status ${response.status}`;
+        try {
+          const parsed = JSON.parse(errorText);
+          if (parsed.message) errorMessage = parsed.message;
+        } catch {
+          if (errorText) errorMessage = errorText;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      if (!data.success || !data.uploadUrl) {
-        throw new Error(data.message || 'Failed to get upload URL');
+      if (data.success && (data.url || data.imageUrl)) {
+        return data.url || data.imageUrl;
       }
 
-      const { uploadUrl, url } = data;
-
-      // 2. Upload file content directly to S3 via pre-signed PUT
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': file.type || 'image/jpeg'
-        },
-        body: file // Upload direct binary payload
-      });
-
-      if (!uploadRes.ok) {
-        let uploadErrText = '';
-        try {
-          uploadErrText = await uploadRes.text();
-        } catch (_) {}
-        console.error('S3 PUT upload error response:', uploadErrText);
-        throw new Error(`Direct upload to S3 failed with status ${uploadRes.status}. Please check S3 CORS settings if this persists.`);
-      }
-
-      return url;
+      throw new Error(data.message || 'Upload failed: No URL returned');
     } catch (error: any) {
       console.error('Upload flow error:', error);
-      if (error instanceof Error) {
-        throw error;
-      }
       throw new Error(`Upload failed: ${error.message || 'Unknown error'}`);
     }
   };

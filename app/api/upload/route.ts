@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSession } from '@/lib/session';
 
 // Configure AWS S3 Client (v3) - will be initialized after env check
 let s3Client: S3Client | null = null;
@@ -31,20 +32,12 @@ export const maxDuration = 60; // 60 seconds timeout for large uploads
 
 export async function POST(req: NextRequest) {
   try {
-    // Check for authentication token
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Check for authentication session (supports Bearer token or auth-token cookie)
+    const session = await getSession(req);
+    if (!session) {
       return new Response(JSON.stringify({
         success: false,
         message: 'Authentication required'
-      }), { status: 401 });
-    }
-    
-    const token = authHeader.replace('Bearer ', '');
-    if (!token) {
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Authentication token required'
       }), { status: 401 });
     }
     
