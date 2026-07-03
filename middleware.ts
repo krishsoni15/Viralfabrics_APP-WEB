@@ -60,6 +60,8 @@ const SUPERADMIN_ROUTES = [
   '/api/backup',
   '/fabrics',
   '/api/fabrics',
+  '/purchase-orders',
+  '/api/purchase-orders',
   // Weaver is accessible to all authenticated users
   // '/weaver',
   // '/api/weaver',
@@ -114,6 +116,7 @@ export async function middleware(req: NextRequest) {
   if (!pathname.startsWith('/api/') && !pathname.startsWith('/dashboard') &&
     !pathname.startsWith('/orders') && !pathname.startsWith('/fabrics') &&
     !pathname.startsWith('/users') && !pathname.startsWith('/logs') &&
+    !pathname.startsWith('/purchase-orders') &&
     !pathname.startsWith('/access-denied')) {
     return NextResponse.next();
   }
