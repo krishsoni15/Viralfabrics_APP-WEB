@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Platform, TouchableOpacity, Modal, View, Text, StyleSheet, Pressable, PanResponder, Dimensions, Image, ScrollView } from 'react-native';
 import { Tabs, router, usePathname } from 'expo-router';
-import { Home, ShoppingBag, Package, Users, User, Menu, X, ChevronRight, Shield, FileText, Boxes, TestTubes, MoreHorizontal } from 'lucide-react-native';
+import { Home, ShoppingBag, Package, Users, User, Menu, X, ChevronRight, Shield, FileText, Boxes, TestTubes, MoreHorizontal, ClipboardList } from 'lucide-react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { Colors } from '../../constants/colors';
 import * as Haptics from 'expo-haptics';
@@ -287,6 +287,7 @@ export default function TabsLayout() {
   const isFinishActive = pathname.includes('/finish-lot-stock');
   const isUsersActive = pathname.includes('/users');
   const isLogsActive = pathname.includes('/logs');
+  const isPurchaseOrdersActive = pathname.includes('/purchase-orders');
 
   const getActiveMenuInfo = () => {
     return { Icon: MoreHorizontal, title: 'More' };
@@ -300,6 +301,7 @@ export default function TabsLayout() {
     if (isFinishActive) return Package;
     if (isUsersActive) return Users;
     if (isLogsActive) return FileText;
+    if (isPurchaseOrdersActive) return ClipboardList;
     return null;
   };
 
@@ -461,7 +463,7 @@ export default function TabsLayout() {
                     hideDot={false}
                     accessibilityState={{
                       ...props.accessibilityState,
-                      selected: isMenuOpen || isFabricsActive || isWeaversActive || isGreyActive || isSamplingActive || isFinishActive || isUsersActive || isLogsActive
+                      selected: isMenuOpen || isFabricsActive || isWeaversActive || isGreyActive || isSamplingActive || isFinishActive || isUsersActive || isLogsActive || isPurchaseOrdersActive
                     }}
                     onPress={() => {
                       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -523,6 +525,12 @@ export default function TabsLayout() {
         />
         <Tabs.Screen
           name="logs"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="purchase-orders"
           options={{
             href: null,
           }}
@@ -753,7 +761,34 @@ export default function TabsLayout() {
                 <ChevronRight size={14} color={isUsersActive ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textTertiary} />
               </TouchableOpacity>
 
-              {/* Option 7: Logs */}
+              {/* Option 7: Purchase Orders */}
+              <TouchableOpacity
+                onPress={() => handleNavigate('/(tabs)/purchase-orders')}
+                activeOpacity={0.7}
+                style={[
+                  styles.menuItem,
+                  {
+                    backgroundColor: isPurchaseOrdersActive 
+                      ? (isDarkMode ? 'rgba(96, 165, 250, 0.12)' : 'rgba(37, 99, 235, 0.08)') 
+                      : (isDarkMode ? '#0f172a' : '#f8fafc'),
+                    borderColor: isPurchaseOrdersActive 
+                      ? (isDarkMode ? '#60a5fa' : '#2563eb') 
+                      : theme.borderLight,
+                    marginBottom: 0,
+                  }
+                ]}
+              >
+                <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? 'rgba(236, 72, 153, 0.15)' : '#fdf2f8' }]}>
+                  <ClipboardList size={18} color={isDarkMode ? '#f472b6' : '#db2777'} />
+                </View>
+                <View style={styles.menuTextContainer}>
+                  <Text style={[styles.menuItemTitle, { color: isPurchaseOrdersActive ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.text }]}>Purchase Orders</Text>
+                  <Text style={[styles.menuItemSubtitle, { color: theme.textSecondary }]}>Manage fabric purchase orders</Text>
+                </View>
+                <ChevronRight size={14} color={isPurchaseOrdersActive ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textTertiary} />
+              </TouchableOpacity>
+
+              {/* Option 8: Logs */}
               {isSuperAdmin ? (
                 <TouchableOpacity
                   onPress={() => handleNavigate('/(tabs)/logs')}

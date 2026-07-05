@@ -208,38 +208,218 @@ export function generatePurchaseOrderPDF(po: any): jsPDF {
   // Underline for Delivery
   doc.line(margin + 103, y + 1, rightMargin, y + 1);
 
+interface StyledSpan {
+  text: string;
+  b: boolean;
+  i: boolean;
+  u: boolean;
+}
+
+function normalizeHtml(htmlStr?: string): string {
+  if (!htmlStr) return '';
+  return htmlStr
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<p[^>]*>/gi, '\n')
+    .replace(/<\/p>/gi, '')
+    .replace(/<div[^>]*>/gi, '\n')
+    .replace(/<\/div>/gi, '')
+    .replace(/<span[^>]*font-weight:\s*bold[^>]*>(.*?)<\/span>/gi, '<b>$1</b>')
+    .replace(/<span[^>]*font-weight:\s*bolder[^>]*>(.*?)<\/span>/gi, '<b>$1</b>')
+    .replace(/<span[^>]*font-style:\s*italic[^>]*>(.*?)<\/span>/gi, '<i>$1</i>')
+    .replace(/<span[^>]*text-decoration:\s*underline[^>]*>(.*?)<\/span>/gi, '<u>$1</u>')
+    .replace(/<span[^>]*>(.*?)<\/span>/gi, '$1')
+    .replace(/<\/span>/gi, '')
+    .replace(/\n\s*\n/g, '\n')
+    .trim();
+}
+
+function parseStyledSegments(rawHtml: string): StyledSpan[] {
+  if (!rawHtml) return [];
+  const normalized = normalizeHtml(rawHtml);
+
+  const tagRegex = /<\/?(b|i|u|strong|em)[^>]*>/gi;
+  const spans: StyledSpan[] = [];
+  let b = false, i = false, u = false;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tagRegex.exec(normalized)) !== null) {
+    const textChunk = normalized.substring(lastIdx, match.index);
+    if (textChunk) {
+      spans.push({ text: textChunk, b, i, u });
+    }
+
+    const tag = match[0].toLowerCase();
+    if (tag.startsWith('<b') || tag.startsWith('<strong')) b = true;
+    else if (tag.startsWith('</b') || tag.startsWith('</strong')) b = false;
+    else if (tag.startsWith('<i') || tag.startsWith('<em')) i = true;
+    else if (tag.startsWith('</i') || tag.startsWith('</em')) i = false;
+    else if (tag.startsWith('<u')) u = true;
+    else if (tag.startsWith('</u')) u = false;
+
+    lastIdx = tagRegex.lastIndex;
+  }
+
+  const remaining = normalized.substring(lastIdx);
+  if (remaining) {
+    spans.push({ text: remaining, b, i, u });
+  }
+
+  return spans;
+}
+
+function renderStyledHtmlToPdf(
+  doc: jsPDF,
+  rawHtml: string,
+  startX: number,
+  startY: number,
+  maxWidth: number,
+  leftMargin: number,
+  fontSize: number = 9.5,
+  lineHeight: number = 8.5,
+  drawNotebookLines: boolean = false,
+  rightMargin: number = 195
+): { endY: number; lineCount: number } {
+  const spans = parseStyledSegments(rawHtml);
+  if (spans.length === 0) return { endY: startY, lineCount: 0 };
+
+  let curX = startX;
+  let curY = startY;
+  let lineCount = 1;
+  const rightBoundary = leftMargin + maxWidth;
+  const bottomLimit = 275;
+
+  const drawLineRule = (lineY: number, isFirst: boolean) => {
+    if (!drawNotebookLines) return;
+    const ruleStartX = isFirst ? startX - 1 : leftMargin;
+    doc.setLineWidth(0.3);
+    doc.line(ruleStartX, lineY + 1.2, rightMargin, lineY + 1.2);
+  };
+
+  const handlePageBreak = () => {
+    if (curY > bottomLimit) {
+      doc.addPage();
+      curY = 23;
+      curX = leftMargin;
+      drawLineRule(curY, true);
+    }
+  };
+
+  drawLineRule(curY, true);
+
+  spans.forEach((span) => {
+    let fontStyle = 'bold';
+    if (span.b && span.i) fontStyle = 'bolditalic';
+    else if (span.i) fontStyle = 'italic';
+    else if (span.b) fontStyle = 'bold';
+    else fontStyle = 'bold';
+
+    doc.setFont('helvetica', fontStyle);
+    doc.setFontSize(fontSize);
+
+    const lines = span.text.split('\n');
+    lines.forEach((lineText, lIdx) => {
+      if (lIdx > 0) {
+        curY += lineHeight;
+        curX = leftMargin;
+        lineCount++;
+        handlePageBreak();
+        drawLineRule(curY, false);
+      }
+
+      if (!lineText) return;
+
+      const words = lineText.split(' ');
+      words.forEach((word, wIdx) => {
+        if (!word && wIdx > 0) {
+          curX += doc.getTextWidth(' ');
+          return;
+        }
+
+        const spacePrefix = (wIdx > 0 || (lIdx > 0 && curX > leftMargin)) ? ' ' : '';
+        const wordWithSpace = spacePrefix + word;
+        const wordWidth = doc.getTextWidth(wordWithSpace);
+
+        if (curX + wordWidth > rightBoundary && curX > leftMargin) {
+          curY += lineHeight;
+          curX = leftMargin;
+          lineCount++;
+          handlePageBreak();
+          drawLineRule(curY, false);
+
+          const cleanWord = word;
+          const cleanWidth = doc.getTextWidth(cleanWord);
+
+          doc.setFont('helvetica', fontStyle);
+          doc.setFontSize(fontSize);
+          doc.text(cleanWord, curX, curY);
+
+          if (span.u) {
+            doc.setLineWidth(0.5);
+            doc.line(curX, curY + 0.6, curX + cleanWidth, curY + 0.6);
+          }
+
+          curX += cleanWidth;
+        } else {
+          doc.setFont('helvetica', fontStyle);
+          doc.setFontSize(fontSize);
+          doc.text(wordWithSpace, curX, curY);
+
+          if (span.u) {
+            const spaceW = spacePrefix ? doc.getTextWidth(' ') : 0;
+            const uStartX = curX + spaceW;
+            const uWidth = doc.getTextWidth(word);
+            doc.setLineWidth(0.5);
+            doc.line(uStartX, curY + 0.6, uStartX + uWidth, curY + 0.6);
+          }
+
+          curX += wordWidth;
+        }
+      });
+    });
+  });
+
+  return { endY: curY, lineCount };
+}
+
   // ─── 11. RATE ROW ───
   y += 8.5;
   doc.setFont('helvetica', 'normal');
   doc.text('Rate', margin, y);
   doc.text(':', margin + 16, y);
   doc.setFont('helvetica', 'bold');
-  doc.text(po.rate || '', margin + 20, y);
+  const formattedRate = po.rate ? (/gst/i.test(po.rate) ? po.rate : `${po.rate} + GST`) : '';
+  doc.text(formattedRate, margin + 20, y);
   // Underline for Rate
   doc.line(margin + 19, y + 1, margin + 62, y + 1);
 
   // ─── 12. PAYMENT TERMS ROW (Supports Multi-line Payment Terms) ───
   y += 8.5;
+  if (y > 270) {
+    doc.addPage();
+    y = 23;
+  }
   doc.setFont('helvetica', 'normal');
   doc.text('Payment Terms : ', margin, y);
   if (po.paymentTerms) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    const termLines = doc.splitTextToSize(po.paymentTerms, contentWidth - 34);
-    termLines.forEach((tLine: string, index: number) => {
-      if (index === 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.text(tLine, margin + 34, y);
-        doc.line(margin + 33, y + 1, rightMargin, y + 1);
-      } else {
-        y += 8.5;
-        doc.setFont('helvetica', 'bold');
-        doc.text(tLine, margin, y);
-        doc.line(margin, y + 1, rightMargin, y + 1);
-      }
-    });
-  } else {
-    doc.line(margin + 33, y + 1, rightMargin, y + 1);
+    const res = renderStyledHtmlToPdf(
+      doc,
+      po.paymentTerms,
+      margin + 34,
+      y,
+      contentWidth - 34,
+      margin,
+      9.5,
+      8.5,
+      true,
+      rightMargin
+    );
+    y = res.endY;
   }
 
   // Elegant section divider line below Payment Terms
@@ -249,12 +429,16 @@ export function generatePurchaseOrderPDF(po: any): jsPDF {
 
   // ─── 13. SPECIFICATIONS TABLE ───
   y += 6.5;
+  if (y > 240) {
+    doc.addPage();
+    y = 23;
+  }
   const specs = po.specs || {};
   const specRows = [
     { label: 'Finish GSM:', value: specs.finishGsm || '' },
     { label: 'Grey Width:', value: specs.greyWidth || '' },
-    { label: 'Finish Width:', value: specs.finishWidth || '' },
-    { label: 'Weight:', value: specs.weight || '' }
+    { key: 'finishWidth', label: 'Finish Width:', value: specs.finishWidth || '' },
+    { key: 'weight', label: 'Weight:', value: specs.weight || '' }
   ];
 
   const tableX = margin;
@@ -289,36 +473,52 @@ export function generatePurchaseOrderPDF(po: any): jsPDF {
   });
 
   y += rowHeight * specRows.length + 8;
+  if (y > 255) {
+    doc.addPage();
+    y = 23;
+  }
 
   // ─── 14. NOTES SECTION ───
   doc.setFontSize(9.5);
   doc.setFont('helvetica', 'normal');
   doc.text('Notes : ', margin, y);
 
-  // Underline for first Notes line
-  doc.setLineWidth(0.3);
-  doc.line(margin + 17, y + 1, rightMargin, y + 1);
+  let notesLineCount = 0;
 
   if (po.notes) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    const noteLines = doc.splitTextToSize(po.notes, contentWidth - 18);
-    noteLines.forEach((nLine: string, index: number) => {
-      if (index === 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.text(nLine, margin + 18, y);
-      } else {
-        y += 8.5;
-        doc.setFont('helvetica', 'bold');
-        doc.text(nLine, margin, y);
-        doc.line(margin, y + 1, rightMargin, y + 1);
-      }
-    });
+    const res = renderStyledHtmlToPdf(
+      doc,
+      po.notes,
+      margin + 18,
+      y,
+      contentWidth - 18,
+      margin,
+      9.5,
+      8.5,
+      true,
+      rightMargin
+    );
+    y = res.endY;
+    notesLineCount = res.lineCount;
+  } else {
+    // Underline for first Notes line if empty
+    doc.setLineWidth(0.3);
+    doc.line(margin + 17, y + 1, rightMargin, y + 1);
+    notesLineCount = 1;
   }
 
-  // Draw 3 extra blank underline lines for Notes area to match reference style
-  for (let i = 0; i < 3; i++) {
-    y += 8.5;
+  // Draw remaining empty notebook line rules to guarantee AT LEAST 4 total lines minimum
+  const totalMinLines = 4;
+  const remainingEmptyLines = Math.max(0, totalMinLines - notesLineCount);
+  for (let i = 0; i < remainingEmptyLines; i++) {
+    // Check if adding rules reaches bottom limit
+    if (y > 275) {
+      doc.addPage();
+      y = 23;
+    } else {
+      y += 8.5;
+    }
+    doc.setLineWidth(0.3);
     doc.line(margin, y + 1, rightMargin, y + 1);
   }
 

@@ -136,11 +136,11 @@ export function SkeletonStats() {
   );
 }
 
-export function SkeletonList({ count = 5 }: { count?: number }) {
+export function SkeletonList({ count = 5, height }: { count?: number; height?: number }) {
   return (
     <PulsingContainer style={{ padding: 16 }}>
       {Array.from({ length: count }).map((_, i) => (
-        <SkeletonCard key={i} />
+        <SkeletonCard key={i} height={height} />
       ))}
     </PulsingContainer>
   );

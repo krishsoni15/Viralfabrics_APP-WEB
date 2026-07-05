@@ -71,23 +71,66 @@ export async function GET(request: NextRequest) {
       query.$and.push({ poDate: { $lte: new Date(endDate + 'T23:59:59.999Z') } });
     }
 
-    // Search across multiple fields
+    // Search across multiple fields or specific field if prefixed
     if (search) {
       const searchPattern = search.trim();
-      query.$and.push({
-        $or: [
-          { poNumber: { $regex: searchPattern, $options: 'i' } },
-          { brokerName: { $regex: searchPattern, $options: 'i' } },
-          { brokerPhone: { $regex: searchPattern, $options: 'i' } },
-          { supplierName: { $regex: searchPattern, $options: 'i' } },
-          { supplierGstin: { $regex: searchPattern, $options: 'i' } },
-          { quality: { $regex: searchPattern, $options: 'i' } },
-          { delivery: { $regex: searchPattern, $options: 'i' } },
-          { notes: { $regex: searchPattern, $options: 'i' } },
-          { rate: { $regex: searchPattern, $options: 'i' } },
-          { paymentTerms: { $regex: searchPattern, $options: 'i' } }
-        ]
-      });
+      const colonIndex = searchPattern.indexOf(':');
+      if (colonIndex !== -1) {
+        const field = searchPattern.slice(0, colonIndex);
+        const term = searchPattern.slice(colonIndex + 1).trim();
+        if (field === 'poNumber') {
+          query.$and.push({ poNumber: { $regex: term, $options: 'i' } });
+        } else if (field === 'supplier') {
+          query.$and.push({
+            $or: [
+              { supplierName: { $regex: term, $options: 'i' } },
+              { supplierGstin: { $regex: term, $options: 'i' } }
+            ]
+          });
+        } else if (field === 'broker') {
+          query.$and.push({
+            $or: [
+              { brokerName: { $regex: term, $options: 'i' } },
+              { brokerPhone: { $regex: term, $options: 'i' } }
+            ]
+          });
+        } else if (field === 'quality') {
+          query.$and.push({ quality: { $regex: term, $options: 'i' } });
+        } else if (field === 'notes') {
+          query.$and.push({ notes: { $regex: term, $options: 'i' } });
+        } else {
+          // fallback to global search if unrecognized prefix
+          query.$and.push({
+            $or: [
+              { poNumber: { $regex: searchPattern, $options: 'i' } },
+              { brokerName: { $regex: searchPattern, $options: 'i' } },
+              { brokerPhone: { $regex: searchPattern, $options: 'i' } },
+              { supplierName: { $regex: searchPattern, $options: 'i' } },
+              { supplierGstin: { $regex: searchPattern, $options: 'i' } },
+              { quality: { $regex: searchPattern, $options: 'i' } },
+              { delivery: { $regex: searchPattern, $options: 'i' } },
+              { notes: { $regex: searchPattern, $options: 'i' } },
+              { rate: { $regex: searchPattern, $options: 'i' } },
+              { paymentTerms: { $regex: searchPattern, $options: 'i' } }
+            ]
+          });
+        }
+      } else {
+        query.$and.push({
+          $or: [
+            { poNumber: { $regex: searchPattern, $options: 'i' } },
+            { brokerName: { $regex: searchPattern, $options: 'i' } },
+            { brokerPhone: { $regex: searchPattern, $options: 'i' } },
+            { supplierName: { $regex: searchPattern, $options: 'i' } },
+            { supplierGstin: { $regex: searchPattern, $options: 'i' } },
+            { quality: { $regex: searchPattern, $options: 'i' } },
+            { delivery: { $regex: searchPattern, $options: 'i' } },
+            { notes: { $regex: searchPattern, $options: 'i' } },
+            { rate: { $regex: searchPattern, $options: 'i' } },
+            { paymentTerms: { $regex: searchPattern, $options: 'i' } }
+          ]
+        });
+      }
     }
 
     // Sort

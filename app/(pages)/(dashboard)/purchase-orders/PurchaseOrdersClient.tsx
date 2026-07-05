@@ -670,6 +670,137 @@ function CardsSkeleton({ isDarkMode, limit }: { isDarkMode: boolean; limit: numb
   );
 }
 
+// Rich Text Editor Component (MS Word style live editing)
+function RichTextEditor({
+  label,
+  value,
+  onChange,
+  placeholder,
+  inputBg,
+  labelColor,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  inputBg: string;
+  labelColor?: string;
+}) {
+  const { isDarkMode } = useDarkMode();
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [isBold, setIsBold] = useState(false);
+  const [isItalic, setIsItalic] = useState(false);
+  const [isUnderline, setIsUnderline] = useState(false);
+
+  const finalLabelColor = labelColor || (isDarkMode ? 'text-slate-300' : 'text-slate-600');
+
+  const updateFormatStates = () => {
+    if (typeof document !== 'undefined') {
+      setIsBold(document.queryCommandState('bold'));
+      setIsItalic(document.queryCommandState('italic'));
+      setIsUnderline(document.queryCommandState('underline'));
+    }
+  };
+
+  useEffect(() => {
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      const currentVal = value || '';
+      if (editorRef.current.innerHTML !== currentVal) {
+        editorRef.current.innerHTML = currentVal;
+      }
+    }
+  }, [value]);
+
+  const handleFormat = (command: string, val: string | undefined = undefined) => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+      document.execCommand(command, false, val);
+      updateFormatStates();
+      onChange(editorRef.current.innerHTML);
+    }
+  };
+
+  const getBtnStyle = (active: boolean) => {
+    if (active) {
+      return 'bg-blue-600 border-blue-600 text-white shadow-md scale-105';
+    }
+    return isDarkMode
+      ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 shadow-xs'
+      : 'bg-white border-slate-300 text-slate-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 shadow-xs';
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between mb-1">
+        <label className={`text-xs font-semibold ${finalLabelColor}`}>{label}</label>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleFormat('bold');
+            }}
+            className={`px-3 py-1 text-xs font-black rounded-lg border transition-all ${getBtnStyle(isBold)}`}
+            title="Toggle Bold (Ctrl+B)"
+          >
+            B
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleFormat('italic');
+            }}
+            className={`px-3 py-1 text-xs font-black italic rounded-lg border transition-all ${getBtnStyle(isItalic)}`}
+            title="Toggle Italic (Ctrl+I)"
+          >
+            I
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleFormat('underline');
+            }}
+            className={`px-3 py-1 text-xs font-black underline rounded-lg border transition-all ${getBtnStyle(isUnderline)}`}
+            title="Toggle Underline (Ctrl+U)"
+          >
+            U
+          </button>
+        </div>
+      </div>
+
+      <div className="relative">
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={() => {
+            if (editorRef.current) {
+              updateFormatStates();
+              onChange(editorRef.current.innerHTML);
+            }
+          }}
+          onKeyUp={updateFormatStates}
+          onMouseUp={updateFormatStates}
+          onFocus={updateFormatStates}
+          onBlur={() => {
+            if (editorRef.current) {
+              onChange(editorRef.current.innerHTML);
+            }
+          }}
+          className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none min-h-[75px] max-h-[180px] overflow-y-auto leading-relaxed`}
+        />
+        {(!value || value === '<br>' || value === '<div><br></div>') && placeholder && (
+          <div className="absolute top-2.5 left-3 text-sm text-slate-400 pointer-events-none select-none">
+            {placeholder}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PurchaseOrdersClient() {
   const { isDarkMode } = useDarkMode();
   const { user } = useAppStore();
@@ -1521,13 +1652,18 @@ export default function PurchaseOrdersClient() {
                       </td>
                     </tr>
                   ) : (
-                    purchaseOrders.map((po) => {
+                    purchaseOrders.map((po, index) => {
+                      const cleanNotesText = (po.notes || '').replace(/<[^>]+>/g, '');
+                      const hasLongNotes = cleanNotesText.length > 25;
                       const isNotesExpanded = expandedNotes[po._id];
-                      const hasLongNotes = (po.notes || '').length > 25;
+
                       const isSupplierAddrExpanded = expandedSupplierAddress[po._id];
                       const hasLongAddress = (po.supplierAddress || '').length > 22;
+
+                      const cleanPaymentTermsText = (po.paymentTerms || '').replace(/<[^>]+>/g, '');
                       const isPaymentTermsExpanded = expandedPaymentTerms[po._id];
-                      const hasLongPaymentTerms = (po.paymentTerms || '').length > 20;
+                      const hasLongPaymentTerms = cleanPaymentTermsText.length > 20;
+
                       const companyInfo = COMPANY_HEADERS[po.companyHeader] || COMPANY_HEADERS['Viral Fabrics'];
 
                       return (
@@ -1538,7 +1674,7 @@ export default function PurchaseOrdersClient() {
                             <button
                               onClick={() => setSelectedCompanyInfo(companyInfo)}
                               title="Click to view full company details"
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 mt-1 text-xs font-bold rounded-full cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm ${
+                              className={`inline-flex items-center justify-center gap-1 px-3.5 py-0.5 mt-1.5 text-xs font-bold rounded-full whitespace-nowrap cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm ${
                                 po.companyHeader === 'Viral Fabrics'
                                   ? isDarkMode
                                     ? 'bg-blue-900/60 text-blue-300 border border-blue-700/60 hover:bg-blue-800/60'
@@ -1552,7 +1688,7 @@ export default function PurchaseOrdersClient() {
                             </button>
                           </td>
 
-                          {/* 2. Date + Direct Created At & Updated At Timestamps */}
+                          {/* 2. Date + Timestamps */}
                           <td className="px-3.5 py-4 whitespace-nowrap">
                             <div className={`font-bold text-sm ${textPrimary}`}>{formatDate(po.poDate)}</div>
                             {po.createdAt && (
@@ -1575,7 +1711,7 @@ export default function PurchaseOrdersClient() {
                             )}
                           </td>
 
-                          {/* 4. Supplier (Click Address to Expand/Collapse!) */}
+                          {/* 4. Supplier */}
                           <td className="px-4 py-4 max-w-[210px]">
                             <div className={`font-bold text-sm ${textPrimary}`}>{po.supplierName || '-'}</div>
                             {po.supplierAddress && (
@@ -1621,13 +1757,15 @@ export default function PurchaseOrdersClient() {
                                     ? isDarkMode
                                       ? 'break-words whitespace-pre-line text-blue-300 bg-slate-800/90 p-2.5 rounded-xl border border-slate-700 shadow-inner mt-1 font-medium'
                                       : 'break-words whitespace-pre-line text-slate-900 bg-slate-100 p-2.5 rounded-xl border border-slate-300 shadow-sm mt-1 font-semibold'
-                                    : hasLongPaymentTerms
-                                      ? `truncate ${textSecondary} hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium`
-                                      : `${textSecondary} font-medium`
+                                    : `line-clamp-2 break-words ${textSecondary} hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium mt-0.5`
                                 }`}
-                                title={hasLongPaymentTerms ? (isPaymentTermsExpanded ? 'Click to collapse' : 'Click to expand payment terms') : po.paymentTerms}
+                                title={hasLongPaymentTerms ? (isPaymentTermsExpanded ? 'Click to collapse' : 'Click to expand payment terms') : cleanPaymentTermsText}
                               >
-                                {isPaymentTermsExpanded ? po.paymentTerms : (hasLongPaymentTerms ? `${po.paymentTerms.slice(0, 20)}...` : po.paymentTerms)}
+                                {isPaymentTermsExpanded ? (
+                                  <span dangerouslySetInnerHTML={{ __html: po.paymentTerms.replace(/\n/g, '<br/>') }} />
+                                ) : (
+                                  cleanPaymentTermsText
+                                )}
                               </div>
                             )}
                           </td>
@@ -1671,13 +1809,15 @@ export default function PurchaseOrdersClient() {
                                     ? isDarkMode
                                       ? 'break-words whitespace-pre-line text-blue-300 bg-slate-800/90 p-2.5 rounded-xl border border-slate-700 shadow-inner'
                                       : 'break-words whitespace-pre-line text-slate-900 bg-slate-100 p-2.5 rounded-xl border border-slate-300 shadow-sm font-semibold'
-                                    : hasLongNotes
-                                      ? `truncate ${textSecondary} hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium`
-                                      : textSecondary
+                                    : `line-clamp-2 break-words ${textSecondary} hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium`
                                 }`}
-                                title={hasLongNotes ? (isNotesExpanded ? 'Click text to collapse' : 'Click text to expand full note') : po.notes}
+                                title={hasLongNotes ? (isNotesExpanded ? 'Click text to collapse' : 'Click text to expand full note') : cleanNotesText}
                               >
-                                {isNotesExpanded ? po.notes : (hasLongNotes ? `${po.notes.slice(0, 22)}...` : po.notes)}
+                                {isNotesExpanded ? (
+                                  <span dangerouslySetInnerHTML={{ __html: po.notes.replace(/\n/g, '<br/>') }} />
+                                ) : (
+                                  cleanNotesText
+                                )}
                               </div>
                             ) : (
                               <span className={textMuted}>-</span>
@@ -1747,12 +1887,14 @@ export default function PurchaseOrdersClient() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {purchaseOrders.map((po) => {
+                const cleanNotesText = (po.notes || '').replace(/<[^>]+>/g, '');
                 const isNotesExpanded = expandedNotes[po._id];
-                const hasLongNotes = (po.notes || '').length > 25;
+                const hasLongNotes = cleanNotesText.length > 25;
                 const isSupplierAddrExpanded = expandedSupplierAddress[po._id];
                 const hasLongAddress = (po.supplierAddress || '').length > 22;
+                const cleanPaymentTermsText = (po.paymentTerms || '').replace(/<[^>]+>/g, '');
                 const isPaymentTermsExpanded = expandedPaymentTerms[po._id];
-                const hasLongPaymentTerms = (po.paymentTerms || '').length > 20;
+                const hasLongPaymentTerms = cleanPaymentTermsText.length > 20;
                 const companyInfo = COMPANY_HEADERS[po.companyHeader] || COMPANY_HEADERS['Viral Fabrics'];
 
                 return (
@@ -1867,7 +2009,11 @@ export default function PurchaseOrdersClient() {
                               }`}
                               title={hasLongPaymentTerms ? (isPaymentTermsExpanded ? 'Click to collapse' : 'Click to expand payment terms') : po.paymentTerms}
                             >
-                              {isPaymentTermsExpanded ? po.paymentTerms : (hasLongPaymentTerms ? `${po.paymentTerms.slice(0, 20)}...` : po.paymentTerms)}
+                              {isPaymentTermsExpanded ? (
+                                <span dangerouslySetInnerHTML={{ __html: po.paymentTerms.replace(/\n/g, '<br/>') }} />
+                              ) : (
+                                hasLongPaymentTerms ? `${cleanPaymentTermsText.slice(0, 20)}...` : cleanPaymentTermsText
+                              )}
                             </div>
                           )}
                         </div>
@@ -1901,9 +2047,13 @@ export default function PurchaseOrdersClient() {
                                   ? `truncate ${textSecondary} hover:text-blue-600 dark:hover:text-blue-400 transition-colors`
                                   : textSecondary
                             }`}
-                            title={hasLongNotes ? (isNotesExpanded ? 'Click to collapse' : 'Click to expand note') : po.notes}
+                            title={hasLongNotes ? (isNotesExpanded ? 'Click to collapse' : 'Click to expand note') : cleanNotesText}
                           >
-                            {isNotesExpanded ? po.notes : (hasLongNotes ? `${po.notes.slice(0, 25)}...` : po.notes)}
+                            {isNotesExpanded ? (
+                              <span dangerouslySetInnerHTML={{ __html: po.notes.replace(/\n/g, '<br/>') }} />
+                            ) : (
+                              hasLongNotes ? `${cleanNotesText.slice(0, 25)}...` : cleanNotesText
+                            )}
                           </div>
                         </div>
                       )}
@@ -2319,8 +2469,9 @@ export default function PurchaseOrdersClient() {
                   <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Pcs / Mtr</label>
                   <input
                     type="text"
+                    inputMode="decimal"
                     value={formData.pcsMtr}
-                    onChange={(e) => setFormData({ ...formData, pcsMtr: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, pcsMtr: e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1') })}
                     placeholder="e.g. 3606.00"
                     className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
                   />
@@ -2342,22 +2493,23 @@ export default function PurchaseOrdersClient() {
                 <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Rate</label>
                 <input
                   type="text"
+                  inputMode="decimal"
                   value={formData.rate}
-                  onChange={(e) => setFormData({ ...formData, rate: e.target.value })}
-                  placeholder="e.g. 79.50 + GST"
+                  onChange={(e) => setFormData({ ...formData, rate: e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1') })}
+                  placeholder="e.g. 79.50"
                   className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none font-semibold`}
                 />
               </div>
 
               {/* Payment Terms */}
               <div>
-                <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Payment Terms</label>
-                <input
-                  type="text"
-                  value={formData.paymentTerms}
-                  onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
+                <RichTextEditor
+                  label="Payment Terms"
+                  value={formData.paymentTerms || ''}
+                  onChange={(val) => setFormData({ ...formData, paymentTerms: val })}
                   placeholder="e.g. 30 Days"
-                  className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
+                  inputBg={inputBg}
+                  labelColor={textSecondary}
                 />
               </div>
 
@@ -2377,10 +2529,11 @@ export default function PurchaseOrdersClient() {
                       </span>
                       <input
                         type="text"
+                        inputMode="decimal"
                         value={(formData.specs as any)[spec.key]}
                         onChange={(e) => setFormData({
                           ...formData,
-                          specs: { ...formData.specs, [spec.key]: e.target.value }
+                          specs: { ...formData.specs, [spec.key]: e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1') }
                         })}
                         className={`flex-1 px-3 py-2 text-sm ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-900'} outline-none focus:ring-1 focus:ring-blue-500`}
                       />
@@ -2391,13 +2544,13 @@ export default function PurchaseOrdersClient() {
 
               {/* Notes */}
               <div>
-                <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Notes</label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={2}
+                <RichTextEditor
+                  label="Notes"
+                  value={formData.notes || ''}
+                  onChange={(val) => setFormData({ ...formData, notes: val })}
                   placeholder="Additional notes..."
-                  className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none resize-none`}
+                  inputBg={inputBg}
+                  labelColor={textSecondary}
                 />
               </div>
             </div>

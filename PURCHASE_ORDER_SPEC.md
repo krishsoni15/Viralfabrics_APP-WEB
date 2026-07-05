@@ -44,7 +44,7 @@ When creating a Purchase Order, the form provides the following fields:
 | **Quality** | Text / Select | Fabric quality specification (e.g. `GREY 20% RECYCLE POLY SATIN`). |
 | **Pcs / Mtr** | Text / Number | Quantity of pieces or meters (e.g. `3606.00`). |
 | **Delivery** | Text | Delivery location or terms (e.g. `office`). |
-| **Rate** | Text | Purchase rate entered manually (e.g. `79.50 + GST`). |
+| **Rate** | Text | Purchase rate entered manually (e.g. `79.50`). |
 | **Payment Terms** | Text | Agreed payment timeframe (e.g. `30 Days`). |
 | **Finish GSM** | Text / Number | Specifications table item 1. |
 | **Grey Width** | Text / Number | Specifications table item 2. |
