@@ -1648,7 +1648,14 @@ export default function PurchaseOrdersClient() {
                       <td colSpan={9} className="px-4 py-16 text-center">
                         <ClipboardDocumentListIcon className={`w-12 h-12 mx-auto mb-3 opacity-30 ${textSecondary}`} />
                         <p className={`text-base font-semibold ${textPrimary}`}>No purchase orders found</p>
-                        <p className={`text-xs mt-1 ${textSecondary}`}>Create your first purchase order using the button above.</p>
+                        <p className={`text-xs mt-1 mb-4 ${textSecondary}`}>Create your first purchase order to get started.</p>
+                        <button
+                          onClick={handleCreate}
+                          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all active:scale-[0.98] hover:shadow-lg hover:scale-105 duration-200"
+                        >
+                          <PlusIcon className="w-4 h-4 stroke-[3]" />
+                          <span>Create PO</span>
+                        </button>
                       </td>
                     </tr>
                   ) : (
@@ -1882,7 +1889,14 @@ export default function PurchaseOrdersClient() {
             <div className={`p-12 rounded-2xl border text-center ${cardBg}`}>
               <ClipboardDocumentListIcon className={`w-12 h-12 mx-auto mb-3 opacity-30 ${textSecondary}`} />
               <p className={`text-base font-semibold ${textPrimary}`}>No purchase orders found</p>
-              <p className={`text-xs mt-1 ${textSecondary}`}>Create your first purchase order using the button above.</p>
+              <p className={`text-xs mt-1 mb-4 ${textSecondary}`}>Create your first purchase order to get started.</p>
+              <button
+                onClick={handleCreate}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all active:scale-[0.98] hover:shadow-lg hover:scale-105 duration-200"
+              >
+                <PlusIcon className="w-4 h-4 stroke-[3]" />
+                <span>Create PO</span>
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
