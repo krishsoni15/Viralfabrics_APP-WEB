@@ -360,3 +360,45 @@ export interface Log {
   success: boolean;
   severity: 'info' | 'warning' | 'error' | 'critical';
 }
+
+export interface PurchaseOrder {
+  _id: string;
+  companyHeader: 'Viral Fabrics' | 'Viral Enterprise';
+  poNumber: string;
+  poDate: string;
+  brokerName: string;
+  brokerPhone: string;
+  supplierName: string;
+  supplierAddress: string;
+  supplierGstin: string;
+  quality: string;
+  pcsMtr: string;
+  delivery: string;
+  rate: string;
+  paymentTerms: string;
+  specs: {
+    finishGsm: string;
+    greyWidth: string;
+    finishWidth: string;
+    weight: string;
+  };
+  notes: string;
+  financialYear: string;
+  softDeleted?: boolean;
+  createdBy?: { _id?: string; name: string; username: string };
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Broker {
+  _id: string;
+  name: string;
+  phone?: string;
+}
+
+export interface POSupplier {
+  _id: string;
+  name: string;
+  address?: string;
+  gstin?: string;
+}

@@ -223,7 +223,7 @@ const PieChart = memo(function PieChart({
           </div>
         ) : !isLoading && filteredData.length > 0 && screenWidth > 0 ? (
           <div onClick={(e) => e.stopPropagation()} className="w-full h-full" style={{ position: 'relative', zIndex: 1 }}>
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
             <RechartsPieChart>
               <Pie
                 data={filteredData}

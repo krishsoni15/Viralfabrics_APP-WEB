@@ -75,7 +75,8 @@ export function resolveImageUrl(photoPath: string | undefined | null): string {
       const parts = resolvedUrl.split('?url=');
       resultUrl = `${parts[0]}?url=${encodeURIComponent(decodeURIComponent(parts[1]))}`;
     } else {
-      resultUrl = encodeURI(resolvedUrl);
+      let cleanUrl = resolvedUrl.replace(/%%20/g, '%20').replace(/%2520/g, '%20').replace(/%%/g, '%');
+      resultUrl = encodeURI(cleanUrl);
     }
     // Explicitly replace parentheses to prevent Fresco image loader bugs on Android
     return resultUrl.replace(/\(/g, '%28').replace(/\)/g, '%29');
@@ -381,4 +382,32 @@ export async function uploadSingleImage(uri: string, folder = 'general', weaverI
     throw new Error('Upload succeeded but no URL returned');
   }
   return imageUrl;
+}
+
+/**
+ * Get dynamic FY option calculator for filters
+ */
+export function getCalculatedFYOptions() {
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  // Financial year starts in April (month 3)
+  const startYear = month >= 3 ? year : year - 1;
+
+  const currentFYCode = `${String(startYear).slice(-2)}${String(startYear + 1).slice(-2)}`;
+  const options: { value: string; label: string; isCurrent: boolean }[] = [];
+
+  // Assuming FY 25-26 is the starting point based on web logic
+  for (let sYr = startYear; sYr >= 2025; sYr--) {
+    const eYr = sYr + 1;
+    const code = `${String(sYr).slice(-2)}${String(eYr).slice(-2)}`;
+    const label = `FY ${String(sYr).slice(-2)}-${String(eYr).slice(-2)}`;
+    options.push({
+      value: code,
+      label,
+      isCurrent: code === currentFYCode
+    });
+  }
+
+  return options;
 }

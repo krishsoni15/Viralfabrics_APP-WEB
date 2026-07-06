@@ -20,7 +20,8 @@ import {
   MoonIcon,
   CircleStackIcon,
   SwatchIcon,
-  ArchiveBoxIcon
+  ArchiveBoxIcon,
+  ClipboardDocumentListIcon
 } from '@heroicons/react/24/outline';
 import WeaverIcon from './WeaverIcon';
 import { useDarkMode } from '../hooks/useDarkMode';
@@ -175,6 +176,11 @@ export default function Sidebar({
         name: 'Finish Lot Stock',
         href: '/finish-lot-stocks',
         icon: ArchiveBoxIcon
+      },
+      {
+        name: 'Purchase Orders',
+        href: '/purchase-orders',
+        icon: ClipboardDocumentListIcon
       }
     ];
 
@@ -204,6 +210,10 @@ export default function Sidebar({
       // Remove Sampling item for non-admin
       const samplingIndex = items.findIndex(item => item.name === 'Sampling');
       if (samplingIndex !== -1) items.splice(samplingIndex, 1);
+
+      // Remove Purchase Orders item for non-admin
+      const poIndex = items.findIndex(item => item.name === 'Purchase Orders');
+      if (poIndex !== -1) items.splice(poIndex, 1);
     }
 
     // Add Logs for superadmin and master
