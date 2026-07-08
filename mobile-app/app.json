@@ -7,6 +7,11 @@
     "icon": "./assets/icon.png",
     "scheme": "viralfabrics",
     "userInterfaceStyle": "automatic",
+    "statusBar": {
+      "barStyle": "dark-content",
+      "translucent": true,
+      "backgroundColor": "#00000000"
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -16,6 +21,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.viralfabrics.crm",
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true
+      },
       "config": {
         "usesNonExemptEncryption": false
       }

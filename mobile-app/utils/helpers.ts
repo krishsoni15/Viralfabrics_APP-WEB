@@ -1,23 +1,6 @@
-import { Dimensions, Platform } from 'react-native';
-
+import { Platform } from 'react-native';
 import { CONFIG } from '../constants/config';
 import api from '../services/api';
-
-const { width, height } = Dimensions.get('window');
-
-/**
- * Responsive helpers
- */
-export const isSmallDevice = width < 375;
-export const isMediumDevice = width >= 375 && width < 414;
-export const isLargeDevice = width >= 414;
-export const isTablet = width >= 768;
-
-export const screenWidth = width;
-export const screenHeight = height;
-
-export const isIOS = Platform.OS === 'ios';
-export const isAndroid = Platform.OS === 'android';
 
 /**
  * General helper to resolve any image URL, including local proxy in development

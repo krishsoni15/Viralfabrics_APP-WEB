@@ -1,11 +1,14 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Image, Alert, Pressable, PanResponder, Animated as RNAnimated, Dimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Image, Alert, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Keyboard, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated from 'react-native-reanimated';
 import { useSegments, Redirect } from 'expo-router';
-import { Boxes, Search, X, ArrowUpDown, Plus, Image as ImageIcon, Trash2, Edit, Camera, User, WifiOff, SlidersHorizontal, RotateCcw } from 'lucide-react-native';
+import { Boxes, Search, X, ArrowUpDown, Plus, Image as ImageIcon, Trash2, Edit, Camera, User, WifiOff, SlidersHorizontal, RotateCcw, Tag } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import PdfViewerModal from '../../components/shared/PdfViewerModal';
+import { generateStickerPdf } from '../../utils/stickerPdf';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 let ImagePicker: any = null;
 try {
   ImagePicker = require('expo-image-picker');
@@ -30,6 +33,59 @@ import { formatDate, resolveImageUrl, uploadSingleImage } from '../../utils/help
 
 const PAGE_SIZE = 20;
 
+function FilterPill({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const { isDarkMode } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={() => {
+        if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }}
+      activeOpacity={0.7}
+      style={{
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: selected
+          ? Colors.primary[600]
+          : isDarkMode
+            ? Colors.neutral[800]
+            : Colors.neutral[100],
+        marginRight: 8,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: selected
+          ? Colors.primary[600]
+          : isDarkMode
+            ? Colors.neutral[700]
+            : Colors.neutral[200],
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 13,
+          fontWeight: '600',
+          color: selected
+            ? Colors.white
+            : isDarkMode
+              ? Colors.neutral[300]
+              : Colors.neutral[600],
+        }}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 interface GroupedGreyMaterial {
   qualityCode: string;
   qualityName: string;
@@ -39,7 +95,8 @@ interface GroupedGreyMaterial {
 }
 
 const GreyMaterialCard = React.memo(function GreyMaterialCard({
-  group, index, onEdit, onDelete, isSuperAdmin, isMaster, onPreviewImages
+  group, index, onEdit, onDelete, isSuperAdmin, isMaster, onPreviewImages, onOpenSticker,
+  numColumns = 1,
 }: { 
   group: GroupedGreyMaterial; 
   index: number; 
@@ -48,6 +105,8 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
   isSuperAdmin: boolean; 
   isMaster: boolean;
   onPreviewImages: (imgs: string[]) => void;
+  onOpenSticker: (item: GreyMaterial, group: GroupedGreyMaterial) => void;
+  numColumns?: number;
 }) {
   const { theme, isDarkMode } = useTheme();
 
@@ -99,30 +158,79 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
   };
 
   return (
-    <Animated.View>
-      <Card style={{ marginHorizontal: 16, marginBottom: 16, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.card, borderRadius: 16, padding: 18 }}>
-        {/* Combined Images clickable preview */}
+    <Animated.View style={{ flex: 1 }}>
+      <View style={{
+        marginHorizontal: numColumns && numColumns > 1 ? 8 : 16,
+        marginBottom: 16,
+        borderRadius: 18,
+        backgroundColor: theme.card,
+        borderWidth: 1,
+        borderColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#e8edf2',
+        shadowColor: isDarkMode ? '#000' : '#94a3b8',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: isDarkMode ? 0.25 : 0.12,
+        shadowRadius: 10,
+        elevation: 4,
+        padding: 14,
+        flex: 1,
+      }}>
+        {/* Clickable Image Preview styled like fabrics/sampling page */}
         {allGroupImages.length > 0 && (
-          <TouchableOpacity onPress={() => onPreviewImages(allGroupImages)} activeOpacity={0.9} style={{ marginBottom: 12, borderRadius: 12, overflow: 'hidden' }}>
-            <Image source={{ uri: resolveImageUrl(allGroupImages[0]) }} style={{ width: '100%', height: 160, borderRadius: 12 }} resizeMode="cover" />
+          <TouchableOpacity
+            onPress={() => onPreviewImages(allGroupImages)}
+            activeOpacity={0.9}
+            style={{
+              marginBottom: 12,
+              borderRadius: 14,
+              overflow: 'hidden',
+              backgroundColor: isDarkMode ? 'rgba(15,23,42,0.7)' : '#f1f5f9',
+              borderWidth: 1,
+              borderColor: theme.borderLight,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Image 
+              source={{ uri: resolveImageUrl(allGroupImages[0]) }} 
+              style={{ width: '100%', height: 220 }} 
+              resizeMode="contain" 
+              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
+              fadeDuration={100}
+            />
             {allGroupImages.length > 1 && (
-              <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, flexDirection: 'row', alignItems: 'center' }}>
-                <ImageIcon size={11} color="#fff" />
-                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700', marginLeft: 4 }}>{allGroupImages.length}</Text>
+              <View style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, flexDirection: 'row', alignItems: 'center' }}>
+                <ImageIcon size={14} color="#fff" />
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700', marginLeft: 5 }}>{allGroupImages.length}</Text>
               </View>
             )}
           </TouchableOpacity>
         )}
 
         {/* Quality Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <View style={{ flex: 1, marginRight: 8 }}>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }} numberOfLines={2}>{group.qualityName}</Text>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: theme.text, letterSpacing: -0.2 }} numberOfLines={1}>
+              {group.qualityName}
+            </Text>
             {group.type ? (
               <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginTop: 2 }}>{group.type}</Text>
             ) : null}
           </View>
-          {group.qualityCode && <Badge text={group.qualityCode} color={codeColor} />}
+          
+          {!!group.qualityCode && (
+            <View style={{
+              backgroundColor: isDarkMode ? 'rgba(99, 102, 241, 0.15)' : '#e0e7ff',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: isDarkMode ? 'rgba(99, 102, 241, 0.3)' : '#c7d2fe'
+            }}>
+              <Text style={{ fontSize: 11, fontWeight: '900', color: Colors.primary[600], textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                QC: {group.qualityCode}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Weavers List Section */}
@@ -133,89 +241,119 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
               style={{ 
                 padding: 12, 
                 borderRadius: 12,
-                backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.02)' : '#f8fafc',
-                borderLeftWidth: 3,
-                borderLeftColor: isDarkMode ? Colors.primary[500] : Colors.primary[600],
+                backgroundColor: isDarkMode ? 'rgba(0,0,0,0.15)' : '#f8fafc',
                 borderWidth: 1,
-                borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'
+                borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#e2e8f0',
+                marginBottom: idx === group.items.length - 1 ? 0 : 10,
               }}
             >
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: isDarkMode ? 'rgba(99, 102, 241, 0.15)' : '#e0e7ff', alignItems: 'center', justifyContent: 'center' }}>
-                      <User size={12} color={isDarkMode ? '#818cf8' : '#4f46e5'} />
-                    </View>
-                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: theme.text }}>
-                      {item.weaver || '—'}
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 11, color: theme.textTertiary, fontWeight: '500' }}>
-                    {formatDate(item.createdAt)}
+              {/* Weaver Name and Date */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <User size={13} color={isDarkMode ? '#818cf8' : '#4f46e5'} />
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: theme.text }}>
+                    {item.weaver || '—'}
                   </Text>
                 </View>
-                
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
-                  {item.piece != null && item.piece > 0 && <Badge text={`${item.piece} pcs`} color={pieceColor} />}
-                  {item.meter != null && item.meter > 0 && <Badge text={`${item.meter} mtr`} color={meterColor} />}
-                  {item.challanNumber && <Badge text={`#${item.challanNumber}`} color={challanColor} />}
-                  {item.gsm != null && item.gsm > 0 && <Badge text={`GSM: ${item.gsm}`} color={gsmColor} />}
-                  {item.greighWidth != null && item.greighWidth > 0 && <Badge text={`${item.greighWidth}" Width`} />}
-                  {item.greighRate != null && item.greighRate > 0 && <Badge text={`₹${item.greighRate}`} />}
-                  {item.rack ? <Badge text={`Rack: ${item.rack}`} /> : null}
-                </View>
+                <Text style={{ fontSize: 11, color: theme.textTertiary, fontWeight: '500' }}>
+                  {formatDate(item.createdAt)}
+                </Text>
+              </View>
+
+              {/* Weaver Info Table/Grid (instead of button-like Badges) */}
+              <View style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                rowGap: 8,
+                columnGap: 14,
+                paddingTop: 8,
+                borderTopWidth: 1,
+                borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0',
+              }}>
+                {item.piece != null && item.piece > 0 && (
+                  <View style={{ minWidth: 70 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>Pieces</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.piece} Pcs</Text>
+                  </View>
+                )}
+                {item.meter != null && item.meter > 0 && (
+                  <View style={{ minWidth: 70 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>Meters</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.meter} Mtr</Text>
+                  </View>
+                )}
+                {!!item.challanNumber && (
+                  <View style={{ minWidth: 75 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>Challan #</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.challanNumber}</Text>
+                  </View>
+                )}
+                {item.gsm != null && item.gsm > 0 && (
+                  <View style={{ minWidth: 60 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>GSM</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.gsm}</Text>
+                  </View>
+                )}
+                {item.greighWidth != null && item.greighWidth > 0 && (
+                  <View style={{ minWidth: 70 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>Width</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.greighWidth}"</Text>
+                  </View>
+                )}
+                {item.greighRate != null && item.greighRate > 0 && (
+                  <View style={{ minWidth: 60 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>Rate</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>₹{item.greighRate}</Text>
+                  </View>
+                )}
+                {!!item.rack && (
+                  <View style={{ minWidth: 60 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>Rack</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.rack}</Text>
+                  </View>
+                )}
               </View>
             </View>
           ))}
         </View>
 
-        {/* Card Footer Actions - same as fabrics page */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
-          <Text style={{ fontSize: 11.5, color: theme.textTertiary, fontWeight: '500' }}>
+        {/* Card Footer Actions */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9' }}>
+          <Text style={{ fontSize: 11, color: theme.textTertiary, fontWeight: '500' }}>
             Added {formatDate(group.items[0]?.createdAt)}
           </Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {isSuperAdmin && (
               <TouchableOpacity
                 onPress={() => onEdit(group.items[0])}
+                activeOpacity={0.75}
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 5,
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
-                  backgroundColor: isDarkMode ? 'rgba(59,130,246,0.1)' : '#eff6ff',
+                  width: 34, height: 34, borderRadius: 10,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: isDarkMode ? 'rgba(59,130,246,0.12)' : '#eff6ff',
+                  borderWidth: 1, borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
                 }}
               >
-                <Edit size={13} color={isDarkMode ? '#60a5fa' : Colors.primary[600]} />
-                <Text style={{ fontSize: 11.5, fontWeight: '700', color: isDarkMode ? '#60a5fa' : Colors.primary[600] }}>Edit</Text>
+                <Edit size={15} color={isDarkMode ? '#60a5fa' : Colors.primary[600]} />
               </TouchableOpacity>
             )}
             {isMaster && (
               <TouchableOpacity
                 onPress={() => onDelete(group.qualityCode, group.qualityName)}
+                activeOpacity={0.75}
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 5,
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: isDarkMode ? 'rgba(239,68,68,0.3)' : '#fca5a5',
-                  backgroundColor: isDarkMode ? 'rgba(239,68,68,0.1)' : '#fef2f2',
+                  width: 34, height: 34, borderRadius: 10,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: isDarkMode ? 'rgba(239,68,68,0.12)' : '#fef2f2',
+                  borderWidth: 1, borderColor: isDarkMode ? 'rgba(239,68,68,0.3)' : '#fecaca',
                 }}
               >
-                <Trash2 size={13} color={isDarkMode ? '#ef4444' : Colors.error[600]} />
-                <Text style={{ fontSize: 11.5, fontWeight: '700', color: isDarkMode ? '#ef4444' : Colors.error[600] }}>Delete</Text>
+                <Trash2 size={15} color={isDarkMode ? '#f87171' : Colors.error[600]} />
               </TouchableOpacity>
             )}
           </View>
         </View>
-      </Card>
+      </View>
     </Animated.View>
   );
 });
@@ -246,16 +384,16 @@ const WeaverFormField = ({ label, value, onChangeText, placeholder, keyboard, th
 );
 
 export default function GreyMaterialsScreen() {
-  const segments = useSegments();
-  const isInTabs = (segments as string[]).includes('(tabs)');
-
-  const insets = useSafeAreaInsets();
   const { theme, isDarkMode } = useTheme();
+  const insets = useSafeAreaInsets();
   const { isSuperAdmin, isMaster, user } = useAuth();
+  const { isLargeScreen, modalMaxWidth, numColumns, containerMaxWidth } = useResponsiveLayout();
   const queryClient = useQueryClient();
   const addToast = useAppStore(s => s.addToast);
   const isAuthenticated = useAppStore(s => s.isAuthenticated);
   const isOffline = useAppStore(s => s.isOffline);
+  const segments = useSegments();
+  const isInTabs = (segments as string[]).includes('(tabs)');
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -298,13 +436,17 @@ export default function GreyMaterialsScreen() {
 
   // Form Pan and Gesture animation
   const formPanY = useRef(new RNAnimated.Value(800)).current;
+  const filterScrollOffset = useRef(0);
+  const formScrollOffset = useRef(0);
+  const formSheetY = useRef(0);
+  const filterSheetY = useRef(0);
 
   const closeForm = useCallback(() => {
     if ((Platform.OS as string) !== 'web') {
       RNAnimated.timing(formPanY, {
         toValue: 800,
         duration: 180,
-        useNativeDriver: (Platform.OS as string) !== 'web'
+        useNativeDriver: false
       }).start(() => setShowForm(false));
     } else {
       setShowForm(false);
@@ -313,22 +455,35 @@ export default function GreyMaterialsScreen() {
 
   const formPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - formSheetY.current;
+        return touchY > 0 && touchY <= 85;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: (_, gs) => {
+        Keyboard.dismiss();
+      },
       onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) formPanY.setValue(gs.dy);
+        if (gs.dy > 0) {
+          formPanY.setValue(gs.dy);
+        }
       },
       onPanResponderRelease: (_, gs) => {
-        if (gs.dy > 100 || gs.vy > 0.5) {
+        if (gs.dy > 120 || gs.vy > 0.5) {
           if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           closeForm();
         } else {
           RNAnimated.spring(formPanY, {
             toValue: 0,
-            useNativeDriver: (Platform.OS as string) !== 'web',
-            friction: 5
+            useNativeDriver: false,
+            tension: 65,
+            friction: 11
           }).start();
         }
       }
@@ -340,7 +495,7 @@ export default function GreyMaterialsScreen() {
       formPanY.setValue(800);
       RNAnimated.spring(formPanY, {
         toValue: 0,
-        useNativeDriver: (Platform.OS as string) !== 'web',
+        useNativeDriver: false,
         damping: 15,
         stiffness: 120
       }).start();
@@ -355,7 +510,7 @@ export default function GreyMaterialsScreen() {
       RNAnimated.timing(filterPanY, {
         toValue: 600,
         duration: 180,
-        useNativeDriver: (Platform.OS as string) !== 'web'
+        useNativeDriver: false
       }).start(() => setShowFilterModal(false));
     } else {
       setShowFilterModal(false);
@@ -364,22 +519,35 @@ export default function GreyMaterialsScreen() {
 
   const filterPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - filterSheetY.current;
+        return touchY > 0 && touchY <= 85;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: (_, gs) => {
+        Keyboard.dismiss();
+      },
       onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) filterPanY.setValue(gs.dy);
+        if (gs.dy > 0) {
+          filterPanY.setValue(gs.dy);
+        }
       },
       onPanResponderRelease: (_, gs) => {
-        if (gs.dy > 60 || gs.vy > 0.3) {
+        if (gs.dy > 120 || gs.vy > 0.5) {
           if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           closeFilter();
         } else {
           RNAnimated.spring(filterPanY, {
             toValue: 0,
-            useNativeDriver: (Platform.OS as string) !== 'web',
-            friction: 5
+            useNativeDriver: false,
+            tension: 65,
+            friction: 11
           }).start();
         }
       }
@@ -391,7 +559,7 @@ export default function GreyMaterialsScreen() {
       filterPanY.setValue(600);
       RNAnimated.spring(filterPanY, {
         toValue: 0,
-        useNativeDriver: (Platform.OS as string) !== 'web',
+        useNativeDriver: false,
         damping: 15,
         stiffness: 120
       }).start();
@@ -399,23 +567,49 @@ export default function GreyMaterialsScreen() {
   }, [showFilterModal, filterPanY]);
 
   // Draggable FAB animation setup
-  const screenWidth = Dimensions.get('window').width;
-  const screenHeight = Dimensions.get('window').height;
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
-  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 150 })).current;
+  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 170 })).current;
+  const fabX = useRef(screenWidth - 68);
+  const fabY = useRef(screenHeight - 170);
+
+  const dimensionsRef = useRef({ screenWidth, screenHeight });
+  dimensionsRef.current = { screenWidth, screenHeight };
+
+  React.useEffect(() => {
+    const isSnappedLeft = fabX.current < screenWidth / 2;
+    const targetX = isSnappedLeft ? 16 : screenWidth - 68;
+    const targetY = Math.min(Math.max(fabY.current, 120), screenHeight - 170);
+    
+    fabX.current = targetX;
+    fabY.current = targetY;
+    
+    RNAnimated.spring(pan, {
+      toValue: { x: targetX, y: targetY },
+      useNativeDriver: false,
+      friction: 6,
+    }).start();
+  }, [screenWidth, screenHeight]);
 
   const fabPanResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
     onPanResponderGrant: () => { 
-      pan.setOffset({ x: (pan.x as any)._value || 0, y: (pan.y as any)._value || 0 }); 
+      pan.setOffset({ x: fabX.current, y: fabY.current }); 
       pan.setValue({ x: 0, y: 0 }); 
     },
     onPanResponderMove: RNAnimated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-    onPanResponderRelease: () => {
+    onPanResponderRelease: (e, gestureState) => {
       pan.flattenOffset();
-      const snapX = (pan.x as any)._value < screenWidth / 2 ? 16 : screenWidth - 68;
-      const snapY = Math.min(Math.max((pan.y as any)._value, 120), screenHeight - 200);
+      const currentScreenWidth = dimensionsRef.current.screenWidth;
+      const currentScreenHeight = dimensionsRef.current.screenHeight;
+
+      const currentX = fabX.current + gestureState.dx;
+      const currentY = fabY.current + gestureState.dy;
+      const snapX = currentX < currentScreenWidth / 2 ? 16 : currentScreenWidth - 68;
+      const snapY = Math.min(Math.max(currentY, 120), currentScreenHeight - 170);
+      fabX.current = snapX;
+      fabY.current = snapY;
       RNAnimated.spring(pan, { toValue: { x: snapX, y: snapY }, useNativeDriver: false, friction: 6 }).start();
     },
   })).current;
@@ -424,6 +618,51 @@ export default function GreyMaterialsScreen() {
   const [cameraVisible, setCameraVisible] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
+
+  // PDF Sticker Viewer states
+  const [pdfViewerVisible, setPdfViewerVisible] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState('');
+  const [pdfViewerTitle, setPdfViewerTitle] = useState('');
+  const [pdfViewerFilename, setPdfViewerFilename] = useState('');
+  const [pdfViewerLocalUri, setPdfViewerLocalUri] = useState<string | undefined>();
+  const [pdfViewerLocalBase64, setPdfViewerLocalBase64] = useState<string | undefined>();
+
+  const openStickerPreview = useCallback(async (item: GreyMaterial, group: GroupedGreyMaterial) => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const sanitizedQuality = (group.qualityName || 'Sticker').replace(/[^a-zA-Z0-9-_]/g, '_');
+    const sanitizedWeaver = (item.weaver || 'Weaver').replace(/[^a-zA-Z0-9-_]/g, '_');
+    const filename = `Grey_Sticker_${sanitizedQuality}_${sanitizedWeaver}.pdf`;
+
+    try {
+      const remarksParts = [];
+      if (item.weaver) remarksParts.push(`Weaver: ${item.weaver}`);
+      if (item.challanNumber) remarksParts.push(`Challan: ${item.challanNumber}`);
+      if (item.piece) remarksParts.push(`Pcs: ${item.piece}`);
+      if (item.meter) remarksParts.push(`Mtr: ${item.meter}`);
+      const remarksStr = remarksParts.join(' | ');
+
+      const { uri, base64 } = await generateStickerPdf({
+        type: 'grey',
+        qualityCode: item.qualityCode || '',
+        qualityName: group.qualityName || '',
+        weaverName: item.weaver || '',
+        width: item.greighWidth != null ? Number(item.greighWidth) : undefined,
+        gsm: item.gsm != null ? Number(item.gsm) : undefined,
+        content: item.content || '',
+        remarks: remarksStr,
+      }, filename);
+
+      setPdfViewerLocalUri(uri);
+      setPdfViewerLocalBase64(base64);
+      setPdfViewerUrl('');
+      setPdfViewerTitle(`Grey Sticker — ${group.qualityName || 'Sticker'}`);
+      setPdfViewerFilename(filename);
+      setPdfViewerVisible(true);
+    } catch (err) {
+      addToast({ type: 'error', title: 'Failed to generate sticker', message: String(err) });
+    }
+  }, []);
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<{ qualityCode: string; qualityName: string } | null>(null);
@@ -439,6 +678,7 @@ export default function GreyMaterialsScreen() {
     queryKey: ['grey-materials', debouncedSearch, sortOrder, filterType],
     enabled: isAuthenticated,
     initialPageParam: 1,
+    staleTime: 30000,
     queryFn: async ({ pageParam = 1 }) => {
       const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
       if (debouncedSearch) params.search = debouncedSearch;
@@ -658,7 +898,8 @@ export default function GreyMaterialsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <View style={{ flex: 1, width: '100%', maxWidth: containerMaxWidth, alignSelf: 'center' }}>
       {!isInTabs && (
         <Header 
           title="Stock" 
@@ -699,77 +940,84 @@ export default function GreyMaterialsScreen() {
         </TouchableOpacity>
       </View>
 
-      {isOffline && (
-        <View style={{
-          marginHorizontal: 16,
-          marginBottom: 10,
-          backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
-          borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fef3c7',
-          borderWidth: 1,
-          borderRadius: 12,
-          padding: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8
-        }}>
-          <WifiOff size={14} color={isDarkMode ? '#fbbf24' : '#b45309'} />
-          <Text style={{ fontSize: 12.5, color: isDarkMode ? '#fbbf24' : '#b45309', fontWeight: '600', flex: 1 }}>
-            Offline Mode • Showing previously loaded cached data
-          </Text>
-        </View>
-      )}
-
-      {/* Unified Count & Active Filters Row */}
-      <View style={{
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.borderLight,
-        backgroundColor: theme.background
-      }}>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>
-          {isFiltered ? (
-            <Text>
-              Showing <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{groupedMaterials.length}</Text> qualities
-            </Text>
-          ) : (
-            <Text>
-              Total Qualities: <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{groupedMaterials.length}</Text>
-            </Text>
-          )}
-        </Text>
-        {totalActiveFiltersCount > 0 && (
-          <TouchableOpacity 
-            onPress={clearAllFilters} 
-            activeOpacity={0.7} 
-            style={{ 
-              flexDirection: 'row', 
-              alignItems: 'center', 
-              gap: 4, 
-              paddingHorizontal: 10, 
-              paddingVertical: 5, 
-              borderRadius: 10, 
-              backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
-              borderWidth: 1,
-              borderColor: isDarkMode ? 'rgba(239, 68, 68, 0.3)' : '#fca5a5'
-            }}
-          >
-            <RotateCcw size={12} color={Colors.error[500]} />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.error[500] }}>Clear ({totalActiveFiltersCount})</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
       {/* Content */}
       {query.isLoading ? <GreyMaterialSkeletonList count={3} /> : groupedMaterials.length === 0 ? (
         <EmptyState icon={<Boxes size={48} color={Colors.primary[500]} />} title="No Grey Materials" subtitle={debouncedSearch || filterType !== 'All' ? 'No materials match your filters.' : 'No grey materials added yet.'} />
       ) : (
         <FlatList
           data={groupedMaterials}
+          key={numColumns}
+          numColumns={numColumns}
           keyExtractor={(item, i) => `${item.qualityCode}_${item.qualityName}_${i}`}
+          ListHeaderComponent={() => {
+            const isFiltered = debouncedSearch.trim() !== '' || filterType !== 'All';
+            return (
+              <View>
+                {isOffline && (
+                  <View style={{
+                    marginHorizontal: 16,
+                    marginTop: 10,
+                    marginBottom: 4,
+                    backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
+                    borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fef3c7',
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    padding: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8
+                  }}>
+                    <WifiOff size={14} color={isDarkMode ? '#fbbf24' : '#b45309'} />
+                    <Text style={{ fontSize: 12.5, color: isDarkMode ? '#fbbf24' : '#b45309', fontWeight: '600', flex: 1 }}>
+                      Offline Mode • Showing previously loaded cached data
+                    </Text>
+                  </View>
+                )}
+                <View style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.borderLight,
+                  backgroundColor: theme.background
+                }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>
+                    {isFiltered ? (
+                      <Text>
+                        Showing <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{groupedMaterials.length}</Text> qualities
+                      </Text>
+                    ) : (
+                      <Text>
+                        Total Qualities: <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{groupedMaterials.length}</Text>
+                      </Text>
+                    )}
+                  </Text>
+                  {totalActiveFiltersCount > 0 && (
+                    <TouchableOpacity 
+                      onPress={clearAllFilters} 
+                      activeOpacity={0.7} 
+                      style={{ 
+                        flexDirection: 'row', 
+                        alignItems: 'center', 
+                        gap: 4, 
+                        paddingHorizontal: 10, 
+                        paddingVertical: 5, 
+                        borderRadius: 10, 
+                        backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
+                        borderWidth: 1,
+                        borderColor: isDarkMode ? 'rgba(239, 68, 68, 0.3)' : '#fca5a5'
+                      }}
+                    >
+                      <RotateCcw size={12} color={Colors.error[500]} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.error[500] }}>Clear ({totalActiveFiltersCount})</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            );
+          }}
           renderItem={({ item, index }) => (
             <GreyMaterialCard 
               group={item} 
@@ -779,17 +1027,33 @@ export default function GreyMaterialsScreen() {
               isSuperAdmin={isSuperAdmin} 
               isMaster={isMaster}
               onPreviewImages={handleOpenPreview} 
+              onOpenSticker={openStickerPreview}
+              numColumns={numColumns}
             />
           )}
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: 120 }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 120, paddingHorizontal: numColumns > 1 ? 8 : 0 }}
           showsVerticalScrollIndicator={false}
           onEndReached={() => { if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage(); }}
           onEndReachedThreshold={0.3}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
+          initialNumToRender={8}
+          maxToRenderPerBatch={4}
           windowSize={5}
-          removeClippedSubviews={Platform.OS !== 'web'}
-          ListFooterComponent={query.isFetchingNextPage ? <View style={{ paddingVertical: 20, alignItems: 'center' }}><ActivityIndicator size="small" color={Colors.primary[500]} /><Text style={{ fontSize: 12, color: theme.textTertiary, marginTop: 6 }}>Loading more...</Text></View> : null}
+          removeClippedSubviews={true}
+          updateCellsBatchingPeriod={50}
+          ListFooterComponent={
+            query.isFetchingNextPage ? (
+              <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={Colors.primary[500]} />
+                <Text style={{ fontSize: 12, color: theme.textTertiary, marginTop: 6 }}>Loading more...</Text>
+              </View>
+            ) : (!query.hasNextPage && groupedMaterials.length > 0) ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 11, color: theme.textTertiary, fontStyle: 'italic' }}>
+                  No more grey materials to load
+                </Text>
+              </View>
+            ) : null
+          }
           refreshControl={Platform.OS !== 'web' ? <RefreshControl refreshing={query.isRefetching && !query.isFetchingNextPage} onRefresh={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); query.refetch(); }} tintColor={Colors.primary[500]} colors={[Colors.primary[500]]} /> : undefined}
         />
       )}
@@ -823,18 +1087,53 @@ export default function GreyMaterialsScreen() {
           </TouchableOpacity>
         </RNAnimated.View>
       )}
+      </View>
 
       {/* Slide-Up Filter Modal */}
       <Modal visible={showFilterModal} animationType="none" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={closeFilter}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <Pressable onPress={closeFilter} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-          <RNAnimated.View style={{
-            backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-            paddingTop: 12, paddingHorizontal: 24, paddingBottom: 24 + insets.bottom,
-            transform: [{ translateY: filterPanY }], shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20,
-          }}>
+
+        <View style={{
+          flex: 1,
+          justifyContent: isLargeScreen ? 'center' : 'flex-end',
+          alignItems: isLargeScreen ? 'center' : 'stretch',
+        }}>
+          {/* Clickable Backdrop */}
+          <RNAnimated.View
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'transparent',
+            }}
+          >
+            <Pressable onPress={closeFilter} style={{ flex: 1 }} />
+          </RNAnimated.View>
+
+          <RNAnimated.View
+            onLayout={(e) => {
+              filterSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...filterPanResponder.panHandlers}
+            style={{
+              backgroundColor: isDarkMode ? '#1e293b' : '#fff',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+              borderBottomRightRadius: isLargeScreen ? 24 : 0,
+              paddingTop: 12,
+              paddingHorizontal: 24,
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 16 : 32),
+              width: '100%',
+              maxWidth: isLargeScreen ? modalMaxWidth : '100%',
+              transform: [{ translateY: filterPanY }],
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              elevation: 20,
+            }}
+          >
             {/* Drag Handle */}
-            <View {...filterPanResponder.panHandlers} style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}>
+            <View style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}>
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#d1d5db' }} />
             </View>
 
@@ -860,65 +1159,51 @@ export default function GreyMaterialsScreen() {
 
             {/* Sort Order Options */}
             <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textSecondary, marginBottom: 10 }}>Sort By</Text>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
-              <TouchableOpacity 
-                onPress={() => {
-                  setSortOrder('desc');
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }} 
-                style={{ 
-                  flex: 1, 
-                  paddingVertical: 12, 
-                  borderRadius: 12, 
-                  alignItems: 'center', 
-                  backgroundColor: sortOrder === 'desc' ? (isDarkMode ? 'rgba(96, 165, 250, 0.15)' : 'rgba(37, 99, 235, 0.08)') : (isDarkMode ? '#0f172a' : '#f8fafc'), 
-                  borderWidth: 1, 
-                  borderColor: sortOrder === 'desc' ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.borderLight 
-                }}
-              >
-                <Text style={{ color: sortOrder === 'desc' ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textSecondary, fontWeight: '700', fontSize: 14 }}>Newest first</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={() => {
-                  setSortOrder('asc');
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }} 
-                style={{ 
-                  flex: 1, 
-                  paddingVertical: 12, 
-                  borderRadius: 12, 
-                  alignItems: 'center', 
-                  backgroundColor: sortOrder === 'asc' ? (isDarkMode ? 'rgba(96, 165, 250, 0.15)' : 'rgba(37, 99, 235, 0.08)') : (isDarkMode ? '#0f172a' : '#f8fafc'), 
-                  borderWidth: 1, 
-                  borderColor: sortOrder === 'asc' ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.borderLight 
-                }}
-              >
-                <Text style={{ color: sortOrder === 'asc' ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textSecondary, fontWeight: '700', fontSize: 14 }}>Oldest first</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 24 }}>
+              <FilterPill
+                label="Newest first"
+                selected={sortOrder === 'desc'}
+                onPress={() => setSortOrder('desc')}
+              />
+              <FilterPill
+                label="Oldest first"
+                selected={sortOrder === 'asc'}
+                onPress={() => setSortOrder('asc')}
+              />
             </View>
 
             {/* Type Filtering Options */}
             <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textSecondary, marginBottom: 10 }}>Type</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 }}>
               {['All', 'Polyester', 'Blend', 'Viscose', 'Cotton', 'Rayon', 'Other'].map((t) => (
-                <TouchableOpacity 
-                  key={t} 
-                  onPress={() => {
-                    setFilterType(t);
-                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }} 
-                  style={{ 
-                    paddingHorizontal: 16, 
-                    paddingVertical: 10, 
-                    borderRadius: 10, 
-                    backgroundColor: filterType === t ? (isDarkMode ? 'rgba(96, 165, 250, 0.15)' : 'rgba(37, 99, 235, 0.08)') : (isDarkMode ? '#0f172a' : '#f8fafc'), 
-                    borderWidth: 1, 
-                    borderColor: filterType === t ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.borderLight 
-                  }}
-                >
-                  <Text style={{ color: filterType === t ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textSecondary, fontWeight: '700', fontSize: 13 }}>{t}</Text>
-                </TouchableOpacity>
+                <FilterPill
+                  key={t}
+                  label={t === 'All' ? 'All Types' : t}
+                  selected={filterType === t}
+                  onPress={() => setFilterType(t)}
+                />
               ))}
+            </View>
+
+            {/* Apply Button */}
+            <View style={{ marginTop: 16 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  closeFilter();
+                }}
+                activeOpacity={0.8}
+                style={{
+                  width: '100%',
+                  height: 48,
+                  borderRadius: 12,
+                  backgroundColor: Colors.primary[600],
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Apply Filters</Text>
+              </TouchableOpacity>
             </View>
           </RNAnimated.View>
         </View>
@@ -926,20 +1211,51 @@ export default function GreyMaterialsScreen() {
 
       {/* Create/Edit Modal */}
       <Modal visible={showForm} animationType="none" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={closeForm}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <Pressable onPress={closeForm} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-          <RNAnimated.View style={{
-            backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-            paddingTop: 12, paddingHorizontal: 24, paddingBottom: 24 + insets.bottom, height: '92%',
-            transform: [{ translateY: formPanY }], shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20,
-          }}>
+
+        <View style={{
+          flex: 1,
+          justifyContent: isLargeScreen ? 'center' : 'flex-end',
+          alignItems: isLargeScreen ? 'center' : 'stretch',
+        }}>
+          {/* Clickable Backdrop */}
+          <RNAnimated.View
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'transparent',
+            }}
+          >
+            <Pressable onPress={closeForm} style={{ flex: 1 }} />
+          </RNAnimated.View>
+
+          <RNAnimated.View
+            onLayout={(e) => {
+              formSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...formPanResponder.panHandlers}
+            style={{
+              backgroundColor: isDarkMode ? '#1e293b' : '#fff',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+              borderBottomRightRadius: isLargeScreen ? 24 : 0,
+              paddingTop: 12,
+              paddingHorizontal: 24,
+              paddingBottom: isLargeScreen ? 24 : 0,
+              maxHeight: isLargeScreen ? '85%' : '92%',
+              width: '100%',
+              maxWidth: modalMaxWidth,
+              transform: isLargeScreen ? undefined : [{ translateY: formPanY }],
+              shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20,
+            }}
+          >
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
               style={{ flex: 1 }}
             >
               {/* Drag Handle */}
-              <View {...formPanResponder.panHandlers} style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}>
+              <View style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}>
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#d1d5db' }} />
               </View>
 
@@ -953,9 +1269,11 @@ export default function GreyMaterialsScreen() {
               
               <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 180 + insets.bottom }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
+                onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                scrollEventThrottle={16}
               >
                 {/* Quality details at the top */}
                 <FormField
@@ -1171,7 +1489,7 @@ export default function GreyMaterialsScreen() {
 
       {/* Delete Modal */}
       <Modal visible={!!deleteTarget} animationType="fade" transparent statusBarTranslucent={true} navigationBarTranslucent={true} onRequestClose={() => setDeleteTarget(null)}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 24 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)', padding: 24 }}>
           <View style={{ backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 360 }}>
             <Text style={{ fontSize: 20, fontWeight: '900', color: theme.text, marginBottom: 12 }}>Delete Grey Material</Text>
             <Text style={{ fontSize: 15, color: theme.textSecondary, marginBottom: 24 }}>Are you sure you want to delete "{deleteTarget?.qualityName}"?</Text>
@@ -1192,6 +1510,24 @@ export default function GreyMaterialsScreen() {
 
       {/* Image Preview Modal */}
       <ImagePreviewModal visible={previewVisible} images={previewImages} onClose={() => setPreviewVisible(false)} />
+
+      {/* PDF Sticker Viewer Modal */}
+      <PdfViewerModal
+        visible={pdfViewerVisible}
+        onClose={() => {
+          setPdfViewerVisible(false);
+          setPdfViewerLocalUri(undefined);
+          setPdfViewerLocalBase64(undefined);
+        }}
+        title={pdfViewerTitle}
+        pdfUrl={pdfViewerUrl}
+        filename={pdfViewerFilename}
+        localUri={pdfViewerLocalUri}
+        localBase64={pdfViewerLocalBase64}
+        addToast={addToast}
+      />
     </SafeAreaView>
   );
 }
+
+

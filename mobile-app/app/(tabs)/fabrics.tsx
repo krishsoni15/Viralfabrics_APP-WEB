@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Image, Modal, ScrollView, KeyboardAvoidingView, Alert, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Linking } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Image, Modal, ScrollView, KeyboardAvoidingView, Alert, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Linking, Keyboard, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 
 import PdfViewerModal from '../../components/shared/PdfViewerModal';
 import { generateStickerPdf } from '../../utils/stickerPdf';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 let ImagePicker: any = null;
 try {
@@ -34,13 +35,13 @@ import { storage } from '../../utils/storage';
 
 const PAGE_SIZE = 5;
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
 const FabricsProgressBar = () => {
   const { isDarkMode } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const translateX = useSharedValue(-150);
 
   React.useEffect(() => {
+    translateX.value = -150;
     translateX.value = withRepeat(
       withTiming(screenWidth, {
         duration: 1000,
@@ -49,7 +50,7 @@ const FabricsProgressBar = () => {
       -1,
       false
     );
-  }, []);
+  }, [screenWidth]);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -170,7 +171,8 @@ export interface GroupedFabric {
 }
 
 const GroupedFabricCard = React.memo(function GroupedFabricCard({
-  group, index, onEdit, onDeleteWeaver, onDeleteGroup, isSuperAdmin, isMaster, onPreviewImages, isExpanded, onToggleExpand, onOpenSticker
+  group, index, onEdit, onDeleteWeaver, onDeleteGroup, isSuperAdmin, isMaster, onPreviewImages, isExpanded, onToggleExpand, onOpenSticker,
+  numColumns = 1,
 }: {
   group: GroupedFabric;
   index: number;
@@ -183,6 +185,7 @@ const GroupedFabricCard = React.memo(function GroupedFabricCard({
   isExpanded: boolean;
   onToggleExpand: () => void;
   onOpenSticker: (weaver: Fabric, group: GroupedFabric) => void;
+  numColumns?: number;
 }) {
   const { theme, isDarkMode } = useTheme();
   const mainFabric = group.items[0];
@@ -206,11 +209,12 @@ const GroupedFabricCard = React.memo(function GroupedFabricCard({
   );
 
   return (
-    <Animated.View entering={FadeInDown.duration(300).delay((index % 6) * 50)}>
+    <View style={{ flex: 1 }}>
       <Card
         style={{
-          marginHorizontal: 12,
+          marginHorizontal: numColumns && numColumns > 1 ? 6 : 12,
           marginBottom: 14,
+          flex: 1,
           borderWidth: 1,
           borderColor: theme.borderLight,
           backgroundColor: theme.card,
@@ -476,18 +480,21 @@ const GroupedFabricCard = React.memo(function GroupedFabricCard({
           </View>
         </View>
       </Card>
-    </Animated.View>
+    </View>
   );
 });
 
 export default function FabricsScreen() {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { theme, isDarkMode } = useTheme();
   const { isSuperAdmin, isMaster } = useAuth();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const { isLargeScreen, modalMaxWidth, numColumns, containerMaxWidth } = useResponsiveLayout();
+  const user = useAppStore((state) => state.user);
   const addToast = useAppStore((state) => state.addToast);
   const isAuthenticated = useAppStore((state) => state.isAuthenticated);
   const isOffline = useAppStore((state) => state.isOffline);
-  const insets = useSafeAreaInsets();
 
   // 1. State declarations
   const [search, setSearch] = useState('');
@@ -532,14 +539,48 @@ export default function FabricsScreen() {
   const filterPanY = useRef(new RNAnimated.Value(600)).current;
   const searchTypePanY = useRef(new RNAnimated.Value(600)).current;
   const formPanY = useRef(new RNAnimated.Value(800)).current;
-  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 150 })).current;
+  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 170 })).current;
+  const fabX = useRef(screenWidth - 68);
+  const fabY = useRef(screenHeight - 170);
+
+  const dimensionsRef = useRef({ screenWidth, screenHeight });
+  dimensionsRef.current = { screenWidth, screenHeight };
+
+  React.useEffect(() => {
+    const isSnappedLeft = fabX.current < screenWidth / 2;
+    const targetX = isSnappedLeft ? 20 : screenWidth - 68;
+    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - 170);
+    
+    fabX.current = targetX;
+    fabY.current = targetY;
+    
+    RNAnimated.spring(pan, {
+      toValue: { x: targetX, y: targetY },
+      useNativeDriver: false,
+      tension: 40,
+      friction: 12,
+    }).start();
+  }, [screenWidth, screenHeight]);
+
+  const filterScrollOffset = useRef(0);
+  const filterCapturedDy = useRef(0);
+  const filterSheetY = useRef(0);
+  const filterTouchStartPageY = useRef(0);
+  const searchTypeScrollOffset = useRef(0);
+  const searchTypeCapturedDy = useRef(0);
+  const searchTypeSheetY = useRef(0);
+  const searchTypeTouchStartPageY = useRef(0);
+  const formScrollOffset = useRef(0);
+  const formCapturedDy = useRef(0);
+  const formSheetY = useRef(0);
+  const formTouchStartPageY = useRef(0);
 
   // 3. Callback & Helper Function declarations
   const closeFilterModal = useCallback(() => {
     RNAnimated.timing(filterPanY, {
       toValue: 600,
       duration: 160,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
     }).start(() => {
       setShowFilterModal(false);
     });
@@ -549,7 +590,7 @@ export default function FabricsScreen() {
     RNAnimated.timing(searchTypePanY, {
       toValue: 600,
       duration: 160,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
     }).start(() => {
       setShowSearchTypeModal(false);
     });
@@ -559,7 +600,7 @@ export default function FabricsScreen() {
     RNAnimated.timing(formPanY, {
       toValue: 800,
       duration: 180,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
     }).start(() => {
       setShowForm(false);
     });
@@ -795,6 +836,8 @@ export default function FabricsScreen() {
 
     try {
       const { uri, base64 } = await generateStickerPdf({
+        type: 'fabric',
+        qualityCode: groupData.qualityCode || '',
         qualityName: groupData.qualityName || '',
         weaverName: weaverData.weaver || '',
         width: weaverData.finishWidth ? Number(weaverData.finishWidth) : undefined,
@@ -803,6 +846,8 @@ export default function FabricsScreen() {
         count: countVal || undefined,
         rxP: rxPVal || undefined,
         danier: weaverData.danier || undefined,
+        moq: weaverData.moq ? String(weaverData.moq) : undefined,
+        remarks: weaverData.remarks || '',
       }, filename);
 
       setPdfViewerLocalUri(uri);
@@ -840,26 +885,41 @@ export default function FabricsScreen() {
   // 4. PanResponder declarations
   const filterPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        filterTouchStartPageY.current = pageY;
+        return pageY < filterSheetY.current + 85;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          filterPanY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return filterScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return filterScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          filterPanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dy > 40 || gestureState.vy > 0.2) {
+      onPanResponderRelease: (evt, gs) => {
+        const isBackdropTouch = filterTouchStartPageY.current < filterSheetY.current;
+        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
+          closeFilterModal();
+          return;
+        }
+
+        if (gs.dy > 50 || gs.vy > 0.2) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
           closeFilterModal();
         } else {
-          RNAnimated.timing(filterPanY, {
+          RNAnimated.spring(filterPanY, {
             toValue: 0,
-            duration: 200,
-            useNativeDriver: Platform.OS !== 'web',
+            useNativeDriver: false,
+            tension: 40,
+            friction: 9,
           }).start();
         }
       },
@@ -868,26 +928,41 @@ export default function FabricsScreen() {
 
   const searchTypePanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        searchTypeTouchStartPageY.current = pageY;
+        return pageY < searchTypeSheetY.current + 85;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          searchTypePanY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return searchTypeScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return searchTypeScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          searchTypePanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dy > 40 || gestureState.vy > 0.2) {
+      onPanResponderRelease: (evt, gs) => {
+        const isBackdropTouch = searchTypeTouchStartPageY.current < searchTypeSheetY.current;
+        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
+          closeSearchTypeModal();
+          return;
+        }
+
+        if (gs.dy > 50 || gs.vy > 0.2) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
           closeSearchTypeModal();
         } else {
-          RNAnimated.timing(searchTypePanY, {
+          RNAnimated.spring(searchTypePanY, {
             toValue: 0,
-            duration: 200,
-            useNativeDriver: Platform.OS !== 'web',
+            useNativeDriver: false,
+            tension: 40,
+            friction: 9,
           }).start();
         }
       },
@@ -896,26 +971,44 @@ export default function FabricsScreen() {
 
   const formPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        formTouchStartPageY.current = pageY;
+        return pageY < formSheetY.current + 85;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) {
-          formPanY.setValue(g.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return formScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return formScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: () => {
+        Keyboard.dismiss();
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          formPanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 80 || g.vy > 0.3) {
+      onPanResponderRelease: (evt, gs) => {
+        const isBackdropTouch = formTouchStartPageY.current < formSheetY.current;
+        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
+          closeForm();
+          return;
+        }
+
+        if (gs.dy > 50 || gs.vy > 0.2) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
           closeForm();
         } else {
-          RNAnimated.timing(formPanY, {
+          RNAnimated.spring(formPanY, {
             toValue: 0,
-            duration: 200,
-            useNativeDriver: Platform.OS !== 'web',
+            useNativeDriver: false,
+            tension: 40,
+            friction: 9,
           }).start();
         }
       },
@@ -930,8 +1023,8 @@ export default function FabricsScreen() {
       },
       onPanResponderGrant: () => {
         pan.setOffset({
-          x: (pan.x as any)._value || 0,
-          y: (pan.y as any)._value || 0,
+          x: fabX.current,
+          y: fabY.current,
         });
         pan.setValue({ x: 0, y: 0 });
       },
@@ -942,16 +1035,22 @@ export default function FabricsScreen() {
       onPanResponderRelease: (e, gestureState) => {
         pan.flattenOffset();
 
-        const currentX = (pan.x as any)._value;
-        const currentY = (pan.y as any)._value;
+        const currentScreenWidth = dimensionsRef.current.screenWidth;
+        const currentScreenHeight = dimensionsRef.current.screenHeight;
+
+        const currentX = fabX.current + gestureState.dx;
+        const currentY = fabY.current + gestureState.dy;
 
         const snapLeftX = 20;
-        const snapRightX = screenWidth - 68;
-        const targetX = currentX < screenWidth / 2 ? snapLeftX : snapRightX;
+        const snapRightX = currentScreenWidth - 68;
+        const targetX = currentX < currentScreenWidth / 2 ? snapLeftX : snapRightX;
 
         const minY = 100;
-        const maxY = screenHeight - 150;
+        const maxY = currentScreenHeight - 110;
         const targetY = Math.min(Math.max(currentY, minY), maxY);
+
+        fabX.current = targetX;
+        fabY.current = targetY;
 
         RNAnimated.spring(pan, {
           toValue: { x: targetX, y: targetY },
@@ -970,7 +1069,7 @@ export default function FabricsScreen() {
       RNAnimated.timing(filterPanY, {
         toValue: 0,
         duration: 220,
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: false,
       }).start();
     }
   }, [showFilterModal]);
@@ -981,7 +1080,7 @@ export default function FabricsScreen() {
       RNAnimated.timing(searchTypePanY, {
         toValue: 0,
         duration: 220,
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: false,
       }).start();
     }
   }, [showSearchTypeModal]);
@@ -992,7 +1091,7 @@ export default function FabricsScreen() {
       RNAnimated.timing(formPanY, {
         toValue: 0,
         duration: 220,
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: false,
       }).start();
     }
   }, [showForm]);
@@ -1026,6 +1125,7 @@ export default function FabricsScreen() {
     queryKey: ['fabrics', debouncedSearch, sortOrder, searchType, typeFilter],
     enabled: isAuthenticated,
     initialPageParam: 1,
+    staleTime: 30000,
     queryFn: async ({ pageParam = 1 }) => {
       const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
       
@@ -1113,8 +1213,10 @@ export default function FabricsScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
-      {/* Unified Search & Filters Row */}
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <View style={{ flex: 1, width: '100%', maxWidth: containerMaxWidth, alignSelf: 'center' }}>
+      
+      {/* ─── Search & Filters Header ─── */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingHorizontal: 16, gap: 8 }}>
         {/* Custom Search Bar with Search Type Dropdown */}
         <View style={{
@@ -1219,79 +1321,6 @@ export default function FabricsScreen() {
         </TouchableOpacity>
       </View>
 
-      {isOffline && (
-        <View style={{
-          marginHorizontal: 16,
-          marginBottom: 10,
-          backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
-          borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fef3c7',
-          borderWidth: 1,
-          borderRadius: 12,
-          padding: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8
-        }}>
-          <WifiOff size={14} color={isDarkMode ? '#fbbf24' : '#b45309'} />
-          <Text style={{ fontSize: 12.5, color: isDarkMode ? '#fbbf24' : '#b45309', fontWeight: '600', flex: 1 }}>
-            Offline Mode • Showing previously loaded cached data
-          </Text>
-        </View>
-      )}
-
-      {/* Filter and Count Summary Row */}
-      {(() => {
-        const totalMatchingCount = fabricsQuery.data?.pages[0]?.totalCount || 0;
-        const grandTotal = unfilteredQuery.data ?? totalMatchingCount;
-        const isFiltered = debouncedSearch.trim() !== '' || typeFilter !== 'All';
-        if (grandTotal === 0 && !isFiltered) return null;
-        return (
-          <View style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            paddingVertical: 10,
-            paddingHorizontal: 16,
-            backgroundColor: theme.background
-          }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>
-              {isFiltered ? (
-                <Text>
-                  Showing <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{totalMatchingCount}</Text> of <Text style={{ fontWeight: '800', color: theme.text }}>{grandTotal}</Text>
-                </Text>
-              ) : (
-                <Text>
-                  Total Fabrics: <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{grandTotal}</Text>
-                </Text>
-              )}
-            </Text>
-
-            {totalActiveFiltersCount > 0 && (
-              <TouchableOpacity
-                onPress={clearAllFilters}
-                activeOpacity={0.7}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
-                  borderColor: isDarkMode ? '#991b1b' : '#fca5a5',
-                  borderWidth: 1,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 20,
-                  gap: 4
-                }}
-              >
-                <Trash2 size={12} color={isDarkMode ? '#fca5a5' : '#c53030'} />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#fca5a5' : '#c53030' }}>
-                  Clear Filters ({totalActiveFiltersCount})
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        );
-      })()}
-
       {/* Content */}
       {(fabricsQuery.isLoading || (fabricsQuery.isFetching && fabrics.length === 0)) ? (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -1309,7 +1338,84 @@ export default function FabricsScreen() {
       ) : (
         <FlatList
           data={groupedFabrics}
+          key={numColumns}
+          numColumns={numColumns}
           keyExtractor={(group: GroupedFabric) => `${group.qualityCode}__${group.qualityName}`}
+          ListHeaderComponent={() => {
+            const totalMatchingCount = fabricsQuery.data?.pages[0]?.totalCount || 0;
+            const grandTotal = unfilteredQuery.data ?? totalMatchingCount;
+            const isFiltered = debouncedSearch.trim() !== '' || typeFilter !== 'All';
+            if (grandTotal === 0 && !isFiltered && !isOffline) return null;
+            return (
+              <View>
+                {isOffline && (
+                  <View style={{
+                    marginHorizontal: 16,
+                    marginTop: 10,
+                    marginBottom: 4,
+                    backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
+                    borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fef3c7',
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    padding: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8
+                  }}>
+                    <WifiOff size={14} color={isDarkMode ? '#fbbf24' : '#b45309'} />
+                    <Text style={{ fontSize: 12.5, color: isDarkMode ? '#fbbf24' : '#b45309', fontWeight: '600', flex: 1 }}>
+                      Offline Mode • Showing previously loaded cached data
+                    </Text>
+                  </View>
+                )}
+                {(grandTotal > 0 || isFiltered) && (
+                  <View style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    backgroundColor: theme.background
+                  }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>
+                      {isFiltered ? (
+                        <Text>
+                          Showing <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{totalMatchingCount}</Text> of <Text style={{ fontWeight: '800', color: theme.text }}>{grandTotal}</Text>
+                        </Text>
+                      ) : (
+                        <Text>
+                          Total Fabrics: <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{grandTotal}</Text>
+                        </Text>
+                      )}
+                    </Text>
+
+                    {totalActiveFiltersCount > 0 && (
+                      <TouchableOpacity
+                        onPress={clearAllFilters}
+                        activeOpacity={0.7}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
+                          borderColor: isDarkMode ? '#991b1b' : '#fca5a5',
+                          borderWidth: 1,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 20,
+                          gap: 4
+                        }}
+                      >
+                        <Trash2 size={12} color={isDarkMode ? '#fca5a5' : '#c53030'} />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#fca5a5' : '#c53030' }}>
+                          Clear Filters ({totalActiveFiltersCount})
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          }}
           renderItem={({ item: group, index }) => {
             const cardKey = `${group.qualityCode}__${group.qualityName}`;
             return (
@@ -1325,10 +1431,11 @@ export default function FabricsScreen() {
                 isExpanded={!!expandedCards[cardKey]}
                 onToggleExpand={() => toggleCardExpand(cardKey)}
                 onOpenSticker={openStickerPreview}
+                numColumns={numColumns}
               />
             );
           }}
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: 65 + insets.bottom }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 65 + insets.bottom, paddingHorizontal: numColumns > 1 ? 6 : 0 }}
           showsVerticalScrollIndicator={false}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
@@ -1340,6 +1447,12 @@ export default function FabricsScreen() {
             fabricsQuery.isFetchingNextPage ? (
               <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
                 <ActivityIndicator size="small" color={Colors.primary[500]} />
+              </View>
+            ) : (!fabricsQuery.hasNextPage && fabrics.length > 0) ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 11, color: theme.textTertiary, fontStyle: 'italic' }}>
+                  No more fabrics to load
+                </Text>
               </View>
             ) : null
           }
@@ -1365,9 +1478,10 @@ export default function FabricsScreen() {
         <RNAnimated.View
           {...panResponder.panHandlers}
           style={{
-            left: pan.x,
-            top: pan.y,
             position: 'absolute',
+            left: 0,
+            top: 0,
+            transform: [{ translateX: pan.x }, { translateY: pan.y }],
             zIndex: 9999,
           }}
         >
@@ -1403,23 +1517,45 @@ export default function FabricsScreen() {
           </TouchableOpacity>
         </RNAnimated.View>
       )}
+      </View>
 
-      {/* Create/Edit Modal */}
-      <Modal visible={showForm} animationType="none" transparent statusBarTranslucent onRequestClose={closeForm}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      {/* Floating Action Button for Adding New Fabric */}
+      <Modal visible={showForm} animationType="none" hardwareAccelerated={true} transparent={true} statusBarTranslucent={true} onRequestClose={closeForm}>
+
+        <View style={{
+          flex: 1,
+          justifyContent: isLargeScreen ? 'center' : 'flex-end',
+          alignItems: isLargeScreen ? 'center' : 'stretch'
+        }}>
           {/* Clickable Backdrop */}
-          <Pressable onPress={closeForm} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+          <RNAnimated.View
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'transparent',
+            }}
+          >
+            <Pressable onPress={closeForm} style={{ flex: 1 }} />
+          </RNAnimated.View>
 
           <RNAnimated.View
+            onLayout={(e) => {
+              formSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...formPanResponder.panHandlers}
             style={{
               backgroundColor: isDarkMode ? '#1e293b' : '#fff',
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
+              borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+              borderBottomRightRadius: isLargeScreen ? 24 : 0,
               paddingTop: 12,
               paddingHorizontal: 24,
-              paddingBottom: 24 + insets.bottom,
-              height: '92%',
-              transform: [{ translateY: formPanY }],
+              paddingBottom: isLargeScreen ? 24 : 0,
+              maxHeight: isLargeScreen ? '85%' : '92%',
+              width: '100%',
+              maxWidth: modalMaxWidth,
+              transform: isLargeScreen ? undefined : [{ translateY: formPanY }],
               shadowColor: '#000',
               shadowOffset: { width: 0, height: -4 },
               shadowOpacity: 0.15,
@@ -1429,12 +1565,11 @@ export default function FabricsScreen() {
           >
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
               style={{ flex: 1 }}
             >
               {/* Swipe Drag Handle Bar */}
               <View 
-                {...formPanResponder.panHandlers} 
                 style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}
               >
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#d1d5db' }} />
@@ -1465,9 +1600,11 @@ export default function FabricsScreen() {
 
               <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 180 + insets.bottom }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 48 : 60 }}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
+                onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                scrollEventThrottle={16}
               >
                 {/* ─── Shared Quality Information ─── */}
                 <View style={{ marginBottom: 16, backgroundColor: isDarkMode ? '#0f172a' : '#f0f4ff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: isDarkMode ? '#1e3a5f' : '#c7d2fe' }}>
@@ -1698,8 +1835,8 @@ export default function FabricsScreen() {
       </Modal>
 
       {/* Delete Modal */}
-      <Modal visible={!!deleteTarget} animationType="fade" transparent>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 24 }}>
+      <Modal visible={!!deleteTarget} animationType="fade" transparent={true} statusBarTranslucent={true}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)', padding: 24 }}>
           <View style={{ backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 360 }}>
             <Text style={{ fontSize: 20, fontWeight: '900', color: theme.text, marginBottom: 12 }}>Delete Fabric Quality</Text>
             <Text style={{ fontSize: 15, color: theme.textSecondary, marginBottom: 24 }}>Are you sure you want to delete "{deleteTarget?.qualityName}"? This action cannot be undone.</Text>
@@ -1716,8 +1853,8 @@ export default function FabricsScreen() {
       </Modal>
 
       {/* Delete Group Modal */}
-      <Modal visible={!!deleteGroupTarget} animationType="fade" transparent>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 24 }}>
+      <Modal visible={!!deleteGroupTarget} animationType="fade" transparent={true} statusBarTranslucent={true}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)', padding: 24 }}>
           <View style={{ backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 360 }}>
             <Text style={{ fontSize: 20, fontWeight: '900', color: theme.text, marginBottom: 12 }}>Delete Entire Group</Text>
             <Text style={{ fontSize: 15, color: theme.textSecondary, marginBottom: 24 }}>
@@ -1736,10 +1873,30 @@ export default function FabricsScreen() {
       </Modal>
 
       {/* Type Selection Modal */}
-      <Modal visible={showTypeModal} animationType="fade" transparent>
-        <Pressable onPress={() => setShowTypeModal(false)} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 24 }}>
-          <View style={{ backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderRadius: 20, padding: 20, width: '100%', maxWidth: 340 }}>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text, marginBottom: 16 }}>Select Fabric Type</Text>
+      <Modal visible={showTypeModal} animationType="fade" transparent={true} statusBarTranslucent={true} onRequestClose={() => setShowTypeModal(false)}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', padding: 24 }}>
+          {/* Clickable Backdrop */}
+          <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={() => setShowTypeModal(false)} />
+          
+          <View style={{ backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 340, zIndex: 1 }}>
+            {/* Header Row */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>Select Fabric Type</Text>
+              <TouchableOpacity
+                onPress={() => setShowTypeModal(false)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isDarkMode ? '#334155' : '#f1f5f9',
+                }}
+              >
+                <X size={16} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
             {fabricTypes.filter(t => t !== 'All').map((type) => {
               const isSelected = formQuality.type === type;
               return (
@@ -1761,7 +1918,7 @@ export default function FabricsScreen() {
               );
             })}
           </View>
-        </Pressable>
+        </View>
       </Modal>
 
       {/* Camera Modal */}
@@ -1773,25 +1930,32 @@ export default function FabricsScreen() {
       {/* Search Type Selection Modal */}
       <Modal
         visible={showSearchTypeModal}
-        transparent
+        transparent={true}
         animationType="none"
+        hardwareAccelerated={true}
+        statusBarTranslucent={true}
         onRequestClose={closeSearchTypeModal}
       >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <View style={{
+          flex: 1,
+          justifyContent: 'flex-end',
+        }}>
           {/* Clickable Backdrop */}
-          <Pressable
-            onPress={closeSearchTypeModal}
+          <RNAnimated.View
             style={{
               position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'transparent',
             }}
-          />
+          >
+            <Pressable onPress={closeSearchTypeModal} style={{ flex: 1 }} />
+          </RNAnimated.View>
 
           <RNAnimated.View
+            onLayout={(e) => {
+              searchTypeSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...searchTypePanResponder.panHandlers}
             style={{
               backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
               borderTopLeftRadius: 24,
@@ -1801,11 +1965,11 @@ export default function FabricsScreen() {
               borderTopWidth: 1,
               borderTopColor: isDarkMode ? '#334155' : '#e2e8f0',
               maxHeight: '60%',
-              transform: [{ translateY: searchTypePanY }],
+              transform: isLargeScreen ? undefined : [{ translateY: searchTypePanY }],
             }}
           >
             {/* Header Drag Zone */}
-            <View {...searchTypePanResponder.panHandlers} style={{ width: '100%' }}>
+            <View style={{ width: '100%' }}>
               {/* Swipe Drag Handle Bar */}
               <View
                 style={{
@@ -1844,7 +2008,11 @@ export default function FabricsScreen() {
               <X size={18} color={theme.text} />
             </TouchableOpacity>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              onScroll={(e) => { searchTypeScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+              scrollEventThrottle={16}
+            >
               {Object.keys(searchTypeFullLabels).map((type) => {
                 const isSelected = searchType === type;
                 return (
@@ -1884,25 +2052,32 @@ export default function FabricsScreen() {
       {/* Filter Modal */}
       <Modal
         visible={showFilterModal}
-        transparent
+        transparent={true}
         animationType="none"
+        hardwareAccelerated={true}
+        statusBarTranslucent={true}
         onRequestClose={closeFilterModal}
       >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <View style={{
+          flex: 1,
+          justifyContent: 'flex-end',
+        }}>
           {/* Clickable Backdrop */}
-          <Pressable
-            onPress={closeFilterModal}
+          <RNAnimated.View
             style={{
               position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'transparent',
             }}
-          />
+          >
+            <Pressable onPress={closeFilterModal} style={{ flex: 1 }} />
+          </RNAnimated.View>
 
           <RNAnimated.View
+            onLayout={(e) => {
+              filterSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...filterPanResponder.panHandlers}
             style={{
               backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
               borderTopLeftRadius: 24,
@@ -1912,11 +2087,11 @@ export default function FabricsScreen() {
               borderTopWidth: 1,
               borderTopColor: isDarkMode ? '#334155' : '#e2e8f0',
               maxHeight: '80%',
-              transform: [{ translateY: filterPanY }],
+              transform: isLargeScreen ? undefined : [{ translateY: filterPanY }],
             }}
           >
             {/* Header Drag Zone */}
-            <View {...filterPanResponder.panHandlers} style={{ width: '100%' }}>
+            <View style={{ width: '100%' }}>
               {/* Swipe Drag Handle Bar */}
               <View
                 style={{
@@ -1970,7 +2145,12 @@ export default function FabricsScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ paddingHorizontal: 24 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ paddingHorizontal: 24 }}
+              onScroll={(e) => { filterScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+              scrollEventThrottle={16}
+            >
               {/* Sort Order Section */}
               <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Sort By</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 24 }}>

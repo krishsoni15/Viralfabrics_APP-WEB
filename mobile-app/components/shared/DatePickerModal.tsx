@@ -361,7 +361,7 @@ export default function DatePickerModal({
   );
 }
 
-const screenWidth = Dimensions.get('window').width;
+
 
 const styles = StyleSheet.create({
   backdrop: {

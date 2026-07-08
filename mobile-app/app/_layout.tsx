@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, ActivityIndicator, StyleSheet, Text, useColorScheme, Image, Modal, TouchableOpacity, Pressable } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text, useColorScheme, Image, Modal, TouchableOpacity, Pressable, LogBox, StatusBar, Platform } from 'react-native';
 import { Stack, router, useSegments } from 'expo-router';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StatusBar } from 'expo-status-bar';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -23,7 +22,6 @@ import { CONFIG } from '../constants/config';
 import ToastContainer from '../components/ui/Toast';
 import Button from '../components/ui/Button';
 import { ShieldAlert, HardDrive, CheckCircle, X, AlertTriangle, WifiOff } from 'lucide-react-native';
-import { Platform } from 'react-native';
 import JSZip from 'jszip';
 import * as FileSystem from 'expo-file-system/legacy';
 let Sharing: any = null;
@@ -37,6 +35,11 @@ import * as SplashScreen from 'expo-splash-screen';
 
 // Keep the splash screen visible while we fetch resources / validate session
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Suppress the shadow style warning on web platform
+LogBox.ignoreLogs([
+  '"shadow*" style props are deprecated',
+]);
 
 // CSS import removed — all styles use React Native StyleSheet / inline styles
 
@@ -201,6 +204,7 @@ function RootLayoutNav() {
   // Sync system dark mode automatically or use stored preference
   const systemColorScheme = useColorScheme();
 
+  // Load stored theme preference once on mount
   useEffect(() => {
     (async () => {
       try {
@@ -221,7 +225,14 @@ function RootLayoutNav() {
         setDarkMode(systemColorScheme === 'dark');
       }
     })();
-  }, [systemColorScheme]);
+  }, []);
+
+  // Update theme dynamically when system color scheme changes, if sync is enabled
+  useEffect(() => {
+    if (syncSystemTheme) {
+      setDarkMode(systemColorScheme === 'dark');
+    }
+  }, [systemColorScheme, syncSystemTheme]);
 
   // Synchronize browser online/offline status dynamically on web
   useEffect(() => {
@@ -309,7 +320,7 @@ function RootLayoutNav() {
 
   // Auth redirect logic
   useEffect(() => {
-    if (initializing) return;
+    if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -318,20 +329,7 @@ function RootLayoutNav() {
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)/dashboard');
     }
-  }, [isAuthenticated, segments, initializing]);
-
-  if (initializing) {
-    // Render a clean background matching the splash screen.
-    // This allows the native splash screen to remain on screen without any double logo or spinner.
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: '#ffffff',
-        }}
-      />
-    );
-  }
+  }, [isAuthenticated, segments, isLoading]);
 
   const theme = isDarkMode ? DarkTheme : LightTheme;
 
@@ -610,7 +608,7 @@ function RootLayoutNav() {
         screenOptions={{
           headerShown: false,
           animation: 'slide_from_right',
-          contentStyle: { backgroundColor: 'transparent' },
+          contentStyle: { backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.white },
         }}
       >
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
@@ -771,19 +769,114 @@ function RootLayoutNav() {
           </TouchableOpacity>
         </View>
       )}
+
+      {initializing && (
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.white,
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 99999,
+            }
+          ]}
+        >
+          {/* Logo Animation */}
+          <Animated.View style={[{ alignItems: 'center' }, animatedLogoStyle]}>
+            <Image
+              source={require('../assets/logo-clean.png')}
+              style={{ width: 140, height: 140, marginBottom: 24 }}
+              resizeMode="contain"
+            />
+          </Animated.View>
+
+          {/* Text Animation */}
+          <Animated.View style={[{ alignItems: 'center' }, animatedTextStyle]}>
+            <Text
+              style={{
+                fontSize: 22,
+                fontWeight: '900',
+                color: isDarkMode ? Colors.neutral[50] : Colors.neutral[900],
+                letterSpacing: -0.5,
+                marginBottom: 6,
+              }}
+            >
+              Viral Fabrics
+            </Text>
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.textSecondary,
+                marginBottom: 32,
+              }}
+            >
+              Loading active session...
+            </Text>
+          </Animated.View>
+
+          {/* Premium Indeterminate Progress Bar */}
+          <View
+            style={{
+              width: 180,
+              height: 4,
+              backgroundColor: isDarkMode ? '#1e293b' : '#f1f5f9',
+              borderRadius: 2,
+              overflow: 'hidden',
+              position: 'relative',
+            }}
+          >
+            <Animated.View
+              style={[
+                {
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  width: '45%',
+                  backgroundColor: Colors.primary[600],
+                  borderRadius: 2,
+                },
+                animatedProgressStyle,
+              ]}
+            />
+          </View>
+        </Animated.View>
+      )}
     </>
   );
 }
 
+import { ThemeProvider as NavigationProvider, DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme } from 'expo-router';
+
 export default function RootLayout() {
   const isDarkMode = useAppStore((s) => s.isDarkMode);
+
+  const navTheme = {
+    ...(isDarkMode ? NavDarkTheme : NavDefaultTheme),
+    dark: isDarkMode,
+    colors: {
+      ...(isDarkMode ? NavDarkTheme.colors : NavDefaultTheme.colors),
+      primary: Colors.primary[600],
+      background: isDarkMode ? Colors.neutral[900] : Colors.white,
+      card: isDarkMode ? Colors.neutral[800] : Colors.white,
+      text: isDarkMode ? Colors.neutral[50] : Colors.neutral[900],
+      border: isDarkMode ? Colors.neutral[700] : Colors.neutral[200],
+      notification: Colors.primary[500],
+    },
+  };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <StatusBar style={isDarkMode ? 'light' : 'dark'} />
-          <RootLayoutNav />
+          <NavigationProvider value={navTheme}>
+            <StatusBar
+              barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+              translucent={true}
+              backgroundColor="transparent"
+            />
+            <RootLayoutNav />
+          </NavigationProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

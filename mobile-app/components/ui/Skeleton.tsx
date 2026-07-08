@@ -9,6 +9,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { useTheme } from '../../hooks/useTheme';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import Card from './Card';
 import { Colors } from '../../constants/colors';
 import {
@@ -137,10 +138,18 @@ export function SkeletonStats() {
 }
 
 export function SkeletonList({ count = 5, height }: { count?: number; height?: number }) {
+  const { numColumns } = useResponsiveLayout();
   return (
-    <PulsingContainer style={{ padding: 16 }}>
+    <PulsingContainer style={{ 
+      flexDirection: 'row', 
+      flexWrap: 'wrap', 
+      paddingHorizontal: numColumns > 1 ? 8 : 16,
+      paddingVertical: 16,
+    }}>
       {Array.from({ length: count }).map((_, i) => (
-        <SkeletonCard key={i} height={height} />
+        <View key={i} style={{ width: `${100 / numColumns}%`, paddingHorizontal: numColumns > 1 ? 8 : 0 }}>
+          <SkeletonCard height={height} />
+        </View>
       ))}
     </PulsingContainer>
   );
@@ -265,9 +274,10 @@ export function SkeletonDeliveredSoon() {
 
 export function OrderCardSkeleton() {
   const { theme, isDarkMode } = useTheme();
+  const { numColumns } = useResponsiveLayout();
 
   return (
-    <Card style={{ marginHorizontal: 16, marginBottom: 12, padding: 14, borderRadius: 16 }}>
+    <Card style={{ marginHorizontal: numColumns > 1 ? 8 : 16, marginBottom: 12, padding: 14, borderRadius: 16 }}>
       {/* Top Header */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -468,10 +478,18 @@ export function OrderCardSkeleton() {
 }
 
 export function OrderSkeletonList({ count = 5 }: { count?: number }) {
+  const { numColumns } = useResponsiveLayout();
   return (
-    <PulsingContainer style={{ paddingVertical: 12 }}>
+    <PulsingContainer style={{ 
+      flexDirection: 'row', 
+      flexWrap: 'wrap', 
+      paddingHorizontal: numColumns > 1 ? 8 : 0,
+      paddingVertical: 12,
+    }}>
       {Array.from({ length: count }).map((_, i) => (
-        <OrderCardSkeleton key={i} />
+        <View key={i} style={{ width: `${100 / numColumns}%` }}>
+          <OrderCardSkeleton key={i} />
+        </View>
       ))}
     </PulsingContainer>
   );
@@ -479,6 +497,7 @@ export function OrderSkeletonList({ count = 5 }: { count?: number }) {
 
 export function UserSkeletonCard() {
   const { theme, isDarkMode } = useTheme();
+  const { numColumns } = useResponsiveLayout();
 
   return (
     <View
@@ -489,7 +508,7 @@ export function UserSkeletonCard() {
         marginBottom: 10,
         borderWidth: 1,
         borderColor: theme.border,
-        marginHorizontal: 16
+        marginHorizontal: numColumns > 1 ? 8 : 16
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -531,10 +550,18 @@ export function UserSkeletonCard() {
 }
 
 export function UserSkeletonList({ count = 5 }: { count?: number }) {
+  const { numColumns } = useResponsiveLayout();
   return (
-    <PulsingContainer style={{ paddingVertical: 12 }}>
+    <PulsingContainer style={{ 
+      flexDirection: 'row', 
+      flexWrap: 'wrap', 
+      paddingHorizontal: numColumns > 1 ? 8 : 0,
+      paddingVertical: 12,
+    }}>
       {Array.from({ length: count }).map((_, i) => (
-        <UserSkeletonCard key={i} />
+        <View key={i} style={{ width: `${100 / numColumns}%` }}>
+          <UserSkeletonCard key={i} />
+        </View>
       ))}
     </PulsingContainer>
   );
@@ -542,11 +569,12 @@ export function UserSkeletonList({ count = 5 }: { count?: number }) {
 
 export function FabricSkeletonCard() {
   const { theme, isDarkMode } = useTheme();
+  const { numColumns } = useResponsiveLayout();
 
   return (
     <Card
       style={{
-        marginHorizontal: 16,
+        marginHorizontal: numColumns > 1 ? 6 : 12,
         marginBottom: 12,
         borderWidth: 1,
         borderColor: theme.borderLight,
@@ -691,10 +719,18 @@ export function FabricSkeletonCard() {
 }
 
 export function FabricSkeletonList({ count = 3 }: { count?: number }) {
+  const { numColumns } = useResponsiveLayout();
   return (
-    <PulsingContainer style={{ paddingVertical: 12 }}>
+    <PulsingContainer style={{ 
+      flexDirection: 'row', 
+      flexWrap: 'wrap', 
+      paddingHorizontal: numColumns > 1 ? 6 : 0,
+      paddingVertical: 12,
+    }}>
       {Array.from({ length: count }).map((_, i) => (
-        <FabricSkeletonCard key={i} />
+        <View key={i} style={{ width: `${100 / numColumns}%` }}>
+          <FabricSkeletonCard key={i} />
+        </View>
       ))}
     </PulsingContainer>
   );
@@ -759,10 +795,18 @@ export function WeaverSkeletonCard() {
 }
 
 export function WeaverSkeletonList({ count = 3 }: { count?: number }) {
+  const { numColumns } = useResponsiveLayout();
   return (
-    <PulsingContainer style={{ paddingVertical: 12 }}>
+    <PulsingContainer style={{ 
+      flexDirection: 'row', 
+      flexWrap: 'wrap', 
+      paddingHorizontal: 0,
+      paddingVertical: 12,
+    }}>
       {Array.from({ length: count }).map((_, i) => (
-        <WeaverSkeletonCard key={i} />
+        <View key={i} style={{ width: `${100 / numColumns}%` }}>
+          <WeaverSkeletonCard key={i} />
+        </View>
       ))}
     </PulsingContainer>
   );
@@ -850,10 +894,18 @@ export function SampleSkeletonCard() {
 }
 
 export function SampleSkeletonList({ count = 3 }: { count?: number }) {
+  const { numColumns } = useResponsiveLayout();
   return (
-    <PulsingContainer style={{ paddingVertical: 12 }}>
+    <PulsingContainer style={{ 
+      flexDirection: 'row', 
+      flexWrap: 'wrap', 
+      paddingHorizontal: 0,
+      paddingVertical: 12,
+    }}>
       {Array.from({ length: count }).map((_, i) => (
-        <SampleSkeletonCard key={i} />
+        <View key={i} style={{ width: `${100 / numColumns}%` }}>
+          <SampleSkeletonCard key={i} />
+        </View>
       ))}
     </PulsingContainer>
   );
@@ -861,9 +913,10 @@ export function SampleSkeletonList({ count = 3 }: { count?: number }) {
 
 export function SamplingSkeletonCard() {
   const { theme, isDarkMode } = useTheme();
+  const { numColumns } = useResponsiveLayout();
 
   return (
-    <Card style={{ marginHorizontal: 16, marginBottom: 16, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.card, borderRadius: 16, padding: 18 }}>
+    <Card style={{ marginHorizontal: numColumns > 1 ? 8 : 16, marginBottom: 16, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.card, borderRadius: 16, padding: 18 }}>
       {/* Image Preview Skeleton */}
       <Skeleton height={160} style={{ marginBottom: 14, borderRadius: 12 }} />
 
@@ -898,10 +951,18 @@ export function SamplingSkeletonCard() {
 }
 
 export function SamplingSkeletonList({ count = 3 }: { count?: number }) {
+  const { numColumns } = useResponsiveLayout();
   return (
-    <PulsingContainer style={{ paddingVertical: 12 }}>
+    <PulsingContainer style={{ 
+      flexDirection: 'row', 
+      flexWrap: 'wrap', 
+      paddingHorizontal: numColumns > 1 ? 8 : 0,
+      paddingVertical: 12,
+    }}>
       {Array.from({ length: count }).map((_, i) => (
-        <SamplingSkeletonCard key={i} />
+        <View key={i} style={{ width: `${100 / numColumns}%` }}>
+          <SamplingSkeletonCard key={i} />
+        </View>
       ))}
     </PulsingContainer>
   );
@@ -909,9 +970,10 @@ export function SamplingSkeletonList({ count = 3 }: { count?: number }) {
 
 export function GreyMaterialSkeletonCard() {
   const { theme, isDarkMode } = useTheme();
+  const { numColumns } = useResponsiveLayout();
 
   return (
-    <Card style={{ marginHorizontal: 16, marginBottom: 16, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.card, borderRadius: 16, padding: 18 }}>
+    <Card style={{ marginHorizontal: numColumns > 1 ? 8 : 16, marginBottom: 16, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.card, borderRadius: 16, padding: 18 }}>
       {/* Image Preview Skeleton */}
       <Skeleton height={160} style={{ marginBottom: 12, borderRadius: 12 }} />
 
@@ -965,10 +1027,18 @@ export function GreyMaterialSkeletonCard() {
 }
 
 export function GreyMaterialSkeletonList({ count = 4 }: { count?: number }) {
+  const { numColumns } = useResponsiveLayout();
   return (
-    <PulsingContainer style={{ paddingVertical: 12 }}>
+    <PulsingContainer style={{ 
+      flexDirection: 'row', 
+      flexWrap: 'wrap', 
+      paddingHorizontal: numColumns > 1 ? 8 : 0,
+      paddingVertical: 12,
+    }}>
       {Array.from({ length: count }).map((_, i) => (
-        <GreyMaterialSkeletonCard key={i} />
+        <View key={i} style={{ width: `${100 / numColumns}%` }}>
+          <GreyMaterialSkeletonCard key={i} />
+        </View>
       ))}
     </PulsingContainer>
   );
@@ -976,11 +1046,12 @@ export function GreyMaterialSkeletonList({ count = 4 }: { count?: number }) {
 
 export function FinishLotSkeletonCard() {
   const { theme, isDarkMode } = useTheme();
+  const { numColumns } = useResponsiveLayout();
 
   return (
     <Card
       style={{
-        marginHorizontal: 12,
+        marginHorizontal: numColumns > 1 ? 8 : 12,
         marginBottom: 14,
         borderWidth: 1,
         borderColor: theme.borderLight,
@@ -1067,10 +1138,18 @@ export function FinishLotSkeletonCard() {
 }
 
 export function FinishLotSkeletonList({ count = 4 }: { count?: number }) {
+  const { numColumns } = useResponsiveLayout();
   return (
-    <PulsingContainer style={{ paddingVertical: 12 }}>
+    <PulsingContainer style={{ 
+      flexDirection: 'row', 
+      flexWrap: 'wrap', 
+      paddingHorizontal: numColumns > 1 ? 8 : 0,
+      paddingVertical: 12,
+    }}>
       {Array.from({ length: count }).map((_, i) => (
-        <FinishLotSkeletonCard key={i} />
+        <View key={i} style={{ width: `${100 / numColumns}%` }}>
+          <FinishLotSkeletonCard key={i} />
+        </View>
       ))}
     </PulsingContainer>
   );

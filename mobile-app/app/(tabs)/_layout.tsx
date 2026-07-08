@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Platform, TouchableOpacity, Modal, View, Text, StyleSheet, Pressable, PanResponder, Dimensions, Image, ScrollView } from 'react-native';
+import { Platform, TouchableOpacity, Modal, View, Text, StyleSheet, Pressable, PanResponder, Dimensions, Image, ScrollView, useWindowDimensions } from 'react-native';
 import { Tabs, router, usePathname } from 'expo-router';
 import { Home, ShoppingBag, Package, Users, User, Menu, X, ChevronRight, Shield, FileText, Boxes, TestTubes, MoreHorizontal, ClipboardList } from 'lucide-react-native';
 import { useTheme } from '../../hooks/useTheme';
@@ -279,6 +279,9 @@ export default function TabsLayout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMenuRendered, setIsMenuRendered] = useState(false);
   const pathname = usePathname();
+  const scrollY = useRef(0);
+  const menuSheetY = useRef(0);
+  const menuTouchStartPageY = useRef(0);
   
   const isFabricsActive = pathname.includes('/fabrics');
   const isWeaversActive = pathname.includes('/weaver');
@@ -308,9 +311,22 @@ export default function TabsLayout() {
   const activeSubpageIcon = getActiveSubpageIcon();
   const { Icon: activeMenuIcon, title: activeMenuTitle } = getActiveMenuInfo();
 
-  const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+  const { height: SCREEN_HEIGHT } = useWindowDimensions();
   const offScreenY = SCREEN_HEIGHT + 80;
   const sheetTranslateY = useSharedValue(offScreenY);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      sheetTranslateY.value = offScreenY;
+    }
+  }, [offScreenY, isMenuOpen]);
+
+  // Automatically close and clean up the menu overlay whenever the active route changes
+  useEffect(() => {
+    setIsMenuOpen(false);
+    setIsMenuRendered(false);
+    sheetTranslateY.value = offScreenY;
+  }, [pathname]);
 
   const openMenu = () => {
     sheetTranslateY.value = offScreenY;
@@ -346,15 +362,21 @@ export default function TabsLayout() {
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 8 && g.dy > Math.abs(g.dx),
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        menuTouchStartPageY.current = pageY;
+        return pageY < menuSheetY.current + 85;
+      },
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, g) => scrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
+      onMoveShouldSetPanResponderCapture: (_, g) => scrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
       onPanResponderMove: (_, g) => {
         if (g.dy > 0) {
           sheetTranslateY.value = g.dy;
         }
       },
       onPanResponderRelease: (_, g) => {
-        if (g.dy > 15 || g.vy > 0.05) {
+        if (g.dy > 50 || g.vy > 0.2) {
           const velocity = g.vy * 1000;
           closeMenu(velocity);
         } else {
@@ -365,12 +387,17 @@ export default function TabsLayout() {
   ).current;
 
   const handleNavigate = (path: any) => {
-    closeMenu();
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Route after the close animation starts and has moved mostly off screen
-    setTimeout(() => {
-      router.push(path);
-    }, 180);
+    // Close the menu instantly to avoid overlay getting stuck on navigation
+    setIsMenuOpen(false);
+    setIsMenuRendered(false);
+    sheetTranslateY.value = offScreenY;
+
+    if (Platform.OS !== 'web') {
+      requestAnimationFrame(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      });
+    }
+    router.push(path);
   };
 
   const animatedBackdropStyle = useAnimatedStyle(() => {
@@ -418,7 +445,11 @@ export default function TabsLayout() {
         }}
         screenListeners={{
           tabPress: () => {
-            if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (Platform.OS !== 'web') {
+              requestAnimationFrame(() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              });
+            }
           },
         }}
       >
@@ -466,7 +497,11 @@ export default function TabsLayout() {
                       selected: isMenuOpen || isFabricsActive || isWeaversActive || isGreyActive || isSamplingActive || isFinishActive || isUsersActive || isLogsActive || isPurchaseOrdersActive
                     }}
                     onPress={() => {
-                      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      if (Platform.OS !== 'web') {
+                        requestAnimationFrame(() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                        });
+                      }
                       if (isMenuOpen) {
                         closeMenu();
                       } else {
@@ -554,6 +589,9 @@ export default function TabsLayout() {
           
           <Animated.View 
             {...panResponder.panHandlers}
+            onLayout={(e) => {
+              menuSheetY.current = e.nativeEvent.layout.y;
+            }}
             style={[
               styles.modalContent, 
               { 
@@ -584,7 +622,11 @@ export default function TabsLayout() {
               </View>
               <TouchableOpacity 
                 onPress={() => {
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (Platform.OS !== 'web') {
+                    requestAnimationFrame(() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    });
+                  }
                   closeMenu();
                 }}
                 style={[styles.closeButton, { backgroundColor: isDarkMode ? '#334155' : '#f1f5f9' }]}
@@ -598,6 +640,8 @@ export default function TabsLayout() {
               style={{ maxHeight: SCREEN_HEIGHT * 0.6 }} 
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ gap: 6 }}
+              onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
+              scrollEventThrottle={16}
             >
               {/* Option 1: Fabrics */}
               <TouchableOpacity
@@ -734,34 +778,7 @@ export default function TabsLayout() {
                 <ChevronRight size={14} color={isFinishActive ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textTertiary} />
               </TouchableOpacity>
 
-              {/* Option 6: Users */}
-              <TouchableOpacity
-                onPress={() => handleNavigate('/(tabs)/users')}
-                activeOpacity={0.7}
-                style={[
-                  styles.menuItem,
-                  {
-                    backgroundColor: isUsersActive 
-                      ? (isDarkMode ? 'rgba(96, 165, 250, 0.12)' : 'rgba(37, 99, 235, 0.08)') 
-                      : (isDarkMode ? '#0f172a' : '#f8fafc'),
-                    borderColor: isUsersActive 
-                      ? (isDarkMode ? '#60a5fa' : '#2563eb') 
-                      : theme.borderLight,
-                    marginBottom: 0,
-                  }
-                ]}
-              >
-                <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5' }]}>
-                  <Users size={18} color={isDarkMode ? '#34d399' : '#059669'} />
-                </View>
-                <View style={styles.menuTextContainer}>
-                  <Text style={[styles.menuItemTitle, { color: isUsersActive ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.text }]}>Users</Text>
-                  <Text style={[styles.menuItemSubtitle, { color: theme.textSecondary }]}>Manage user roles and permissions</Text>
-                </View>
-                <ChevronRight size={14} color={isUsersActive ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textTertiary} />
-              </TouchableOpacity>
-
-              {/* Option 7: Purchase Orders */}
+              {/* Option 6: Purchase Orders */}
               <TouchableOpacity
                 onPress={() => handleNavigate('/(tabs)/purchase-orders')}
                 activeOpacity={0.7}
@@ -788,7 +805,32 @@ export default function TabsLayout() {
                 <ChevronRight size={14} color={isPurchaseOrdersActive ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textTertiary} />
               </TouchableOpacity>
 
-              {/* Option 8: Logs */}
+              {/* Option 7: Users */}
+              <TouchableOpacity
+                onPress={() => handleNavigate('/(tabs)/users')}
+                activeOpacity={0.7}
+                style={[
+                  styles.menuItem,
+                  {
+                    backgroundColor: isUsersActive 
+                      ? (isDarkMode ? 'rgba(96, 165, 250, 0.12)' : 'rgba(37, 99, 235, 0.08)') 
+                      : (isDarkMode ? '#0f172a' : '#f8fafc'),
+                    borderColor: isUsersActive 
+                      ? (isDarkMode ? '#60a5fa' : '#2563eb') 
+                      : theme.borderLight,
+                    marginBottom: 0,
+                  }
+                ]}
+              >
+                <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5' }]}>
+                  <Users size={18} color={isDarkMode ? '#34d399' : '#059669'} />
+                </View>
+                <View style={styles.menuTextContainer}>
+                  <Text style={[styles.menuItemTitle, { color: isUsersActive ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.text }]}>Users</Text>
+                  <Text style={[styles.menuItemSubtitle, { color: theme.textSecondary }]}>Manage user roles and permissions</Text>
+                </View>
+                <ChevronRight size={14} color={isUsersActive ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textTertiary} />
+              </TouchableOpacity>
               {isSuperAdmin ? (
                 <TouchableOpacity
                   onPress={() => handleNavigate('/(tabs)/logs')}

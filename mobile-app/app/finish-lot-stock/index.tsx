@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Image, Modal, ScrollView, KeyboardAvoidingView, Pressable, PanResponder, Animated as RNAnimated, Dimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Image, Modal, ScrollView, KeyboardAvoidingView, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Keyboard, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
@@ -12,28 +12,27 @@ try { ImagePicker = require('expo-image-picker'); } catch (e) { console.warn('ex
 
 import api from '../../services/api';
 import Header from '../../components/shared/Header';
-import Card from '../../components/ui/Card';
 import { FinishLotSkeletonList } from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import ImagePreviewModal from '../../components/shared/ImagePreviewModal';
 import CustomCameraModal from '../../components/shared/CustomCameraModal';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { Colors } from '../../constants/colors';
 import { FinishLotStock } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { formatDate, resolveImageUrl, uploadSingleImage } from '../../utils/helpers';
 
 const PAGE_SIZE = 5;
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
-// ─── Progress Bar ─────────────────────────────────────────────────────────
 const FinishProgressBar = () => {
   const { isDarkMode } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const translateX = useSharedValue(-150);
   React.useEffect(() => {
+    translateX.value = -150;
     translateX.value = withRepeat(withTiming(screenWidth, { duration: 1000, easing: Easing.linear }), -1, false);
-  }, []);
+  }, [screenWidth]);
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
   return (
     <View style={{ width: '100%', height: 3, backgroundColor: isDarkMode ? '#1e293b' : '#e2e8f0', overflow: 'hidden' }}>
@@ -49,25 +48,47 @@ const searchTypePlaceholders: Record<string, string> = { all: 'Search finish lot
 
 // ─── Finish Lot Card ──────────────────────────────────────────────────────
 const FinishLotCard = React.memo(function FinishLotCard({
-  item, index, onEdit, onDelete, isSuperAdmin, isMaster, onPreviewImages
-}: { item: FinishLotStock; index: number; onEdit: (f: FinishLotStock) => void; onDelete: (f: FinishLotStock) => void; isSuperAdmin: boolean; isMaster: boolean; onPreviewImages: (imgs: string[]) => void }) {
+  item, index, onEdit, onDelete, isSuperAdmin, isMaster, onPreviewImages, numColumns = 1
+}: { item: FinishLotStock; index: number; onEdit: (f: FinishLotStock) => void; onDelete: (f: FinishLotStock) => void; isSuperAdmin: boolean; isMaster: boolean; onPreviewImages: (imgs: string[]) => void; numColumns?: number }) {
   const { theme, isDarkMode } = useTheme();
 
   return (
-    <Animated.View>
-      <Card style={{
-        marginHorizontal: 12, marginBottom: 14, borderWidth: 1, borderColor: theme.borderLight,
-        backgroundColor: theme.card, borderRadius: 18, overflow: 'hidden',
-        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDarkMode ? 0.12 : 0.04, shadowRadius: 12, elevation: 4,
+    <Animated.View style={{ flex: 1 }}>
+      <View style={{
+        marginHorizontal: numColumns && numColumns > 1 ? 8 : 12,
+        marginBottom: 14,
+        borderRadius: 18,
+        backgroundColor: theme.card,
+        borderWidth: 1,
+        borderColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#e8edf2',
+        shadowColor: isDarkMode ? '#000' : '#94a3b8',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: isDarkMode ? 0.25 : 0.12,
+        shadowRadius: 10,
+        elevation: 4,
+        padding: 14,
+        flex: 1,
       }}>
-        {/* Image */}
+        {/* Clickable Image Preview styled like fabrics/sampling page */}
         {item.images && item.images.length > 0 && (
-          <TouchableOpacity onPress={() => onPreviewImages(item.images || [])} activeOpacity={0.9}
-            style={{ borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+          <TouchableOpacity
+            onPress={() => onPreviewImages(item.images || [])}
+            activeOpacity={0.9}
+            style={{
+              marginBottom: 12,
+              borderRadius: 14,
+              overflow: 'hidden',
+              backgroundColor: isDarkMode ? 'rgba(15,23,42,0.7)' : '#f1f5f9',
+              borderWidth: 1,
+              borderColor: theme.borderLight,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
             <Image 
               source={{ uri: resolveImageUrl(item.images[0]) }} 
-              style={{ width: '100%', height: 170 }} 
-              resizeMode="cover" 
+              style={{ width: '100%', height: 220 }} 
+              resizeMode="contain" 
               resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
               fadeDuration={100}
             />
@@ -80,70 +101,84 @@ const FinishLotCard = React.memo(function FinishLotCard({
           </TouchableOpacity>
         )}
 
-        <View style={{ padding: 14 }}>
-          {/* Quality Name */}
-          <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text, letterSpacing: -0.3, marginBottom: 8 }} numberOfLines={2}>
-            {item.qualityName}
-          </Text>
+        {/* Quality Name */}
+        <Text style={{ fontSize: 17, fontWeight: '800', color: theme.text, marginBottom: 12, letterSpacing: -0.2 }} numberOfLines={2}>
+          {item.qualityName}
+        </Text>
 
-          {/* Badges Row */}
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-            <View style={{ backgroundColor: isDarkMode ? 'rgba(59,130,246,0.12)' : '#eff6ff', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: isDarkMode ? 'rgba(59,130,246,0.25)' : '#bfdbfe' }}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: isDarkMode ? '#93c5fd' : Colors.primary[700] }}>{item.piece || 0} Pcs</Text>
+        {/* Metadata Grid (replaces button-like look with clean structure) */}
+        <View style={{
+          borderWidth: 1,
+          borderColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0',
+          borderRadius: 12,
+          backgroundColor: isDarkMode ? 'rgba(0,0,0,0.1)' : '#f8fafc',
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          gap: 10,
+        }}>
+          {/* Pieces & Meters Row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Pieces</Text>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: theme.text }}>
+                {item.piece != null && item.piece > 0 ? `${item.piece} Pcs` : '-'}
+              </Text>
             </View>
-            <View style={{ backgroundColor: isDarkMode ? 'rgba(34,197,94,0.12)' : '#f0fdf4', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: isDarkMode ? 'rgba(34,197,94,0.25)' : '#bbf7d0' }}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: isDarkMode ? '#4ade80' : '#16a34a' }}>{item.meter || 0} Mtr</Text>
-            </View>
-          </View>
-
-          {/* Date + Actions */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
-            <Text style={{ fontSize: 12, color: theme.textTertiary, fontWeight: '500' }}>
-              {formatDate(item.createdAt)}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {isSuperAdmin && (
-                <TouchableOpacity
-                  onPress={() => onEdit(item)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 5,
-                    paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
-                    backgroundColor: isDarkMode ? 'rgba(59,130,246,0.1)' : '#eff6ff',
-                  }}
-                >
-                  <Edit size={13} color={isDarkMode ? '#60a5fa' : Colors.primary[600]} />
-                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: isDarkMode ? '#60a5fa' : Colors.primary[600] }}>Edit</Text>
-                </TouchableOpacity>
-              )}
-              {isMaster && (
-                <TouchableOpacity
-                  onPress={() => onDelete(item)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 5,
-                    paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: isDarkMode ? 'rgba(239,68,68,0.3)' : '#fca5a5',
-                    backgroundColor: isDarkMode ? 'rgba(239,68,68,0.1)' : '#fef2f2',
-                  }}
-                >
-                  <Trash2 size={13} color={isDarkMode ? '#ef4444' : Colors.error[600]} />
-                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: isDarkMode ? '#ef4444' : Colors.error[600] }}>Delete</Text>
-                </TouchableOpacity>
-              )}
+            <View style={{ width: 1, height: 28, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#e2e8f0' }} />
+            <View style={{ flex: 1, paddingLeft: 16 }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Meters</Text>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: theme.text }}>
+                {item.meter != null && item.meter > 0 ? `${item.meter} Mtr` : '-'}
+              </Text>
             </View>
           </View>
         </View>
-      </Card>
+
+        {/* Date + Actions */}
+        <View style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: 14,
+          paddingTop: 10,
+          borderTopWidth: 1,
+          borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+        }}>
+          <Text style={{ fontSize: 11, color: theme.textTertiary, fontWeight: '500' }}>
+            {formatDate(item.createdAt)}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {isSuperAdmin && (
+              <TouchableOpacity
+                onPress={() => onEdit(item)}
+                activeOpacity={0.75}
+                style={{
+                  width: 34, height: 34, borderRadius: 10,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: isDarkMode ? 'rgba(59,130,246,0.12)' : '#eff6ff',
+                  borderWidth: 1, borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
+                }}
+              >
+                <Edit size={15} color={isDarkMode ? '#60a5fa' : Colors.primary[600]} />
+              </TouchableOpacity>
+            )}
+            {isMaster && (
+              <TouchableOpacity
+                onPress={() => onDelete(item)}
+                activeOpacity={0.75}
+                style={{
+                  width: 34, height: 34, borderRadius: 10,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: isDarkMode ? 'rgba(239,68,68,0.12)' : '#fef2f2',
+                  borderWidth: 1, borderColor: isDarkMode ? 'rgba(239,68,68,0.3)' : '#fecaca',
+                }}
+              >
+                <Trash2 size={15} color={isDarkMode ? '#f87171' : Colors.error[600]} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
     </Animated.View>
   );
 });
@@ -152,11 +187,13 @@ const FinishLotCard = React.memo(function FinishLotCard({
 // ═══ MAIN SCREEN ═════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════
 export default function FinishLotStockScreen() {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const segments = useSegments();
   const isInTabs = (segments as string[]).includes('(tabs)');
 
   const { theme, isDarkMode } = useTheme();
   const { isSuperAdmin, isMaster } = useAuth();
+  const { isLargeScreen, modalMaxWidth, numColumns, containerMaxWidth } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const addToast = useAppStore(s => s.addToast);
@@ -184,59 +221,143 @@ export default function FinishLotStockScreen() {
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterPanY = useRef(new RNAnimated.Value(600)).current;
   const formPanY = useRef(new RNAnimated.Value(800)).current;
-  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 150 })).current;
+  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 170 })).current;
+  const fabX = useRef(screenWidth - 68);
+  const fabY = useRef(screenHeight - 170);
+  const filterScrollOffset = useRef(0);
+  const formScrollOffset = useRef(0);
+  const formSheetY = useRef(0);
+  const filterSheetY = useRef(0);
+
+  const dimensionsRef = useRef({ screenWidth, screenHeight });
+  dimensionsRef.current = { screenWidth, screenHeight };
+
+  React.useEffect(() => {
+    const isSnappedLeft = fabX.current < screenWidth / 2;
+    const targetX = isSnappedLeft ? 16 : screenWidth - 68;
+    const targetY = Math.min(Math.max(fabY.current, 120), screenHeight - 170);
+    
+    fabX.current = targetX;
+    fabY.current = targetY;
+    
+    RNAnimated.spring(pan, {
+      toValue: { x: targetX, y: targetY },
+      useNativeDriver: false,
+      friction: 6,
+    }).start();
+  }, [screenWidth, screenHeight]);
 
   // ─ Modal Animators ──
   const closeFilterModal = useCallback(() => {
-    RNAnimated.timing(filterPanY, { toValue: 600, duration: 160, useNativeDriver: Platform.OS !== 'web' }).start(() => setShowFilterModal(false));
+    RNAnimated.timing(filterPanY, { toValue: 600, duration: 160, useNativeDriver: false }).start(() => setShowFilterModal(false));
   }, [filterPanY]);
 
-
-
   const closeForm = useCallback(() => {
-    RNAnimated.timing(formPanY, { toValue: 800, duration: 180, useNativeDriver: Platform.OS !== 'web' }).start(() => setShowForm(false));
+    RNAnimated.timing(formPanY, { toValue: 800, duration: 180, useNativeDriver: false }).start(() => setShowForm(false));
   }, [formPanY]);
 
   // ─ PanResponders ──
-  const filterPanResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => false, onStartShouldSetPanResponderCapture: () => false,
-    onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8, onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-    onPanResponderMove: (_, gs) => { if (gs.dy > 0) filterPanY.setValue(gs.dy); },
-    onPanResponderRelease: (_, gs) => {
-      if (gs.dy > 40 || gs.vy > 0.2) { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); RNAnimated.timing(filterPanY, { toValue: 600, duration: 160, useNativeDriver: Platform.OS !== 'web' }).start(() => setShowFilterModal(false)); }
-      else { RNAnimated.spring(filterPanY, { toValue: 0, useNativeDriver: Platform.OS !== 'web', friction: 7 }).start(); }
-    },
-  })).current;
+  const filterPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - filterSheetY.current;
+        return touchY > 0 && touchY <= 85;
+      },
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: () => {
+        Keyboard.dismiss();
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          filterPanY.setValue(gs.dy);
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          closeFilterModal();
+        } else {
+          RNAnimated.spring(filterPanY, {
+            toValue: 0,
+            useNativeDriver: false,
+            tension: 65,
+            friction: 11
+          }).start();
+        }
+      },
+    })
+  ).current;
 
-
-
-  const formPanResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => false, onStartShouldSetPanResponderCapture: () => false,
-    onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8, onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-    onPanResponderMove: (_, gs) => { if (gs.dy > 0) formPanY.setValue(gs.dy); },
-    onPanResponderRelease: (_, gs) => {
-      if (gs.dy > 100 || gs.vy > 0.5) { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); closeForm(); }
-      else { RNAnimated.spring(formPanY, { toValue: 0, useNativeDriver: Platform.OS !== 'web', friction: 5 }).start(); }
-    },
-  })).current;
-
+  const formPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - formSheetY.current;
+        return touchY > 0 && touchY <= 85;
+      },
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: () => {
+        Keyboard.dismiss();
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          formPanY.setValue(gs.dy);
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          closeForm();
+        } else {
+          RNAnimated.spring(formPanY, {
+            toValue: 0,
+            useNativeDriver: false,
+            tension: 65,
+            friction: 11
+          }).start();
+        }
+      },
+    })
+  ).current;
   const fabPanResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
-    onPanResponderGrant: () => { pan.setOffset({ x: (pan.x as any)._value || 0, y: (pan.y as any)._value || 0 }); pan.setValue({ x: 0, y: 0 }); },
+    onPanResponderGrant: () => { pan.setOffset({ x: fabX.current, y: fabY.current }); pan.setValue({ x: 0, y: 0 }); },
     onPanResponderMove: RNAnimated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-    onPanResponderRelease: () => {
+    onPanResponderRelease: (e, gestureState) => {
       pan.flattenOffset();
-      const snapX = (pan.x as any)._value < screenWidth / 2 ? 16 : screenWidth - 68;
-      const snapY = Math.min(Math.max((pan.y as any)._value, 120), screenHeight - 200);
+      const currentScreenWidth = dimensionsRef.current.screenWidth;
+      const currentScreenHeight = dimensionsRef.current.screenHeight;
+
+      const currentX = fabX.current + gestureState.dx;
+      const currentY = fabY.current + gestureState.dy;
+      const snapX = currentX < currentScreenWidth / 2 ? 16 : currentScreenWidth - 68;
+      const snapY = Math.min(Math.max(currentY, 120), currentScreenHeight - 170);
+      fabX.current = snapX;
+      fabY.current = snapY;
       RNAnimated.spring(pan, { toValue: { x: snapX, y: snapY }, useNativeDriver: false, friction: 6 }).start();
     },
   })).current;
 
   // ─ Modal open effects ──
-  React.useEffect(() => { if (showFilterModal) { filterPanY.setValue(600); RNAnimated.spring(filterPanY, { toValue: 0, useNativeDriver: Platform.OS !== 'web', damping: 15, stiffness: 120 }).start(); } }, [showFilterModal]);
+  React.useEffect(() => { if (showFilterModal) { filterPanY.setValue(600); RNAnimated.spring(filterPanY, { toValue: 0, useNativeDriver: false, damping: 15, stiffness: 120 }).start(); } }, [showFilterModal]);
 
-  React.useEffect(() => { if (showForm) { formPanY.setValue(800); RNAnimated.spring(formPanY, { toValue: 0, useNativeDriver: Platform.OS !== 'web', damping: 15, stiffness: 120 }).start(); } }, [showForm]);
+  React.useEffect(() => { if (showForm) { formPanY.setValue(800); RNAnimated.spring(formPanY, { toValue: 0, useNativeDriver: false, damping: 15, stiffness: 120 }).start(); } }, [showForm]);
 
   // ─ Callbacks ──
   const clearAllFilters = useCallback(() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSearch(''); setDebouncedSearch(''); setSearchType('all'); setSortOrder('desc'); }, []);
@@ -254,6 +375,7 @@ export default function FinishLotStockScreen() {
   const query = useInfiniteQuery({
     queryKey: ['finish-lot-stocks', debouncedSearch, sortOrder, searchType],
     enabled: isAuthenticated, initialPageParam: 1,
+    staleTime: 30000,
     queryFn: async ({ pageParam = 1 }) => {
       const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
       if (debouncedSearch) { params.search = debouncedSearch; }
@@ -436,73 +558,96 @@ export default function FinishLotStockScreen() {
         </TouchableOpacity>
       </View>
 
-      {isOffline && (
-        <View style={{
-          marginHorizontal: 16,
-          marginBottom: 10,
-          backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
-          borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fef3c7',
-          borderWidth: 1,
-          borderRadius: 12,
-          padding: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8
-        }}>
-          <WifiOff size={14} color={isDarkMode ? '#fbbf24' : '#b45309'} />
-          <Text style={{ fontSize: 12.5, color: isDarkMode ? '#fbbf24' : '#b45309', fontWeight: '600', flex: 1 }}>
-            Offline Mode • Showing previously loaded cached data
-          </Text>
-        </View>
-      )}
-
-      {/* Unified Count & Active Filters Row */}
-      <View style={{
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.borderLight,
-        backgroundColor: theme.background
-      }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>
-              {isFiltered ? (
-                <Text>
-                  Showing <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{totalMatchingCount}</Text> of <Text style={{ fontWeight: '800', color: theme.text }}>{grandTotal}</Text>
-                </Text>
-              ) : (
-                <Text>
-                  Total Lots: <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{grandTotal}</Text>
-                </Text>
-              )}
-            </Text>
-        {totalActiveFiltersCount > 0 && (
-          <TouchableOpacity onPress={clearAllFilters} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: isDarkMode ? 'rgba(239,68,68,0.1)' : '#fef2f2' }}>
-            <RotateCcw size={12} color={Colors.error[500]} />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.error[500] }}>Clear ({totalActiveFiltersCount})</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
       {/* ═══ CONTENT ═══ */}
       {query.isLoading ? <FinishLotSkeletonList count={5} /> : items.length === 0 ? (
         <EmptyState icon={<Package size={48} color={Colors.primary[500]} />} title="No Finish Lots" subtitle={debouncedSearch ? 'No items match your search.' : 'No finish lot stocks yet.'} />
       ) : (
         <FlatList
           data={items}
+          key={numColumns}
+          numColumns={numColumns}
           keyExtractor={(item, i) => item._id + '-' + i}
-          renderItem={({ item, index }) => <FinishLotCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} onPreviewImages={handleOpenPreview} />}
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: 120 }}
+          ListHeaderComponent={() => {
+            if (grandTotal === 0 && !isFiltered && !isOffline) return null;
+            return (
+              <View>
+                {isOffline && (
+                  <View style={{
+                    marginHorizontal: 16,
+                    marginTop: 10,
+                    marginBottom: 4,
+                    backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
+                    borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fef3c7',
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    padding: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8
+                  }}>
+                    <WifiOff size={14} color={isDarkMode ? '#fbbf24' : '#b45309'} />
+                    <Text style={{ fontSize: 12.5, color: isDarkMode ? '#fbbf24' : '#b45309', fontWeight: '600', flex: 1 }}>
+                      Offline Mode • Showing previously loaded cached data
+                    </Text>
+                  </View>
+                )}
+                {(grandTotal > 0 || isFiltered) && (
+                  <View style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.borderLight,
+                    backgroundColor: theme.background
+                  }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>
+                      {isFiltered ? (
+                        <Text>
+                          Showing <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{totalMatchingCount}</Text> of <Text style={{ fontWeight: '800', color: theme.text }}>{grandTotal}</Text>
+                        </Text>
+                      ) : (
+                        <Text>
+                          Total Lots: <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{grandTotal}</Text>
+                        </Text>
+                      )}
+                    </Text>
+                    {totalActiveFiltersCount > 0 && (
+                      <TouchableOpacity onPress={clearAllFilters} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: isDarkMode ? 'rgba(239,68,68,0.1)' : '#fef2f2' }}>
+                        <RotateCcw size={12} color={Colors.error[500]} />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.error[500] }}>Clear ({totalActiveFiltersCount})</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          }}
+          renderItem={({ item, index }) => <FinishLotCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} onPreviewImages={handleOpenPreview} numColumns={numColumns} />}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 120, paddingHorizontal: numColumns > 1 ? 8 : 0 }}
           showsVerticalScrollIndicator={false}
           onEndReached={() => { if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage(); }}
           onEndReachedThreshold={0.3}
-          initialNumToRender={5}
-          maxToRenderPerBatch={5}
+          initialNumToRender={8}
+          maxToRenderPerBatch={4}
           windowSize={5}
-          removeClippedSubviews={Platform.OS !== 'web'}
-          ListFooterComponent={query.isFetchingNextPage ? <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}><ActivityIndicator size="small" color={Colors.primary[500]} /><Text style={{ fontSize: 12, color: theme.textTertiary, fontWeight: '500' }}>Loading more...</Text></View> : null}
+          removeClippedSubviews={true}
+          updateCellsBatchingPeriod={50}
+          ListFooterComponent={
+            query.isFetchingNextPage ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
+                <ActivityIndicator size="small" color={Colors.primary[500]} />
+                <Text style={{ fontSize: 12, color: theme.textTertiary, fontWeight: '500' }}>Loading more...</Text>
+              </View>
+            ) : (!query.hasNextPage && items.length > 0) ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 11, color: theme.textTertiary, fontStyle: 'italic' }}>
+                  No more finished lots to load
+                </Text>
+              </View>
+            ) : null
+          }
           refreshControl={Platform.OS !== 'web' ? <RefreshControl refreshing={query.isRefetching && !query.isFetchingNextPage} onRefresh={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); query.refetch(); }} tintColor={Colors.primary[500]} colors={[Colors.primary[500]]} /> : undefined}
         />
       )}
@@ -524,11 +669,44 @@ export default function FinishLotStockScreen() {
 
       {/* ═══ FILTER BOTTOM SHEET ═══ */}
       <Modal visible={showFilterModal} animationType="none" transparent statusBarTranslucent onRequestClose={closeFilterModal}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <Pressable onPress={closeFilterModal} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-          <RNAnimated.View style={{ backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingBottom: 24 + insets.bottom, transform: [{ translateY: filterPanY }] }}>
+
+        <View style={{
+          flex: 1,
+          justifyContent: isLargeScreen ? 'center' : 'flex-end',
+          alignItems: isLargeScreen ? 'center' : 'stretch',
+        }}>
+          {/* Clickable Backdrop */}
+          <RNAnimated.View
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'transparent',
+            }}
+          >
+            <Pressable onPress={closeFilterModal} style={{ flex: 1 }} />
+          </RNAnimated.View>
+
+          <RNAnimated.View
+            onLayout={(e) => {
+              filterSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...filterPanResponder.panHandlers}
+            style={{
+              backgroundColor: isDarkMode ? '#1e293b' : '#fff',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+              borderBottomRightRadius: isLargeScreen ? 24 : 0,
+              paddingHorizontal: 24,
+              paddingTop: 12,
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 16 : 32),
+              width: '100%',
+              maxWidth: isLargeScreen ? modalMaxWidth : '100%',
+              transform: [{ translateY: filterPanY }],
+            }}
+          >
             {/* Swipe Drag Handle Bar */}
-            <View {...filterPanResponder.panHandlers} style={{ width: '100%', alignItems: 'center', paddingVertical: 12 }}>
+            <View style={{ width: '100%', alignItems: 'center', paddingVertical: 12 }}>
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#d1d5db' }} />
             </View>
 
@@ -592,16 +770,51 @@ export default function FinishLotStockScreen() {
 
       {/* ═══ CREATE/EDIT FORM MODAL ═══ */}
       <Modal visible={showForm} animationType="none" transparent statusBarTranslucent onRequestClose={closeForm}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <Pressable onPress={closeForm} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-          <RNAnimated.View style={{
-            backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-            paddingTop: 12, paddingHorizontal: 24, paddingBottom: 24 + insets.bottom, height: '85%',
-            transform: [{ translateY: formPanY }], shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20,
-          }}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130} style={{ flex: 1 }}>
+
+        <View style={{
+          flex: 1,
+          justifyContent: isLargeScreen ? 'center' : 'flex-end',
+          alignItems: isLargeScreen ? 'center' : 'stretch',
+        }}>
+          {/* Clickable Backdrop */}
+          <RNAnimated.View
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'transparent',
+            }}
+          >
+            <Pressable onPress={closeForm} style={{ flex: 1 }} />
+          </RNAnimated.View>
+
+          <RNAnimated.View
+            onLayout={(e) => {
+              formSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...formPanResponder.panHandlers}
+            style={{
+              backgroundColor: isDarkMode ? '#1e293b' : '#fff',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+              borderBottomRightRadius: isLargeScreen ? 24 : 0,
+              paddingTop: 12,
+              paddingHorizontal: 24,
+              paddingBottom: isLargeScreen ? 24 : 0,
+              maxHeight: '85%',
+              width: '100%',
+              maxWidth: isLargeScreen ? modalMaxWidth : '100%',
+              transform: [{ translateY: formPanY }],
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              elevation: 20,
+            }}
+          >
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0} style={{ flex: 1 }}>
               {/* Drag Handle */}
-              <View {...formPanResponder.panHandlers} style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}>
+              <View style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}>
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#d1d5db' }} />
               </View>
 
@@ -616,7 +829,14 @@ export default function FinishLotStockScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 + insets.bottom }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 24 }}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                scrollEventThrottle={16}
+              >
                 {renderInput('Quality Name *', formData.qualityName, t => setFormData(p => ({ ...p, qualityName: t })), 'Enter quality name')}
 
                 {/* Piece + Meter in row */}
@@ -710,7 +930,7 @@ export default function FinishLotStockScreen() {
 
       {/* ═══ DELETE CONFIRMATION ═══ */}
       <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={() => setDeleteTarget(null)}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 24 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)', padding: 24 }}>
           <View style={{ backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderRadius: 24, padding: 24, width: '100%', maxWidth: 360, borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 }}>
             <View style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: isDarkMode ? 'rgba(239,68,68,0.15)' : '#fef2f2', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 16 }}>
               <Trash2 size={28} color={Colors.error[500]} />

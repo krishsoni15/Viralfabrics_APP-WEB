@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, Text, TouchableOpacity, Platform, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,10 +43,6 @@ export default function Header({
         borderBottomColor: theme.border,
       }}
     >
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={theme.headerBg}
-      />
       <View
         style={{
           flexDirection: 'row',

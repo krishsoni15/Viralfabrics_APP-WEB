@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,16 +13,20 @@ import {
   Animated,
   PanResponder,
   Dimensions,
-  TouchableWithoutFeedback
+  Keyboard,
+  TouchableWithoutFeedback,
+  useWindowDimensions
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Calendar, X, Trash2, Tag, Check, AlertCircle, ArrowLeft, Beaker } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import DatePickerModal from '../shared/DatePickerModal';
 import { getDisplayOrderId } from '../../utils/helpers';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 
 // Date conversion helpers
 const toDisplay = (dateStr: string | null | undefined): string => {
@@ -137,6 +141,7 @@ interface LabDataModalProps {
 }
 
 function ModalProgressBar({ isDarkMode }: { isDarkMode: boolean }) {
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const translateX = useRef(new Animated.Value(-150)).current;
 
   useEffect(() => {
@@ -149,7 +154,7 @@ function ModalProgressBar({ isDarkMode }: { isDarkMode: boolean }) {
     );
     anim.start();
     return () => anim.stop();
-  }, [translateX]);
+  }, [translateX, SCREEN_WIDTH]);
 
   return (
     <View style={{
@@ -186,7 +191,9 @@ export default function LabDataModal({
   isDeleting = false,
   isReadOnly = false
 }: LabDataModalProps) {
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { isLargeScreen, modalMaxWidth } = useResponsiveLayout();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [formData, setFormData] = useState<any>({
     labSendDate: '',
@@ -199,44 +206,67 @@ export default function LabDataModal({
 
   // Swipe-down-to-close gesture on the whole sheet
   const scrollY = useRef(0);
+  const sheetY = useRef(0);
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   const translateY = useRef(new Animated.Value(0)).current;
   const touchStartPageY = useRef(0);
+
+  const dimensionsRef = useRef({ SCREEN_WIDTH, SCREEN_HEIGHT });
+  dimensionsRef.current = { SCREEN_WIDTH, SCREEN_HEIGHT };
+
+  const closeModal = useCallback(() => {
+    Animated.timing(translateY, {
+      toValue: SCREEN_HEIGHT,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => {
+      onCloseRef.current();
+    });
+  }, [translateY, SCREEN_HEIGHT]);
+
   const panResponder = useRef(
     PanResponder.create({
-      // Claim touch immediately if started in the header region (top of modal) or backdrop
       onStartShouldSetPanResponder: (evt) => {
         const pageY = evt.nativeEvent.pageY;
         touchStartPageY.current = pageY;
-        return pageY < SCREEN_HEIGHT * 0.15 + 60;
+        return pageY < sheetY.current + 85;
       },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, g) =>
-        scrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
-      onMoveShouldSetPanResponderCapture: (_, g) =>
-        scrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
+      onMoveShouldSetPanResponder: (_, g) => {
+        return scrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        return scrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx);
+      },
       onPanResponderMove: (_, g) => {
-        if (g.dy > 0) translateY.setValue(g.dy);
+        if (g.dy > 0) {
+          translateY.setValue(g.dy);
+        }
       },
       onPanResponderRelease: (evt, g) => {
-        const isBackdropTouch = touchStartPageY.current < SCREEN_HEIGHT * 0.15;
+        const isBackdropTouch = touchStartPageY.current < sheetY.current;
         if (isBackdropTouch && Math.abs(g.dy) < 10 && Math.abs(g.dx) < 10) {
-          onCloseRef.current();
+          closeModal();
           return;
         }
 
-        if (g.dy > 80 || g.vy > 0.4) {
-          Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: true })
-            .start(() => onCloseRef.current());
+        if (g.dy > 50 || g.vy > 0.2) {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          closeModal();
         } else {
-          Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
         }
       },
     })
   ).current;
-
   // Sync state with editItem and visible changes
   useEffect(() => {
     if (visible) {
@@ -289,36 +319,48 @@ export default function LabDataModal({
       animationType="slide"
       transparent
       statusBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={closeModal}
     >
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0)', justifyContent: 'flex-end' }}>
         {/* Backdrop overlay */}
-        <TouchableWithoutFeedback onPress={onClose}>
+        <TouchableWithoutFeedback onPress={closeModal}>
           <View 
-            {...panResponder.panHandlers}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} 
+            style={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              right: 0, 
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.05)'
+            }} 
           />
         </TouchableWithoutFeedback>
 
         <Animated.View
+          onLayout={(e) => {
+            sheetY.current = e.nativeEvent.layout.y;
+          }}
           {...panResponder.panHandlers}
           style={{
             backgroundColor: bg,
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,
             height: '85%',
+            maxWidth: isLargeScreen ? modalMaxWidth : '100%',
+            width: '100%',
+            alignSelf: 'center',
             transform: [{ translateY }],
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -4 },
             shadowOpacity: 0.2,
             shadowRadius: 16,
             elevation: 20,
-            paddingBottom: 24 + insets.bottom,
+            paddingBottom: isLargeScreen ? 24 : 0,
           }}
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130}
+            behavior="padding"
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
             style={{ width: '100%', flex: 1 }}
           >
             {/* Visual Drag Handle */}
@@ -369,7 +411,7 @@ export default function LabDataModal({
               </View>
             </View>
             <TouchableOpacity
-              onPress={onClose}
+              onPress={closeModal}
               style={{
                 width: 34, height: 34, borderRadius: 17,
                 backgroundColor: isDarkMode ? '#2a2a38' : '#f3f4f6',
@@ -383,7 +425,7 @@ export default function LabDataModal({
           {/* Scrollable Form */}
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 250 }}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             scrollEventThrottle={16}
@@ -498,7 +540,7 @@ export default function LabDataModal({
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
               {isReadOnly ? (
                 <TouchableOpacity
-                  onPress={onClose}
+                  onPress={closeModal}
                   activeOpacity={0.8}
                   style={{
                     flex: 1,

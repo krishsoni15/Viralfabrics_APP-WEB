@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, Alert, Animated, PanResponder, Dimensions, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, Alert, Animated, PanResponder, Dimensions, TouchableWithoutFeedback, useWindowDimensions, Pressable } from 'react-native';
 import { ChevronDown, X, Calendar, FileOutput, Trash2, Plus, Minus, Layers } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import DatePickerModal from '../shared/DatePickerModal';
@@ -7,6 +7,8 @@ import api from '../../services/api';
 import { getDisplayOrderId } from '../../utils/helpers';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 
 interface MillOutputModalProps {
   visible: boolean;
@@ -124,19 +126,20 @@ const getLocalDateString = () => {
 };
 
 function ModalProgressBar({ isDarkMode }: { isDarkMode: boolean }) {
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const translateX = useRef(new Animated.Value(-150)).current;
 
   useEffect(() => {
     const anim = Animated.loop(
       Animated.timing(translateX, {
-        toValue: Dimensions.get('window').width,
+        toValue: SCREEN_WIDTH,
         duration: 1000,
         useNativeDriver: true,
       })
     );
     anim.start();
     return () => anim.stop();
-  }, [translateX]);
+  }, [translateX, SCREEN_WIDTH]);
 
   return (
     <View style={{
@@ -173,7 +176,33 @@ export default function MillOutputModal({
   isDeleting = false,
   isReadOnly = false
 }: MillOutputModalProps) {
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { isLargeScreen, modalMaxWidth } = useResponsiveLayout();
+  const queryClient = useQueryClient();
+
+  const [deleteWarning, setDeleteWarning] = useState<{ title: string; message: string } | null>(null);
+
+  const [deleteQualityTarget, setDeleteQualityTarget] = useState<any>(null);
+  const deleteQualityMutation = useMutation({
+    mutationFn: async (qualityId: string) => {
+      const { data } = await api.delete(`/api/qualities/${qualityId}`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qualities'] });
+      setDeleteQualityTarget(null);
+    },
+    onError: (err: any) => {
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to delete quality';
+      setDeleteWarning({
+        title: 'Cannot Delete Quality',
+        message: errMsg,
+      });
+      setDeleteQualityTarget(null);
+    }
+  });
+
   const [millOutputItems, setMillOutputItems] = useState<any[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const lastInitializedOrderIdRef = useRef<string | null>(null);
@@ -203,38 +232,44 @@ export default function MillOutputModal({
   const [selectorSearchQuery, setSelectorSearchQuery] = useState('');
 
   // Swipe-down-to-close implementation
-  const { height: SCREEN_HEIGHT } = Dimensions.get('window');
   const scrollY = useRef(0);
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   const translateY = useRef(new Animated.Value(0)).current;
   const touchStartPageY = useRef(0);
+
+  const dimensionsRef = useRef({ SCREEN_WIDTH, SCREEN_HEIGHT });
+  dimensionsRef.current = { SCREEN_WIDTH, SCREEN_HEIGHT };
+
   const panResponder = useRef(
     PanResponder.create({
       // Claim touch immediately if started in the header region (top of modal) or backdrop
       onStartShouldSetPanResponder: (evt) => {
         const pageY = evt.nativeEvent.pageY;
         touchStartPageY.current = pageY;
-        return pageY < SCREEN_HEIGHT * 0.08 + 60;
+        const currentScreenHeight = dimensionsRef.current.SCREEN_HEIGHT;
+        return pageY < currentScreenHeight * 0.08 + 60;
       },
       onStartShouldSetPanResponderCapture: () => false,
+      // Only intercept if: scrolled to top AND swipe is downward
       onMoveShouldSetPanResponder: (_, g) =>
-        scrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
+        scrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
       onMoveShouldSetPanResponderCapture: (_, g) =>
-        scrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
+        scrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
       onPanResponderMove: (_, g) => {
         if (g.dy > 0) translateY.setValue(g.dy);
       },
       onPanResponderRelease: (evt, g) => {
-        const isBackdropTouch = touchStartPageY.current < SCREEN_HEIGHT * 0.08;
+        const currentScreenHeight = dimensionsRef.current.SCREEN_HEIGHT;
+        const isBackdropTouch = touchStartPageY.current < currentScreenHeight * 0.08;
         if (isBackdropTouch && Math.abs(g.dy) < 10 && Math.abs(g.dx) < 10) {
           onCloseRef.current();
           return;
         }
 
-        if (g.dy > 80 || g.vy > 0.4) {
-          Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: true })
+        if (g.dy > 50 || g.vy > 0.2) {
+          Animated.timing(translateY, { toValue: currentScreenHeight, duration: 220, useNativeDriver: true })
             .start(() => onCloseRef.current());
         } else {
           Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
@@ -242,7 +277,6 @@ export default function MillOutputModal({
       },
     })
   ).current;
-
   useEffect(() => {
     if (visible) {
       translateY.setValue(0);
@@ -259,25 +293,27 @@ export default function MillOutputModal({
       onStartShouldSetPanResponder: (evt) => {
         const pageY = evt.nativeEvent.pageY;
         selectorTouchStartPageY.current = pageY;
-        return pageY < SCREEN_HEIGHT * 0.15 + 60;
+        const currentScreenHeight = dimensionsRef.current.SCREEN_HEIGHT;
+        return pageY < currentScreenHeight * 0.15 + 60;
       },
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, g) =>
-        selectorScrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
+        selectorScrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
       onMoveShouldSetPanResponderCapture: (_, g) =>
-        selectorScrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
+        selectorScrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
       onPanResponderMove: (_, g) => {
         if (g.dy > 0) selectorTranslateY.setValue(g.dy);
       },
       onPanResponderRelease: (evt, g) => {
-        const isBackdropTouch = selectorTouchStartPageY.current < SCREEN_HEIGHT * 0.15;
+        const currentScreenHeight = dimensionsRef.current.SCREEN_HEIGHT;
+        const isBackdropTouch = selectorTouchStartPageY.current < currentScreenHeight * 0.15;
         if (isBackdropTouch && Math.abs(g.dy) < 10 && Math.abs(g.dx) < 10) {
           setSelectorModal(null);
           return;
         }
 
-        if (g.dy > 80 || g.vy > 0.4) {
-          Animated.timing(selectorTranslateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: true })
+        if (g.dy > 50 || g.vy > 0.2) {
+          Animated.timing(selectorTranslateY, { toValue: currentScreenHeight, duration: 220, useNativeDriver: true })
             .start(() => setSelectorModal(null));
         } else {
           Animated.spring(selectorTranslateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
@@ -285,7 +321,6 @@ export default function MillOutputModal({
       },
     })
   ).current;
-
   useEffect(() => {
     if (selectorModal !== null) {
       selectorTranslateY.setValue(0);
@@ -512,12 +547,19 @@ export default function MillOutputModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0)', justifyContent: 'flex-end' }}>
         <TouchableWithoutFeedback onPress={onClose}>
           <View 
             {...panResponder.panHandlers}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} 
+            style={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              right: 0, 
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.05)'
+            }} 
           />
         </TouchableWithoutFeedback>
 
@@ -529,8 +571,11 @@ export default function MillOutputModal({
             borderTopRightRadius: 30,
             paddingHorizontal: 20,
             paddingTop: 14,
-            paddingBottom: 24 + insets.bottom,
+            paddingBottom: isLargeScreen ? 24 : 0,
             height: '92%',
+            maxWidth: isLargeScreen ? modalMaxWidth : '100%',
+            width: '100%',
+            alignSelf: 'center',
             transform: [{ translateY }],
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -10 },
@@ -540,8 +585,8 @@ export default function MillOutputModal({
           }}
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130}
+            behavior="padding"
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
             style={{ width: '100%', flex: 1 }}
           >
             <View style={{ backgroundColor: 'transparent' }}>
@@ -606,7 +651,7 @@ export default function MillOutputModal({
               <>
             <ScrollView
               style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: 250 }}
+              contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
@@ -1201,15 +1246,18 @@ export default function MillOutputModal({
         visible={selectorModal !== null}
         animationType="slide"
         transparent
+        statusBarTranslucent={true}
         onRequestClose={() => setSelectorModal(null)}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-          <TouchableWithoutFeedback onPress={() => setSelectorModal(null)}>
-            <View 
-              {...selectorPanResponder.panHandlers}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} 
-            />
-          </TouchableWithoutFeedback>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={() => setSelectorModal(null)}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.15)',
+            }}
+          />
 
           <Animated.View
             {...selectorPanResponder.panHandlers}
@@ -1219,7 +1267,7 @@ export default function MillOutputModal({
               borderTopRightRadius: 28,
               paddingHorizontal: 20,
               paddingTop: 16,
-              paddingBottom: 24 + insets.bottom,
+              paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? (insets.bottom > 0 ? insets.bottom + 8 : 16) : 16),
               height: '85%',
               borderWidth: 1,
               borderColor: theme.border,
@@ -1279,40 +1327,58 @@ export default function MillOutputModal({
                       : false;
 
                     return (
-                      <TouchableOpacity
+                      <View
                         key={q._id}
-                        onPress={() => {
-                          if (selectorModal) {
-                            const updated = [...millOutputItems];
-                            if (selectorModal.additionalIndex !== undefined) {
-                              updated[selectorModal.itemIndex].additionalFinishedMtr[selectorModal.additionalIndex].quality = q._id;
-                            } else {
-                              updated[selectorModal.itemIndex].quality = q._id;
-                            }
-                            setMillOutputItems(updated);
-                          }
-                          setSelectorModal(null);
-                        }}
                         style={{
-                          paddingVertical: 12,
-                          paddingHorizontal: 14,
-                          borderRadius: 10,
-                          backgroundColor: isSelected ? (isDarkMode ? Colors.success[900] : Colors.success[50]) : 'transparent',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
                           borderBottomWidth: 1,
                           borderBottomColor: theme.borderLight,
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
                         }}
                       >
-                        <Text style={{
-                          fontSize: 13,
-                          fontWeight: isSelected ? '700' : '500',
-                          color: isSelected ? Colors.success[600] : theme.text
-                        }}>
-                          {q.name}
-                        </Text>
-                      </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            if (selectorModal) {
+                              const updated = [...millOutputItems];
+                              if (selectorModal.additionalIndex !== undefined) {
+                                updated[selectorModal.itemIndex].additionalFinishedMtr[selectorModal.additionalIndex].quality = q._id;
+                              } else {
+                                updated[selectorModal.itemIndex].quality = q._id;
+                              }
+                              setMillOutputItems(updated);
+                            }
+                            setSelectorModal(null);
+                          }}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 12,
+                            paddingHorizontal: 14,
+                            borderRadius: 10,
+                            backgroundColor: isSelected ? (isDarkMode ? Colors.success[900] : Colors.success[50]) : 'transparent',
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Text style={{
+                            fontSize: 13,
+                            fontWeight: isSelected ? '700' : '500',
+                            color: isSelected ? Colors.success[600] : theme.text
+                          }}>
+                            {q.name}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {isMaster && (
+                          <TouchableOpacity
+                            onPress={() => setDeleteQualityTarget(q)}
+                            style={{ padding: 10, marginLeft: 8 }}
+                          >
+                            <Trash2 size={16} color={Colors.error[600]} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     );
                   })}
               </ScrollView>
@@ -1329,6 +1395,29 @@ export default function MillOutputModal({
         message="Are you sure you want to delete all mill outputs for this order? This action cannot be undone."
         confirmText="Delete All"
         isDeleting={isDeleting}
+      />
+
+      <DeleteConfirmModal
+        visible={deleteQualityTarget !== null}
+        onClose={() => setDeleteQualityTarget(null)}
+        onConfirm={() => {
+          if (deleteQualityTarget?._id) {
+            deleteQualityMutation.mutate(deleteQualityTarget._id);
+          }
+        }}
+        title="Delete Quality"
+        message={`Are you sure you want to delete "${deleteQualityTarget?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        isDeleting={deleteQualityMutation.isPending}
+      />
+      <DeleteConfirmModal
+        visible={deleteWarning !== null}
+        onClose={() => setDeleteWarning(null)}
+        onConfirm={() => setDeleteWarning(null)}
+        title={deleteWarning?.title || 'Cannot Delete'}
+        message={deleteWarning?.message || ''}
+        isAlert={true}
+        alertBtnText="Close"
       />
     </Modal>
   );

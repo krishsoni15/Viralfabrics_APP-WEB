@@ -10,7 +10,9 @@ import {
   Alert,
   Image,
   FlatList,
-  ActivityIndicator
+  ActivityIndicator,
+  useWindowDimensions,
+  Keyboard
 } from 'react-native';
 import { X, Check, Zap, RotateCw, Grid, Trash2, Camera, Plus, Minus, Image as ImageIcon, ChevronLeft, ChevronRight, FlipHorizontal } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
@@ -31,7 +33,7 @@ import Animated, {
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
 
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
 
 // Dynamic import of expo-camera to prevent bundler failure if package isn't linked
 let CameraView: any = null;
@@ -171,6 +173,7 @@ export default function CustomCameraModal({
   onPhotosCaptured,
   singlePhoto = false
 }: CustomCameraModalProps) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
@@ -186,6 +189,13 @@ export default function CustomCameraModal({
     width: screenWidth,
     height: screenHeight - 180
   });
+
+  useEffect(() => {
+    setContainerDimensions({
+      width: screenWidth,
+      height: screenHeight - 180
+    });
+  }, [screenWidth, screenHeight]);
 
   const cameraRef = useRef<any>(null);
 
@@ -245,6 +255,7 @@ export default function CustomCameraModal({
   // Reset captured photos when modal opens
   useEffect(() => {
     if (visible) {
+      Keyboard.dismiss();
       setCapturedPhotos([]);
       setZoom(0);
       setLoading(false);
@@ -603,7 +614,8 @@ export default function CustomCameraModal({
   return (
     <Modal
       visible={visible}
-      transparent={false}
+      transparent={true}
+      statusBarTranslucent={true}
       animationType="slide"
       onRequestClose={onClose}
     >
@@ -1123,20 +1135,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#000',
-  },
-  emptyStrip: {
-    width: screenWidth - 40,
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-  },
-  emptyStripText: {
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 12,
   },
   triggerPanel: {
     flexDirection: 'row',

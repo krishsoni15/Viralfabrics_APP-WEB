@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, ActivityIndicator, Image, Modal, ScrollView, TextInput, KeyboardAvoidingView, Alert, PanResponder, Animated as RNAnimated, Pressable, Dimensions } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, ActivityIndicator, Image, Modal, ScrollView, TextInput, KeyboardAvoidingView, Alert, PanResponder, Animated as RNAnimated, Pressable, Dimensions, Keyboard, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,13 +25,14 @@ import CustomCameraModal from '../../../components/shared/CustomCameraModal';
 import PdfViewerModal from '../../../components/shared/PdfViewerModal';
 import { useTheme } from '../../../hooks/useTheme';
 import { useAuth } from '../../../hooks/useAuth';
+import { useResponsiveLayout } from '../../../hooks/useResponsiveLayout';
 import { Colors } from '../../../constants/colors';
 import { Sample, SamplingWeaver } from '../../../types';
 import { useAppStore } from '../../../store/useAppStore';
 import { formatDate, resolveImageUrl, uploadSingleImage } from '../../../utils/helpers';
 import { generateStickerPdf } from '../../../utils/stickerPdf';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
 const TYPE_OPTIONS = ['Polyester', 'Blend', 'Viscose', 'Cotton', 'Rayon', 'Other'];
 
 function SampleCard({
@@ -264,6 +265,7 @@ function SampleCard({
 }
 
 export default function WeaverSamplesScreen() {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { weaverId } = useLocalSearchParams<{ weaverId: string }>();
   const { theme, isDarkMode } = useTheme();
   const { isSuperAdmin, isMaster } = useAuth();
@@ -271,6 +273,7 @@ export default function WeaverSamplesScreen() {
   const addToast = useAppStore(s => s.addToast);
   const isOffline = useAppStore(s => s.isOffline);
   const insets = useSafeAreaInsets();
+  const { isLargeScreen, modalMaxWidth } = useResponsiveLayout();
 
   const [search, setSearch] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -279,34 +282,53 @@ export default function WeaverSamplesScreen() {
   const [showForm, setShowForm] = useState(false);
   const [reopenFormOnStickerClose, setReopenFormOnStickerClose] = useState(false);
   const formPanY = useRef(new RNAnimated.Value(800)).current;
+  const formScrollOffset = useRef(0);
+  const formSheetY = useRef(0);
 
-  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 200 })).current;
+  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 170 })).current;
+  const fabX = useRef(screenWidth - 68);
+  const fabY = useRef(screenHeight - 170);
+
+  const dimensionsRef = useRef({ screenWidth, screenHeight });
+  dimensionsRef.current = { screenWidth, screenHeight };
+
+  React.useEffect(() => {
+    const isSnappedLeft = fabX.current < screenWidth / 2;
+    const targetX = isSnappedLeft ? 16 : screenWidth - 68;
+    const targetY = Math.min(Math.max(fabY.current, 120), screenHeight - 170);
+    
+    fabX.current = targetX;
+    fabY.current = targetY;
+    
+    RNAnimated.spring(pan, {
+      toValue: { x: targetX, y: targetY },
+      useNativeDriver: false,
+      friction: 6,
+    }).start();
+  }, [screenWidth, screenHeight]);
 
   const fabPanResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
-    onPanResponderGrant: () => { pan.setOffset({ x: (pan.x as any)._value || 0, y: (pan.y as any)._value || 0 }); pan.setValue({ x: 0, y: 0 }); },
+    onPanResponderGrant: () => { pan.setOffset({ x: fabX.current, y: fabY.current }); pan.setValue({ x: 0, y: 0 }); },
     onPanResponderMove: RNAnimated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-    onPanResponderRelease: () => {
+    onPanResponderRelease: (e, gestureState) => {
       pan.flattenOffset();
-      const snapX = (pan.x as any)._value < screenWidth / 2 ? 16 : screenWidth - 68;
-      const snapY = Math.min(Math.max((pan.y as any)._value, 120), screenHeight - 200);
+      const currentScreenWidth = dimensionsRef.current.screenWidth;
+      const currentScreenHeight = dimensionsRef.current.screenHeight;
+
+      const currentX = fabX.current + gestureState.dx;
+      const currentY = fabY.current + gestureState.dy;
+      const snapX = currentX < currentScreenWidth / 2 ? 16 : currentScreenWidth - 68;
+      const snapY = Math.min(Math.max(currentY, 120), currentScreenHeight - 170);
+      fabX.current = snapX;
+      fabY.current = snapY;
       RNAnimated.spring(pan, { toValue: { x: snapX, y: snapY }, useNativeDriver: false, friction: 6 }).start();
     },
   })).current;
 
   // Form modal handlers
   const closeFormModalRef = React.useRef<() => void>(() => {});
-
-  const forceCloseForm = useCallback(() => {
-    RNAnimated.timing(formPanY, {
-      toValue: 800,
-      duration: 180,
-      useNativeDriver: Platform.OS !== 'web',
-    }).start(() => {
-      setShowForm(false);
-    });
-  }, [formPanY]);
 
   const [editingItem, setEditingItem] = useState<Sample | null>(null);
   const [formData, setFormData] = useState({
@@ -323,7 +345,7 @@ export default function WeaverSamplesScreen() {
     reed: '',
     pick: '',
     greighRate: '',
-    note: ''
+    note: '',
   });
   const [formImages, setFormImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -356,6 +378,34 @@ export default function WeaverSamplesScreen() {
     }
   }, [formData, formImages, editingItem]);
 
+  const forceCloseForm = useCallback(() => {
+    Keyboard.dismiss();
+    RNAnimated.timing(formPanY, {
+      toValue: 800,
+      duration: 180,
+      useNativeDriver: false,
+    }).start(() => {
+      setShowForm(false);
+      setEditingItem(null);
+      setFormData({
+        qualityName: '',
+        type: '',
+        rack: '',
+        greighWidth: '',
+        finishWidth: '',
+        weight: '',
+        gsm: '',
+        content: '',
+        danier: '',
+        count: '',
+        reed: '',
+        pick: '',
+        greighRate: '',
+        note: '',
+      });
+    });
+  }, [formPanY]);
+
   const closeFormModal = useCallback(() => {
     forceCloseForm();
   }, [forceCloseForm]);
@@ -364,17 +414,27 @@ export default function WeaverSamplesScreen() {
 
   const formPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - formSheetY.current;
+        return touchY > 0 && touchY <= 85;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: () => false,
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          formPanY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: () => {
+        Keyboard.dismiss();
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          formPanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -382,8 +442,9 @@ export default function WeaverSamplesScreen() {
         } else {
           RNAnimated.spring(formPanY, {
             toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
-            friction: 5,
+            useNativeDriver: false,
+            tension: 65,
+            friction: 11
           }).start();
         }
       },
@@ -395,7 +456,7 @@ export default function WeaverSamplesScreen() {
       formPanY.setValue(800);
       RNAnimated.spring(formPanY, {
         toValue: 0,
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: false,
         damping: 15,
         stiffness: 120,
       }).start();
@@ -599,10 +660,11 @@ export default function WeaverSamplesScreen() {
 
     const sanitizedQuality = ((sample as any).qualityName || 'Sticker').replace(/[^a-zA-Z0-9-_]/g, '_');
     const sanitizedWeaver = (weaver?.name || 'Weaver').replace(/[^a-zA-Z0-9-_]/g, '_');
-    const filename = `Sticker_${sanitizedQuality}_${sanitizedWeaver}.pdf`;
+    const filename = `Sample_Sticker_${sanitizedQuality}_${sanitizedWeaver}.pdf`;
 
     try {
       const { uri, base64 } = await generateStickerPdf({
+        type: 'sample',
         qualityName: (sample as any).qualityName || '',
         weaverName: weaver?.name || '',
         width: (sample as any).finishWidth ? Number((sample as any).finishWidth) : undefined,
@@ -616,7 +678,7 @@ export default function WeaverSamplesScreen() {
       setPdfViewerLocalUri(uri);
       setPdfViewerLocalBase64(base64);
       setPdfViewerUrl('');
-      setPdfViewerTitle(`Fabric Sticker — ${(sample as any).qualityName || 'Sticker'}`);
+      setPdfViewerTitle(`Sample Sticker — ${(sample as any).qualityName || 'Sticker'}`);
       setPdfViewerFilename(filename);
       setReopenFormOnStickerClose(true);
       setShowForm(false);
@@ -635,10 +697,11 @@ export default function WeaverSamplesScreen() {
 
     const sanitizedQuality = (sample.qualityName || 'Sticker').replace(/[^a-zA-Z0-9-_]/g, '_');
     const sanitizedWeaver = (weaver?.name || 'Weaver').replace(/[^a-zA-Z0-9-_]/g, '_');
-    const filename = `Sticker_${sanitizedQuality}_${sanitizedWeaver}.pdf`;
+    const filename = `Sample_Sticker_${sanitizedQuality}_${sanitizedWeaver}.pdf`;
 
     try {
       const { uri, base64 } = await generateStickerPdf({
+        type: 'sample',
         qualityName: sample.qualityName || '',
         weaverName: weaver?.name || '',
         width: sample.finishWidth ? Number(sample.finishWidth) : undefined,
@@ -652,7 +715,7 @@ export default function WeaverSamplesScreen() {
       setPdfViewerLocalUri(uri);
       setPdfViewerLocalBase64(base64);
       setPdfViewerUrl('');
-      setPdfViewerTitle(`Fabric Sticker — ${sample.qualityName || 'Sticker'}`);
+      setPdfViewerTitle(`Sample Sticker — ${sample.qualityName || 'Sticker'}`);
       setPdfViewerFilename(filename);
       setReopenFormOnStickerClose(false);
       setPdfViewerVisible(true);
@@ -735,33 +798,6 @@ export default function WeaverSamplesScreen() {
         </TouchableOpacity>
       </View>
 
-      {isOffline && (
-        <View style={{
-          marginHorizontal: 16,
-          marginBottom: 10,
-          backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
-          borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fef3c7',
-          borderWidth: 1,
-          borderRadius: 12,
-          padding: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8
-        }}>
-          <WifiOff size={14} color={isDarkMode ? '#fbbf24' : '#b45309'} />
-          <Text style={{ fontSize: 12.5, color: isDarkMode ? '#fbbf24' : '#b45309', fontWeight: '600', flex: 1 }}>
-            Offline Mode • Showing previously loaded cached data
-          </Text>
-        </View>
-      )}
-
-      {/* Sort indicator & count */}
-      <View style={{ paddingHorizontal: 20, paddingBottom: 6 }}>
-        <Text style={{ fontSize: 12, color: theme.textTertiary, fontWeight: '600' }}>
-          {sortOrder === 'desc' ? '↓ Newest first' : '↑ Oldest first'} · {filteredSamples.length} items
-        </Text>
-      </View>
-
       {/* Samples List */}
       {samplesQuery.isLoading ? <SampleSkeletonList count={3} /> : filteredSamples.length === 0 ? (
         <EmptyState icon={<TestTubes size={40} color={Colors.primary[500]} />} title="No Samples" subtitle={search ? 'No samples match your search.' : 'No samples found for this weaver.'} />
@@ -769,6 +805,35 @@ export default function WeaverSamplesScreen() {
         <FlatList
           data={filteredSamples}
           keyExtractor={(item: Sample) => item._id}
+          ListHeaderComponent={() => (
+            <View>
+              {isOffline && (
+                <View style={{
+                  marginHorizontal: 16,
+                  marginTop: 10,
+                  marginBottom: 4,
+                  backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
+                  borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fef3c7',
+                  borderWidth: 1,
+                  borderRadius: 12,
+                  padding: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8
+                }}>
+                  <WifiOff size={14} color={isDarkMode ? '#fbbf24' : '#b45309'} />
+                  <Text style={{ fontSize: 12.5, color: isDarkMode ? '#fbbf24' : '#b45309', fontWeight: '600', flex: 1 }}>
+                    Offline Mode • Showing previously loaded cached data
+                  </Text>
+                </View>
+              )}
+              <View style={{ paddingHorizontal: 20, paddingVertical: 8, backgroundColor: theme.background }}>
+                <Text style={{ fontSize: 12, color: theme.textTertiary, fontWeight: '600' }}>
+                  {sortOrder === 'desc' ? '↓ Newest first' : '↑ Oldest first'} · {filteredSamples.length} items
+                </Text>
+              </View>
+            </View>
+          )}
           renderItem={({ item, index }) => <SampleCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} onPreviewImages={handleOpenPreview} onOpenSticker={openStickerPreview} />}
           contentContainerStyle={{ paddingTop: 4, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
@@ -776,6 +841,15 @@ export default function WeaverSamplesScreen() {
           maxToRenderPerBatch={6}
           windowSize={5}
           removeClippedSubviews={Platform.OS !== 'web'}
+          ListFooterComponent={
+            filteredSamples.length > 0 ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 11, color: theme.textTertiary, fontStyle: 'italic' }}>
+                  No more samples to load
+                </Text>
+              </View>
+            ) : null
+          }
           refreshControl={Platform.OS !== 'web' ? <RefreshControl refreshing={samplesQuery.isRefetching} onRefresh={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); samplesQuery.refetch(); }} tintColor={Colors.primary[500]} colors={[Colors.primary[500]]} /> : undefined}
         />
       )}
@@ -796,26 +870,48 @@ export default function WeaverSamplesScreen() {
 
       {/* Create/Edit Modal */}
       <Modal visible={showForm} transparent={true} animationType="none" statusBarTranslucent={true} navigationBarTranslucent={true} onRequestClose={closeFormModal}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+
+        <View style={{
+          flex: 1,
+          justifyContent: isLargeScreen ? 'center' : 'flex-end',
+          alignItems: isLargeScreen ? 'center' : 'stretch',
+        }}>
           {/* Clickable Backdrop */}
-          <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={closeFormModal} />
+          <RNAnimated.View
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'transparent',
+            }}
+          >
+            <Pressable onPress={closeFormModal} style={{ flex: 1 }} />
+          </RNAnimated.View>
           
-          <RNAnimated.View style={{
-            backgroundColor: isDarkMode ? '#1e293b' : '#fff',
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingTop: 12,
-            paddingHorizontal: 24,
-            paddingBottom: 24 + insets.bottom,
-            height: '92%',
-            width: '100%',
-            transform: [{ translateY: formPanY }],
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 12,
-            elevation: 20,
-          }}>
+          <RNAnimated.View
+            onLayout={(e) => {
+              formSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...formPanResponder.panHandlers}
+            style={{
+              backgroundColor: isDarkMode ? '#1e293b' : '#fff',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+              borderBottomRightRadius: isLargeScreen ? 24 : 0,
+              paddingTop: 12,
+              paddingHorizontal: 24,
+              paddingBottom: isLargeScreen ? 24 : 0,
+              maxHeight: '92%',
+              width: '100%',
+              maxWidth: isLargeScreen ? modalMaxWidth : '100%',
+              transform: [{ translateY: formPanY }],
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              elevation: 20,
+            }}
+          >
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
               keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130}
@@ -823,7 +919,6 @@ export default function WeaverSamplesScreen() {
             >
               {/* Swipe Drag Handle Bar */}
               <View 
-                {...formPanResponder.panHandlers} 
                 style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}
               >
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#d1d5db' }} />
@@ -855,9 +950,11 @@ export default function WeaverSamplesScreen() {
 
               <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 180 + insets.bottom }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
+                onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                scrollEventThrottle={16}
               >
                 {/* ─── Quality Information ─── */}
                 <View style={{ borderBottomWidth: 1, borderBottomColor: theme.borderLight, paddingBottom: 6, marginBottom: 12 }}>
@@ -1187,7 +1284,7 @@ export default function WeaverSamplesScreen() {
 
       {/* Delete */}
       <Modal visible={!!deleteTarget} animationType="fade" transparent statusBarTranslucent={true} navigationBarTranslucent={true} onRequestClose={() => setDeleteTarget(null)}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 24 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)', padding: 24 }}>
           <View style={{ backgroundColor: isDarkMode ? '#1e293b' : '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 360 }}>
             <Text style={{ fontSize: 20, fontWeight: '900', color: theme.text, marginBottom: 12 }}>Delete Sample</Text>
             <Text style={{ fontSize: 15, color: theme.textSecondary, marginBottom: 24 }}>Delete "{deleteTarget?.qualityName}"?</Text>
@@ -1217,6 +1314,7 @@ export default function WeaverSamplesScreen() {
         filename={pdfViewerFilename}
         localUri={pdfViewerLocalUri}
         localBase64={pdfViewerLocalBase64}
+        addToast={addToast}
         onClose={() => {
           setPdfViewerVisible(false);
           setPdfViewerLocalUri(undefined);

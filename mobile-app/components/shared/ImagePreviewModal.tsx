@@ -12,7 +12,8 @@ import {
   ActivityIndicator,
   Image,
   StyleSheet,
-  useColorScheme
+  useColorScheme,
+  useWindowDimensions
 } from 'react-native';
 import { X, Share2, Download, Maximize2, Minimize2, Crop, Check } from 'lucide-react-native';
 import {
@@ -31,7 +32,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import * as Haptics from 'expo-haptics';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
 
 // ── Image cache helpers (expo-file-system) ──
 const imageCache = new Map<string, string>();
@@ -119,7 +120,7 @@ async function cropImageOnWeb(
   });
 }
 
-function getCropBoxDimensions(ratio: '4:3' | '16:9' | '1:1' | 'Full', imgAspect: number) {
+function getCropBoxDimensions(ratio: '4:3' | '16:9' | '1:1' | 'Full', imgAspect: number, screenWidth: number, screenHeight: number) {
   const maxW = screenWidth - 40;
   const maxH = (screenHeight * 0.75) - 40;
 
@@ -202,6 +203,7 @@ function ZoomableImage({
   naturalSize,
   onLoadSize
 }: ZoomableImageProps) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isZoomedRef = useRef(false);
   const [isZoomed, setIsZoomed] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -448,6 +450,7 @@ export default function ImagePreviewModal({
   singlePhoto,
   isDarkMode
 }: ImagePreviewModalProps) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const colorScheme = useColorScheme();
   const effectiveIsDarkMode = isDarkMode ?? colorScheme === 'dark';
   const themeSurface = effectiveIsDarkMode ? '#020617' : '#f8fafc';
@@ -550,12 +553,12 @@ export default function ImagePreviewModal({
 
   const resetCropBox = useCallback((ratio: '4:3' | '16:9' | '1:1' | 'Full', size: { width: number; height: number } | null) => {
     const aspect = size ? size.width / size.height : 1;
-    const { width: initW, height: initH } = getCropBoxDimensions(ratio, aspect);
+    const { width: initW, height: initH } = getCropBoxDimensions(ratio, aspect, screenWidth, screenHeight);
     cropBoxW.value = initW;
     cropBoxH.value = initH;
     cropBoxX.value = (screenWidth - initW) / 2;
     cropBoxY.value = (screenHeight * 0.75 - initH) / 2;
-  }, []);
+  }, [screenWidth, screenHeight]);
 
   // Sync active index when modal becomes visible or initialIndex changes
   useEffect(() => {

@@ -628,3 +628,54 @@ export default function WeaverSampleFormModal({ weaverId, onClose, onSuccess }: 
   );
 }
 ```
+
+---
+
+## 6. Premium Modal & Slide to Close Design System
+
+To achieve a native-feeling, smooth swipe gesture and premium transition for bottom sheets/modals on Android and iOS:
+
+### A. Modal Window Setup
+1. **Attributes**: Always set `transparent={true}` and `statusBarTranslucent={true}` on the React Native `<Modal>` component. This ensures the modal window covers the entire device screen, including the status bar and bottom soft navigation bar.
+2. **Keyboards**: Call `Keyboard.dismiss()` inside the modal's open transition block to prevent layout conflicts or keyboard-resized gaps at the bottom.
+
+### B. Backdrop & Sheet Layout
+1. **Sibling Layout**: Place the backdrop overlay `<Pressable>` as a sibling (not parent) to the sheet container.
+2. **Opacity/Tint**: The backdrop background color should use a soft, semi-translucent overlay (e.g., `rgba(0,0,0,0.5)` or `rgba(0,0,0,0.4)`). Avoid dark opaque overlays that block view visibility.
+3. **Layout Measurement**: Track the sheet's top Y-coordinate using a layout ref:
+   ```typescript
+   const sheetY = useRef(0);
+   ...
+   <Animated.View
+     onLayout={(e) => {
+       sheetY.current = e.nativeEvent.layout.y;
+     }}
+     {...panResponder.panHandlers}
+   >
+   ```
+
+### C. PanResponder & Physics
+1. **Instant Header Touch Interception**: Claim touch immediately if the user touches the header drag handle area (top 80px - 85px of the sheet) by returning `true` from `onStartShouldSetPanResponder` and `onStartShouldSetPanResponderCapture`:
+   ```typescript
+   onStartShouldSetPanResponder: (e) => {
+     const relativeTouchY = e.nativeEvent.pageY - sheetY.current;
+     return relativeTouchY >= 0 && relativeTouchY <= 85;
+   }
+   ```
+2. **Scroll Sync**: On scroll views, only allow swipe down if scroll offset is at the top (`offset <= 5`) and the gesture direction is downward (`dy > 8`).
+3. **Rubber-band Friction**: Apply friction to upward drags:
+   ```typescript
+   const translateY = dragY < 0 ? dragY * 0.15 : dragY;
+   ```
+4. **Spring Release**:
+   - Close modal if dragged down > 80px or flicked down (`vy > 0.3`).
+   - Otherwise, spring back to top with customized spring dynamics:
+     ```typescript
+     RNAnimated.spring(panY, {
+       toValue: 0,
+       useNativeDriver: true,
+       tension: 40,
+       friction: 9,
+     }).start();
+     ```
+

@@ -130,7 +130,7 @@ export default function LogsScreen() {
     filterPanY.setValue(600);
     RNAnimated.spring(filterPanY, {
       toValue: 0,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
       damping: 15,
       stiffness: 120,
     }).start();
@@ -141,7 +141,7 @@ export default function LogsScreen() {
     RNAnimated.timing(filterPanY, {
       toValue: 600,
       duration: 220,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
     }).start(() => {
       setShowFilterModal(false);
     });
@@ -152,7 +152,7 @@ export default function LogsScreen() {
     detailsPanY.setValue(600);
     RNAnimated.spring(detailsPanY, {
       toValue: 0,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
       damping: 15,
       stiffness: 120,
     }).start();
@@ -163,7 +163,7 @@ export default function LogsScreen() {
     RNAnimated.timing(detailsPanY, {
       toValue: 600,
       duration: 220,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
     }).start(() => {
       setSelectedLog(null);
     });
@@ -194,7 +194,7 @@ export default function LogsScreen() {
         } else {
           RNAnimated.spring(filterPanY, {
             toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
+            useNativeDriver: false,
             friction: 7,
           }).start();
         }
@@ -219,7 +219,7 @@ export default function LogsScreen() {
         } else {
           RNAnimated.spring(detailsPanY, {
             toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
+            useNativeDriver: false,
             friction: 7,
           }).start();
         }
@@ -233,6 +233,7 @@ export default function LogsScreen() {
     queryKey: ['logs', dateFilter, statusFilter, actionFilter],
     enabled: isAuthenticated,
     initialPageParam: undefined as string | undefined,
+    staleTime: 30000,
     queryFn: async ({ pageParam }) => {
       const params: any = { limit: PAGE_SIZE, includeStats: true };
       if (dateFilter !== 'all') params.dateFilter = dateFilter;
@@ -284,7 +285,7 @@ export default function LogsScreen() {
     const actionStyle = ACTION_ICONS[actionKey] || ACTION_ICONS['update'];
 
     return (
-      <Animated.View entering={FadeInDown.duration(300).delay(Math.min(index, 10) * 40)}>
+      <View>
         <TouchableOpacity
           onPress={() => {
             if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -347,17 +348,28 @@ export default function LogsScreen() {
             <ChevronRight size={16} color={theme.textTertiary} />
           </View>
         </TouchableOpacity>
-      </Animated.View>
+      </View>
     );
   }, [theme, isDarkMode]);
 
   const renderFooter = () => {
-    if (!logsQuery.isFetchingNextPage) return null;
-    return (
-      <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="small" color={Colors.primary[500]} />
-      </View>
-    );
+    if (logsQuery.isFetchingNextPage) {
+      return (
+        <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="small" color={Colors.primary[500]} />
+        </View>
+      );
+    }
+    if (!logsQuery.hasNextPage && logs.length > 0) {
+      return (
+        <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 11, color: theme.textTertiary, fontStyle: 'italic' }}>
+            No more logs to load
+          </Text>
+        </View>
+      );
+    }
+    return null;
   };
 
   const selectedActionKey = (selectedLog?.action || '').toLowerCase();
@@ -467,64 +479,6 @@ export default function LogsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Filter and Count Summary Row */}
-      {(() => {
-        const totalMatchingCount = logsQuery.data?.pages[0]?.pagination?.total || logs.length;
-        const displayGrandTotal = grandTotal || totalMatchingCount;
-        const isFiltered = activeFilterCount > 0 || debouncedSearch.trim() !== '';
-        
-        return (
-          <View style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            paddingVertical: 10,
-            paddingHorizontal: 16,
-            backgroundColor: theme.background
-          }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>
-              {isFiltered ? (
-                <Text>
-                  Showing <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{totalMatchingCount}</Text> of <Text style={{ fontWeight: '800', color: theme.text }}>{displayGrandTotal}</Text>
-                </Text>
-              ) : (
-                <Text>
-                  Total Logs: <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{displayGrandTotal}</Text>
-                </Text>
-              )}
-            </Text>
-
-            {activeFilterCount > 0 && (
-              <TouchableOpacity
-                onPress={() => {
-                  setDateFilter('all');
-                  setStatusFilter('all');
-                  setActionFilter('all');
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-                activeOpacity={0.7}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
-                  borderColor: isDarkMode ? '#991b1b' : '#fca5a5',
-                  borderWidth: 1,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 20,
-                  gap: 4
-                }}
-              >
-                <Trash2 size={12} color={isDarkMode ? '#fca5a5' : '#c53030'} />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#fca5a5' : '#c53030' }}>
-                  Clear Filters ({activeFilterCount})
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        );
-      })()}
-
       {/* Content */}
       {logsQuery.isLoading ? (
         <SkeletonList count={8} />
@@ -538,6 +492,62 @@ export default function LogsScreen() {
         <FlatList
           data={logs}
           keyExtractor={(item: any, i: number) => (item._id || item.id || i.toString()) + '-' + i}
+          ListHeaderComponent={() => {
+            const totalMatchingCount = logsQuery.data?.pages[0]?.pagination?.total || logs.length;
+            const displayGrandTotal = grandTotal || totalMatchingCount;
+            const isFiltered = activeFilterCount > 0 || debouncedSearch.trim() !== '';
+            
+            return (
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                backgroundColor: theme.background
+              }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>
+                  {isFiltered ? (
+                    <Text>
+                      Showing <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{totalMatchingCount}</Text> of <Text style={{ fontWeight: '800', color: theme.text }}>{displayGrandTotal}</Text>
+                    </Text>
+                  ) : (
+                    <Text>
+                      Total Logs: <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{displayGrandTotal}</Text>
+                    </Text>
+                  )}
+                </Text>
+
+                {activeFilterCount > 0 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setDateFilter('all');
+                      setStatusFilter('all');
+                      setActionFilter('all');
+                      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
+                      borderColor: isDarkMode ? '#991b1b' : '#fca5a5',
+                      borderWidth: 1,
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 20,
+                      gap: 4
+                    }}
+                  >
+                    <Trash2 size={12} color={isDarkMode ? '#fca5a5' : '#c53030'} />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#fca5a5' : '#c53030' }}>
+                      Clear Filters ({activeFilterCount})
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          }}
           renderItem={({ item, index }) => <LogItem item={item} index={index} />}
           contentContainerStyle={{ paddingTop: 4, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
@@ -574,7 +584,7 @@ export default function LogsScreen() {
         >
           <View style={{
             flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backgroundColor: 'rgba(0, 0, 0, 0)',
             justifyContent: 'flex-end',
             alignItems: 'center',
           }}>
@@ -694,7 +704,7 @@ export default function LogsScreen() {
         >
           <View style={{
             flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backgroundColor: 'rgba(0, 0, 0, 0)',
             justifyContent: 'flex-end',
             alignItems: 'center',
           }}>

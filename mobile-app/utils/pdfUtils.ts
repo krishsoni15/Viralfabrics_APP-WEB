@@ -7,6 +7,7 @@
  */
 import { Platform, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let Sharing: any = null;
 try {
@@ -24,6 +25,8 @@ export interface SavePdfOptions {
   token?: string | null;
   /** Optional dialog title for iOS share sheet */
   dialogTitle?: string;
+  /** Optional local file URI to bypass downloading */
+  localUri?: string;
 }
 
 export interface SavePdfResult {
@@ -44,14 +47,30 @@ export interface SavePdfResult {
  * - **Web**: Creates a blob and triggers a browser download via <a download>.
  */
 export async function savePdfToDevice(options: SavePdfOptions): Promise<SavePdfResult> {
-  const { url, filename, token, dialogTitle } = options;
+  const { url, filename, token, dialogTitle, localUri } = options;
 
   // ─── Web ───────────────────────────────────────────────
   if (Platform.OS === 'web') {
-    return savePdfWeb(url, filename);
+    return savePdfWeb(localUri || url, filename);
   }
 
   // ─── Native (Android / iOS) ────────────────────────────
+  if (localUri) {
+    try {
+      if (Platform.OS === 'android') {
+        return await saveToAndroidDownloads(localUri, filename);
+      } else {
+        return await saveToIosFiles(localUri, filename, dialogTitle);
+      }
+    } catch (err: any) {
+      console.error('savePdfToDevice localUri error:', err);
+      return {
+        success: false,
+        message: `Failed to save PDF: ${err.message}`,
+      };
+    }
+  }
+
   return savePdfNative(url, filename, token, dialogTitle);
 }
 
@@ -104,6 +123,9 @@ async function savePdfNative(
   dialogTitle?: string,
 ): Promise<SavePdfResult> {
   try {
+    if (!url) {
+      throw new Error('No download URL provided');
+    }
     // Step 1: Download to cache
     const cacheUri = `${FileSystem.cacheDirectory}${filename}`;
     const downloadResult = await FileSystem.downloadAsync(url, cacheUri, {
@@ -142,87 +164,40 @@ async function savePdfNative(
   }
 }
 
-/**
- * Android: Use StorageAccessFramework to write the PDF to the
- * device's Downloads folder. This is fully in-app — no browser,
- * no external app dependency.
- */
 async function saveToAndroidDownloads(
   cachedUri: string,
   filename: string,
 ): Promise<SavePdfResult> {
   try {
-    // Try using StorageAccessFramework from expo-file-system
-    const SAF = FileSystem.StorageAccessFramework;
-
-    if (SAF && SAF.requestDirectoryPermissionsAsync) {
-      // Ask the user for a directory (typically they'll pick Downloads)
-      const permissions = await SAF.requestDirectoryPermissionsAsync();
-
-      if (permissions.granted) {
-        // Read the cached file as base64
-        const fileContent = await FileSystem.readAsStringAsync(cachedUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        // Create the file in the user-selected directory
-        const createdUri = await SAF.createFileAsync(
-          permissions.directoryUri,
-          filename,
-          'application/pdf',
-        );
-
-        // Write the content
-        await FileSystem.writeAsStringAsync(createdUri, fileContent, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        return {
-          success: true,
-          localUri: createdUri,
-          message: `${filename} saved to your device.`,
-        };
-      }
-    }
-
-    // Fallback: If SAF isn't available or user denied, use expo-sharing
-    if (Sharing && (await Sharing.isAvailableAsync())) {
-      await Sharing.shareAsync(cachedUri, {
-        mimeType: 'application/pdf',
-        dialogTitle: `Save ${filename}`,
-        UTI: 'com.adobe.pdf',
+    const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+    
+    if (permissions.granted) {
+      const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+        permissions.directoryUri,
+        filename,
+        'application/pdf'
+      );
+      
+      const base64Data = await FileSystem.readAsStringAsync(cachedUri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
+      
+      await FileSystem.writeAsStringAsync(newFileUri, base64Data, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      
       return {
         success: true,
-        localUri: cachedUri,
-        message: `${filename} ready to save.`,
+        localUri: newFileUri,
+        message: 'Saved to device successfully.',
       };
     }
-
-    // Last resort: The file is in cache, inform user
+    
     return {
-      success: true,
-      localUri: cachedUri,
-      message: `${filename} downloaded to app cache.`,
+      success: false,
+      message: 'Permission to save file was denied.',
     };
   } catch (err: any) {
-    // If SAF fails (e.g., on older devices), try sharing
-    if (Sharing && (await Sharing.isAvailableAsync())) {
-      try {
-        await Sharing.shareAsync(cachedUri, {
-          mimeType: 'application/pdf',
-          dialogTitle: `Save ${filename}`,
-          UTI: 'com.adobe.pdf',
-        });
-        return {
-          success: true,
-          localUri: cachedUri,
-          message: `${filename} ready to save.`,
-        };
-      } catch {
-        // Fall through
-      }
-    }
     return {
       success: false,
       message: `Failed to save: ${err.message}`,

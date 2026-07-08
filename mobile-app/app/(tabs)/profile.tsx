@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, Switch, Alert, Platform, Dimensions, useColorScheme, TextInput, Modal, KeyboardAvoidingView, Pressable, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, ZoomIn, ZoomOut, FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, Easing } from 'react-native-reanimated';
 import { User, Shield, Phone, MapPin, Moon, Sun, Smartphone, LogOut, Users, FileText, ChevronRight, Lock, Clock, Activity, Trash2, Edit2, X, Camera, Image as ImageIcon } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Card from '../../components/ui/Card';
@@ -13,6 +13,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAppStore } from '../../store/useAppStore';
 import { storage } from '../../utils/storage';
 import { Colors } from '../../constants/colors';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { getInitials, isSuperAdmin, formatDateTime, getProfilePhotoUrl, uploadSingleImage } from '../../utils/helpers';
 import api from '../../services/api';
 
@@ -24,7 +25,7 @@ try {
 }
 import CustomCameraModal from '../../components/shared/CustomCameraModal';
 
-const { width } = Dimensions.get('window');
+
 
 function MenuItem({ icon, label, onPress, danger, isLast }: { icon: React.ReactNode; label: string; onPress: () => void; danger?: boolean; isLast?: boolean }) {
   const { theme, isDarkMode } = useTheme();
@@ -54,6 +55,7 @@ export default function ProfileScreen() {
   const { setDarkMode, syncSystemTheme, setSyncSystemTheme, setUser, addToast } = useAppStore();
   const isMaster = user?.role === 'master';
   const systemColorScheme = useColorScheme();
+  const { isLargeScreen, modalMaxWidth, containerMaxWidth } = useResponsiveLayout();
 
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [editName, setEditName] = useState('');
@@ -66,6 +68,7 @@ export default function ProfileScreen() {
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [isPhotoSheetVisible, setIsPhotoSheetVisible] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [isThemeChanging, setIsThemeChanging] = useState(false);
   const [logoutAllModalVisible, setLogoutAllModalVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
@@ -234,17 +237,25 @@ export default function ProfileScreen() {
 
   const handleSyncSystemToggle = useCallback(async (val: boolean) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSyncSystemTheme(val);
-    await storage.setSyncSystemTheme(val);
-    if (val) {
-      setDarkMode(systemColorScheme === 'dark');
-    }
+    setIsThemeChanging(true);
+    setTimeout(async () => {
+      setSyncSystemTheme(val);
+      await storage.setSyncSystemTheme(val);
+      if (val) {
+        setDarkMode(systemColorScheme === 'dark');
+      }
+      setIsThemeChanging(false);
+    }, 400);
   }, [systemColorScheme]);
 
   const handleDarkModeToggle = useCallback(async (val: boolean) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDarkMode(val);
-    await storage.setDarkMode(val);
+    setIsThemeChanging(true);
+    setTimeout(async () => {
+      setDarkMode(val);
+      await storage.setDarkMode(val);
+      setIsThemeChanging(false);
+    }, 400);
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -256,8 +267,9 @@ export default function ProfileScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        <View style={{ flex: 1, width: '100%', maxWidth: containerMaxWidth, alignSelf: 'center' }}>
         {/* Banner header */}
         <View style={{ 
           height: 120, 
@@ -719,9 +731,8 @@ export default function ProfileScreen() {
           
           <Text style={{ textAlign: 'center', marginTop: 28, fontSize: 12, color: theme.textTertiary, fontWeight: '600', letterSpacing: 0.5 }}>VIRAL FABRICS CRM v1.0.0</Text>
         </Animated.View>
+        </View>
       </ScrollView>
-
-      {/* Edit Profile Modal */}
       <Modal
         visible={isEditModalVisible}
         transparent={true}
@@ -730,14 +741,14 @@ export default function ProfileScreen() {
       >
         <View style={{
           flex: 1,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          backgroundColor: 'rgba(0,0,0,0.15)',
           justifyContent: 'center',
           alignItems: 'center',
           padding: 20
         }}>
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={{ width: '100%', maxWidth: 440 }}
+            style={{ width: '100%', maxWidth: modalMaxWidth }}
           >
             <Card 
               style={{
@@ -1071,8 +1082,9 @@ export default function ProfileScreen() {
         <Pressable 
           style={{
             flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
+            backgroundColor: 'rgba(0,0,0,0.15)',
+            justifyContent: isLargeScreen ? 'center' : 'flex-end',
+            alignItems: isLargeScreen ? 'center' : 'stretch',
           }}
           onPress={() => setIsPhotoSheetVisible(false)}
         >
@@ -1081,9 +1093,12 @@ export default function ProfileScreen() {
               backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
+              borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+              borderBottomRightRadius: isLargeScreen ? 24 : 0,
               padding: 20,
-              paddingBottom: (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
+              paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
               width: '100%',
+              maxWidth: modalMaxWidth,
               borderWidth: 1,
               borderColor: theme.border,
             }}
@@ -1524,6 +1539,38 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Theme switching loading indicator */}
+      {isThemeChanging && (
+        <Modal transparent animationType="fade" visible={isThemeChanging}>
+          <View style={{
+            flex: 1,
+            backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+            <View style={{
+              padding: 24,
+              borderRadius: 16,
+              backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+              borderWidth: 1,
+              borderColor: theme.border,
+              alignItems: 'center',
+              gap: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 10,
+              elevation: 5,
+            }}>
+              <ActivityIndicator size="small" color={Colors.primary[600]} />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>
+                Updating Theme...
+              </Text>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
