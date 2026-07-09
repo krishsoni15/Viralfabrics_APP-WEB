@@ -37,7 +37,9 @@ export const authService = {
       const token = await storage.getToken();
       if (!token) return { valid: false };
       const { data } = await api.get('/api/auth/validate-session');
-      return { valid: true, user: data.user || data };
+      // Ensure we only return a valid user object if it contains user properties (like id/role)
+      const user = data.user || (data && (data.id || data._id) ? data : undefined);
+      return { valid: true, user };
     } catch (err: any) {
       const isAuthError = err.response && (err.response.status === 401 || err.response.status === 403);
       if (!isAuthError) {

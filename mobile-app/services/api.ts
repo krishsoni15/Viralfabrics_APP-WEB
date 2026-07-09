@@ -12,8 +12,13 @@ import { useAppStore } from '../store/useAppStore';
 const getCacheKey = (config: any) => {
   const baseURL = config.baseURL || CONFIG.API_URL || '';
   const url = config.url || '';
-  const params = config.params ? JSON.stringify(config.params) : '';
-  return `api_cache:${baseURL}:${url}:${params}`;
+  let paramsStr = '';
+  if (config.params) {
+    const sanitizedParams = { ...config.params };
+    delete sanitizedParams.t;
+    paramsStr = JSON.stringify(sanitizedParams);
+  }
+  return `api_cache:${baseURL}:${url}:${paramsStr}`;
 };
 
 /**
@@ -90,6 +95,17 @@ api.interceptors.response.use(
       const baseResource = url.replace(/\/([0-9a-fA-F]{24}|\d+)(\/|$)/g, '$2');
       if (baseResource) {
         await invalidateCache(baseResource);
+
+        // Cascade invalidation from order sub-resources (grey-info, labs, dispatch, etc.) to orders list
+        const orderSubResources = ['grey-info', 'mill-inputs', 'mill-outputs', 'dispatch', 'labs'];
+        if (orderSubResources.some(res => baseResource.includes(res))) {
+          await invalidateCache('orders');
+        }
+
+        // Cascade invalidation from sampling samples sub-resource to the main sampling list
+        if (baseResource.includes('sampling/samples')) {
+          await invalidateCache('sampling');
+        }
       }
     }
     
@@ -135,6 +151,135 @@ api.interceptors.response.use(
               headers: { 'x-from-cache': 'true' },
               config: error.config,
             } as any;
+          }
+        }
+
+        // If exact cache key is not found (cache miss), attempt local client-side filtering on cached items
+        if (!cachedStr && url) {
+          const keys = await AsyncStorage.getAllKeys();
+          const normalizedUrl = url.startsWith('/') ? url : `/${url}`;
+          const targetPattern = `:${normalizedUrl}:`;
+          const matchingKeys = keys.filter(key => key.startsWith('api_cache:') && key.includes(targetPattern));
+
+          if (matchingKeys.length > 0) {
+            let allItems: any[] = [];
+            const seenIds = new Set<string>();
+
+            for (const key of matchingKeys) {
+              const str = await AsyncStorage.getItem(key);
+              if (str) {
+                try {
+                  const parsed = JSON.parse(str);
+                  let itemsList: any[] = [];
+                  if (parsed && parsed.data) {
+                    if (Array.isArray(parsed.data)) {
+                      itemsList = parsed.data;
+                    } else if (Array.isArray(parsed.data.data)) {
+                      itemsList = parsed.data.data;
+                    }
+                  }
+
+                  for (const item of itemsList) {
+                    if (item) {
+                      const itemId = item._id || item.orderId || JSON.stringify(item);
+                      if (!seenIds.has(itemId)) {
+                        seenIds.add(itemId);
+                        allItems.push(item);
+                      }
+                    }
+                  }
+                } catch (parseErr) {
+                  // Ignore parsing errors for individual keys
+                }
+              }
+            }
+
+            if (allItems.length > 0) {
+              const params = error.config.params || {};
+              let filtered = [...allItems];
+
+              // Filter by status (e.g. pending, delivered)
+              if (params.status && params.status !== 'All') {
+                filtered = filtered.filter(item => 
+                  String(item.status || '').toLowerCase() === String(params.status).toLowerCase()
+                );
+              }
+
+              // Filter by type (e.g. Dying, Printing)
+              if (params.type && params.type !== 'All') {
+                filtered = filtered.filter(item => 
+                  String(item.orderType || item.type || '').toLowerCase() === String(params.type).toLowerCase()
+                );
+              }
+
+              // Filter by general search string
+              if (params.search && String(params.search).trim() !== '') {
+                const searchVal = String(params.search).toLowerCase().trim();
+                filtered = filtered.filter(item => 
+                  String(item.orderId || '').toLowerCase().includes(searchVal) ||
+                  String(item.poNumber || '').toLowerCase().includes(searchVal) ||
+                  String(item.styleNo || '').toLowerCase().includes(searchVal) ||
+                  String(item.party?.name || '').toLowerCase().includes(searchVal) ||
+                  String(item.quality?.name || '').toLowerCase().includes(searchVal)
+                );
+              }
+
+              // Filter by financial year (fy)
+              if (params.fy) {
+                filtered = filtered.filter(item => 
+                  String(item.fy || '').toLowerCase() === String(params.fy).toLowerCase()
+                );
+              }
+
+              // Filter by mill
+              if (params.millId) {
+                filtered = filtered.filter(item => 
+                  item.millId === params.millId || 
+                  item.mill?._id === params.millId ||
+                  item.mill === params.millId
+                );
+              }
+
+              // Sort results
+              if (params.sort) {
+                const sortField = params.sort;
+                if (sortField === 'latest_first' || sortField === 'newest') {
+                  filtered.sort((a, b) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime());
+                } else if (sortField === 'oldest_first' || sortField === 'oldest') {
+                  filtered.sort((a, b) => new Date(a.createdAt || a.date || 0).getTime() - new Date(b.createdAt || b.date || 0).getTime());
+                }
+              }
+
+              // Apply pagination
+              const page = Number(params.page) || 1;
+              const limit = Number(params.limit) || 10;
+              const paginated = filtered.slice((page - 1) * limit, page * limit);
+
+              // Structure response matching the API's pagination style
+              const mockResponseData = normalizedUrl.includes('/orders')
+                ? {
+                    data: paginated,
+                    pagination: {
+                      total: filtered.length,
+                      page,
+                      pages: Math.ceil(filtered.length / limit),
+                      limit
+                    }
+                  }
+                : paginated;
+
+              if (__DEV__) {
+                console.log(`[Offline Cache] Serving locally-filtered fallback data (${filtered.length} matches) for: ${error.config.url}`);
+              }
+
+              return {
+                data: mockResponseData,
+                status: 200,
+                statusText: 'OK (Local Offline Filter)',
+                headers: { 'x-from-cache': 'true', 'x-local-filtered': 'true' },
+                config: error.config,
+              } as any;
+            }
           }
         }
       } catch (e) {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, Switch, Alert, Platform, Dimensions, useColorScheme, TextInput, Modal, KeyboardAvoidingView, Pressable, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -52,7 +52,7 @@ export default function ProfileScreen() {
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const { user, logout, logoutAll, isSuperAdmin: isAdmin } = useAuth();
-  const { setDarkMode, syncSystemTheme, setSyncSystemTheme, setUser, addToast } = useAppStore();
+  const { setDarkMode, syncSystemTheme, setSyncSystemTheme, setThemePreference, setUser, addToast, isOffline } = useAppStore();
   const isMaster = user?.role === 'master';
   const systemColorScheme = useColorScheme();
   const { isLargeScreen, modalMaxWidth, containerMaxWidth } = useResponsiveLayout();
@@ -80,6 +80,16 @@ export default function ProfileScreen() {
       width: `${countdownProgress.value * 100}%`,
     };
   });
+
+  const logoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (logoutIntervalRef.current) {
+        clearInterval(logoutIntervalRef.current);
+      }
+    };
+  }, []);
 
   const handleRemoveProfilePhoto = async () => {
     Alert.alert(
@@ -235,28 +245,19 @@ export default function ProfileScreen() {
   };
 
 
-  const handleSyncSystemToggle = useCallback(async (val: boolean) => {
+  const handleThemePreferenceChange = useCallback(async (sync: boolean, dark: boolean) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsThemeChanging(true);
     setTimeout(async () => {
-      setSyncSystemTheme(val);
-      await storage.setSyncSystemTheme(val);
-      if (val) {
-        setDarkMode(systemColorScheme === 'dark');
+      const resolvedDark = sync ? (systemColorScheme === 'dark') : dark;
+      setThemePreference(sync, resolvedDark);
+      await storage.setSyncSystemTheme(sync);
+      if (!sync) {
+        await storage.setDarkMode(dark);
       }
       setIsThemeChanging(false);
     }, 400);
-  }, [systemColorScheme]);
-
-  const handleDarkModeToggle = useCallback(async (val: boolean) => {
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsThemeChanging(true);
-    setTimeout(async () => {
-      setDarkMode(val);
-      await storage.setDarkMode(val);
-      setIsThemeChanging(false);
-    }, 400);
-  }, []);
+  }, [systemColorScheme, setThemePreference]);
 
   const handleLogout = useCallback(() => {
     setLogoutModalVisible(true);
@@ -456,7 +457,7 @@ export default function ProfileScreen() {
                     width: 6,
                     height: 6,
                     borderRadius: 3,
-                    backgroundColor: '#10b981', 
+                    backgroundColor: isOffline ? '#eab308' : '#10b981', 
                     marginRight: 6,
                   }} />
                   <Text style={{
@@ -588,8 +589,7 @@ export default function ProfileScreen() {
               {/* Light Option */}
               <Pressable
                 onPress={() => {
-                  handleSyncSystemToggle(false);
-                  handleDarkModeToggle(false);
+                  handleThemePreferenceChange(false, false);
                 }}
                 style={({ pressed }) => ({
                   flex: 1,
@@ -619,8 +619,7 @@ export default function ProfileScreen() {
               {/* Dark Option */}
               <Pressable
                 onPress={() => {
-                  handleSyncSystemToggle(false);
-                  handleDarkModeToggle(true);
+                  handleThemePreferenceChange(false, true);
                 }}
                 style={({ pressed }) => ({
                   flex: 1,
@@ -650,7 +649,7 @@ export default function ProfileScreen() {
               {/* System Option */}
               <Pressable
                 onPress={() => {
-                  handleSyncSystemToggle(true);
+                  handleThemePreferenceChange(true, systemColorScheme === 'dark');
                 }}
                 style={({ pressed }) => ({
                   flex: 1,
@@ -1499,11 +1498,15 @@ export default function ProfileScreen() {
                       countdownProgress.value = withTiming(0, { duration: 3000 });
                       
                       let timeLeft = 3;
-                      const interval = setInterval(async () => {
+                      if (logoutIntervalRef.current) clearInterval(logoutIntervalRef.current);
+                      logoutIntervalRef.current = setInterval(async () => {
                         timeLeft -= 1;
                         setLogoutCountdown(timeLeft);
                         if (timeLeft <= 0) {
-                          clearInterval(interval);
+                          if (logoutIntervalRef.current) {
+                            clearInterval(logoutIntervalRef.current);
+                            logoutIntervalRef.current = null;
+                          }
                           try {
                             await logoutAll();
                           } catch (err) {

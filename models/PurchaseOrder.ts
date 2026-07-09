@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
+import "./User";
 
 export interface IPurchaseOrderSpecs {
   finishGsm?: string;

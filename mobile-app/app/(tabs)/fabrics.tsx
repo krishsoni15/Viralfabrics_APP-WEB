@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Image, Modal, ScrollView, KeyboardAvoidingView, Alert, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Linking, Keyboard, useWindowDimensions } from 'react-native';
+import { View, Text, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Alert, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Linking, Keyboard, useWindowDimensions } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
@@ -246,9 +248,8 @@ const GroupedFabricCard = React.memo(function GroupedFabricCard({
             <Image
               source={{ uri: resolveImageUrl(group.images[0]) }}
               style={{ width: '100%', height: 220 }}
-              resizeMode="contain"
-              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-              fadeDuration={100}
+              contentFit="contain"
+              transition={100}
             />
             {group.images.length > 1 && (
               <View style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, flexDirection: 'row', alignItems: 'center' }}>
@@ -538,13 +539,19 @@ export default function FabricsScreen() {
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterPanY = useRef(new RNAnimated.Value(600)).current;
   const searchTypePanY = useRef(new RNAnimated.Value(600)).current;
-  const formPanY = useRef(new RNAnimated.Value(800)).current;
+  const formPanY = useRef(new RNAnimated.Value(0)).current;
   const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 170 })).current;
   const fabX = useRef(screenWidth - 68);
   const fabY = useRef(screenHeight - 170);
 
   const dimensionsRef = useRef({ screenWidth, screenHeight });
   dimensionsRef.current = { screenWidth, screenHeight };
+
+  React.useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
 
   React.useEffect(() => {
     const isSnappedLeft = fabX.current < screenWidth / 2;
@@ -597,14 +604,8 @@ export default function FabricsScreen() {
   }, [searchTypePanY]);
 
   const closeForm = useCallback(() => {
-    RNAnimated.timing(formPanY, {
-      toValue: 800,
-      duration: 180,
-      useNativeDriver: false,
-    }).start(() => {
-      setShowForm(false);
-    });
-  }, [formPanY]);
+    setShowForm(false);
+  }, []);
 
   const clearAllFilters = useCallback(() => {
     if (Platform.OS !== 'web') {
@@ -971,17 +972,16 @@ export default function FabricsScreen() {
 
   const formPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: (evt) => {
-        const pageY = evt.nativeEvent.pageY;
-        formTouchStartPageY.current = pageY;
-        return pageY < formSheetY.current + 85;
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - formSheetY.current;
+        return touchY > 0 && touchY <= 85;
       },
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gs) => {
-        return formScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
       },
       onMoveShouldSetPanResponderCapture: (_, gs) => {
-        return formScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
       },
       onPanResponderGrant: () => {
         Keyboard.dismiss();
@@ -991,14 +991,8 @@ export default function FabricsScreen() {
           formPanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gs) => {
-        const isBackdropTouch = formTouchStartPageY.current < formSheetY.current;
-        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
-          closeForm();
-          return;
-        }
-
-        if (gs.dy > 50 || gs.vy > 0.2) {
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -1007,8 +1001,8 @@ export default function FabricsScreen() {
           RNAnimated.spring(formPanY, {
             toValue: 0,
             useNativeDriver: false,
-            tension: 40,
-            friction: 9,
+            tension: 65,
+            friction: 11,
           }).start();
         }
       },
@@ -1019,7 +1013,7 @@ export default function FabricsScreen() {
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+        return Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10;
       },
       onPanResponderGrant: () => {
         pan.setOffset({
@@ -1034,6 +1028,20 @@ export default function FabricsScreen() {
       ),
       onPanResponderRelease: (e, gestureState) => {
         pan.flattenOffset();
+
+        if (Math.abs(gestureState.dx) < 10 && Math.abs(gestureState.dy) < 10) {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          }
+          openCreateForm();
+          RNAnimated.spring(pan, {
+            toValue: { x: fabX.current, y: fabY.current },
+            useNativeDriver: false,
+            tension: 40,
+            friction: 12,
+          }).start();
+          return;
+        }
 
         const currentScreenWidth = dimensionsRef.current.screenWidth;
         const currentScreenHeight = dimensionsRef.current.screenHeight;
@@ -1087,12 +1095,12 @@ export default function FabricsScreen() {
 
   React.useEffect(() => {
     if (showForm) {
-      formPanY.setValue(800);
-      RNAnimated.timing(formPanY, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: false,
-      }).start();
+      formPanY.setValue(0);
+    } else {
+      const timer = setTimeout(() => {
+        formPanY.setValue(0);
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [showForm]);
 
@@ -1336,11 +1344,12 @@ export default function FabricsScreen() {
           subtitle={debouncedSearch ? 'No fabrics match your search.' : 'No fabrics added yet.'}
         />
       ) : (
-        <FlatList
+        <FlashList
           data={groupedFabrics}
           key={numColumns}
           numColumns={numColumns}
           keyExtractor={(group: GroupedFabric) => `${group.qualityCode}__${group.qualityName}`}
+          drawDistance={800}
           ListHeaderComponent={() => {
             const totalMatchingCount = fabricsQuery.data?.pages[0]?.totalCount || 0;
             const grandTotal = unfilteredQuery.data ?? totalMatchingCount;
@@ -1439,10 +1448,7 @@ export default function FabricsScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
-          initialNumToRender={5}
-          maxToRenderPerBatch={5}
-          windowSize={5}
-          removeClippedSubviews={Platform.OS !== 'web'}
+          removeClippedSubviews={false}
           ListFooterComponent={
             fabricsQuery.isFetchingNextPage ? (
               <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
@@ -1520,7 +1526,7 @@ export default function FabricsScreen() {
       </View>
 
       {/* Floating Action Button for Adding New Fabric */}
-      <Modal visible={showForm} animationType="none" hardwareAccelerated={true} transparent={true} statusBarTranslucent={true} onRequestClose={closeForm}>
+      <Modal visible={showForm} animationType={isLargeScreen ? 'fade' : 'slide'} hardwareAccelerated={true} transparent={true} statusBarTranslucent={true} navigationBarTranslucent={true} onRequestClose={closeForm}>
 
         <View style={{
           flex: 1,
@@ -1552,7 +1558,7 @@ export default function FabricsScreen() {
               paddingTop: 12,
               paddingHorizontal: 24,
               paddingBottom: isLargeScreen ? 24 : 0,
-              maxHeight: isLargeScreen ? '85%' : '92%',
+              height: isLargeScreen ? '85%' : '92%',
               width: '100%',
               maxWidth: modalMaxWidth,
               transform: isLargeScreen ? undefined : [{ translateY: formPanY }],
@@ -1564,8 +1570,8 @@ export default function FabricsScreen() {
             }}
           >
             <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 120}
               style={{ flex: 1 }}
             >
               {/* Swipe Drag Handle Bar */}
@@ -1600,7 +1606,7 @@ export default function FabricsScreen() {
 
               <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 48 : 60 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 220 : 220 }}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
                 onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
@@ -1697,9 +1703,8 @@ export default function FabricsScreen() {
                               <Image
                                 source={{ uri: resolveImageUrl(img) }}
                                 style={{ width: 80, height: 80, borderRadius: 10, borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#cbd5e1' }}
-                                resizeMode="cover"
-                                resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-                                fadeDuration={100}
+                                contentFit="cover"
+                                transition={100}
                               />
                             </TouchableOpacity>
                             <TouchableOpacity

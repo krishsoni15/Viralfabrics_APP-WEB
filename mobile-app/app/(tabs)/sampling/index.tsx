@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Image, Alert, PanResponder, Animated as RNAnimated, Dimensions, Pressable, Keyboard, useWindowDimensions } from 'react-native';
+import { View, Text, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Alert, PanResponder, Animated as RNAnimated, Dimensions, Pressable, Keyboard, useWindowDimensions } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -129,9 +131,8 @@ const SamplingCard = React.memo(function SamplingCard({
             <Image
               source={{ uri: resolveImageUrl(item.images[0]) }}
               style={{ width: '100%', height: 220 }}
-              resizeMode="contain"
-              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-              fadeDuration={100}
+              contentFit="contain"
+              transition={100}
             />
             {item.images.length > 1 && (
               <View style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, flexDirection: 'row', alignItems: 'center' }}>
@@ -279,7 +280,28 @@ export default function SamplingScreen() {
   const [maxMeter, setMaxMeter] = useState('');
   const [minPiece, setMinPiece] = useState('');
   const [maxPiece, setMaxPiece] = useState('');
+  const [debouncedMinMeter, setDebouncedMinMeter] = useState('');
+  const [debouncedMaxMeter, setDebouncedMaxMeter] = useState('');
+  const [debouncedMinPiece, setDebouncedMinPiece] = useState('');
+  const [debouncedMaxPiece, setDebouncedMaxPiece] = useState('');
+
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedMinMeter(minMeter);
+      setDebouncedMaxMeter(maxMeter);
+      setDebouncedMinPiece(minPiece);
+      setDebouncedMaxPiece(maxPiece);
+    }, 600);
+    return () => clearTimeout(handler);
+  }, [minMeter, maxMeter, minPiece, maxPiece]);
+
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
 
   // Modals visibility
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -288,6 +310,7 @@ export default function SamplingScreen() {
   const [formData, setFormData] = useState({ qualityName: '', whereToPut: '', notes: '', piece: '', meter: '' });
   const [formImages, setFormImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
 
   const [cameraVisible, setCameraVisible] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -333,7 +356,7 @@ export default function SamplingScreen() {
 
   // Animated values for sheet transitions
   const filterPanY = useRef(new RNAnimated.Value(600)).current;
-  const formPanY = useRef(new RNAnimated.Value(600)).current;
+  const formPanY = useRef(new RNAnimated.Value(0)).current;
   const filterScrollOffset = useRef(0);
   const formScrollOffset = useRef(0);
   const formSheetY = useRef(0);
@@ -445,14 +468,8 @@ export default function SamplingScreen() {
 
   // Form modal handlers
   const closeFormModal = useCallback(() => {
-    RNAnimated.timing(formPanY, {
-      toValue: 600,
-      duration: 180,
-      useNativeDriver: false,
-    }).start(() => {
-      setShowForm(false);
-    });
-  }, [formPanY]);
+    setShowForm(false);
+  }, []);
 
   const formPanResponder = useRef(
     PanResponder.create({
@@ -495,13 +512,12 @@ export default function SamplingScreen() {
 
   React.useEffect(() => {
     if (showForm) {
-      formPanY.setValue(600);
-      RNAnimated.spring(formPanY, {
-        toValue: 0,
-        useNativeDriver: false,
-        damping: 15,
-        stiffness: 120,
-      }).start();
+      formPanY.setValue(0);
+    } else {
+      const timer = setTimeout(() => {
+        formPanY.setValue(0);
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [showForm]);
 
@@ -543,17 +559,17 @@ export default function SamplingScreen() {
   }, [activeFilterCount, debouncedSearch]);
 
   const query = useInfiniteQuery({
-    queryKey: ['sampling', debouncedSearch, sortOrder, sortBy, minMeter, maxMeter, minPiece, maxPiece],
+    queryKey: ['sampling', debouncedSearch, sortOrder, sortBy, debouncedMinMeter, debouncedMaxMeter, debouncedMinPiece, debouncedMaxPiece],
     enabled: isAuthenticated,
     initialPageParam: 1,
     staleTime: 30000,
     queryFn: async ({ pageParam = 1 }) => {
       const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy, sortOrder };
       if (debouncedSearch) params.search = debouncedSearch;
-      if (minMeter) params.minMeter = minMeter;
-      if (maxMeter) params.maxMeter = maxMeter;
-      if (minPiece) params.minPiece = minPiece;
-      if (maxPiece) params.maxPiece = maxPiece;
+      if (debouncedMinMeter) params.minMeter = debouncedMinMeter;
+      if (debouncedMaxMeter) params.maxMeter = debouncedMaxMeter;
+      if (debouncedMinPiece) params.minPiece = debouncedMinPiece;
+      if (debouncedMaxPiece) params.maxPiece = debouncedMaxPiece;
       const { data } = await api.get('/api/sampling', { params });
       const items = data?.data || [];
       const pagination = data?.pagination || {};
@@ -724,11 +740,12 @@ export default function SamplingScreen() {
       {query.isLoading ? <SamplingSkeletonList count={3} /> : samples.length === 0 ? (
         <EmptyState icon={<TestTubes size={48} color={Colors.primary[500]} />} title="No Sampling" subtitle={debouncedSearch ? 'No samples match your search.' : 'No sampling items added yet.'} />
       ) : (
-        <FlatList
+        <FlashList
           data={samples}
           key={numColumns}
           numColumns={numColumns}
           keyExtractor={(item, i) => item._id + '-' + i}
+          drawDistance={800}
           ListHeaderComponent={() => {
             if (totalMatchingCount === 0 && totalActiveFiltersCount === 0 && !isOffline) return null;
             return (
@@ -818,10 +835,7 @@ export default function SamplingScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={() => { if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage(); }}
           onEndReachedThreshold={0.3}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={5}
-          removeClippedSubviews={Platform.OS !== 'web'}
+          removeClippedSubviews={false}
           ListFooterComponent={
             query.isFetchingNextPage ? (
               <View style={{ paddingVertical: 20, alignItems: 'center' }}>
@@ -842,7 +856,16 @@ export default function SamplingScreen() {
 
       {/* FAB */}
       {isSuperAdmin && (
-        <RNAnimated.View {...fabPanResponder.panHandlers} style={[{ position: 'absolute', zIndex: 9999 }, { transform: pan.getTranslateTransform() }]}>
+        <RNAnimated.View
+          {...fabPanResponder.panHandlers}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            transform: pan.getTranslateTransform(),
+            zIndex: 9999,
+          }}
+        >
           <TouchableOpacity onPress={() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); openCreateForm(); }} activeOpacity={0.85} style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary[600], alignItems: 'center', justifyContent: 'center', elevation: 8, shadowColor: Colors.primary[600], shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 }}>
             <View style={{ position: 'relative', width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
               <TestTubes size={24} color="#ffffff" />
@@ -902,7 +925,12 @@ export default function SamplingScreen() {
               transform: [{ translateY: filterPanY }],
             }}
           >
-            {/* Header Drag Zone */}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 120}
+              style={{ flex: 1 }}
+            >
+              {/* Header Drag Zone */}
             <View style={{ width: '100%' }}>
               {/* Swipe Drag Handle Bar */}
               <View
@@ -960,7 +988,7 @@ export default function SamplingScreen() {
             <ScrollView 
               showsVerticalScrollIndicator={false} 
               style={{ paddingHorizontal: 24 }}
-              contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 24 : 36 }}
+              contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 220 : 220 }}
               onScroll={(e) => { filterScrollOffset.current = e.nativeEvent.contentOffset.y; }}
               scrollEventThrottle={16}
             >
@@ -1070,12 +1098,13 @@ export default function SamplingScreen() {
                 </View>
               </View>
             </ScrollView>
+            </KeyboardAvoidingView>
           </RNAnimated.View>
         </View>
       </Modal>
 
       {/* Create/Edit Modal */}
-      <Modal visible={showForm} animationType="none" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={closeFormModal}>
+      <Modal visible={showForm} animationType={isLargeScreen ? 'fade' : 'slide'} transparent statusBarTranslucent navigationBarTranslucent onRequestClose={closeFormModal}>
 
         <View style={{
           flex: 1,
@@ -1107,9 +1136,9 @@ export default function SamplingScreen() {
               paddingTop: 12,
               paddingHorizontal: 24,
               paddingBottom: isLargeScreen ? 24 : 0,
-              maxHeight: isLargeScreen ? '85%' : '90%',
+              height: isLargeScreen ? '92%' : '92%',
               width: '100%',
-              maxWidth: isLargeScreen ? modalMaxWidth : '100%',
+              maxWidth: isLargeScreen ? 850 : '100%',
               transform: isLargeScreen ? undefined : [{ translateY: formPanY }],
               shadowColor: '#000',
               shadowOffset: { width: 0, height: -4 },
@@ -1119,8 +1148,8 @@ export default function SamplingScreen() {
             }}
           >
             <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
               style={{ flex: 1 }}
             >
               {/* Swipe Drag Handle Bar */}
@@ -1154,10 +1183,11 @@ export default function SamplingScreen() {
               </View>
 
               <ScrollView
+                ref={scrollViewRef}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 80 : 100 }}
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
+                keyboardDismissMode="none"
                 onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
                 scrollEventThrottle={16}
               >
@@ -1247,8 +1277,8 @@ export default function SamplingScreen() {
                             <Image 
                               source={{ uri: resolveImageUrl(img) }} 
                               style={{ width: 80, height: 80, borderRadius: 10 }} 
-                              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-                              fadeDuration={100}
+                              contentFit="cover"
+                              transition={100}
                             />
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => setFormImages(p => p.filter((_, idx) => idx !== i))} style={{ position: 'absolute', top: -4, right: -4, backgroundColor: Colors.error[500], width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>

@@ -2,7 +2,6 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
   View,
   Text,
-  FlatList,
   RefreshControl,
   TouchableOpacity,
   ScrollView,
@@ -20,9 +19,12 @@ import {
   Linking,
   Keyboard,
   useWindowDimensions,
+  StatusBar,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import * as print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Tabs } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS, Easing } from 'react-native-reanimated';
@@ -56,7 +58,7 @@ import * as Haptics from 'expo-haptics';
 
 import api from '../../services/api';
 import Card from '../../components/ui/Card';
-import { SkeletonList } from '../../components/ui/Skeleton';
+import { PurchaseOrderSkeletonList } from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import DatePickerModal from '../../components/shared/DatePickerModal';
 import DeleteConfirmModal from '../../components/shared/DeleteConfirmModal';
@@ -70,6 +72,7 @@ import { storage } from '../../utils/storage';
 import PdfViewerModal from '../../components/shared/PdfViewerModal';
 import { generatePoHtml } from '../../utils/poPdfTemplate';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { savePdfToDevice } from '../../utils/pdfUtils';
 
 // Dynamically import WebView to avoid crashes on web
 let WebView: any = null;
@@ -204,6 +207,14 @@ const cleanHtmlForInput = (text?: string): string => {
 const getEditorHtml = (initialValue: string, isDarkMode: boolean, placeholder: string = 'Enter text...') => {
   const textColor = isDarkMode ? '#f8fafc' : '#0f172a';
   const bgColor = isDarkMode ? '#1e293b' : '#ffffff';
+  const toolbarBg = isDarkMode ? '#1e293b' : '#f8fafc';
+  const toolbarBorder = isDarkMode ? '#334155' : '#cbd5e1';
+  const btnBorder = isDarkMode ? '#475569' : '#cbd5e1';
+  const btnBg = isDarkMode ? '#334155' : '#ffffff';
+  const btnText = isDarkMode ? '#cbd5e1' : '#475569';
+  const btnActiveBg = isDarkMode ? '#60a5fa' : '#2563eb';
+  const btnActiveBorder = isDarkMode ? '#60a5fa' : '#2563eb';
+  const btnActiveText = isDarkMode ? '#0f172a' : '#ffffff';
   
   return `
     <!DOCTYPE html>
@@ -217,64 +228,124 @@ const getEditorHtml = (initialValue: string, isDarkMode: boolean, placeholder: s
         }
         body {
           margin: 0;
-          padding: 8px;
+          padding: 0;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-          font-size: 15px;
-          color: ${textColor};
           background-color: ${bgColor};
+          color: ${textColor};
+          display: flex;
+          flex-direction: column;
+          height: 100vh;
+          overflow: hidden;
+        }
+        #toolbar {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background-color: ${toolbarBg};
+          border-bottom: 1px solid ${toolbarBorder};
+          height: 42px;
+          box-sizing: border-box;
+        }
+        .btn {
+          width: 30px;
+          height: 30px;
+          border-radius: 6px;
+          border: 1px solid ${btnBorder};
+          background-color: ${btnBg};
+          color: ${btnText};
+          font-size: 13px;
+          font-weight: 800;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          outline: none;
+          box-sizing: border-box;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .btn.active {
+          background-color: ${btnActiveBg};
+          border-color: ${btnActiveBorder};
+          color: ${btnActiveText};
         }
         #editor {
-          min-height: 80px;
-          width: 100%;
+          flex: 1;
+          padding: 10px 12px;
           outline: none;
           word-wrap: break-word;
           overflow-y: auto;
+          font-size: 14px;
+          line-height: 1.5;
         }
         #editor u {
           text-decoration: underline;
         }
-        /* Placeholder styling */
-        #editor:empty:before {
-          content: attr(data-placeholder);
+        #editor[placeholder]:empty:before {
+          content: attr(placeholder);
           color: ${isDarkMode ? '#64748b' : '#94a3b8'};
           font-style: italic;
         }
       </style>
     </head>
     <body>
-      <div id="editor" contenteditable="true" data-placeholder="${placeholder}">${initialValue || ''}</div>
+      <div id="toolbar">
+        <button type="button" class="btn" data-command="bold">B</button>
+        <button type="button" class="btn" data-command="italic" style="font-style: italic;">I</button>
+        <button type="button" class="btn" data-command="underline" style="text-decoration: underline;">U</button>
+      </div>
+      <div id="editor" contenteditable="true" placeholder="${placeholder}">${initialValue || ''}</div>
       <script>
         const editor = document.getElementById('editor');
+        const buttons = document.querySelectorAll('.btn');
         
+        try {
+          document.execCommand('styleWithCSS', false, false);
+        } catch (e) {}
+
+        buttons.forEach(btn => {
+          btn.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent editor from losing focus
+          });
+          
+          btn.addEventListener('click', (e) => {
+            const command = btn.getAttribute('data-command');
+            document.execCommand(command, false, null);
+            updateButtonStates();
+            sendState();
+          });
+        });
+
+        function updateButtonStates() {
+          buttons.forEach(btn => {
+            const command = btn.getAttribute('data-command');
+            const isActive = document.queryCommandState(command);
+            if (isActive) {
+              btn.classList.add('active');
+            } else {
+              btn.classList.remove('active');
+            }
+          });
+        }
+
         function sendState() {
-          const isBold = document.queryCommandState('bold');
-          const isItalic = document.queryCommandState('italic');
-          const isUnderline = document.queryCommandState('underline');
           window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'selectionChange',
-            bold: isBold,
-            italic: isItalic,
-            underline: isUnderline,
+            type: 'change',
             value: editor.innerHTML
           }));
         }
 
         editor.addEventListener('input', sendState);
-        document.addEventListener('selectionchange', sendState);
-        editor.addEventListener('focus', sendState);
+        
+        document.addEventListener('selectionchange', () => {
+          updateButtonStates();
+          sendState();
+        });
 
-        window.addEventListener('message', (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'format') {
-              editor.focus();
-              document.execCommand(data.command, false, null);
-              sendState();
-            } else if (data.type === 'setValue') {
-              editor.innerHTML = data.value;
-              sendState();
-            }
-          } catch(e) {}
+        editor.addEventListener('focus', () => {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'focus'
+          }));
         });
       </script>
     </body>
@@ -444,6 +515,8 @@ const CompanyInfoModal: React.FC<CompanyInfoModalProps> = ({
       visible={visible}
       transparent
       animationType="none"
+      statusBarTranslucent={true}
+      navigationBarTranslucent={true}
       onRequestClose={handleClose}
     >
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0)', justifyContent: 'flex-end' }}>
@@ -591,7 +664,7 @@ const CompanyInfoModal: React.FC<CompanyInfoModalProps> = ({
   );
 };
 
-const PurchaseOrderCard = ({ 
+const PurchaseOrderCard = React.memo(({ 
   item, 
   index, 
   isMaster, 
@@ -862,7 +935,7 @@ const PurchaseOrderCard = ({
       </Card>
     </View>
   );
-};// ─── Purchase Orders Tab ───
+});// ─── Purchase Orders Tab ───
 
 export default function PurchaseOrdersScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -967,6 +1040,7 @@ export default function PurchaseOrdersScreen() {
   // Swipe down to close Filter Modal
   const filterScrollOffset = useRef(0);
   const filterCapturedDy = useRef(0);
+  const filterSheetY = useRef(0);
   const filterPanY = useRef(new RNAnimated.Value(600)).current;
 
   const closeFilterModal = useCallback(() => {
@@ -980,16 +1054,20 @@ export default function PurchaseOrdersScreen() {
   }, [filterPanY]);
   const filterPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - filterSheetY.current;
+        return touchY > 0 && touchY <= 85;
+      },
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gs) => {
-        return filterScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
       },
       onMoveShouldSetPanResponderCapture: (_, gs) => {
-        return filterScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
       },
       onPanResponderGrant: (_, gs) => {
         filterCapturedDy.current = gs.dy;
+        Keyboard.dismiss();
       },
       onPanResponderMove: (_, gs) => {
         const dragY = gs.dy - filterCapturedDy.current;
@@ -1065,10 +1143,13 @@ export default function PurchaseOrdersScreen() {
   const [initialNotes, setInitialNotes] = useState('');
   const termsEditorRef = useRef<any>(null);
   const notesEditorRef = useRef<any>(null);
-  const [activeFormats, setActiveFormats] = useState({
-    paymentTerms: { bold: false, italic: false, underline: false },
-    notes: { bold: false, italic: false, underline: false }
-  });
+  const formScrollViewRef = useRef<ScrollView>(null);
+
+  const scrollToFormEnd = () => {
+    setTimeout(() => {
+      formScrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 150);
+  };
 
   // Debounce search
   const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1258,16 +1339,12 @@ export default function PurchaseOrdersScreen() {
   const formScrollOffset = useRef(0);
   const formCapturedDy = useRef(0);
   const backdropBgColor = pan.interpolate({
-    inputRange: [0, 450],
-    outputRange: ['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)'],
+    inputRange: [0, screenHeight],
+    outputRange: ['rgba(0, 0, 0, 0.5)', 'rgba(0, 0, 0, 0)'],
     extrapolate: 'clamp',
   });
 
   const openModal = (order?: PurchaseOrder) => {
-    setActiveFormats({
-      paymentTerms: { bold: false, italic: false, underline: false },
-      notes: { bold: false, italic: false, underline: false }
-    });
     if (order) {
       setIsEditMode(true);
       setEditId(order._id);
@@ -1290,6 +1367,18 @@ export default function PurchaseOrdersScreen() {
       setFormData({
         companyHeader: 'Viral Fabrics',
         poDate: new Date().toISOString(),
+        poNumber: '',
+        brokerName: '',
+        brokerPhone: '',
+        supplierName: '',
+        supplierAddress: '',
+        supplierGstin: '',
+        quality: '',
+        pcsMtr: '',
+        rate: '',
+        delivery: '',
+        paymentTerms: '',
+        notes: '',
         specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' }
       });
     }
@@ -1314,36 +1403,38 @@ export default function PurchaseOrdersScreen() {
     });
   };
 
+  const formSheetY = useRef(0);
+
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - formSheetY.current;
+        return touchY > 0 && touchY <= 85;
+      },
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gs) => {
-        return formScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
       },
       onMoveShouldSetPanResponderCapture: (_, gs) => {
-        return formScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
       },
-      onPanResponderGrant: (_, gs) => {
+      onPanResponderGrant: () => {
         Keyboard.dismiss();
-        formCapturedDy.current = gs.dy;
       },
       onPanResponderMove: (_, gs) => {
-        const dragY = gs.dy - formCapturedDy.current;
-        const translateY = dragY < 0 ? dragY * 0.22 : dragY;
-        pan.setValue(translateY);
+        if (gs.dy > 0) {
+          pan.setValue(gs.dy);
+        }
       },
       onPanResponderRelease: (_, gs) => {
-        const dragY = gs.dy - formCapturedDy.current;
-        if (dragY > 120 || gs.vy > 0.55) {
+        if (gs.dy > 120 || gs.vy > 0.5) {
           closeModal();
         } else {
           RNAnimated.spring(pan, {
             toValue: 0,
-            stiffness: 300,
-            damping: 30,
-            mass: 1,
             useNativeDriver: true,
+            tension: 40,
+            friction: 8,
           }).start();
         }
       },
@@ -1352,8 +1443,8 @@ export default function PurchaseOrdersScreen() {
 
   // Handlers
   const handleSave = () => {
-    if (!formData.companyHeader || !formData.poDate || !formData.quality) {
-      addToast({ type: 'error', title: 'Validation Error', message: 'Company, Date, and Quality are required.' });
+    if (!formData.companyHeader) {
+      addToast({ type: 'error', title: 'Validation Error', message: 'Company Header is required.' });
       return;
     }
     const cleanData = {
@@ -1422,8 +1513,31 @@ export default function PurchaseOrdersScreen() {
         addToast({ type: 'error', title: 'PDF Error', message: 'Failed to generate PDF.' });
       }
     } else {
-      // On native, both buttons trigger the premium Save & Share viewer
-      previewPDF(po);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+      const displayId = getDisplayOrderId(po.poNumber);
+      const token = await storage.getToken();
+      const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
+      const filename = `Purchase_Order_${displayId}.pdf`;
+      
+      addToast({ type: 'info', title: 'Downloading PDF', message: 'Saving Purchase Order to device...' });
+      
+      try {
+        const result = await savePdfToDevice({
+          url: pdfUrl,
+          filename,
+          token,
+          dialogTitle: `Purchase Order — #${displayId}`
+        });
+        
+        if (result.success) {
+          addToast({ type: 'success', title: 'Saved Successfully', message: result.message });
+        } else {
+          addToast({ type: 'error', title: 'Save Failed', message: result.message });
+        }
+      } catch (err: any) {
+        addToast({ type: 'error', title: 'Error', message: `Failed to save PDF: ${err.message}` });
+      }
     }
   };
   // Form Input Helpers
@@ -1458,45 +1572,45 @@ export default function PurchaseOrdersScreen() {
 
     const val = (formData as any)[field] || '';
     const sel = field === 'paymentTerms' ? termsSel : notesSel;
-    const start = sel.start;
-    const end = sel.end;
+    const start = sel.start || 0;
+    const end = sel.end || 0;
     const selectedText = (start !== end && start < end) ? val.substring(start, end) : '';
 
     let newText = val;
-    if (formatType === 'bold') {
+    let newCursorPos = start;
+
+    if (formatType === 'bold' || formatType === 'italic' || formatType === 'underline') {
+      const tagOpen = formatType === 'bold' ? '<b>' : (formatType === 'italic' ? '<i>' : '<u>');
+      const tagClose = formatType === 'bold' ? '</b>' : (formatType === 'italic' ? '</i>' : '</u>');
+
       if (selectedText) {
-        if (selectedText.startsWith('<b>') && selectedText.endsWith('</b>')) {
-          newText = val.substring(0, start) + selectedText.slice(3, -4) + val.substring(end);
+        if (selectedText.startsWith(tagOpen) && selectedText.endsWith(tagClose)) {
+          newText = val.substring(0, start) + selectedText.slice(tagOpen.length, -tagClose.length) + val.substring(end);
+          newCursorPos = start + selectedText.length - tagOpen.length - tagClose.length;
         } else {
-          newText = val.substring(0, start) + `<b>${selectedText}</b>` + val.substring(end);
+          newText = val.substring(0, start) + `${tagOpen}${selectedText}${tagClose}` + val.substring(end);
+          newCursorPos = start + tagOpen.length + selectedText.length + tagClose.length;
         }
       } else {
-        newText = val ? `${val} <b>bold text</b>` : '<b>bold text</b>';
+        newText = val.substring(0, start) + `${tagOpen}${tagClose}` + val.substring(start);
+        newCursorPos = start + tagOpen.length;
       }
-    } else if (formatType === 'italic') {
-      if (selectedText) {
-        if (selectedText.startsWith('<i>') && selectedText.endsWith('</i>')) {
-          newText = val.substring(0, start) + selectedText.slice(3, -4) + val.substring(end);
-        } else {
-          newText = val.substring(0, start) + `<i>${selectedText}</i>` + val.substring(end);
-        }
+
+      if (field === 'paymentTerms') {
+        setTermsSel({ start: newCursorPos, end: newCursorPos });
       } else {
-        newText = val ? `${val} <i>italic text</i>` : '<i>italic text</i>';
-      }
-    } else if (formatType === 'underline') {
-      if (selectedText) {
-        if (selectedText.startsWith('<u>') && selectedText.endsWith('</u>')) {
-          newText = val.substring(0, start) + selectedText.slice(3, -4) + val.substring(end);
-        } else {
-          newText = val.substring(0, start) + `<u>${selectedText}</u>` + val.substring(end);
-        }
-      } else {
-        newText = val ? `${val} <u>underlined text</u>` : '<u>underlined text</u>';
+        setNotesSel({ start: newCursorPos, end: newCursorPos });
       }
     } else if (formatType === 'bullet') {
-      newText = val ? `${val}\n• ` : '• ';
+      newText = val.substring(0, start) + (start === 0 || val[start - 1] === '\n' ? '• ' : '\n• ') + val.substring(start);
+      newCursorPos = start + (start === 0 || val[start - 1] === '\n' ? 2 : 3);
+      if (field === 'paymentTerms') setTermsSel({ start: newCursorPos, end: newCursorPos });
+      else setNotesSel({ start: newCursorPos, end: newCursorPos });
     } else if (formatType === 'number') {
-      newText = val ? `${val}\n1. ` : '1. ';
+      newText = val.substring(0, start) + (start === 0 || val[start - 1] === '\n' ? '1. ' : '\n1. ') + val.substring(start);
+      newCursorPos = start + (start === 0 || val[start - 1] === '\n' ? 3 : 4);
+      if (field === 'paymentTerms') setTermsSel({ start: newCursorPos, end: newCursorPos });
+      else setNotesSel({ start: newCursorPos, end: newCursorPos });
     }
 
     updateField(field, newText);
@@ -1511,6 +1625,10 @@ export default function PurchaseOrdersScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : ((isModalOpen || showFilterModal || !!infoCompany) ? 'light-content' : 'dark-content')}
+      />
+      <Tabs.Screen options={{ tabBarStyle: isModalOpen ? { display: 'none' } : undefined }} />
       <View style={{ flex: 1, width: '100%', maxWidth: containerMaxWidth, alignSelf: 'center' }}>
       {/* Unified Search & Filters Row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingHorizontal: 16 }}>
@@ -1602,7 +1720,7 @@ export default function PurchaseOrdersScreen() {
       {/* List */}
       <View style={{ flex: 1 }}>
         {(isLoading || (isFetching && !isRefetching)) && page === 1 ? (
-          <SkeletonList count={5} height={180} />
+          <PurchaseOrderSkeletonList count={5} />
         ) : orders.length === 0 ? (
           <EmptyState
             icon={<ClipboardList size={48} color={Colors.primary[500]} />}
@@ -1612,20 +1730,17 @@ export default function PurchaseOrdersScreen() {
             onAction={isMaster ? () => openModal() : undefined}
           />
         ) : (
-          <FlatList
-            data={orders}
+          <FlashList
             key={numColumns}
             numColumns={numColumns}
-            keyExtractor={(item) => item._id}
+            data={orders}
+            keyExtractor={(item: PurchaseOrder) => item._id}
+            drawDistance={800}
             contentContainerStyle={{ paddingVertical: 16, paddingBottom: 100, paddingHorizontal: numColumns > 1 ? 8 : 0 }}
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={Colors.primary[500]} />}
             onEndReached={loadMore}
             onEndReachedThreshold={0.5}
-            initialNumToRender={8}
-            maxToRenderPerBatch={4}
-            windowSize={5}
-            removeClippedSubviews={true}
-            updateCellsBatchingPeriod={50}
+            removeClippedSubviews={false}
             renderItem={({ item, index }) => (
               <PurchaseOrderCard
                 item={item}
@@ -1664,6 +1779,8 @@ export default function PurchaseOrdersScreen() {
         visible={isModalOpen}
         transparent={true}
         animationType="none"
+        statusBarTranslucent={true}
+        navigationBarTranslucent={true}
         onRequestClose={() => closeModal()}
       >
         <View style={[{ flex: 1, position: 'relative' }]}>
@@ -1672,9 +1789,12 @@ export default function PurchaseOrdersScreen() {
           </TouchableWithoutFeedback>
           
           <RNAnimated.View 
+            onLayout={(e) => {
+              formSheetY.current = e.nativeEvent.layout.y;
+            }}
             {...panResponder.panHandlers}
             style={[
-              { position: 'absolute', left: 0, right: 0, bottom: 0, top: isLargeScreen ? undefined : insets.top + 20, height: isLargeScreen ? '85%' : undefined, maxWidth: modalMaxWidth, width: '100%', alignSelf: 'center', backgroundColor: theme.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20 },
+              { position: 'absolute', left: 0, right: 0, bottom: 0, top: isLargeScreen ? undefined : insets.top + 20, height: isLargeScreen ? '92%' : undefined, maxWidth: isLargeScreen ? 850 : '100%', width: '100%', alignSelf: 'center', backgroundColor: theme.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20 },
               { transform: [{ translateY: pan }] }
             ]}
           >
@@ -1693,12 +1813,14 @@ export default function PurchaseOrdersScreen() {
               </View>
             </View>
 
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
               <View style={{ flex: 1, position: 'relative' }}>
                 <ScrollView
+                  ref={formScrollViewRef}
                   style={{ flex: 1 }}
-                  contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24 }}
+                  contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: insets.bottom > 0 ? insets.bottom + 80 : 100 }}
                   keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="none"
                   onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
                   scrollEventThrottle={16}
                 >
@@ -1791,10 +1913,12 @@ export default function PurchaseOrdersScreen() {
                       style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
                       value={formData.brokerName || ''}
                       onChangeText={(t) => { updateField('brokerName', t); setShowBrokerSuggestions(true); fetchSuggestions(t); }}
+                      onFocus={() => { setShowBrokerSuggestions(true); fetchSuggestions(formData.brokerName || ''); }}
+                      onBlur={() => { setTimeout(() => setShowBrokerSuggestions(false), 200); }}
                       placeholder="Type or press Arrow keys..."
                       placeholderTextColor={theme.inputPlaceholder}
                     />
-                    {showBrokerSuggestions && brokerSuggestions.length > 0 && !!formData.brokerName && (
+                    {showBrokerSuggestions && brokerSuggestions.length > 0 && (
                       <View style={{ position: 'absolute', top: 76, left: 0, right: 0, backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, zIndex: 1000, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 }}>
                         {brokerSuggestions.slice(0, 3).map((b, i) => (
                           <TouchableOpacity 
@@ -1834,10 +1958,12 @@ export default function PurchaseOrdersScreen() {
                     style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
                     value={formData.supplierName || ''}
                     onChangeText={(t) => { updateField('supplierName', t); setShowSupplierSuggestions(true); fetchSuggestions(t); }}
+                    onFocus={() => { setShowSupplierSuggestions(true); fetchSuggestions(formData.supplierName || ''); }}
+                    onBlur={() => { setTimeout(() => setShowSupplierSuggestions(false), 200); }}
                     placeholder="Type or press Arrow keys..."
                     placeholderTextColor={theme.inputPlaceholder}
                   />
-                  {showSupplierSuggestions && supplierSuggestions.length > 0 && !!formData.supplierName && (
+                  {showSupplierSuggestions && supplierSuggestions.length > 0 && (
                     <View style={{ position: 'absolute', top: 76, left: 0, right: 0, backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, zIndex: 1000, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 }}>
                       {supplierSuggestions.slice(0, 3).map((s, i) => (
                         <TouchableOpacity 
@@ -1884,7 +2010,7 @@ export default function PurchaseOrdersScreen() {
 
                 {/* Quality */}
                 <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Quality *</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Quality</Text>
                   <TextInput
                     style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
                     value={formData.quality || ''}
@@ -1926,77 +2052,21 @@ export default function PurchaseOrdersScreen() {
                     style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, fontWeight: '600' }}
                     value={formData.rate || ''}
                     onChangeText={(t) => updateField('rate', t)}
+                    onFocus={scrollToFormEnd}
                     placeholder="e.g. 79.50"
                     placeholderTextColor={theme.inputPlaceholder}
                     keyboardType="decimal-pad"
                   />
                 </View>
 
-                {/* Payment Terms */}
+                 {/* Payment Terms */}
                 <View style={{ marginBottom: 20 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ marginBottom: 8 }}>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Payment Terms</Text>
-                    {/* Rich Formatting Toolbar */}
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('paymentTerms', 'bold')}
-                        style={{
-                          paddingHorizontal: 11,
-                          paddingVertical: 5,
-                          borderRadius: 8,
-                          backgroundColor: activeFormats.paymentTerms.bold
-                            ? (isDarkMode ? Colors.primary[700] : '#e0e7ff')
-                            : (isDarkMode ? '#1e293b' : '#ffffff'),
-                          borderWidth: 1,
-                          borderColor: activeFormats.paymentTerms.bold
-                            ? (isDarkMode ? Colors.primary[500] : Colors.primary[600])
-                            : (isDarkMode ? '#334155' : '#cbd5e1')
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '900', color: activeFormats.paymentTerms.bold ? (isDarkMode ? '#ffffff' : Colors.primary[700]) : theme.text }}>B</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('paymentTerms', 'italic')}
-                        style={{
-                          paddingHorizontal: 11,
-                          paddingVertical: 5,
-                          borderRadius: 8,
-                          backgroundColor: activeFormats.paymentTerms.italic
-                            ? (isDarkMode ? Colors.primary[700] : '#e0e7ff')
-                            : (isDarkMode ? '#1e293b' : '#ffffff'),
-                          borderWidth: 1,
-                          borderColor: activeFormats.paymentTerms.italic
-                            ? (isDarkMode ? Colors.primary[500] : Colors.primary[600])
-                            : (isDarkMode ? '#334155' : '#cbd5e1')
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontStyle: 'italic', fontWeight: '900', color: activeFormats.paymentTerms.italic ? (isDarkMode ? '#ffffff' : Colors.primary[700]) : theme.text }}>I</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('paymentTerms', 'underline')}
-                        style={{
-                          paddingHorizontal: 11,
-                          paddingVertical: 5,
-                          borderRadius: 8,
-                          backgroundColor: activeFormats.paymentTerms.underline
-                            ? (isDarkMode ? Colors.primary[700] : '#e0e7ff')
-                            : (isDarkMode ? '#1e293b' : '#ffffff'),
-                          borderWidth: 1,
-                          borderColor: activeFormats.paymentTerms.underline
-                            ? (isDarkMode ? Colors.primary[500] : Colors.primary[600])
-                            : (isDarkMode ? '#334155' : '#cbd5e1')
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '900', textDecorationLine: 'underline', color: activeFormats.paymentTerms.underline ? (isDarkMode ? '#ffffff' : Colors.primary[700]) : theme.text }}>U</Text>
-                      </TouchableOpacity>
-                    </View>
                   </View>
 
                   {showWebViewEditor ? (
-                    <View style={{ height: 120, borderRadius: 12, borderWidth: 1, borderColor: theme.inputBorder, overflow: 'hidden', backgroundColor: theme.input }}>
+                    <View style={{ height: 150, borderRadius: 12, borderWidth: 1, borderColor: theme.inputBorder, overflow: 'hidden', backgroundColor: theme.input }}>
                       <WebView
                         ref={termsEditorRef}
                         source={{ html: getEditorHtml(initialTerms, isDarkMode, 'e.g. 30 Days') }}
@@ -2004,14 +2074,10 @@ export default function PurchaseOrdersScreen() {
                         onMessage={(e: any) => {
                           try {
                             const data = JSON.parse(e.nativeEvent.data);
-                            if (data.type === 'change') {
+                            if (data.type === 'focus') {
+                              scrollToFormEnd();
+                            } else if (data.type === 'change') {
                               updateField('paymentTerms', data.value);
-                            } else if (data.type === 'selectionChange') {
-                              updateField('paymentTerms', data.value);
-                              setActiveFormats(prev => ({
-                                ...prev,
-                                paymentTerms: { bold: data.bold, italic: data.italic, underline: data.underline }
-                              }));
                             }
                           } catch (err) {}
                         }}
@@ -2026,6 +2092,8 @@ export default function PurchaseOrdersScreen() {
                       style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, minHeight: 80, textAlignVertical: 'top' }}
                       value={formData.paymentTerms || ''}
                       onChangeText={(t) => updateField('paymentTerms', t)}
+                      onFocus={scrollToFormEnd}
+                      selection={termsSel}
                       onSelectionChange={(e) => setTermsSel(e.nativeEvent.selection)}
                       placeholder="e.g. 30 Days"
                       placeholderTextColor={theme.inputPlaceholder}
@@ -2077,6 +2145,7 @@ export default function PurchaseOrdersScreen() {
                           }}
                           value={formData.specs?.[spec.key as keyof typeof formData.specs] || ''}
                           onChangeText={(t) => updateSpec(spec.key as any, t)}
+                          onFocus={scrollToFormEnd}
                           placeholder=""
                           keyboardType="decimal-pad"
                         />
@@ -2087,69 +2156,12 @@ export default function PurchaseOrdersScreen() {
 
                 {/* Notes */}
                 <View style={{ marginBottom: 40 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ marginBottom: 8 }}>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Notes</Text>
-                    {/* Rich Formatting Toolbar */}
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('notes', 'bold')}
-                        style={{
-                          paddingHorizontal: 11,
-                          paddingVertical: 5,
-                          borderRadius: 8,
-                          backgroundColor: activeFormats.notes.bold
-                            ? (isDarkMode ? Colors.primary[700] : '#e0e7ff')
-                            : (isDarkMode ? '#1e293b' : '#ffffff'),
-                          borderWidth: 1,
-                          borderColor: activeFormats.notes.bold
-                            ? (isDarkMode ? Colors.primary[500] : Colors.primary[600])
-                            : (isDarkMode ? '#334155' : '#cbd5e1')
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '900', color: activeFormats.notes.bold ? (isDarkMode ? '#ffffff' : Colors.primary[700]) : theme.text }}>B</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('notes', 'italic')}
-                        style={{
-                          paddingHorizontal: 11,
-                          paddingVertical: 5,
-                          borderRadius: 8,
-                          backgroundColor: activeFormats.notes.italic
-                            ? (isDarkMode ? Colors.primary[700] : '#e0e7ff')
-                            : (isDarkMode ? '#1e293b' : '#ffffff'),
-                          borderWidth: 1,
-                          borderColor: activeFormats.notes.italic
-                            ? (isDarkMode ? Colors.primary[500] : Colors.primary[600])
-                            : (isDarkMode ? '#334155' : '#cbd5e1')
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontStyle: 'italic', fontWeight: '900', color: activeFormats.notes.italic ? (isDarkMode ? '#ffffff' : Colors.primary[700]) : theme.text }}>I</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('notes', 'underline')}
-                        style={{
-                          paddingHorizontal: 11,
-                          paddingVertical: 5,
-                          borderRadius: 8,
-                          backgroundColor: activeFormats.notes.underline
-                            ? (isDarkMode ? Colors.primary[700] : '#e0e7ff')
-                            : (isDarkMode ? '#1e293b' : '#ffffff'),
-                          borderWidth: 1,
-                          borderColor: activeFormats.notes.underline
-                            ? (isDarkMode ? Colors.primary[500] : Colors.primary[600])
-                            : (isDarkMode ? '#334155' : '#cbd5e1')
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '900', textDecorationLine: 'underline', color: activeFormats.notes.underline ? (isDarkMode ? '#ffffff' : Colors.primary[700]) : theme.text }}>U</Text>
-                      </TouchableOpacity>
-                    </View>
                   </View>
 
                   {showWebViewEditor ? (
-                    <View style={{ height: 140, borderRadius: 12, borderWidth: 1, borderColor: theme.inputBorder, overflow: 'hidden', backgroundColor: theme.input }}>
+                    <View style={{ height: 170, borderRadius: 12, borderWidth: 1, borderColor: theme.inputBorder, overflow: 'hidden', backgroundColor: theme.input }}>
                       <WebView
                         ref={notesEditorRef}
                         source={{ html: getEditorHtml(initialNotes, isDarkMode, 'Additional notes...') }}
@@ -2157,14 +2169,10 @@ export default function PurchaseOrdersScreen() {
                         onMessage={(e: any) => {
                           try {
                             const data = JSON.parse(e.nativeEvent.data);
-                            if (data.type === 'change') {
+                            if (data.type === 'focus') {
+                              scrollToFormEnd();
+                            } else if (data.type === 'change') {
                               updateField('notes', data.value);
-                            } else if (data.type === 'selectionChange') {
-                              updateField('notes', data.value);
-                              setActiveFormats(prev => ({
-                                ...prev,
-                                notes: { bold: data.bold, italic: data.italic, underline: data.underline }
-                              }));
                             }
                           } catch (err) {}
                         }}
@@ -2179,6 +2187,8 @@ export default function PurchaseOrdersScreen() {
                       style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, minHeight: 100, textAlignVertical: 'top' }}
                       value={formData.notes}
                       onChangeText={(t) => updateField('notes', t)}
+                      onFocus={scrollToFormEnd}
+                      selection={notesSel}
                       onSelectionChange={(e) => setNotesSel(e.nativeEvent.selection)}
                       placeholder="Additional notes..."
                       placeholderTextColor={theme.inputPlaceholder}
@@ -2189,11 +2199,8 @@ export default function PurchaseOrdersScreen() {
                 </ScrollView>
                 
                 {/* Action Bar */}
-                <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.borderLight, backgroundColor: theme.background, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 16 }}>
-                  <TouchableOpacity onPress={() => closeModal()} style={{ flex: 1, padding: 16, borderRadius: 12, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100], alignItems: 'center' }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={handleSave} disabled={createMutation.isPending || updateMutation.isPending} style={{ flex: 2, padding: 16, borderRadius: 12, backgroundColor: Colors.primary[600], alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+                <View style={{ paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.borderLight, backgroundColor: theme.background, paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 16 }}>
+                  <TouchableOpacity onPress={handleSave} disabled={createMutation.isPending || updateMutation.isPending} style={{ width: '100%', padding: 16, borderRadius: 12, backgroundColor: Colors.primary[600], alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
                     {createMutation.isPending || updateMutation.isPending ? (
                       <ActivityIndicator color={Colors.white} />
                     ) : (
@@ -2257,6 +2264,8 @@ export default function PurchaseOrdersScreen() {
         visible={showFilterModal}
         animationType="none"
         transparent={true}
+        statusBarTranslucent={true}
+        navigationBarTranslucent={true}
         onRequestClose={closeFilterModal}
       >
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -2266,6 +2275,9 @@ export default function PurchaseOrdersScreen() {
           </TouchableWithoutFeedback>
 
           <RNAnimated.View
+            onLayout={(e) => {
+              filterSheetY.current = e.nativeEvent.layout.y;
+            }}
             {...filterPanResponder.panHandlers}
             style={{
               backgroundColor: isDarkMode ? '#1e293b' : Colors.white,

@@ -8,6 +8,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "ts:check": "tsc",
+    "test": "jest",
     "build": "npx tsc --noEmit && npx expo export",
     "postinstall": "node patch-gradle.js",
     "update:staging": "node -e \"const fs=require('fs'); fs.copyFileSync('env.staging', '.env'); console.log('[✓] Swapped to staging env');\" && npx eas-cli update --channel staging --clear-cache",
@@ -15,6 +16,7 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@shopify/flash-list": "2.0.2",
     "@tanstack/react-query": "^5.28.4",
     "axios": "^1.6.8",
     "expo": "~56.0.5",
@@ -25,6 +27,7 @@
     "expo-file-system": "~56.0.7",
     "expo-font": "~56.0.5",
     "expo-haptics": "~56.0.3",
+    "expo-image": "~56.0.11",
     "expo-image-manipulator": "~56.0.19",
     "expo-image-picker": "~56.0.14",
     "expo-linking": "~56.0.12",
@@ -52,8 +55,13 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.2.2",
+    "babel-plugin-react-compiler": "^1.0.0",
     "babel-preset-expo": "~56.0.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
+    "ts-node": "^10.9.2",
     "typescript": "~6.0.3"
   },
   "private": true

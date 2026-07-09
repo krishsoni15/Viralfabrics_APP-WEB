@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withSequence, runOnJS } from 'react-native-reanimated';
 import { useAuth } from '../../hooks/useAuth';
 import { getInitials, getProfilePhotoUrl } from '../../utils/helpers';
+import { useAppStore } from '../../store/useAppStore';
 
 
 // Satisfying micro-interactions for tab icons
@@ -60,6 +61,8 @@ function AnimatedTabBarIcon({ Icon, color, focused, type }: { Icon: any; color: 
 
 function ProfileTabBarIcon({ focused, color }: { focused: boolean; color: any }) {
   const { user } = useAuth();
+  const { isOffline } = useAppStore();
+  const { isDarkMode } = useTheme();
   const scale = useSharedValue(1);
   const [photoError, setPhotoError] = useState(false);
 
@@ -87,37 +90,52 @@ function ProfileTabBarIcon({ focused, color }: { focused: boolean; color: any })
   const showImage = photoUrl && !photoError;
 
   return (
-    <Animated.View style={[
-      animatedStyle, 
-      { 
-        width: 26, 
-        height: 26, 
-        borderRadius: 13, 
-        backgroundColor: focused ? color : 'rgba(100, 116, 139, 0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        overflow: 'hidden',
-        borderWidth: focused ? 1.5 : 1,
-        borderColor: focused ? color : 'rgba(100, 116, 139, 0.4)',
-      }
-    ]}>
-      {showImage ? (
-        <Image
-          source={{ uri: photoUrl }}
-          style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
-          resizeMode="cover"
-          onError={() => setPhotoError(true)}
-        />
-      ) : (
-        <Text style={{ 
-          fontSize: 10, 
-          fontWeight: '900', 
-          color: focused ? '#ffffff' : color 
-        }}>
-          {getInitials(user?.name || user?.username || 'U')}
-        </Text>
-      )}
-    </Animated.View>
+    <View style={{ width: 28, height: 28, justifyContent: 'center', alignItems: 'center' }}>
+      <Animated.View style={[
+        animatedStyle, 
+        { 
+          width: 26, 
+          height: 26, 
+          borderRadius: 13, 
+          backgroundColor: focused ? color : 'rgba(100, 116, 139, 0.2)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          overflow: 'hidden',
+          borderWidth: focused ? 1.5 : 1,
+          borderColor: focused ? color : 'rgba(100, 116, 139, 0.4)',
+        }
+      ]}>
+        {showImage ? (
+          <Image
+            source={{ uri: photoUrl }}
+            style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
+            resizeMode="cover"
+            onError={() => setPhotoError(true)}
+          />
+        ) : (
+          <Text style={{ 
+            fontSize: 10, 
+            fontWeight: '900', 
+            color: focused ? '#ffffff' : color 
+          }}>
+            {getInitials(user?.name || user?.username || 'U')}
+          </Text>
+        )}
+      </Animated.View>
+      
+      {/* Online/Offline status dot indicator */}
+      <View style={{
+        position: 'absolute',
+        bottom: -1,
+        right: -1,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        borderWidth: 1.5,
+        borderColor: isDarkMode ? '#0f172a' : '#ffffff',
+        backgroundColor: isOffline ? '#eab308' : '#22c55e', // yellow if offline, green if online
+      }} />
+    </View>
   );
 }
 

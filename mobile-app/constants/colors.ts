@@ -109,12 +109,12 @@ export interface ThemeColors {
 }
 
 export const LightTheme: ThemeColors = {
-  background: Colors.white,
+  background: Colors.neutral[100], // Sleek light grey background behind white cards
   surface: Colors.neutral[50],
   card: Colors.white,
   text: Colors.neutral[900],
-  textSecondary: Colors.neutral[500],
-  textTertiary: Colors.neutral[400],
+  textSecondary: Colors.neutral[600], // Increased contrast for readability
+  textTertiary: Colors.neutral[500],  // Increased contrast for sub-text
   border: Colors.neutral[200],
   borderLight: Colors.neutral[100],
   icon: Colors.neutral[500],
@@ -122,15 +122,15 @@ export const LightTheme: ThemeColors = {
   tabBar: Colors.white,
   tabBarBorder: Colors.neutral[200],
   tabBarActive: Colors.primary[600],
-  tabBarInactive: Colors.neutral[400],
+  tabBarInactive: Colors.neutral[500], // Increased contrast for inactive tabs
   statusBar: 'dark',
-  shadow: 'rgba(0, 0, 0, 0.08)',
+  shadow: 'rgba(0, 0, 0, 0.05)',
   overlay: 'rgba(0, 0, 0, 0.5)',
   skeleton: Colors.neutral[200],
   skeletonHighlight: Colors.neutral[100],
   input: Colors.white,
   inputBorder: Colors.neutral[300],
-  inputPlaceholder: Colors.neutral[400],
+  inputPlaceholder: Colors.neutral[500], // Increased contrast for inputs
   headerBg: Colors.white,
   headerText: Colors.neutral[900],
 };

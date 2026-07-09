@@ -27,7 +27,8 @@ import {
   FileOutput,
   Beaker,
   Truck,
-  FileText
+  FileText,
+  FileDown
 } from 'lucide-react-native';
 
 interface SkeletonProps {
@@ -1149,6 +1150,128 @@ export function FinishLotSkeletonList({ count = 4 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <View key={i} style={{ width: `${100 / numColumns}%` }}>
           <FinishLotSkeletonCard key={i} />
+        </View>
+      ))}
+    </PulsingContainer>
+  );
+}
+
+export function PurchaseOrderSkeletonCard() {
+  const { theme, isDarkMode } = useTheme();
+  const { numColumns } = useResponsiveLayout();
+
+  return (
+    <Card style={{ marginHorizontal: numColumns && numColumns > 1 ? 8 : 16, marginBottom: 12, padding: 14, borderRadius: 16 }}>
+      {/* Top Header */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Skeleton width={70} height={18} borderRadius={4} />
+          <Skeleton width={80} height={18} borderRadius={12} />
+        </View>
+        {/* Action Icons */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Eye size={16} color={theme.textTertiary} style={{ opacity: 0.3 }} />
+          <FileDown size={16} color={theme.textTertiary} style={{ opacity: 0.3 }} />
+          <Edit2 size={16} color={theme.textTertiary} style={{ opacity: 0.3 }} />
+          <Trash2 size={16} color={theme.textTertiary} style={{ opacity: 0.3 }} />
+        </View>
+      </View>
+
+      {/* Date Row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+        <CalendarDays size={13} color={theme.textTertiary} style={{ opacity: 0.3 }} />
+        <Skeleton width={90} height={12} borderRadius={4} />
+      </View>
+
+      {/* Broker Row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <Text style={{ fontSize: 12, color: theme.textSecondary }}>Broker:</Text>
+        <Skeleton width={120} height={12} borderRadius={4} />
+      </View>
+
+      <View style={{ height: 1, backgroundColor: theme.borderLight, marginVertical: 8 }} />
+
+      {/* Supplier Section */}
+      <View style={{ marginBottom: 8 }}>
+        <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: theme.textSecondary, marginBottom: 4 }}>
+          SUPPLIER DETAILS
+        </Text>
+        <Skeleton width={180} height={14} borderRadius={4} style={{ marginBottom: 6 }} />
+        <Skeleton width="85%" height={12} borderRadius={4} style={{ marginBottom: 6 }} />
+        <Skeleton width={120} height={10} borderRadius={4} />
+      </View>
+
+      <View style={{ height: 1, backgroundColor: theme.borderLight, marginVertical: 8 }} />
+
+      {/* Quality & Delivery */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <Text style={{ fontSize: 12, color: theme.textSecondary }}>Quality & Delivery:</Text>
+        <Skeleton width={150} height={12} borderRadius={4} />
+      </View>
+
+      {/* Rate & Terms */}
+      <View style={{ marginTop: 2 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ fontSize: 12, color: theme.textSecondary }}>Rate & Terms:</Text>
+          <Skeleton width={50} height={14} borderRadius={4} />
+        </View>
+        <View style={{ alignItems: 'flex-end', marginTop: 4 }}>
+          <Skeleton width={130} height={12} borderRadius={4} />
+        </View>
+      </View>
+
+      {/* Specs Grid */}
+      <View style={{ marginTop: 10 }}>
+        <View style={{ height: 1, backgroundColor: theme.borderLight, marginBottom: 8 }} />
+        <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: theme.textSecondary, marginBottom: 6 }}>
+          SPECIFICATIONS
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {[1, 2, 3, 4].map((i) => (
+            <View 
+              key={i} 
+              style={{ 
+                width: '48%', 
+                padding: 8, 
+                borderRadius: 8, 
+                borderWidth: 1, 
+                borderColor: isDarkMode ? '#475569' : '#cbd5e1', 
+                backgroundColor: isDarkMode ? 'rgba(51, 65, 85, 0.4)' : '#f1f5f9',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4
+              }}
+            >
+              <Skeleton width={60} height={11} borderRadius={3} />
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Notes */}
+      <View style={{ marginTop: 10 }}>
+        <View style={{ height: 1, backgroundColor: theme.borderLight, marginBottom: 8 }} />
+        <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: theme.textSecondary, marginBottom: 4 }}>
+          Notes:
+        </Text>
+        <Skeleton width="90%" height={12} borderRadius={4} style={{ marginTop: 2 }} />
+      </View>
+    </Card>
+  );
+}
+
+export function PurchaseOrderSkeletonList({ count = 5 }: { count?: number }) {
+  const { numColumns } = useResponsiveLayout();
+  return (
+    <PulsingContainer style={{ 
+      flexDirection: 'row', 
+      flexWrap: 'wrap', 
+      paddingHorizontal: numColumns > 1 ? 8 : 0,
+      paddingVertical: 12,
+    }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <View key={i} style={{ width: `${100 / numColumns}%` }}>
+          <PurchaseOrderSkeletonCard />
         </View>
       ))}
     </PulsingContainer>

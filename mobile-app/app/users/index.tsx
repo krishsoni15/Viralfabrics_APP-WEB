@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
-  View, Text, FlatList, RefreshControl, Platform, TextInput,
+  View, Text, RefreshControl, Platform, TextInput,
   TouchableOpacity, StyleSheet, Modal, Alert, KeyboardAvoidingView, ScrollView, Switch,
   PanResponder, Animated as RNAnimated, Dimensions, Image, ActivityIndicator, Pressable,
-  useWindowDimensions
+  useWindowDimensions, StatusBar
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -218,6 +219,21 @@ export default function UsersScreen() {
 
   const pickerTranslateY = useRef(new RNAnimated.Value(0)).current;
 
+  const formScrollViewRef = useRef<ScrollView>(null);
+  const addPartyScrollViewRef = useRef<ScrollView>(null);
+
+  const scrollToFormEnd = () => {
+    setTimeout(() => {
+      formScrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 120);
+  };
+
+  const scrollToAddPartyEnd = () => {
+    setTimeout(() => {
+      addPartyScrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 120);
+  };
+
   const pickerScrollOffset = useRef(0);
   const pickerCapturedDy = useRef(0);
 
@@ -269,6 +285,7 @@ export default function UsersScreen() {
   useEffect(() => {
     if (showFormRolePicker || showFormPartyPicker || showFiltersModal) {
       pickerTranslateY.setValue(0);
+      pickerScrollOffset.current = 0;
     }
   }, [showFormRolePicker, showFormPartyPicker, showFiltersModal]);
 
@@ -528,6 +545,7 @@ export default function UsersScreen() {
           }}
         >
           <RNAnimated.View
+            {...pickerPanResponder.panHandlers}
             style={{
               width: '100%',
               maxWidth: modalMaxWidth,
@@ -551,7 +569,7 @@ export default function UsersScreen() {
               }}
             >
               {/* Header Drag Zone */}
-              <View {...pickerPanResponder.panHandlers} style={{ width: '100%' }}>
+              <View style={{ width: '100%' }}>
                 {/* Header indicator bar */}
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
                 
@@ -574,7 +592,11 @@ export default function UsersScreen() {
                 <X size={20} color={theme.textSecondary} />
               </TouchableOpacity>
 
-              <ScrollView style={{ paddingHorizontal: 16 }}>
+              <ScrollView
+                style={{ paddingHorizontal: 16 }}
+                scrollEventThrottle={16}
+                onScroll={(e) => { pickerScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+              >
                 {options.map((opt) => {
                   const isSelected = selectedValue === opt.value;
                   return (
@@ -636,6 +658,7 @@ export default function UsersScreen() {
           }}
         >
           <RNAnimated.View
+            {...pickerPanResponder.panHandlers}
             style={{
               width: '100%',
               maxWidth: modalMaxWidth,
@@ -659,7 +682,7 @@ export default function UsersScreen() {
               }}
             >
               {/* Header Drag Zone */}
-              <View {...pickerPanResponder.panHandlers} style={{ width: '100%' }}>
+              <View style={{ width: '100%' }}>
                 {/* Header indicator bar */}
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
                 
@@ -828,6 +851,7 @@ export default function UsersScreen() {
             }}
           >
             <RNAnimated.View
+              {...pickerPanResponder.panHandlers}
               style={{
                 width: '100%',
                 maxWidth: modalMaxWidth,
@@ -852,7 +876,7 @@ export default function UsersScreen() {
                 }}
               >
                 {/* Header Drag Zone */}
-                <View {...pickerPanResponder.panHandlers} style={{ width: '100%' }}>
+                <View style={{ width: '100%' }}>
                   {/* Header indicator bar */}
                   <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
                   
@@ -906,7 +930,12 @@ export default function UsersScreen() {
                 </View>
 
                 {/* Parties List */}
-                <ScrollView keyboardShouldPersistTaps="handled" style={{ paddingHorizontal: 16, maxHeight: 350 }}>
+                <ScrollView 
+                  keyboardShouldPersistTaps="handled" 
+                  style={{ paddingHorizontal: 16, maxHeight: 350 }}
+                  scrollEventThrottle={16}
+                  onScroll={(e) => { pickerScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                >
                   {parties.length === 0 ? (
                     <Text style={{ color: theme.textTertiary, padding: 12, textAlign: 'center' }}>Loading parties...</Text>
                   ) : filteredParties.length === 0 ? (
@@ -1128,11 +1157,19 @@ export default function UsersScreen() {
 
   // ─── Form Modal (shared between Create & Edit) ───
   const renderFormModal = (visible: boolean, onClose: () => void, onSubmit: () => void, title: string, isEdit: boolean) => (
-    <Modal visible={visible} animationType="slide" presentationStyle={isLargeScreen ? 'pageSheet' : 'fullScreen'} onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={false}
+      statusBarTranslucent={true}
+      navigationBarTranslucent={true}
+      presentationStyle={isLargeScreen ? 'pageSheet' : 'overFullScreen'}
+      onRequestClose={onClose}
+    >
       <SafeAreaView style={{ flex: 1, backgroundColor: modalBg }}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 40}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
           style={{ flex: 1 }}
         >
           {/* Modal Header */}
@@ -1155,7 +1192,12 @@ export default function UsersScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            ref={formScrollViewRef}
+            contentContainerStyle={{ padding: 20 }}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={true}
+          >
             {/* Profile Photo Selector */}
             <View style={{ alignItems: 'center', marginBottom: 24 }}>
               <View style={{ position: 'relative', width: 90, height: 90 }}>
@@ -1241,6 +1283,7 @@ export default function UsersScreen() {
               <TouchableOpacity
                 onPress={() => {
                   if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  pickerScrollOffset.current = 0;
                   pickerTranslateY.setValue(0);
                   setShowFormRolePicker(true);
                 }}
@@ -1282,6 +1325,7 @@ export default function UsersScreen() {
                 <TouchableOpacity
                   onPress={() => {
                     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    pickerScrollOffset.current = 0;
                     pickerTranslateY.setValue(0);
                     setPartySearch('');
                     setShowFormPartyPicker(true);
@@ -1392,6 +1436,7 @@ export default function UsersScreen() {
                 value={formData.phoneNumber}
                 onChangeText={(t) => setFormData(p => ({ ...p, phoneNumber: t }))}
                 keyboardType="phone-pad"
+                onFocus={scrollToFormEnd}
               />
             </View>
 
@@ -1405,6 +1450,7 @@ export default function UsersScreen() {
                 value={formData.address}
                 onChangeText={(t) => setFormData(p => ({ ...p, address: t }))}
                 multiline
+                onFocus={scrollToFormEnd}
               />
             </View>
           </ScrollView>
@@ -1415,11 +1461,19 @@ export default function UsersScreen() {
 
   // ─── Add Party Modal ───
   const renderAddPartyModal = () => (
-    <Modal visible={showAddPartyModal} animationType="slide" presentationStyle={isLargeScreen ? 'pageSheet' : 'fullScreen'} onRequestClose={() => setShowAddPartyModal(false)}>
+    <Modal
+      visible={showAddPartyModal}
+      animationType="slide"
+      transparent={false}
+      statusBarTranslucent={true}
+      navigationBarTranslucent={true}
+      presentationStyle={isLargeScreen ? 'pageSheet' : 'overFullScreen'}
+      onRequestClose={() => setShowAddPartyModal(false)}
+    >
       <SafeAreaView style={{ flex: 1, backgroundColor: modalBg }}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 40}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
           style={{ flex: 1 }}
         >
           <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
@@ -1438,7 +1492,12 @@ export default function UsersScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            ref={addPartyScrollViewRef}
+            contentContainerStyle={{ padding: 20 }}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={true}
+          >
             {/* Party Name */}
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Party Name *</Text>
@@ -1487,6 +1546,7 @@ export default function UsersScreen() {
                 value={newPartyForm.address}
                 onChangeText={(t) => setNewPartyForm(p => ({ ...p, address: t }))}
                 multiline
+                onFocus={scrollToAddPartyEnd}
               />
             </View>
           </ScrollView>
@@ -1532,6 +1592,9 @@ export default function UsersScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : ((showCreateModal || showEditModal || showAddPartyModal || showFiltersModal || cameraVisible || isPreviewVisible || isUserListPreviewVisible) ? 'light-content' : 'dark-content')}
+      />
       <View style={{ flex: 1, width: '100%', maxWidth: containerMaxWidth, alignSelf: 'center' }}>
       {!isInTabs && (
         <Header title="Users Management" showBack />
@@ -1557,6 +1620,7 @@ export default function UsersScreen() {
         {/* Unified Filter Modal Button */}
         <TouchableOpacity
           onPress={() => {
+            pickerScrollOffset.current = 0;
             pickerTranslateY.setValue(0);
             setShowFiltersModal(true);
           }}
@@ -1604,11 +1668,12 @@ export default function UsersScreen() {
           subtitle={searchQuery ? `No match for "${searchQuery}"` : 'No registered accounts'}
         />
       ) : (
-        <FlatList
+        <FlashList
           data={paginatedUsers}
           key={numColumns}
           numColumns={numColumns}
           keyExtractor={(item: any) => item._id}
+          drawDistance={800}
           ListHeaderComponent={() => renderPaginationControls('top')}
           ListFooterComponent={() => renderPaginationControls('bottom')}
           onEndReached={handleLoadMore}

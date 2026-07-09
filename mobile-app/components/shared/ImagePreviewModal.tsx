@@ -13,7 +13,8 @@ import {
   Image,
   StyleSheet,
   useColorScheme,
-  useWindowDimensions
+  useWindowDimensions,
+  StatusBar
 } from 'react-native';
 import { X, Share2, Download, Maximize2, Minimize2, Crop, Check } from 'lucide-react-native';
 import {
@@ -47,7 +48,7 @@ async function getCachedImageUri(remoteUri: string): Promise<string> {
   }
 
   try {
-    const FileSystem = require('expo-file-system');
+    const FileSystem = require('expo-file-system/legacy');
     const FS = FileSystem?.default || FileSystem;
     if (!FS?.cacheDirectory || !FS?.getInfoAsync || !FS?.downloadAsync) {
       imageCache.set(remoteUri, remoteUri);
@@ -184,7 +185,7 @@ interface ZoomableImageProps {
   onLoadSize?: (size: { width: number; height: number }) => void;
 }
 
-function ZoomableImage({
+const ZoomableImage = React.memo(({
   uri,
   zoomMode,
   onZoomChange,
@@ -202,7 +203,7 @@ function ZoomableImage({
   cropBoxH,
   naturalSize,
   onLoadSize
-}: ZoomableImageProps) {
+}: ZoomableImageProps) => {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isZoomedRef = useRef(false);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -397,7 +398,7 @@ function ZoomableImage({
       </View>
     </GestureDetector>
   );
-}
+});
 
 const fetchImageSize = async (uri: string): Promise<{ width: number; height: number }> => {
   return new Promise((resolve, reject) => {
@@ -441,7 +442,7 @@ const fetchImageSize = async (uri: string): Promise<{ width: number; height: num
   });
 };
 
-export default function ImagePreviewModal({
+function ImagePreviewModal({
   visible,
   images,
   initialIndex = 0,
@@ -452,7 +453,7 @@ export default function ImagePreviewModal({
 }: ImagePreviewModalProps) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const colorScheme = useColorScheme();
-  const effectiveIsDarkMode = isDarkMode ?? colorScheme === 'dark';
+  const effectiveIsDarkMode = true; // Force dark theme for premium photo crop / preview experience
   const themeSurface = effectiveIsDarkMode ? '#020617' : '#f8fafc';
   const themePanel = effectiveIsDarkMode ? 'rgba(15, 23, 42, 0.98)' : 'rgba(255, 255, 255, 0.98)';
   const themeBorder = effectiveIsDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)';
@@ -465,6 +466,12 @@ export default function ImagePreviewModal({
   const imagesSerialized = JSON.stringify(images);
   const [localImages, setLocalImages] = useState<string[]>(images);
   const insets = useSafeAreaInsets();
+  const statusBarHeight = Platform.OS === 'android'
+    ? (StatusBar.currentHeight || 24)
+    : (insets.top > 0 ? insets.top : 20);
+  const modalBottomInset = Platform.OS === 'android'
+    ? 36
+    : (insets.bottom > 0 ? insets.bottom : 20);
   const [currentActiveIndex, setCurrentActiveIndex] = useState(initialIndex);
   const [zoomMode, setZoomMode] = useState<'contain' | 'cover'>('contain');
   const [isZoomed, setIsZoomed] = useState(false);
@@ -526,7 +533,7 @@ export default function ImagePreviewModal({
   const dragGesture = Gesture.Pan()
     .activeOffsetY([-10, 10])
     .failOffsetX([-10, 10])
-    .enabled(!isZoomed && !isCropping) // Lock drag-to-dismiss in zoom or crop modes
+    .enabled(!isZoomed) // Allow drag-to-dismiss even when cropping as long as image is not scaled/zoomed
     .onUpdate((e) => {
       if (e.translationY > 0) {
         translateY.value = e.translationY;
@@ -565,7 +572,7 @@ export default function ImagePreviewModal({
     if (visible) {
       setCurrentActiveIndex(initialIndex);
       setZoomMode('contain'); // Reset zoom mode when opening
-      setIsZoomed(singlePhoto ? true : false);
+      setIsZoomed(false); // Enable unzoomed state initially to support slide-to-close gestures
       setIsCropping(singlePhoto ? true : false);
       setSavingCropped(false);
       setCropRatio('Full'); // Default crop ratio
@@ -640,8 +647,8 @@ export default function ImagePreviewModal({
         return;
       }
 
-      const FileSystem = require('expo-file-system');
-      const MediaLibrary = require('expo-media-library');
+      const FileSystem = require('expo-file-system/legacy');
+      const MediaLibrary = require('expo-media-library/legacy');
 
       const FileSystemLib = FileSystem ? (FileSystem.default || FileSystem) : null;
       const MediaLibraryLib = MediaLibrary ? (MediaLibrary.default || MediaLibrary) : null;
@@ -657,19 +664,25 @@ export default function ImagePreviewModal({
         return;
       }
 
-      const filename = currentUrl.split('/').pop() || 'download.jpg';
-      const cleanFilename = filename.split('?')[0];
-      const fileUri = `${FileSystemLib.documentDirectory}${Date.now()}_${cleanFilename}`;
+      let savedUri = currentUrl;
 
-      const downloadRes = await FileSystemLib.downloadAsync(currentUrl, fileUri);
-      if (downloadRes.status !== 200) {
-        throw new Error('Server returned status code ' + downloadRes.status);
+      // Only perform network download for remote URLs (http/https)
+      if (currentUrl.startsWith('http://') || currentUrl.startsWith('https://')) {
+        const filename = currentUrl.split('/').pop() || 'download.jpg';
+        const cleanFilename = filename.split('?')[0];
+        const fileUri = `${FileSystemLib.documentDirectory}${Date.now()}_${cleanFilename}`;
+
+        const downloadRes = await FileSystemLib.downloadAsync(currentUrl, fileUri);
+        if (downloadRes.status !== 200) {
+          throw new Error('Server returned status code ' + downloadRes.status);
+        }
+        savedUri = downloadRes.uri;
       }
 
-      const asset = await MediaLibraryLib.createAssetAsync(downloadRes.uri);
+      const asset = await MediaLibraryLib.createAssetAsync(savedUri);
       await MediaLibraryLib.createAlbumAsync('Viral Fabrics', asset, false);
 
-      Alert.alert('Success', 'Image downloaded successfully and saved to your Gallery!');
+      Alert.alert('Success', 'Image saved successfully to your Gallery!');
     } catch (error: any) {
       Alert.alert('Error', 'Could not save the image: ' + error.message);
     } finally {
@@ -1085,19 +1098,22 @@ export default function ImagePreviewModal({
   return (
     <Modal
       visible={visible}
-      transparent={true}
+      transparent={false}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent={true}
+      navigationBarTranslucent={true}
       animationType="fade"
       onRequestClose={onClose}
     >
       {visible && localImages && localImages.length > 0 ? (
-        <GestureHandlerRootView style={{ flex: 1 }}>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: themeSurface }}>
           <GestureDetector gesture={dragGesture}>
             <Animated.View style={[{ flex: 1, width: '100%', backgroundColor: themeSurface, justifyContent: 'center', alignItems: 'center' }, animatedStyle]}>
             
             {/* Header Controls */}
             <View style={{
               position: 'absolute',
-              top: insets.top > 0 ? insets.top + 8 : 20,
+              top: statusBarHeight + 8,
               left: 0,
               right: 0,
               flexDirection: 'row',
@@ -1539,7 +1555,7 @@ export default function ImagePreviewModal({
             {isCropping && (
               <View style={{
                 position: 'absolute',
-                bottom: insets.bottom > 0 ? insets.bottom + 10 : 30,
+                bottom: modalBottomInset + 10,
                 left: 0,
                 right: 0,
                 flexDirection: 'row',
@@ -1590,7 +1606,7 @@ export default function ImagePreviewModal({
             {!isCropping && onSaveCroppedImage && singlePhoto && (
               <View style={{
                 position: 'absolute',
-                bottom: insets.bottom > 0 ? insets.bottom + 20 : 40,
+                bottom: modalBottomInset + 20,
                 left: 0,
                 right: 0,
                 alignItems: 'center',
@@ -1676,6 +1692,8 @@ export default function ImagePreviewModal({
     </Modal>
   );
 }
+
+export default React.memo(ImagePreviewModal);
 
 const styles = StyleSheet.create({
   cropCorner: {

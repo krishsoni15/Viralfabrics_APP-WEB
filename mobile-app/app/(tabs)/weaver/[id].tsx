@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, ActivityIndicator, Image, TextInput, Modal, KeyboardAvoidingView, ScrollView, Alert, PanResponder, Animated as RNAnimated, Pressable, Dimensions, useWindowDimensions, Keyboard } from 'react-native';
+import { View, Text, RefreshControl, Platform, TouchableOpacity, ActivityIndicator, Image, TextInput, Modal, KeyboardAvoidingView, ScrollView, Alert, PanResponder, Animated as RNAnimated, Pressable, Dimensions, useWindowDimensions, Keyboard } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -332,6 +333,7 @@ export default function WeaverDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
 
   // Modals visibility
   const [cameraVisible, setCameraVisible] = useState(false);
@@ -433,17 +435,16 @@ export default function WeaverDetailScreen() {
 
   const modalPanResponder = React.useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: (evt) => {
-        const pageY = evt.nativeEvent.pageY;
-        formTouchStartPageY.current = pageY;
-        return pageY < formSheetY.current + 85;
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - formSheetY.current;
+        return touchY > 0 && touchY <= 85;
       },
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gs) => {
-        return formScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
       },
       onMoveShouldSetPanResponderCapture: (_, gs) => {
-        return formScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
       },
       onPanResponderGrant: () => {
         Keyboard.dismiss();
@@ -453,14 +454,8 @@ export default function WeaverDetailScreen() {
           modalTranslateY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gs) => {
-        const isBackdropTouch = formTouchStartPageY.current < formSheetY.current;
-        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
-          closeFormModal();
-          return;
-        }
-
-        if (gs.dy > 50 || gs.vy > 0.2) {
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -469,8 +464,8 @@ export default function WeaverDetailScreen() {
           RNAnimated.spring(modalTranslateY, {
             toValue: 0,
             useNativeDriver: false,
-            tension: 40,
-            friction: 9,
+            tension: 65,
+            friction: 11,
           }).start();
         }
       },
@@ -478,36 +473,29 @@ export default function WeaverDetailScreen() {
   ).current;
 
   const forceCloseForm = useCallback(() => {
-    RNAnimated.timing(modalTranslateY, {
-      toValue: 800,
-      duration: 180,
-      useNativeDriver: false,
-    }).start(() => {
-      setShowForm(false);
-    });
-  }, [modalTranslateY]);
+    setShowForm(false);
+  }, []);
 
   const closeFormModal = useCallback(() => {
-    forceCloseForm();
-  }, [forceCloseForm]);
+    setShowForm(false);
+  }, []);
 
   closeFormModalRef.current = closeFormModal;
 
-  const filterModalTranslateY = React.useRef(new RNAnimated.Value(800)).current;
+  const filterModalTranslateY = React.useRef(new RNAnimated.Value(0)).current;
 
   const filterPanResponder = React.useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: (evt) => {
-        const pageY = evt.nativeEvent.pageY;
-        filterTouchStartPageY.current = pageY;
-        return pageY < filterSheetY.current + 85;
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - filterSheetY.current;
+        return touchY > 0 && touchY <= 85;
       },
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gs) => {
-        return filterScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
       },
       onMoveShouldSetPanResponderCapture: (_, gs) => {
-        return filterScrollOffset.current <= 5 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
       },
       onPanResponderGrant: () => {
         Keyboard.dismiss();
@@ -517,14 +505,8 @@ export default function WeaverDetailScreen() {
           filterModalTranslateY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gs) => {
-        const isBackdropTouch = filterTouchStartPageY.current < filterSheetY.current;
-        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
-          closeFilterModal();
-          return;
-        }
-
-        if (gs.dy > 50 || gs.vy > 0.2) {
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -533,8 +515,8 @@ export default function WeaverDetailScreen() {
           RNAnimated.spring(filterModalTranslateY, {
             toValue: 0,
             useNativeDriver: false,
-            tension: 40,
-            friction: 9,
+            tension: 65,
+            friction: 11,
           }).start();
         }
       },
@@ -542,14 +524,8 @@ export default function WeaverDetailScreen() {
   ).current;
 
   const closeFilterModal = useCallback(() => {
-    RNAnimated.timing(filterModalTranslateY, {
-      toValue: 800,
-      duration: 180,
-      useNativeDriver: false,
-    }).start(() => {
-      setShowFilterModal(false);
-    });
-  }, [filterModalTranslateY]);
+    setShowFilterModal(false);
+  }, []);
 
   React.useEffect(() => {
     if (addSample === 'true') {
@@ -560,23 +536,23 @@ export default function WeaverDetailScreen() {
 
   React.useEffect(() => {
     if (showForm) {
-      modalTranslateY.setValue(800);
-      RNAnimated.timing(modalTranslateY, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: false,
-      }).start();
+      modalTranslateY.setValue(0);
+    } else {
+      const timer = setTimeout(() => {
+        modalTranslateY.setValue(0);
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [showForm]);
 
   React.useEffect(() => {
     if (showFilterModal) {
-      filterModalTranslateY.setValue(800);
-      RNAnimated.timing(filterModalTranslateY, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: false,
-      }).start();
+      filterModalTranslateY.setValue(0);
+    } else {
+      const timer = setTimeout(() => {
+        filterModalTranslateY.setValue(0);
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [showFilterModal]);
 
@@ -895,8 +871,8 @@ export default function WeaverDetailScreen() {
   }, [weaver]);
 
   const renderFormField = (label: string, value: string, keyName: string, placeholder?: string, keyboard?: 'default' | 'numeric') => (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 6 }}>{label}</Text>
+    <View style={{ marginBottom: 10 }}>
+      <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={(t) => setFormData(p => ({ ...p, [keyName]: t }))}
@@ -906,8 +882,9 @@ export default function WeaverDetailScreen() {
         style={{
           backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc',
           borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0',
-          borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13,
-          fontSize: 15, color: theme.text
+          borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9,
+          fontSize: 14.5, color: theme.text,
+          height: 42,
         }}
       />
     </View>
@@ -988,9 +965,10 @@ export default function WeaverDetailScreen() {
           subtitle={search ? 'No samples match your search.' : 'Tap the + button to add a sample.'}
         />
       ) : (
-        <FlatList
+        <FlashList
           data={paginatedSamples}
           keyExtractor={(item: Sample) => item._id}
+          drawDistance={800}
           ListHeaderComponent={() => (
             <View style={{ 
               paddingHorizontal: 20, 
@@ -1050,9 +1028,6 @@ export default function WeaverDetailScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.2}
-          initialNumToRender={5}
-          maxToRenderPerBatch={5}
-          windowSize={5}
           ListFooterComponent={
             loadingMore ? (
               <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
@@ -1118,8 +1093,7 @@ export default function WeaverDetailScreen() {
         </RNAnimated.View>
       )}
 
-      {/* Create/Edit Modal */}
-      <Modal visible={showForm} transparent={true} animationType="none" statusBarTranslucent={true} navigationBarTranslucent={true} onRequestClose={closeFormModal}>
+      <Modal visible={showForm} transparent={true} animationType={isLargeScreen ? 'fade' : 'slide'} statusBarTranslucent={true} navigationBarTranslucent={true} onRequestClose={closeFormModal}>
 
         <View style={{
           flex: 1,
@@ -1151,9 +1125,9 @@ export default function WeaverDetailScreen() {
               paddingTop: 12,
               paddingHorizontal: 24,
               paddingBottom: isLargeScreen ? 24 : 0,
-              maxHeight: '92%',
+              height: isLargeScreen ? '92%' : '92%',
               width: '100%',
-              maxWidth: isLargeScreen ? modalMaxWidth : '100%',
+              maxWidth: isLargeScreen ? 850 : '100%',
               transform: [{ translateY: modalTranslateY }],
               shadowColor: '#000',
               shadowOffset: { width: 0, height: -4 },
@@ -1163,8 +1137,8 @@ export default function WeaverDetailScreen() {
             }}
           >
             <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 120}
               style={{ flex: 1 }}
             >
               {/* Swipe Drag Handle Bar */}
@@ -1199,10 +1173,11 @@ export default function WeaverDetailScreen() {
               </View>
 
               <ScrollView
+                ref={scrollViewRef}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 220 : 220 }}
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
+                keyboardDismissMode="none"
                 onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
                 scrollEventThrottle={16}
               >
@@ -1213,15 +1188,14 @@ export default function WeaverDetailScreen() {
                 {renderFormField('Quality Name *', formData.qualityName, 'qualityName', 'Quality name')}
                 
                 {/* Type Selector Dropdown */}
-                <View style={{ marginBottom: 14, zIndex: 100 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 6 }}>Type</Text>
+                <View style={{ marginBottom: 10, zIndex: 100 }}>
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>Type</Text>
                   <View
                     style={{
-                      height: 50,
+                      height: 42,
                       flexDirection: 'row',
                       alignItems: 'center',
-                      paddingHorizontal: 14,
-                      borderRadius: 14,
+                      borderRadius: 12,
                       borderWidth: 1,
                       borderColor: showTypeDropdown ? (isDarkMode ? Colors.primary[400] : Colors.primary[600]) : (isDarkMode ? '#334155' : '#e2e8f0'),
                       backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc',
@@ -1610,7 +1584,7 @@ export default function WeaverDetailScreen() {
       />
 
       {/* Filter Modal */}
-      <Modal visible={showFilterModal} animationType="none" transparent statusBarTranslucent={true} navigationBarTranslucent={true} onRequestClose={closeFilterModal}>
+      <Modal visible={showFilterModal} animationType={isLargeScreen ? 'fade' : 'slide'} transparent statusBarTranslucent={true} navigationBarTranslucent={true} onRequestClose={closeFilterModal}>
 
         <View style={{
           flex: 1,
@@ -1642,9 +1616,9 @@ export default function WeaverDetailScreen() {
               paddingTop: 12,
               paddingHorizontal: 24,
               paddingBottom: isLargeScreen ? 24 : 0,
-              maxHeight: screenHeight * 0.8,
+              height: isLargeScreen ? 550 : 520,
               width: '100%',
-              maxWidth: isLargeScreen ? modalMaxWidth : '100%',
+              maxWidth: isLargeScreen ? 800 : '100%',
               transform: [{ translateY: filterModalTranslateY }],
               shadowColor: '#000',
               shadowOffset: { width: 0, height: -4 },

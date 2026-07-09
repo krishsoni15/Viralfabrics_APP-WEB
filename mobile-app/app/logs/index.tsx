@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Image, Modal, Pressable, StyleSheet, Clipboard, PanResponder, Animated as RNAnimated } from 'react-native';
+import { View, Text, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Image, Modal, Pressable, StyleSheet, Clipboard, PanResponder, Animated as RNAnimated } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -105,6 +106,12 @@ export default function LogsScreen() {
   const [selectedLog, setSelectedLog] = useState<any | null>(null);
   const [copiedDetails, setCopiedDetails] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
 
   // Pan Translation Values for swipe gestures
   const filterPanY = useRef(new RNAnimated.Value(600)).current;
@@ -489,9 +496,10 @@ export default function LogsScreen() {
           subtitle={debouncedSearch || activeFilterCount > 0 ? 'No logs match your active filters or search term.' : 'No activity logged yet.'} 
         />
       ) : (
-        <FlatList
+        <FlashList
           data={logs}
           keyExtractor={(item: any, i: number) => (item._id || item.id || i.toString()) + '-' + i}
+          drawDistance={800}
           ListHeaderComponent={() => {
             const totalMatchingCount = logsQuery.data?.pages[0]?.pagination?.total || logs.length;
             const displayGrandTotal = grandTotal || totalMatchingCount;

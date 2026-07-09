@@ -27,6 +27,7 @@ import SystemConfig from '@/models/SystemConfig';
 import FinishLotStock from '@/models/FinishLotStock';
 import GreyMaterial from '@/models/GreyMaterial';
 import Sampling from '@/models/Sampling';
+import PurchaseOrder from '@/models/PurchaseOrder';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -100,8 +101,12 @@ function buildCSV(headers: string[], rows: Record<string, string>[]): string {
 
 // ── Main handler ─────────────────────────────────────────────────────
 
-export async function GET() {
+import { NextRequest } from 'next/server';
+
+export async function GET(req: NextRequest) {
     try {
+        const { searchParams } = new URL(req.url);
+        const isClient = searchParams.get('client') === 'true';
         await dbConnect();
 
         // Fetch ALL collections in parallel
@@ -110,7 +115,7 @@ export async function GET() {
             mills, millInputs, millOutputs, dispatches, processes,
             logs, users, counters, samples, weavers,
             qualityNames, weaverQualityNames, samplingWeavers, systemConfigs,
-            finishLotStocks, greyMaterials, samplings
+            finishLotStocks, greyMaterials, samplings, purchaseOrders
         ] = await Promise.all([
             Order.find({}).lean(),
             Party.find({}).lean(),
@@ -135,6 +140,7 @@ export async function GET() {
             FinishLotStock.find({}).lean(),
             GreyMaterial.find({}).lean(),
             Sampling.find({}).lean(),
+            PurchaseOrder.find({}).lean(),
         ]);
 
         // Collection map for iteration
@@ -143,7 +149,7 @@ export async function GET() {
             mills, millInputs, millOutputs, dispatches, processes,
             logs, users, counters, samples, weavers,
             qualityNames, weaverQualityNames, samplingWeavers, systemConfigs,
-            finishLotStocks, greyMaterials, samplings
+            finishLotStocks, greyMaterials, samplings, purchaseOrders
         };
 
         // Timestamp for filenames
@@ -179,55 +185,58 @@ export async function GET() {
 
         // Full structured backup
         jsonFolder.file('full_backup.json', JSON.stringify({ metadata, collections: eJsonCollections }, null, 2));
-        // Individual collection files
-        for (const [name, eDocs] of Object.entries(eJsonCollections)) {
-            if (eDocs.length > 0) {
-                jsonFolder.file(`${name}.json`, JSON.stringify(eDocs, null, 2));
+        // Individual collection files, CSV, and Excel are skipped for client backups for maximum speed
+        if (!isClient) {
+            // Individual collection files
+            for (const [name, eDocs] of Object.entries(eJsonCollections)) {
+                if (eDocs.length > 0) {
+                    jsonFolder.file(`${name}.json`, JSON.stringify(eDocs, null, 2));
+                }
             }
-        }
 
-        // ──────── 2. CSV folder ──────────────────────────────────────
-        const csvFolder = root.folder('CSV')!;
-        for (const [name, docs] of Object.entries(collections)) {
-            if (docs.length === 0) continue;
-            const { headers, rows } = docsToFlatRows(docs);
-            csvFolder.file(`${name}.csv`, buildCSV(headers, rows));
-        }
+            // ──────── 2. CSV folder ──────────────────────────────────────
+            const csvFolder = root.folder('CSV')!;
+            for (const [name, docs] of Object.entries(collections)) {
+                if (docs.length === 0) continue;
+                const { headers, rows } = docsToFlatRows(docs);
+                csvFolder.file(`${name}.csv`, buildCSV(headers, rows));
+            }
 
-        // ──────── 3. Excel file (all collections as sheets) ──────────
-        const wb = XLSX.utils.book_new();
+            // ──────── 3. Excel file (all collections as sheets) ──────────
+            const wb = XLSX.utils.book_new();
 
-        // Metadata sheet
-        const metaRows = Object.entries(totalRecords).map(([collection, count]) => ({
-            Collection: collection,
-            'Record Count': count,
-        }));
-        metaRows.push({ Collection: 'TOTAL', 'Record Count': Object.values(totalRecords).reduce((a, b) => a + b, 0) });
-        const metaSheet = XLSX.utils.json_to_sheet(metaRows);
-        metaSheet['!cols'] = [{ wch: 25 }, { wch: 15 }];
-        XLSX.utils.book_append_sheet(wb, metaSheet, 'Summary');
-
-        // One sheet per collection
-        for (const [name, docs] of Object.entries(collections)) {
-            if (docs.length === 0) continue;
-            const { headers, rows } = docsToFlatRows(docs);
-            const sheetData = rows.map(row => {
-                const obj: Record<string, string> = {};
-                headers.forEach(h => { obj[h] = row[h] || ''; });
-                return obj;
-            });
-            const ws = XLSX.utils.json_to_sheet(sheetData);
-            // Auto-size columns
-            ws['!cols'] = headers.map(h => ({
-                wch: Math.min(Math.max(h.length, 12), 40),
+            // Metadata sheet
+            const metaRows = Object.entries(totalRecords).map(([collection, count]) => ({
+                Collection: collection,
+                'Record Count': count,
             }));
-            // Truncate sheet name to 31 chars (Excel limit)
-            const sheetName = name.length > 31 ? name.slice(0, 31) : name;
-            XLSX.utils.book_append_sheet(wb, ws, sheetName);
-        }
+            metaRows.push({ Collection: 'TOTAL', 'Record Count': Object.values(totalRecords).reduce((a, b) => a + b, 0) });
+            const metaSheet = XLSX.utils.json_to_sheet(metaRows);
+            metaSheet['!cols'] = [{ wch: 25 }, { wch: 15 }];
+            XLSX.utils.book_append_sheet(wb, metaSheet, 'Summary');
 
-        const xlsxBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        root.file(`ViralFabrics_Backup_${timestamp}.xlsx`, xlsxBuffer);
+            // One sheet per collection
+            for (const [name, docs] of Object.entries(collections)) {
+                if (docs.length === 0) continue;
+                const { headers, rows } = docsToFlatRows(docs);
+                const sheetData = rows.map(row => {
+                    const obj: Record<string, string> = {};
+                    headers.forEach(h => { obj[h] = row[h] || ''; });
+                    return obj;
+                });
+                const ws = XLSX.utils.json_to_sheet(sheetData);
+                // Auto-size columns
+                ws['!cols'] = headers.map(h => ({
+                    wch: Math.min(Math.max(h.length, 12), 40),
+                }));
+                // Truncate sheet name to 31 chars (Excel limit)
+                const sheetName = name.length > 31 ? name.slice(0, 31) : name;
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            }
+
+            const xlsxBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+            root.file(`ViralFabrics_Backup_${timestamp}.xlsx`, xlsxBuffer);
+        }
 
         // ──────── 4. README inside zip ───────────────────────────────
         const readme = `# ViralFabrics CRM — Full Backup

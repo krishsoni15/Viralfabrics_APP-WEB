@@ -125,7 +125,14 @@ If you want to bypass the TestFlight review queue and install the app directly o
 
 ---
 
-## 🛠️ 4. Mobile MVP Roadmap & Architecture
+## 📖 4. iOS Display, Real-Time Architecture & Manual Testing Guide
+
+For detailed technical specifications and step-by-step manual test cases regarding iOS compatibility (phones/tablets, orientations, 120Hz ProMotion), background execution, modal swipe-dismiss gestures, offline caching, and Socket.IO real-time features:
+👉 **Go to the [iOS Device & Testing Guide](./IOS_DEVICE_AND_TESTING_GUIDE.md)**
+
+---
+
+## 🛠️ 5. Mobile MVP Roadmap & Architecture
 
 The app is preconfigured as a 3-page MVP implementing core workflows:
 

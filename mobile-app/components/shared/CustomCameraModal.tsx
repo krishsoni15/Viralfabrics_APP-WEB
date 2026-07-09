@@ -9,11 +9,12 @@ import {
   Platform,
   Alert,
   Image,
-  FlatList,
   ActivityIndicator,
   useWindowDimensions,
-  Keyboard
+  Keyboard,
+  StatusBar
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { X, Check, Zap, RotateCw, Grid, Trash2, Camera, Plus, Minus, Image as ImageIcon, ChevronLeft, ChevronRight, FlipHorizontal } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import { Colors } from '../../constants/colors';
@@ -167,7 +168,151 @@ function getViewfinderDimensions(
   return { width: W_vf, height: H_vf };
 }
 
-export default function CustomCameraModal({
+// ── Rendering Optimization Sub-components ──
+
+const ViewfinderGrid = React.memo(({ visible }: { visible: boolean }) => {
+  if (!visible) return null;
+  return (
+    <View style={styles.gridContainer} pointerEvents="none">
+      <View style={styles.gridRow}>
+        <View style={[styles.gridCell, styles.borderRight, styles.borderBottom]} />
+        <View style={[styles.gridCell, styles.borderRight, styles.borderBottom]} />
+        <View style={[styles.gridCell, styles.borderBottom]} />
+      </View>
+      <View style={styles.gridRow}>
+        <View style={[styles.gridCell, styles.borderRight, styles.borderBottom]} />
+        <View style={[styles.gridCell, styles.borderRight, styles.borderBottom]} />
+        <View style={[styles.gridCell, styles.borderBottom]} />
+      </View>
+      <View style={styles.gridRow}>
+        <View style={[styles.gridCell, styles.borderRight]} />
+        <View style={[styles.gridCell, styles.borderRight]} />
+        <View style={styles.gridCell} />
+      </View>
+    </View>
+  );
+});
+
+interface MemoizedRatioSelectorProps {
+  selectedRatio: '4:3' | '16:9' | '1:1' | 'Full';
+  onSelectRatio: (ratio: '4:3' | '16:9' | '1:1' | 'Full') => void;
+}
+
+const MemoizedRatioSelector = React.memo(({
+  selectedRatio,
+  onSelectRatio,
+}: MemoizedRatioSelectorProps) => {
+  return (
+    <View style={styles.ratioSelectorContainer}>
+      {(['4:3', '16:9', '1:1', 'Full'] as const).map((r) => {
+        const isActive = selectedRatio === r;
+        return (
+          <TouchableOpacity
+            key={r}
+            onPress={() => {
+              if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onSelectRatio(r);
+            }}
+            style={[styles.ratioOption, isActive && styles.ratioOptionActive]}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.ratioText, isActive && styles.ratioTextActive]}>
+              {r}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+});
+
+interface CameraControlPanelProps {
+  hasNativeCameraSupport: boolean;
+  loading: boolean;
+  singlePhoto: boolean;
+  capturedPhotosCount: number;
+  onPickFromGallery: () => void;
+  onTakePicture: () => void;
+  onFallbackCapture: () => void;
+  onDone: () => void;
+}
+
+const CameraControlPanel = React.memo(({
+  hasNativeCameraSupport,
+  loading,
+  singlePhoto,
+  capturedPhotosCount,
+  onPickFromGallery,
+  onTakePicture,
+  onFallbackCapture,
+  onDone,
+}: CameraControlPanelProps) => {
+  return (
+    <View style={styles.triggerPanel}>
+      {/* Left Column */}
+      <View style={{ flex: 1, alignItems: 'flex-start' }}>
+        <TouchableOpacity
+          style={styles.galleryButton}
+          onPress={onPickFromGallery}
+          activeOpacity={0.8}
+        >
+          <ImageIcon size={22} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Center Column */}
+      <View style={{ alignItems: 'center' }}>
+        {hasNativeCameraSupport ? (
+          <TouchableOpacity
+            style={styles.shutterOuter}
+            onPress={onTakePicture}
+            activeOpacity={0.85}
+          >
+            <View style={styles.shutterInner}>
+              {loading && <ActivityIndicator size="small" color={Colors.primary[600]} />}
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.shutterOuter}
+            onPress={onFallbackCapture}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.shutterInner, { backgroundColor: '#ea580c' }]}>
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Camera size={24} color="#fff" />
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Right Column */}
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        {!singlePhoto ? (
+          <TouchableOpacity
+            style={[
+              styles.doneButton,
+              capturedPhotosCount === 0 && styles.doneButtonDisabled
+            ]}
+            onPress={onDone}
+            disabled={capturedPhotosCount === 0}
+            activeOpacity={0.8}
+          >
+            <Check size={20} color="#fff" style={{ marginRight: 4 }} />
+            <Text style={styles.doneButtonText}>Done</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 50 }} />
+        )}
+      </View>
+    </View>
+  );
+});
+
+function CustomCameraModal({
   visible,
   onClose,
   onPhotosCaptured,
@@ -664,25 +809,7 @@ export default function CustomCameraModal({
                     />
                   )}
                   {/* Grid Overlay Guide */}
-                  {showGrid && (
-                    <View style={styles.gridContainer} pointerEvents="none">
-                      <View style={styles.gridRow}>
-                        <View style={[styles.gridCell, styles.borderRight, styles.borderBottom]} />
-                        <View style={[styles.gridCell, styles.borderRight, styles.borderBottom]} />
-                        <View style={[styles.gridCell, styles.borderBottom]} />
-                      </View>
-                      <View style={styles.gridRow}>
-                        <View style={[styles.gridCell, styles.borderRight, styles.borderBottom]} />
-                        <View style={[styles.gridCell, styles.borderRight, styles.borderBottom]} />
-                        <View style={[styles.gridCell, styles.borderBottom]} />
-                      </View>
-                      <View style={styles.gridRow}>
-                        <View style={[styles.gridCell, styles.borderRight]} />
-                        <View style={[styles.gridCell, styles.borderRight]} />
-                        <View style={styles.gridCell} />
-                      </View>
-                    </View>
-                  )}
+                  <ViewfinderGrid visible={showGrid} />
                 </Animated.View>
               </GestureDetector>
 
@@ -786,7 +913,7 @@ export default function CustomCameraModal({
               </View>
 
               {/* Captured Thumbnails List */}
-              <FlatList
+              <FlashList
                 data={capturedPhotos}
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -837,97 +964,22 @@ export default function CustomCameraModal({
           )}
 
           {/* Aspect Ratio Selector */}
-          <View style={styles.ratioSelectorContainer}>
-            {(['4:3', '16:9', '1:1', 'Full'] as const).map((r) => {
-              const isActive = selectedRatio === r;
-              return (
-                <TouchableOpacity
-                  key={r}
-                  onPress={() => {
-                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSelectedRatio(r);
-                  }}
-                  style={[styles.ratioOption, isActive && styles.ratioOptionActive]}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.ratioText, isActive && styles.ratioTextActive]}>
-                    {r}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <MemoizedRatioSelector
+            selectedRatio={selectedRatio}
+            onSelectRatio={setSelectedRatio}
+          />
 
           {/* Capture Trigger Panel */}
-          <View style={styles.triggerPanel}>
-            {/* Left Column */}
-            <View style={{ flex: 1, alignItems: 'flex-start' }}>
-              <TouchableOpacity
-                style={styles.galleryButton}
-                onPress={() => {
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  handlePickFromGallery();
-                }}
-                activeOpacity={0.8}
-              >
-                <ImageIcon size={22} color="#fff" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Center Column */}
-            <View style={{ alignItems: 'center' }}>
-              {hasNativeCameraSupport ? (
-                // Capture Shutter Button for custom camera
-                <TouchableOpacity
-                  style={styles.shutterOuter}
-                  onPress={handleTakePicture}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.shutterInner}>
-                    {loading && <ActivityIndicator size="small" color={Colors.primary[600]} />}
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                // Capture Shutter Button for native fallback camera
-                <TouchableOpacity
-                  style={styles.shutterOuter}
-                  onPress={() => {
-                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    handleFallbackCapture();
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <View style={[styles.shutterInner, { backgroundColor: '#ea580c' }]}>
-                    {loading ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Camera size={24} color="#fff" />
-                    )}
-                  </View>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Right Column */}
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              {!singlePhoto ? (
-                <TouchableOpacity
-                  style={[
-                    styles.doneButton,
-                    capturedPhotos.length === 0 && styles.doneButtonDisabled
-                  ]}
-                  onPress={handleDone}
-                  disabled={capturedPhotos.length === 0}
-                  activeOpacity={0.8}
-                >
-                  <Check size={20} color="#fff" style={{ marginRight: 4 }} />
-                  <Text style={styles.doneButtonText}>Done</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={{ width: 50 }} />
-              )}
-            </View>
-          </View>
+          <CameraControlPanel
+            hasNativeCameraSupport={!!hasNativeCameraSupport}
+            loading={loading}
+            singlePhoto={singlePhoto}
+            capturedPhotosCount={capturedPhotos.length}
+            onPickFromGallery={handlePickFromGallery}
+            onTakePicture={handleTakePicture}
+            onFallbackCapture={handleFallbackCapture}
+            onDone={handleDone}
+          />
         </View>
 
         {/* Shutter Screen Flash Overlay */}
@@ -972,11 +1024,15 @@ export default function CustomCameraModal({
   );
 }
 
-// Helper component to handle top status bar safe area padding
+export default React.memo(CustomCameraModal);
+
 function SafeAreaOverlay({ children, style }: { children: React.ReactNode; style: any }) {
   const insets = useSafeAreaInsets();
+  const statusBarHeight = Platform.OS === 'android'
+    ? (StatusBar.currentHeight || 24)
+    : (insets.top > 0 ? insets.top : 20);
   return (
-    <View style={[style, { paddingTop: insets.top > 0 ? insets.top + 8 : 16 }]}>
+    <View style={[style, { paddingTop: statusBarHeight + 8 }]}>
       {children}
     </View>
   );

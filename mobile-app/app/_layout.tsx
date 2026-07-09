@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, ActivityIndicator, StyleSheet, Text, useColorScheme, Image, Modal, TouchableOpacity, Pressable, LogBox, StatusBar, Platform } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text, useColorScheme, Image, Modal, TouchableOpacity, Pressable, LogBox, StatusBar, Platform, AppState } from 'react-native';
 import { Stack, router, useSegments } from 'expo-router';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
@@ -22,8 +22,9 @@ import { CONFIG } from '../constants/config';
 import ToastContainer from '../components/ui/Toast';
 import Button from '../components/ui/Button';
 import { ShieldAlert, HardDrive, CheckCircle, X, AlertTriangle, WifiOff } from 'lucide-react-native';
-import JSZip from 'jszip';
-import * as FileSystem from 'expo-file-system/legacy';
+// JSZip and FileSystem are lazy-imported in handleBackupConfirm to avoid slowing startup
+let _JSZip: any = null;
+let _FileSystem: any = null;
 let Sharing: any = null;
 try {
   Sharing = require('expo-sharing');
@@ -32,14 +33,50 @@ try {
 }
 import BackupModal from '../components/shared/BackupModal';
 import * as SplashScreen from 'expo-splash-screen';
+import { savePdfToDevice } from '../utils/pdfUtils';
 
 // Keep the splash screen visible while we fetch resources / validate session
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// Suppress the shadow style warning on web platform
+// Suppress deprecated warnings in development terminal & browser console
+const originalWarn = console.warn;
+console.warn = (...args: any[]) => {
+  const message = typeof args[0] === 'string' ? args[0] : args.join(' ');
+  if (
+    message.includes('InteractionManager has been deprecated') ||
+    (message.includes('shadow*') && message.includes('deprecated')) ||
+    message.includes('boxShadow') ||
+    message.includes('pointerEvents is deprecated')
+  ) {
+    return;
+  }
+  originalWarn(...args);
+};
+
 LogBox.ignoreLogs([
-  '"shadow*" style props are deprecated',
+  'shadow* style props are deprecated',
+  'boxShadow',
+  'InteractionManager has been deprecated',
+  'props.pointerEvents is deprecated',
 ]);
+
+// Production logging overrides (CPU optimization)
+if (!__DEV__) {
+  console.log = () => {};
+  console.info = () => {};
+  console.warn = () => {};
+}
+
+// Global hook to trigger garbage collection when app is backgrounded (adaptive RAM saving)
+AppState.addEventListener('change', (nextAppState) => {
+  if (nextAppState === 'background' && (global as any).gc) {
+    try {
+      (global as any).gc();
+    } catch (e) {
+      // Fail silently in production
+    }
+  }
+});
 
 // CSS import removed — all styles use React Native StyleSheet / inline styles
 
@@ -47,6 +84,10 @@ const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error: any) => {
       if (error?.response?.status === 401) return;
+      
+      const isOffline = useAppStore.getState().isOffline;
+      const isNetworkError = !error?.response || error?.code === 'ERR_NETWORK' || error?.message === 'Network Error';
+      if (isOffline || isNetworkError) return;
 
       const message = error?.response?.data?.message || error?.message || 'Server connection failed';
       useAppStore.getState().addToast({
@@ -59,6 +100,10 @@ const queryClient = new QueryClient({
   mutationCache: new MutationCache({
     onError: (error: any) => {
       if (error?.response?.status === 401) return;
+      
+      const isOffline = useAppStore.getState().isOffline;
+      const isNetworkError = !error?.response || error?.code === 'ERR_NETWORK' || error?.message === 'Network Error';
+      if (isOffline || isNetworkError) return;
 
       const message = error?.response?.data?.message || error?.message || 'Could not complete request';
       useAppStore.getState().addToast({
@@ -89,6 +134,7 @@ function RootLayoutNav() {
     isDarkMode,
     syncSystemTheme,
     setSyncSystemTheme,
+    setThemePreference,
     user,
     isBackupModalOpen,
     setIsBackupModalOpen,
@@ -106,6 +152,8 @@ function RootLayoutNav() {
   const [initializing, setInitializing] = useState(true);
 
   const abortBackupRef = useRef(false);
+  const activeDownloadRef = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [dismissedOffline, setDismissedOffline] = useState(false);
 
@@ -119,6 +167,11 @@ function RootLayoutNav() {
     let lastCheckedDataChangeTimestamp: string | null = null;
 
     const interval = setInterval(async () => {
+      // Pause polling if app is in background to save battery, data, and prevent OS terminations
+      if (AppState.currentState !== 'active') {
+        return;
+      }
+
       if (isPolling) return;
       isPolling = true;
 
@@ -204,33 +257,37 @@ function RootLayoutNav() {
   // Sync system dark mode automatically or use stored preference
   const systemColorScheme = useColorScheme();
 
-  // Load stored theme preference once on mount
+  // Load stored theme preference once on mount — parallelized for speed
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       try {
-        const syncSystem = await storage.getSyncSystemTheme();
-        setSyncSystemTheme(syncSystem);
+        const [syncSystem, storedMode] = await Promise.all([
+          storage.getSyncSystemTheme(),
+          storage.getDarkMode(),
+        ]);
+        if (!isMounted) return;
 
-        if (syncSystem) {
-          setDarkMode(systemColorScheme === 'dark');
-        } else {
-          const storedMode = await storage.getDarkMode();
-          if (storedMode !== null) {
-            setDarkMode(storedMode);
-          } else {
-            setDarkMode(systemColorScheme === 'dark');
-          }
-        }
+        const resolvedDark = syncSystem
+          ? (systemColorScheme === 'dark')
+          : (storedMode !== null ? storedMode : (systemColorScheme === 'dark'));
+
+        setThemePreference(syncSystem, resolvedDark);
       } catch (e) {
-        setDarkMode(systemColorScheme === 'dark');
+        if (isMounted) {
+          setThemePreference(true, systemColorScheme === 'dark');
+        }
       }
     })();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Update theme dynamically when system color scheme changes, if sync is enabled
   useEffect(() => {
     if (syncSystemTheme) {
-      setDarkMode(systemColorScheme === 'dark');
+      setThemePreference(true, systemColorScheme === 'dark');
     }
   }, [systemColorScheme, syncSystemTheme]);
 
@@ -254,33 +311,89 @@ function RootLayoutNav() {
     }
   }, []);
 
+  // Synchronize network online/offline status periodically on native mobile
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    let isMounted = true;
+    let timer: NodeJS.Timeout;
+
+    const checkConnectivity = async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        // Fetch to verify network path to API server is reachable
+        await fetch(`${CONFIG.API_URL}/api/weavers`, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: { 'Cache-Control': 'no-cache' }
+        }).catch((err) => {
+          // 401 Unauthorized or other HTTP responses don't reject fetch, only network errors do.
+          // If we receive any HTTP response (even error status), the server is reachable and we are online.
+          // If fetch fails completely, it throws a network error.
+          throw err;
+        });
+        
+        clearTimeout(timeoutId);
+        if (isMounted) {
+          setIsOffline(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setIsOffline(true);
+        }
+      }
+    };
+
+    checkConnectivity();
+    timer = setInterval(checkConnectivity, 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [setIsOffline]);
+
   useEffect(() => {
     if (!isOffline) {
       setDismissedOffline(false);
     }
   }, [isOffline]);
 
-  // Restore session on app start
+  // Restore session on app start — parallelized storage reads for speed
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       const startTime = Date.now();
       try {
-        // Check for stored token and user locally (super fast)
-        const token = await storage.getToken();
-        const storedUser = await storage.getUser();
+        // Read token and user in parallel (single round-trip)
+        const [token, storedUser] = await Promise.all([
+          storage.getToken(),
+          storage.getUser(),
+        ]);
         
+        if (!isMounted) return;
+
         if (!token || !storedUser) {
           clearUser();
           setLoading(false);
         } else {
-          // Restore user session instantly from local storage cache
+          // Restore user session state locally
           setUser(storedUser);
-          setLoading(false);
           
-          // Validate session in the background
-          authService.validateSession().then(async (result) => {
+          try {
+            // Validate session with a 2-second timeout to avoid locking the screen on poor connections
+            const validationPromise = authService.validateSession();
+            const timeoutPromise = new Promise<{ valid: boolean; user?: any }>((resolve) => 
+              setTimeout(() => resolve({ valid: true }), 2000)
+            );
+            
+            const result = await Promise.race([validationPromise, timeoutPromise]);
+            if (!isMounted) return;
+
             if (result.valid) {
-              if (result.user) {
+              if (result.user && (result.user.id || result.user._id)) {
                 setUser(result.user);
                 await storage.setUser(result.user); // update local cache
               }
@@ -289,26 +402,39 @@ function RootLayoutNav() {
               await storage.clearAll();
               clearUser();
             }
-          }).catch(() => {
+          } catch (err) {
             // Network failed, keep current session (offline/poor connection support)
             if (__DEV__) {
               console.log('[Offline Mode] Network failed to validate session, keeping local cached user.');
             }
-          });
+          } finally {
+            if (isMounted) {
+              setLoading(false);
+            }
+          }
         }
       } catch (err) {
-        await storage.clearAll();
-        clearUser();
-        setLoading(false);
+        if (isMounted) {
+          await storage.clearAll();
+          clearUser();
+          setLoading(false);
+        }
       } finally {
-        // Ensure the splash screen stays visible for at least 1.5 seconds so users can see the branding and loader
-        const elapsedTime = Date.now() - startTime;
-        const remainingTime = Math.max(0, 1500 - elapsedTime);
-        setTimeout(() => {
-          setInitializing(false);
-        }, remainingTime);
+        if (isMounted) {
+          // Brief splash for branding (300ms) — reduced from 1500ms for faster startup
+          const elapsedTime = Date.now() - startTime;
+          const remainingTime = Math.max(0, 300 - elapsedTime);
+          setTimeout(() => {
+            if (isMounted) {
+              setInitializing(false);
+            }
+          }, remainingTime);
+        }
       }
     })();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Hide splash screen when initialization is finished
@@ -340,6 +466,17 @@ function RootLayoutNav() {
     abortBackupRef.current = false;
     setBackupStatusText('Downloading textual data...');
 
+    // Lazy-load heavy modules only when backup is used
+    if (!_JSZip) {
+      const mod = await import('jszip');
+      _JSZip = mod.default || mod;
+    }
+    if (!_FileSystem && Platform.OS !== 'web') {
+      _FileSystem = await import('expo-file-system/legacy');
+    }
+    const FileSystem = _FileSystem;
+    const JSZip = _JSZip;
+
     const tempZipPath = Platform.OS === 'web' ? '' : `${FileSystem.cacheDirectory}temp_backup.zip`;
     let finalZipPath = '';
 
@@ -350,7 +487,7 @@ function RootLayoutNav() {
       let zip;
 
       if (Platform.OS === 'web') {
-        const response = await fetch(`${CONFIG.API_URL}/api/backup`, {
+        const response = await fetch(`${CONFIG.API_URL}/api/backup?client=true`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -359,18 +496,36 @@ function RootLayoutNav() {
         const blob = await response.blob();
         zip = await JSZip.loadAsync(blob);
       } else {
-        const downloadResult = await FileSystem.downloadAsync(
-          `${CONFIG.API_URL}/api/backup`,
+        const downloadResumable = FileSystem.createDownloadResumable(
+          `${CONFIG.API_URL}/api/backup?client=true`,
           tempZipPath,
           {
             headers: {
               Authorization: `Bearer ${token}`,
             },
+          },
+          (downloadProgress: any) => {
+            const totalBytesWritten = downloadProgress.totalBytesWritten;
+            const totalBytesExpectedToWrite = downloadProgress.totalBytesExpectedToWrite;
+            let progress = 0;
+            if (totalBytesExpectedToWrite > 0) {
+              progress = Math.floor((totalBytesWritten / totalBytesExpectedToWrite) * 100);
+            } else {
+              // Estimate progress assuming a standard 1MB zip size if Content-Length is missing or chunked
+              const estimatedTotal = 1000 * 1024;
+              progress = Math.floor((totalBytesWritten / estimatedTotal) * 100);
+            }
+            setBackupProgress(Math.min(99, progress));
+            setBackupStatusText(`Downloading data (${totalBytesWritten.toLocaleString()} / ${totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite.toLocaleString() : '1,000,000+'} bytes)...`);
           }
         );
+        
+        activeDownloadRef.current = downloadResumable;
+        const downloadResult = await downloadResumable.downloadAsync();
+        activeDownloadRef.current = null;
 
-        if (downloadResult.status !== 200) {
-          throw new Error(`Backup failed with status code ${downloadResult.status}`);
+        if (!downloadResult || downloadResult.status !== 200) {
+          throw new Error(`Backup failed with status code ${downloadResult ? downloadResult.status : 'cancelled'}`);
         }
 
         if (abortBackupRef.current) throw new Error('BACKUP_CANCELLED');
@@ -397,6 +552,18 @@ function RootLayoutNav() {
         const collections = backupData.collections || {};
 
         const organizedRoot = zip.folder('Organized Client Backup');
+        if (organizedRoot) {
+          organizedRoot.folder('Orders');
+          organizedRoot.folder('Purchase Orders');
+          organizedRoot.folder('Dispatches');
+          organizedRoot.folder('Labs');
+          organizedRoot.folder('Samples');
+          organizedRoot.folder('Samplings');
+          organizedRoot.folder('GreyMaterials');
+          organizedRoot.folder('FinishLotStocks');
+          organizedRoot.folder('Fabrics');
+          organizedRoot.folder('Users');
+        }
         const imageUrlsToFetch: { url: string; folder: string; filename: string }[] = [];
 
         const processDoc = (
@@ -486,13 +653,29 @@ function RootLayoutNav() {
           processDoc(user, 'Users', 'email', (d) => (d.profilePhoto ? [d.profilePhoto] : []));
         });
 
+        // PurchaseOrders
+        (collections.purchaseOrders || []).forEach((po: any) => {
+          processDoc(po, 'Purchase Orders', 'poNumber', (d) => {
+            const urls: string[] = [];
+            if (d.specs && d.specs.attachments && Array.isArray(d.specs.attachments)) {
+              d.specs.attachments.forEach((a: any) => {
+                if (a.url) urls.push(a.url);
+              });
+            }
+            return urls;
+          });
+        });
+
         // Fetch images in chunks
         if (includeImages) {
           const total = imageUrlsToFetch.length;
           if (total > 0) {
+            const abortController = new AbortController();
+            abortControllerRef.current = abortController;
+            
             setBackupStatusText(`Fetching ${total} media files...`);
             let fetched = 0;
-            const chunkSize = 3;
+            const chunkSize = 15; // Increased from 3 to 15 for faster concurrent downloads
             for (let i = 0; i < total; i += chunkSize) {
               if (abortBackupRef.current) throw new Error('BACKUP_CANCELLED');
               const chunk = imageUrlsToFetch.slice(i, i + chunkSize);
@@ -500,39 +683,18 @@ function RootLayoutNav() {
                 chunk.map(async (item) => {
                   if (abortBackupRef.current) return;
                   try {
-                    if (Platform.OS === 'web') {
-                      const res = await fetch(
-                        `${CONFIG.API_URL}/api/proxy-image?url=${encodeURIComponent(item.url)}`,
-                        {
-                          headers: {
-                            Authorization: `Bearer ${token}`,
-                          },
-                        }
-                      );
-                      if (res.ok) {
-                        const imgBlob = await res.blob();
-                        zip.folder(item.folder)?.file(item.filename, imgBlob);
+                    const res = await fetch(
+                      `${CONFIG.API_URL}/api/proxy-image?url=${encodeURIComponent(item.url)}`,
+                      {
+                        headers: {
+                          Authorization: `Bearer ${token}`,
+                        },
+                        signal: abortController.signal,
                       }
-                    } else {
-                      const imgTempPath = `${FileSystem.cacheDirectory}temp_img_${i}_${Math.random()
-                        .toString(36)
-                        .substring(7)}`;
-                      const imgDownloadResult = await FileSystem.downloadAsync(
-                        `${CONFIG.API_URL}/api/proxy-image?url=${encodeURIComponent(item.url)}`,
-                        imgTempPath,
-                        {
-                          headers: {
-                            Authorization: `Bearer ${token}`,
-                          },
-                        }
-                      );
-                      if (imgDownloadResult.status === 200) {
-                        const imgBase64 = await FileSystem.readAsStringAsync(imgTempPath, {
-                          encoding: 'base64',
-                        });
-                        zip.folder(item.folder)?.file(item.filename, imgBase64, { base64: true });
-                      }
-                      await FileSystem.deleteAsync(imgTempPath, { idempotent: true });
+                    );
+                    if (res.ok) {
+                      const arrayBuffer = await res.arrayBuffer();
+                      zip.folder(item.folder)?.file(item.filename, arrayBuffer);
                     }
                   } catch (e) {
                     console.warn('Failed to fetch image', item.url, e);
@@ -570,24 +732,50 @@ function RootLayoutNav() {
         await FileSystem.writeAsStringAsync(finalZipPath, finalZipBase64, {
           encoding: 'base64',
         });
-        if (Sharing && await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(finalZipPath, {
-            mimeType: 'application/zip',
+        
+        if (Platform.OS === 'android') {
+          const saveResult = await savePdfToDevice({
+            url: '',
+            filename,
+            localUri: finalZipPath,
             dialogTitle: 'Save System Backup',
-            UTI: 'public.zip-archive',
           });
+          
+          if (!saveResult.success) {
+            if (Sharing && await Sharing.isAvailableAsync()) {
+              await Sharing.shareAsync(finalZipPath, {
+                mimeType: 'application/zip',
+                dialogTitle: 'Save System Backup',
+                UTI: 'public.zip-archive',
+              });
+            } else {
+              alert(saveResult.message || 'Failed to save backup.');
+            }
+          } else {
+            alert(`Backup saved successfully to organized folder!`);
+          }
         } else {
-          alert('Sharing is not available on this device');
+          if (Sharing && await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(finalZipPath, {
+              mimeType: 'application/zip',
+              dialogTitle: 'Save System Backup',
+              UTI: 'public.zip-archive',
+            });
+          } else {
+            alert('Sharing is not available on this device');
+          }
         }
       }
     } catch (err: any) {
-      if (err.message === 'BACKUP_CANCELLED') {
+      if (err.message === 'BACKUP_CANCELLED' || err.message?.includes('cancelled') || err.message?.includes('aborted')) {
         console.log('Backup was cancelled by the user.');
       } else {
         console.error('Backup download failed:', err);
         alert(`Failed to download backup: ${err.message || err}`);
       }
     } finally {
+      activeDownloadRef.current = null;
+      abortControllerRef.current = null;
       if (Platform.OS !== 'web') {
         try {
           await FileSystem.deleteAsync(tempZipPath, { idempotent: true });
@@ -608,7 +796,7 @@ function RootLayoutNav() {
         screenOptions={{
           headerShown: false,
           animation: 'slide_from_right',
-          contentStyle: { backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.white },
+          contentStyle: { backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.neutral[100] },
         }}
       >
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
@@ -724,10 +912,24 @@ function RootLayoutNav() {
                 >
                   <Text style={[styles.confirmBtnText, { color: theme.textSecondary }]}>No, Continue</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                 <TouchableOpacity 
                   style={[styles.confirmBtn, { backgroundColor: '#ef4444' }]}
-                  onPress={() => {
+                  onPress={async () => {
                     abortBackupRef.current = true;
+                    if (activeDownloadRef.current) {
+                      try {
+                        await activeDownloadRef.current.cancelAsync();
+                      } catch (e) {
+                        console.warn('Failed to cancel active download:', e);
+                      }
+                    }
+                    if (abortControllerRef.current) {
+                      try {
+                        abortControllerRef.current.abort();
+                      } catch (e) {
+                        console.warn('Failed to abort fetch controller:', e);
+                      }
+                    }
                     setShowCancelConfirm(false);
                   }}
                 >

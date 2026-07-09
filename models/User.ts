@@ -562,6 +562,9 @@ UserSchema.index({
 
 if (mongoose.models.User && (!mongoose.models.User.schema.paths.partyId || !mongoose.models.User.schema.paths.profilePhoto)) {
   delete mongoose.models.User;
+  if (mongoose.connection && mongoose.connection.models.User) {
+    delete (mongoose.connection.models as any).User;
+  }
 }
 
 const User = mongoose.models.User || mongoose.model<IUser, IUserModel>("User", UserSchema);

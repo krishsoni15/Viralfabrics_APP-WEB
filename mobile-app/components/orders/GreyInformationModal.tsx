@@ -458,8 +458,8 @@ export default function GreyInformationModal({
           }}
         >
           <KeyboardAvoidingView
-            behavior="padding"
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 120}
             style={{ width: '100%', flex: 1 }}
           >
             {/* Drag Handle (visual only) */}
@@ -509,7 +509,7 @@ export default function GreyInformationModal({
 
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 80 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 220 }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, Alert, Animated, PanResponder, Dimensions, TouchableWithoutFeedback, Image, useWindowDimensions, Pressable } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, Alert, Animated, PanResponder, Dimensions, TouchableWithoutFeedback, useWindowDimensions, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { ChevronDown, X, Calendar, Plus, Minus, Layers, Trash2, Truck, Camera, Upload } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { CONFIG } from '../../constants/config';
@@ -1381,7 +1382,7 @@ export default function DispatchModal({
                                     setPreviewImageIndex(imgIdx);
                                     setActivePreviewTarget({ itemIdx, subIdx });
                                   }}>
-                                    <Image source={{ uri: fullUrl }} style={{ width: 50, height: 50, borderRadius: 6, backgroundColor: isDarkMode ? '#1e293b' : '#cbd5e1' }} />
+                                    <Image source={{ uri: fullUrl }} style={{ width: 50, height: 50, borderRadius: 6, backgroundColor: isDarkMode ? '#1e293b' : '#cbd5e1' }} contentFit="cover" transition={100} />
                                   </TouchableOpacity>
                                   {!isReadOnly && (
                                     <TouchableOpacity
@@ -1635,7 +1636,7 @@ export default function DispatchModal({
               borderTopRightRadius: 28,
               paddingHorizontal: 20,
               paddingTop: 16,
-              paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? (insets.bottom > 0 ? insets.bottom + 8 : 16) : 16),
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 16),
               height: '85%',
               borderWidth: 1,
               borderColor: theme.border,

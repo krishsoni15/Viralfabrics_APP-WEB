@@ -1524,7 +1524,7 @@ export default function MillInputModal({
               borderTopRightRadius: 28,
               paddingHorizontal: 20,
               paddingTop: 16,
-              paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? (insets.bottom > 0 ? insets.bottom + 8 : 16) : 16),
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 16),
               height: '85%',
               borderWidth: 1,
               borderColor: theme.border,

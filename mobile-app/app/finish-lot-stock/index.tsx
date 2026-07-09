@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Image, Modal, ScrollView, KeyboardAvoidingView, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Keyboard, useWindowDimensions } from 'react-native';
+import { View, Text, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Keyboard, useWindowDimensions } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
@@ -88,9 +90,8 @@ const FinishLotCard = React.memo(function FinishLotCard({
             <Image 
               source={{ uri: resolveImageUrl(item.images[0]) }} 
               style={{ width: '100%', height: 220 }} 
-              resizeMode="contain" 
-              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-              fadeDuration={100}
+              contentFit="contain" 
+              transition={100}
             />
             {item.images.length > 1 && (
               <View style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, flexDirection: 'row', alignItems: 'center' }}>
@@ -211,6 +212,7 @@ export default function FinishLotStockScreen() {
   const [formData, setFormData] = useState({ qualityName: '', piece: '', meter: '' });
   const [formImages, setFormImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
   const [cameraVisible, setCameraVisible] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
@@ -219,8 +221,14 @@ export default function FinishLotStockScreen() {
 
   // ─ Refs ──
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
   const filterPanY = useRef(new RNAnimated.Value(600)).current;
-  const formPanY = useRef(new RNAnimated.Value(800)).current;
+  const formPanY = useRef(new RNAnimated.Value(0)).current;
   const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 170 })).current;
   const fabX = useRef(screenWidth - 68);
   const fabY = useRef(screenHeight - 170);
@@ -253,8 +261,8 @@ export default function FinishLotStockScreen() {
   }, [filterPanY]);
 
   const closeForm = useCallback(() => {
-    RNAnimated.timing(formPanY, { toValue: 800, duration: 180, useNativeDriver: false }).start(() => setShowForm(false));
-  }, [formPanY]);
+    setShowForm(false);
+  }, []);
 
   // ─ PanResponders ──
   const filterPanResponder = useRef(
@@ -357,7 +365,16 @@ export default function FinishLotStockScreen() {
   // ─ Modal open effects ──
   React.useEffect(() => { if (showFilterModal) { filterPanY.setValue(600); RNAnimated.spring(filterPanY, { toValue: 0, useNativeDriver: false, damping: 15, stiffness: 120 }).start(); } }, [showFilterModal]);
 
-  React.useEffect(() => { if (showForm) { formPanY.setValue(800); RNAnimated.spring(formPanY, { toValue: 0, useNativeDriver: false, damping: 15, stiffness: 120 }).start(); } }, [showForm]);
+  React.useEffect(() => {
+    if (showForm) {
+      formPanY.setValue(0);
+    } else {
+      const timer = setTimeout(() => {
+        formPanY.setValue(0);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [showForm]);
 
   // ─ Callbacks ──
   const clearAllFilters = useCallback(() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSearch(''); setDebouncedSearch(''); setSearchType('all'); setSortOrder('desc'); }, []);
@@ -457,10 +474,11 @@ export default function FinishLotStockScreen() {
   }, [deleteTarget, addToast, queryClient]);
 
   // ─ Reusable Form Input ──
-  const renderInput = (label: string, value: string, onChange: (t: string) => void, placeholder: string, keyboard?: string) => (
+  const renderInput = (label: string, value: string, onChange: (t: string) => void, placeholder: string, keyboard?: string, onFocus?: () => void) => (
     <View style={{ marginBottom: 14 }}>
       <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>{label}</Text>
       <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={theme.inputPlaceholder} keyboardType={(keyboard as any) || 'default'}
+        onFocus={onFocus}
         style={{ backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text }} />
     </View>
   );
@@ -562,11 +580,12 @@ export default function FinishLotStockScreen() {
       {query.isLoading ? <FinishLotSkeletonList count={5} /> : items.length === 0 ? (
         <EmptyState icon={<Package size={48} color={Colors.primary[500]} />} title="No Finish Lots" subtitle={debouncedSearch ? 'No items match your search.' : 'No finish lot stocks yet.'} />
       ) : (
-        <FlatList
+        <FlashList
           data={items}
           key={numColumns}
           numColumns={numColumns}
           keyExtractor={(item, i) => item._id + '-' + i}
+          drawDistance={800}
           ListHeaderComponent={() => {
             if (grandTotal === 0 && !isFiltered && !isOffline) return null;
             return (
@@ -629,11 +648,7 @@ export default function FinishLotStockScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={() => { if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage(); }}
           onEndReachedThreshold={0.3}
-          initialNumToRender={8}
-          maxToRenderPerBatch={4}
-          windowSize={5}
-          removeClippedSubviews={true}
-          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={false}
           ListFooterComponent={
             query.isFetchingNextPage ? (
               <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
@@ -654,7 +669,16 @@ export default function FinishLotStockScreen() {
 
       {/* ═══ DRAGGABLE FAB ═══ */}
       {isSuperAdmin && (
-        <RNAnimated.View {...fabPanResponder.panHandlers} style={[{ position: 'absolute', zIndex: 100 }, { transform: pan.getTranslateTransform() }]}>
+        <RNAnimated.View
+          {...fabPanResponder.panHandlers}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            transform: pan.getTranslateTransform(),
+            zIndex: 100,
+          }}
+        >
           <TouchableOpacity onPress={() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); openCreateForm(); }} activeOpacity={0.85}
             style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary[600], alignItems: 'center', justifyContent: 'center', elevation: 8, shadowColor: Colors.primary[600], shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, zIndex: 9999 }}>
             <View style={{ position: 'relative', width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
@@ -769,7 +793,7 @@ export default function FinishLotStockScreen() {
 
 
       {/* ═══ CREATE/EDIT FORM MODAL ═══ */}
-      <Modal visible={showForm} animationType="none" transparent statusBarTranslucent onRequestClose={closeForm}>
+      <Modal visible={showForm} animationType={isLargeScreen ? 'fade' : 'slide'} transparent statusBarTranslucent onRequestClose={closeForm}>
 
         <View style={{
           flex: 1,
@@ -801,10 +825,10 @@ export default function FinishLotStockScreen() {
               paddingTop: 12,
               paddingHorizontal: 24,
               paddingBottom: isLargeScreen ? 24 : 0,
-              maxHeight: '85%',
+              height: isLargeScreen ? '92%' : '92%',
               width: '100%',
-              maxWidth: isLargeScreen ? modalMaxWidth : '100%',
-              transform: [{ translateY: formPanY }],
+              maxWidth: isLargeScreen ? 850 : '100%',
+              transform: isLargeScreen ? undefined : [{ translateY: formPanY }],
               shadowColor: '#000',
               shadowOffset: { width: 0, height: -4 },
               shadowOpacity: 0.15,
@@ -830,10 +854,11 @@ export default function FinishLotStockScreen() {
               </View>
 
               <ScrollView
+                ref={scrollViewRef}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 24 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 80 : 100 }}
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
+                keyboardDismissMode="none"
                 onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
                 scrollEventThrottle={16}
               >
@@ -903,8 +928,8 @@ export default function FinishLotStockScreen() {
                             <Image 
                               source={{ uri: resolveImageUrl(img) }} 
                               style={{ width: 80, height: 80, borderRadius: 10 }} 
-                              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-                              fadeDuration={100}
+                              contentFit="cover"
+                              transition={100}
                             />
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => setFormImages(p => p.filter((_, idx) => idx !== i))} style={{ position: 'absolute', top: -4, right: -4, backgroundColor: Colors.error[500], width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>

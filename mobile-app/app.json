@@ -22,7 +22,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.viralfabrics.crm",
       "infoPlist": {
-        "CADisableMinimumFrameDurationOnPhone": true
+        "CADisableMinimumFrameDurationOnPhone": true,
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
       },
       "config": {
         "usesNonExemptEncryption": false
@@ -43,7 +45,12 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": true
+        }
+      ],
       "expo-font",
       "expo-status-bar",
       "expo-camera",
@@ -56,10 +63,12 @@
           "resizeMode": "contain",
           "imageWidth": 288
         }
-      ]
+      ],
+      "expo-image"
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "reactCompiler": true
     },
     "extra": {
       "router": {},

@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, ActivityIndicator, Image, Modal, ScrollView, TextInput, KeyboardAvoidingView, Alert, PanResponder, Animated as RNAnimated, Pressable, Dimensions, Keyboard, useWindowDimensions } from 'react-native';
+import { View, Text, RefreshControl, Platform, TouchableOpacity, ActivityIndicator, Modal, ScrollView, TextInput, KeyboardAvoidingView, Alert, PanResponder, Animated as RNAnimated, Pressable, Dimensions, Keyboard, useWindowDimensions } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -129,9 +131,8 @@ function SampleCard({
                 <Image 
                   source={{ uri: resolveImageUrl(img) }} 
                   style={{ width: 72, height: 72 }} 
-                  resizeMode="cover" 
-                  resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-                  fadeDuration={100}
+                  contentFit="cover"
+                  transition={100}
                 />
               </TouchableOpacity>
             ))}
@@ -281,7 +282,9 @@ export default function WeaverSamplesScreen() {
   // Form
   const [showForm, setShowForm] = useState(false);
   const [reopenFormOnStickerClose, setReopenFormOnStickerClose] = useState(false);
-  const formPanY = useRef(new RNAnimated.Value(800)).current;
+  const scrollViewRef = React.useRef<ScrollView>(null);
+
+  const formPanY = useRef(new RNAnimated.Value(0)).current;
   const formScrollOffset = useRef(0);
   const formSheetY = useRef(0);
 
@@ -802,9 +805,10 @@ export default function WeaverSamplesScreen() {
       {samplesQuery.isLoading ? <SampleSkeletonList count={3} /> : filteredSamples.length === 0 ? (
         <EmptyState icon={<TestTubes size={40} color={Colors.primary[500]} />} title="No Samples" subtitle={search ? 'No samples match your search.' : 'No samples found for this weaver.'} />
       ) : (
-        <FlatList
+        <FlashList
           data={filteredSamples}
           keyExtractor={(item: Sample) => item._id}
+          drawDistance={800}
           ListHeaderComponent={() => (
             <View>
               {isOffline && (
@@ -837,10 +841,7 @@ export default function WeaverSamplesScreen() {
           renderItem={({ item, index }) => <SampleCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} onPreviewImages={handleOpenPreview} onOpenSticker={openStickerPreview} />}
           contentContainerStyle={{ paddingTop: 4, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={5}
-          removeClippedSubviews={Platform.OS !== 'web'}
+          removeClippedSubviews={false}
           ListFooterComponent={
             filteredSamples.length > 0 ? (
               <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
@@ -913,8 +914,8 @@ export default function WeaverSamplesScreen() {
             }}
           >
             <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
               style={{ flex: 1 }}
             >
               {/* Swipe Drag Handle Bar */}
@@ -949,10 +950,11 @@ export default function WeaverSamplesScreen() {
               </View>
 
               <ScrollView
+                ref={scrollViewRef}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 80 : 100 }}
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
+                keyboardDismissMode="none"
                 onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
                 scrollEventThrottle={16}
               >
@@ -1170,9 +1172,8 @@ export default function WeaverSamplesScreen() {
                             <Image
                               source={{ uri: resolveImageUrl(img) }}
                               style={{ width: 80, height: 80, borderRadius: 10, borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#cbd5e1' }}
-                              resizeMode="cover"
-                              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-                              fadeDuration={100}
+                              contentFit="cover"
+                              transition={100}
                             />
                           </TouchableOpacity>
                           <TouchableOpacity

@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Image, Alert, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Keyboard, useWindowDimensions } from 'react-native';
+import { View, Text, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Alert, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Keyboard, useWindowDimensions } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated from 'react-native-reanimated';
@@ -109,6 +111,7 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
   numColumns?: number;
 }) {
   const { theme, isDarkMode } = useTheme();
+  const [expanded, setExpanded] = useState(false);
 
   // Combine images from the group fields and all inner items
   const allGroupImages = useMemo(() => {
@@ -193,9 +196,8 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
             <Image 
               source={{ uri: resolveImageUrl(allGroupImages[0]) }} 
               style={{ width: '100%', height: 220 }} 
-              resizeMode="contain" 
-              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-              fadeDuration={100}
+              contentFit="contain" 
+              transition={100}
             />
             {allGroupImages.length > 1 && (
               <View style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, flexDirection: 'row', alignItems: 'center' }}>
@@ -235,7 +237,7 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
 
         {/* Weavers List Section */}
         <View style={{ borderTopWidth: 1, borderColor: theme.borderLight, paddingTop: 12, marginTop: 4, gap: 10 }}>
-          {group.items.map((item, idx) => (
+          {(expanded ? group.items : group.items.slice(0, 1)).map((item, idx) => (
             <View 
               key={item._id || idx} 
               style={{ 
@@ -315,6 +317,30 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
               </View>
             </View>
           ))}
+
+          {group.items.length > 1 && (
+            <TouchableOpacity
+              onPress={() => setExpanded(!expanded)}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 10,
+                borderRadius: 12,
+                backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : '#f1f5f9',
+                borderWidth: 1,
+                borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
+                marginTop: 4,
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.primary[600] }}>
+                {expanded 
+                  ? 'View Less Weavers' 
+                  : `View More Weavers (+${group.items.length - 1})`}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Card Footer Actions */}
@@ -395,12 +421,29 @@ export default function GreyMaterialsScreen() {
   const segments = useSegments();
   const isInTabs = (segments as string[]).includes('(tabs)');
 
+  const [transitionsFinished, setTransitionsFinished] = useState(false);
+
+  React.useEffect(() => {
+    const run = typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : (cb: any) => setTimeout(cb, 1);
+    const cancel = typeof cancelIdleCallback !== 'undefined' ? cancelIdleCallback : (id: any) => clearTimeout(id);
+    const handle = run(() => {
+      setTransitionsFinished(true);
+    });
+    return () => cancel(handle as any);
+  }, []);
+
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [filterType, setFilterType] = useState('All');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
 
   const isFiltered = debouncedSearch.trim() !== '' || filterType !== 'All';
 
@@ -433,25 +476,18 @@ export default function GreyMaterialsScreen() {
 
   const [formImages, setFormImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
 
   // Form Pan and Gesture animation
-  const formPanY = useRef(new RNAnimated.Value(800)).current;
+  const formPanY = useRef(new RNAnimated.Value(0)).current;
   const filterScrollOffset = useRef(0);
   const formScrollOffset = useRef(0);
   const formSheetY = useRef(0);
   const filterSheetY = useRef(0);
 
   const closeForm = useCallback(() => {
-    if ((Platform.OS as string) !== 'web') {
-      RNAnimated.timing(formPanY, {
-        toValue: 800,
-        duration: 180,
-        useNativeDriver: false
-      }).start(() => setShowForm(false));
-    } else {
-      setShowForm(false);
-    }
-  }, [formPanY]);
+    setShowForm(false);
+  }, []);
 
   const formPanResponder = useRef(
     PanResponder.create({
@@ -492,13 +528,12 @@ export default function GreyMaterialsScreen() {
 
   React.useEffect(() => {
     if (showForm) {
-      formPanY.setValue(800);
-      RNAnimated.spring(formPanY, {
-        toValue: 0,
-        useNativeDriver: false,
-        damping: 15,
-        stiffness: 120
-      }).start();
+      formPanY.setValue(0);
+    } else {
+      const timer = setTimeout(() => {
+        formPanY.setValue(0);
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [showForm, formPanY]);
 
@@ -941,14 +976,15 @@ export default function GreyMaterialsScreen() {
       </View>
 
       {/* Content */}
-      {query.isLoading ? <GreyMaterialSkeletonList count={3} /> : groupedMaterials.length === 0 ? (
+      {(!transitionsFinished || query.isLoading) ? <GreyMaterialSkeletonList count={3} /> : groupedMaterials.length === 0 ? (
         <EmptyState icon={<Boxes size={48} color={Colors.primary[500]} />} title="No Grey Materials" subtitle={debouncedSearch || filterType !== 'All' ? 'No materials match your filters.' : 'No grey materials added yet.'} />
       ) : (
-        <FlatList
+        <FlashList
           data={groupedMaterials}
           key={numColumns}
           numColumns={numColumns}
           keyExtractor={(item, i) => `${item.qualityCode}_${item.qualityName}_${i}`}
+          drawDistance={800}
           ListHeaderComponent={() => {
             const isFiltered = debouncedSearch.trim() !== '' || filterType !== 'All';
             return (
@@ -1035,11 +1071,7 @@ export default function GreyMaterialsScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={() => { if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage(); }}
           onEndReachedThreshold={0.3}
-          initialNumToRender={8}
-          maxToRenderPerBatch={4}
-          windowSize={5}
-          removeClippedSubviews={true}
-          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={false}
           ListFooterComponent={
             query.isFetchingNextPage ? (
               <View style={{ paddingVertical: 20, alignItems: 'center' }}>
@@ -1060,7 +1092,16 @@ export default function GreyMaterialsScreen() {
 
       {/* FAB */}
       {isSuperAdmin && (
-        <RNAnimated.View {...fabPanResponder.panHandlers} style={[{ position: 'absolute', zIndex: 100 }, { transform: pan.getTranslateTransform() }]}>
+        <RNAnimated.View
+          {...fabPanResponder.panHandlers}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            transform: pan.getTranslateTransform(),
+            zIndex: 100,
+          }}
+        >
           <TouchableOpacity 
             onPress={() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); openCreateForm(); }} 
             activeOpacity={0.85} 
@@ -1210,7 +1251,7 @@ export default function GreyMaterialsScreen() {
       </Modal>
 
       {/* Create/Edit Modal */}
-      <Modal visible={showForm} animationType="none" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={closeForm}>
+      <Modal visible={showForm} animationType={isLargeScreen ? 'fade' : 'slide'} transparent statusBarTranslucent navigationBarTranslucent onRequestClose={closeForm}>
 
         <View style={{
           flex: 1,
@@ -1242,16 +1283,16 @@ export default function GreyMaterialsScreen() {
               paddingTop: 12,
               paddingHorizontal: 24,
               paddingBottom: isLargeScreen ? 24 : 0,
-              maxHeight: isLargeScreen ? '85%' : '92%',
+              height: isLargeScreen ? '85%' : '92%',
               width: '100%',
-              maxWidth: modalMaxWidth,
+              maxWidth: isLargeScreen ? 850 : '100%',
               transform: isLargeScreen ? undefined : [{ translateY: formPanY }],
               shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20,
             }}
           >
             <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 120}
               style={{ flex: 1 }}
             >
               {/* Drag Handle */}
@@ -1267,11 +1308,12 @@ export default function GreyMaterialsScreen() {
                 </TouchableOpacity>
               </View>
               
-              <ScrollView
+               <ScrollView
+                ref={scrollViewRef}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 220 : 220 }}
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
+                keyboardDismissMode="none"
                 onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
                 scrollEventThrottle={16}
               >
@@ -1359,7 +1401,7 @@ export default function GreyMaterialsScreen() {
                             activeOpacity={0.8}
                             onPress={() => handleOpenPreview([img])}
                           >
-                            <Image source={{ uri: resolveImageUrl(img) }} style={{ width: 80, height: 80, borderRadius: 10, borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#cbd5e1' }} resizeMode="cover" />
+                            <Image source={{ uri: resolveImageUrl(img) }} style={{ width: 80, height: 80, borderRadius: 10, borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#cbd5e1' }} contentFit="cover" transition={100} />
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => setFormImages(p => p.filter((_, idx) => idx !== i))} style={{ position: 'absolute', top: -4, right: -4, backgroundColor: Colors.error[500], width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                             <X size={12} color="#fff" />

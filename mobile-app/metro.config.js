@@ -2,8 +2,9 @@ const { getDefaultConfig } = require("expo/metro-config");
 
 const config = getDefaultConfig(__dirname);
 
-// Add support for modern ES modules
+// Add support for modern ES modules and package exports
 config.resolver.sourceExts = [...config.resolver.sourceExts, 'mjs', 'cjs'];
+config.resolver.unstable_enablePackageExports = true;
 
 const path = require('path');
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -2,7 +2,6 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
   View,
   Text,
-  FlatList,
   RefreshControl,
   TouchableOpacity,
   ScrollView,
@@ -11,7 +10,6 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
-  Image,
   TextInput,
   PanResponder,
   Animated as RNAnimated,
@@ -22,7 +20,10 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   useWindowDimensions,
+  BackHandler,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { FlashList } from '@shopify/flash-list';
 import * as FileSystem from 'expo-file-system/legacy';
 let Sharing: any = null;
 try {
@@ -151,10 +152,9 @@ const AutoRatioImage = ({
       <Image
         source={{ uri }}
         style={{ width: '100%', height: '100%', opacity: imageLoaded ? 1 : 0 }}
-        resizeMode="cover"
+        contentFit="cover"
         onLoadEnd={() => setImageLoaded(true)}
-        resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-        fadeDuration={100}
+        transition={100}
       />
       {!imageLoaded && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
@@ -958,7 +958,8 @@ const OrderCard = React.memo(function OrderCard({
     prevItem.arrivalDate === nextItem.arrivalDate &&
     prevItem.poDate === nextItem.poDate &&
     prevItem.deliveryDate === nextItem.deliveryDate &&
-    prevProps.loadingPill === nextProps.loadingPill &&
+    ((prevProps.loadingPill === nextProps.loadingPill) || 
+     (prevProps.loadingPill?.orderId === nextProps.loadingPill?.orderId && prevProps.loadingPill?.type === nextProps.loadingPill?.type)) &&
     JSON.stringify(prevItem.greyInformation) === JSON.stringify(nextItem.greyInformation) &&
     JSON.stringify(prevItem.millInputs) === JSON.stringify(nextItem.millInputs) &&
     JSON.stringify(prevItem.millOutputs) === JSON.stringify(nextItem.millOutputs) &&
@@ -1002,6 +1003,17 @@ export default function OrdersScreen() {
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const isOffline = useAppStore((s) => s.isOffline);
   const params = useLocalSearchParams<{ status?: string; type?: string; search?: string; searchType?: string }>();
+  
+  const [transitionsFinished, setTransitionsFinished] = useState(false);
+
+  useEffect(() => {
+    const run = typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : (cb: any) => setTimeout(cb, 1);
+    const cancel = typeof cancelIdleCallback !== 'undefined' ? cancelIdleCallback : (id: any) => clearTimeout(id);
+    const handle = run(() => {
+      setTransitionsFinished(true);
+    });
+    return () => cancel(handle as any);
+  }, []);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -1021,6 +1033,12 @@ export default function OrdersScreen() {
   const [showSearchTypeModal, setShowSearchTypeModal] = useState(false);
   const [searchVal, setSearchVal] = useState('');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
 
   const [showFyModal, setShowFyModal] = useState(false);
   const [showMillModal, setShowMillModal] = useState(false);
@@ -1608,7 +1626,7 @@ export default function OrdersScreen() {
     },
     enabled: isAuthenticated
   });
-  const parties = partiesQuery.data || [];
+  const parties = useMemo(() => partiesQuery.data || [], [partiesQuery.data]);
 
   const qualitiesQuery = useQuery({
     queryKey: ['qualities'],
@@ -1628,8 +1646,8 @@ export default function OrdersScreen() {
     enabled: isAuthenticated
   });
 
-  const qualities = qualitiesQuery.data || [];
-  const mills = millsQuery.data || [];
+  const qualities = useMemo(() => qualitiesQuery.data || [], [qualitiesQuery.data]);
+  const mills = useMemo(() => millsQuery.data || [], [millsQuery.data]);
 
   const fyQuery = useQuery({
     queryKey: ['financialYears'],
@@ -1691,7 +1709,7 @@ export default function OrdersScreen() {
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+        return Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10;
       },
       onPanResponderGrant: () => {
         pan.setOffset({
@@ -1706,6 +1724,19 @@ export default function OrdersScreen() {
       ),
       onPanResponderRelease: (e, gestureState) => {
         pan.flattenOffset();
+
+        if (Math.abs(gestureState.dx) < 10 && Math.abs(gestureState.dy) < 10) {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          }
+          router.push('/orders/create');
+          RNAnimated.spring(pan, {
+            toValue: { x: fabX.current, y: fabY.current },
+            useNativeDriver: false,
+            friction: 6,
+          }).start();
+          return;
+        }
 
         const currentScreenWidth = dimensionsRef.current.screenWidth;
         const currentScreenHeight = dimensionsRef.current.screenHeight;
@@ -2138,6 +2169,101 @@ export default function OrdersScreen() {
       setDeleteMillTarget(null);
     }
   });
+
+  // Intercept physical Back button on Android to close active modals/sheets
+  useEffect(() => {
+    const handleBackButton = () => {
+      // 1. Creation Modals
+      if (showCreatePartyModal) {
+        if (!createPartyMutation.isPending) {
+          setShowCreatePartyModal(false);
+        }
+        return true;
+      }
+      if (showCreateQualityModal) {
+        if (!createQualityMutation.isPending) {
+          setShowCreateQualityModal(false);
+        }
+        return true;
+      }
+      if (showCreateMillModal) {
+        if (!createMillMutation.isPending) {
+          setShowCreateMillModal(false);
+        }
+        return true;
+      }
+
+      // 2. PDF Preview
+      if (pdfPreviewData !== null) {
+        setPdfPreviewData(null);
+        return true;
+      }
+
+      // 3. Process Modals (Grey, Mill Input/Output, Dispatch, Lab)
+      if (activeModal !== null) {
+        setActiveModal(null);
+        setEditItem(null);
+        return true;
+      }
+
+      // 4. Filters & Sheet Modals
+      if (showFilterModal) {
+        closeFilterModal();
+        return true;
+      }
+      if (showSearchTypeModal) {
+        closeSearchTypeModal();
+        return true;
+      }
+      if (showFyModal) {
+        closeFyModal();
+        return true;
+      }
+      if (showMillModal) {
+        closeMillModal();
+        return true;
+      }
+      if (showStatusModal) {
+        closeStatusModal();
+        return true;
+      }
+      if (showLabItemSelector) {
+        closeLabSelectorModal();
+        return true;
+      }
+      if (showLogsModal) {
+        closeLogsModal();
+        return true;
+      }
+
+      // 5. Delete warning / confirmations
+      if (deleteWarning !== null) {
+        setDeleteWarning(null);
+        return true;
+      }
+      if (deleteOrderTarget !== null) {
+        setDeleteOrderTarget(null);
+        return true;
+      }
+      if (deleteItemTarget !== null) {
+        setDeleteItemTarget(null);
+        return true;
+      }
+
+      return false; // Let default system navigation handle it
+    };
+
+    if (Platform.OS === 'android') {
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackButton);
+      return () => backHandler.remove();
+    }
+  }, [
+    showCreatePartyModal, showCreateQualityModal, showCreateMillModal,
+    createPartyMutation.isPending, createQualityMutation.isPending, createMillMutation.isPending,
+    pdfPreviewData, activeModal, showFilterModal, showSearchTypeModal, showFyModal,
+    showMillModal, showStatusModal, showLabItemSelector, showLogsModal,
+    deleteWarning, deleteOrderTarget, deleteItemTarget
+  ]);
 
   // Save mutations (linked to query invalidation)
   const saveGreyMutation = useMutation({
@@ -3146,14 +3272,14 @@ export default function OrdersScreen() {
       )}
 
       {/* Orders List */}
-      {(ordersQuery.isLoading || (ordersQuery.isFetching && orders.length === 0)) ? (
+      {(!transitionsFinished || ordersQuery.isLoading || (ordersQuery.isFetching && orders.length === 0)) ? (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
           <OrdersProgressBar />
           <ScrollView showsVerticalScrollIndicator={false}>
             <OrderSkeletonList count={4} />
           </ScrollView>
         </View>
-      ) : ordersQuery.isError ? (
+      ) : (ordersQuery.isError && orders.length === 0) ? (
         <EmptyState
           icon={<ClipboardList size={36} color={Colors.error[500]} />}
           title="Failed to Load Orders"
@@ -3210,24 +3336,21 @@ export default function OrdersScreen() {
               ]} />
             </View>
           )}
-          <FlatList
+          <FlashList
             key={numColumns}
             numColumns={numColumns}
             data={orders}
             extraData={ordersQuery.dataUpdatedAt}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
+            drawDistance={800}
             ListHeaderComponent={() => renderPagination('top')}
             ListFooterComponent={() => renderPagination('bottom')}
             contentContainerStyle={{ paddingTop: 4, paddingBottom: 65 + insets.bottom, paddingHorizontal: numColumns > 1 ? 6 : 0 }}
             showsVerticalScrollIndicator={false}
             onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.8} // Pre-fetch aggressively when user scrolls 80% down
-            initialNumToRender={5}
-            maxToRenderPerBatch={5}
-            windowSize={11}
-            updateCellsBatchingPeriod={30}
-            removeClippedSubviews={Platform.OS !== 'web'}
+            onEndReachedThreshold={0.8}
+            removeClippedSubviews={false}
             refreshControl={
               Platform.OS !== 'web' ? (
                 <RefreshControl
@@ -3710,7 +3833,7 @@ export default function OrdersScreen() {
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               paddingTop: 16,
-              paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? (insets.bottom > 0 ? insets.bottom + 16 : 16) : 16),
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 16 : 16),
               borderTopWidth: 1,
               borderTopColor: theme.borderLight,
               maxHeight: '60%',
@@ -3818,7 +3941,7 @@ export default function OrdersScreen() {
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               paddingTop: 16,
-              paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? (insets.bottom > 0 ? insets.bottom + 8 : 12) : 12),
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 12),
               borderTopWidth: 1,
               borderTopColor: theme.borderLight,
               maxHeight: '50%',
@@ -3952,7 +4075,7 @@ export default function OrdersScreen() {
                 borderTopLeftRadius: 24,
                 borderTopRightRadius: 24,
                 paddingTop: 16,
-                paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? (insets.bottom > 0 ? insets.bottom + 8 : 16) : 16),
+                paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 16),
                 borderTopWidth: 1,
                 borderTopColor: theme.borderLight,
                 maxHeight: 500,
@@ -4260,7 +4383,7 @@ export default function OrdersScreen() {
               borderTopRightRadius: 24,
               padding: 24,
               maxHeight: '75%',
-              paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? (insets.bottom > 0 ? insets.bottom + 12 : 20) : 20),
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 12 : 20),
               transform: [{ translateY: labSelectorPanY }]
             }}
           >
@@ -4438,7 +4561,7 @@ export default function OrdersScreen() {
               borderTopRightRadius: 24,
               padding: 24,
               height: '70%',
-              paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? (insets.bottom > 0 ? insets.bottom + 12 : 20) : 20),
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 12 : 20),
               transform: [{ translateY: logsPanY }]
             }}
           >
@@ -4477,7 +4600,7 @@ export default function OrdersScreen() {
                   <Text style={{ fontSize: 14, color: theme.textSecondary }}>No logs recorded for this order</Text>
                 </View>
               ) : (
-                <FlatList
+                <FlashList
                   data={logsQuery.data}
                   keyExtractor={(log: any) => log._id || Math.random().toString()}
                   showsVerticalScrollIndicator={false}
@@ -4736,7 +4859,7 @@ export default function OrdersScreen() {
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               paddingTop: 16,
-              paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? (insets.bottom > 0 ? insets.bottom + 8 : 16) : 16),
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 16),
               borderTopWidth: 1,
               borderTopColor: theme.borderLight,
               transform: [{ translateY: statusPanY }],
