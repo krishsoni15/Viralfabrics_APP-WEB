@@ -16,7 +16,7 @@ import {
   useWindowDimensions,
   StatusBar
 } from 'react-native';
-import { X, Share2, Download, Maximize2, Minimize2, Crop, Check } from 'lucide-react-native';
+import { X, Share2, Download, Maximize2, Minimize2, Crop, Check, FlipHorizontal } from 'lucide-react-native';
 import {
   GestureHandlerRootView,
   Gesture,
@@ -94,7 +94,8 @@ async function cropImageOnWeb(
   originX: number,
   originY: number,
   width: number,
-  height: number
+  height: number,
+  isFlipped = false
 ): Promise<string> {
   return new Promise((resolve) => {
     const img = new (window as any).Image() as HTMLImageElement;
@@ -110,7 +111,13 @@ async function cropImageOnWeb(
         resolve(uri);
         return;
       }
-      ctx.drawImage(img, originX, originY, width, height, 0, 0, width, height);
+      if (isFlipped) {
+        ctx.translate(width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, img.width - originX - width, originY, width, height, 0, 0, width, height);
+      } else {
+        ctx.drawImage(img, originX, originY, width, height, 0, 0, width, height);
+      }
       resolve(canvas.toDataURL('image/jpeg', 0.9));
     };
     img.onerror = (err) => {
@@ -183,6 +190,7 @@ interface ZoomableImageProps {
   cropBoxH: SharedValue<number>;
   naturalSize: { width: number; height: number } | null;
   onLoadSize?: (size: { width: number; height: number }) => void;
+  isFlipped: boolean;
 }
 
 const ZoomableImage = React.memo(({
@@ -202,7 +210,8 @@ const ZoomableImage = React.memo(({
   cropBoxW,
   cropBoxH,
   naturalSize,
-  onLoadSize
+  onLoadSize,
+  isFlipped
 }: ZoomableImageProps) => {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isZoomedRef = useRef(false);
@@ -352,6 +361,7 @@ const ZoomableImage = React.memo(({
     return {
       transform: [
         { scale: scale.value },
+        { scaleX: isFlipped ? -1 : 1 },
         { translateX: translationX.value },
         { translateY: translationY.value },
       ],
@@ -477,6 +487,7 @@ function ImagePreviewModal({
   const [isZoomed, setIsZoomed] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
   const [savingCropped, setSavingCropped] = useState(false);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [cropRatio, setCropRatio] = useState<'4:3' | '16:9' | '1:1' | 'Full'>('Full');
@@ -493,6 +504,7 @@ function ImagePreviewModal({
   useEffect(() => {
     const currentUrl = localImages?.[currentActiveIndex];
     setNaturalSize(null); // Reset natural size when active image changes
+    setIsFlipped(false); // Reset flip state when active image changes
     if (currentUrl) {
       fetchImageSize(currentUrl)
         .then((size) => {
@@ -781,7 +793,7 @@ function ImagePreviewModal({
       let manipulateResult: { uri: string } = { uri: currentUrl };
 
       if (Platform.OS === 'web') {
-        const croppedDataUrl = await cropImageOnWeb(currentUrl, originX, originY, width, height);
+        const croppedDataUrl = await cropImageOnWeb(currentUrl, originX, originY, width, height, isFlipped);
         manipulateResult = { uri: croppedDataUrl };
       } else {
         try {
@@ -793,18 +805,24 @@ function ImagePreviewModal({
             throw new Error('expo-image-manipulator is not available.');
           }
 
+          const actions: any[] = [
+            {
+              crop: {
+                originX: isFlipped ? (naturalSize.width - originX - width) : originX,
+                originY,
+                width,
+                height,
+              },
+            },
+          ];
+
+          if (isFlipped) {
+            actions.push({ flip: 'horizontal' });
+          }
+
           manipulateResult = await ImageManipulatorLib.manipulateAsync(
             currentUrl,
-            [
-              {
-                crop: {
-                  originX,
-                  originY,
-                  width,
-                  height,
-                },
-              },
-            ],
+            actions,
             { compress: 0.9, format: ImageManipulatorLib.SaveFormat.JPEG }
           );
         } catch (nativeErr: any) {
@@ -1356,6 +1374,7 @@ function ImagePreviewModal({
                       savedTranslationY={savedTranslationY}
                       isActive={currentActiveIndex === idx}
                       isCropping={isCropping}
+                      isFlipped={currentActiveIndex === idx ? isFlipped : false}
                       cropBoxX={cropBoxX}
                       cropBoxY={cropBoxY}
                       cropBoxW={cropBoxW}
@@ -1599,6 +1618,35 @@ function ImagePreviewModal({
                     </TouchableOpacity>
                   );
                 })}
+                
+                {/* Horizontal Flip Button */}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (Platform.OS !== 'web') {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }
+                    setIsFlipped(!isFlipped);
+                  }}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
+                    borderRadius: 14,
+                    backgroundColor: isFlipped ? '#3b82f6' : (effectiveIsDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'),
+                    borderWidth: 0,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <FlipHorizontal size={13} color="#fff" />
+                  <Text style={{
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: '700',
+                  }}>{isFlipped ? 'Flipped' : 'Flip'}</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -1650,7 +1698,7 @@ function ImagePreviewModal({
 
           {savingCropped && (
             <View style={{
-              ...StyleSheet.absoluteFill,
+              ...StyleSheet.absoluteFillObject,
               backgroundColor: 'rgba(0, 0, 0, 0.75)',
               justifyContent: 'center',
               alignItems: 'center',

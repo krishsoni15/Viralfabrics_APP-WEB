@@ -34,6 +34,7 @@ try {
 import BackupModal from '../components/shared/BackupModal';
 import * as SplashScreen from 'expo-splash-screen';
 import { savePdfToDevice } from '../utils/pdfUtils';
+import NetInfo from '@react-native-community/netinfo';
 
 // Keep the splash screen visible while we fetch resources / validate session
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -311,47 +312,22 @@ function RootLayoutNav() {
     }
   }, []);
 
-  // Synchronize network online/offline status periodically on native mobile
+  // Synchronize network online/offline status dynamically on native mobile
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
-    let isMounted = true;
-    let timer: NodeJS.Timeout;
+    // Get initial connectivity state on mount
+    NetInfo.fetch().then((state) => {
+      setIsOffline(state.isConnected === false);
+    });
 
-    const checkConnectivity = async () => {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        
-        // Fetch to verify network path to API server is reachable
-        await fetch(`${CONFIG.API_URL}/api/weavers`, {
-          method: 'GET',
-          signal: controller.signal,
-          headers: { 'Cache-Control': 'no-cache' }
-        }).catch((err) => {
-          // 401 Unauthorized or other HTTP responses don't reject fetch, only network errors do.
-          // If we receive any HTTP response (even error status), the server is reachable and we are online.
-          // If fetch fails completely, it throws a network error.
-          throw err;
-        });
-        
-        clearTimeout(timeoutId);
-        if (isMounted) {
-          setIsOffline(false);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setIsOffline(true);
-        }
-      }
-    };
-
-    checkConnectivity();
-    timer = setInterval(checkConnectivity, 10000);
+    // Listen to real-time network connectivity changes
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsOffline(state.isConnected === false);
+    });
 
     return () => {
-      isMounted = false;
-      clearInterval(timer);
+      unsubscribe();
     };
   }, [setIsOffline]);
 
@@ -446,16 +422,22 @@ function RootLayoutNav() {
 
   // Auth redirect logic
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || initializing) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!isAuthenticated && !inAuthGroup) {
-      router.replace('/(auth)/login');
+      const timer = setTimeout(() => {
+        router.replace('/(auth)/login');
+      }, 0);
+      return () => clearTimeout(timer);
     } else if (isAuthenticated && inAuthGroup) {
-      router.replace('/(tabs)/dashboard');
+      const timer = setTimeout(() => {
+        router.replace('/(tabs)/dashboard');
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [isAuthenticated, segments, isLoading]);
+  }, [isAuthenticated, segments, isLoading, initializing]);
 
   const theme = isDarkMode ? DarkTheme : LightTheme;
 
@@ -1048,7 +1030,7 @@ function RootLayoutNav() {
   );
 }
 
-import { ThemeProvider as NavigationProvider, DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme } from 'expo-router';
+import { ThemeProvider as NavigationProvider, DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme } from '@react-navigation/native';
 
 export default function RootLayout() {
   const isDarkMode = useAppStore((s) => s.isDarkMode);

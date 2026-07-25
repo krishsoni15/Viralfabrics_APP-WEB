@@ -320,6 +320,19 @@ function CustomCameraModal({
 }: CustomCameraModalProps) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const [localVisible, setLocalVisible] = useState(visible);
+
+  useEffect(() => {
+    if (visible) {
+      setLocalVisible(true);
+    } else {
+      const timer = setTimeout(() => {
+        setLocalVisible(false);
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [visible]);
+
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [flash, setFlash] = useState<'off' | 'on' | 'auto'>('off');
@@ -469,7 +482,7 @@ function CustomCameraModal({
 
   const combinedGesture = Gesture.Exclusive(pinchGesture, tapGesture);
 
-  if (!visible) return null;
+  if (!localVisible) return null;
 
   const triggerShutterFlash = () => {
     flashOpacity.value = 1;
@@ -1084,7 +1097,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   gridContainer: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
   },
   gridRow: {
@@ -1331,7 +1344,7 @@ const styles = StyleSheet.create({
     borderColor: '#000',
   },
   focusGuideContainer: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
   },

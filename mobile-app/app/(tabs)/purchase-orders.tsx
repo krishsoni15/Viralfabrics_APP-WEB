@@ -20,10 +20,12 @@ import {
   Keyboard,
   useWindowDimensions,
   StatusBar,
+  Image,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import * as print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as ImagePicker from 'expo-image-picker';
 import { Tabs } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -73,6 +75,7 @@ import PdfViewerModal from '../../components/shared/PdfViewerModal';
 import { generatePoHtml } from '../../utils/poPdfTemplate';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { savePdfToDevice } from '../../utils/pdfUtils';
+import ImagePreviewModal from '../../components/shared/ImagePreviewModal';
 
 // Dynamically import WebView to avoid crashes on web
 let WebView: any = null;
@@ -688,6 +691,7 @@ const PurchaseOrderCard = React.memo(({
   previewPDF: (po: PurchaseOrder) => void;
   onPressCompanyHeader?: (company: 'Viral Fabrics' | 'Viral Enterprise') => void;
   numColumns?: number;
+  handleOpenImagePreview: (images: string[], index: number) => void;
 }) => {
   const [isAddressExpanded, setIsAddressExpanded] = useState(false);
   const [isPaymentTermsExpanded, setIsPaymentTermsExpanded] = useState(false);
@@ -814,6 +818,11 @@ const PurchaseOrderCard = React.memo(({
                 GSTIN: {item.supplierGstin}
               </Text>
             )}
+            {!!item.supplierPhone && (
+              <Text style={{ fontSize: 10, color: theme.textTertiary, marginTop: 2 }}>
+                Phone: {item.supplierPhone}
+              </Text>
+            )}
           </View>
         )}
 
@@ -824,7 +833,7 @@ const PurchaseOrderCard = React.memo(({
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
             <Text style={{ fontSize: 12, color: theme.textSecondary }}>Quality & Delivery:</Text>
             <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>
-              {item.quality} {item.pcsMtr ? `(${item.pcsMtr} Pcs/Mtr)` : ''}
+              {item.quality} {item.pcsMtr || item.greighMtr ? `(${item.pcsMtr ? `${item.pcsMtr} Pcs/Mtr` : ''}${item.pcsMtr && item.greighMtr ? ', ' : ''}${item.greighMtr ? `Greigh: ${item.greighMtr} Mtr` : ''})` : ''}
             </Text>
           </View>
         )}
@@ -900,36 +909,86 @@ const PurchaseOrderCard = React.memo(({
           </View>
         )}
 
-        {/* Notes */}
-        {!!item.notes && (
+        {/* Notes & Images */}
+        {(!!item.notes || (item.images && item.images.length > 0)) && (
           <View style={{ marginTop: 10 }}>
             <View style={{ height: 1, backgroundColor: theme.borderLight, marginBottom: 8 }} />
             <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: theme.textSecondary, marginBottom: 4 }}>
-              Notes:
+              Notes & Images:
             </Text>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setIsNotesExpanded(!isNotesExpanded)}
-              style={isNotesExpanded ? {
-                backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.8)' : '#f1f5f9',
-                padding: 8,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: theme.borderLight,
-                marginTop: 2
-              } : { marginTop: 2 }}
-            >
-              {renderFormattedText(
-                item.notes,
-                { 
-                  fontSize: 11, 
-                  color: isNotesExpanded ? (isDarkMode ? '#93c5fd' : '#1e293b') : theme.textSecondary,
-                  fontWeight: isNotesExpanded ? '600' : '400',
-                  lineHeight: 16
-                },
-                isNotesExpanded ? undefined : 1
+            
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+              {/* Notes Text Column */}
+              <View style={{ flex: 1 }}>
+                {!!item.notes ? (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => setIsNotesExpanded(!isNotesExpanded)}
+                    style={isNotesExpanded ? {
+                      backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.8)' : '#f1f5f9',
+                      padding: 8,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: theme.borderLight,
+                      marginTop: 2
+                    } : { marginTop: 2 }}
+                  >
+                    {renderFormattedText(
+                      item.notes,
+                      { 
+                        fontSize: 11, 
+                        color: isNotesExpanded ? (isDarkMode ? '#93c5fd' : '#1e293b') : theme.textSecondary,
+                        fontWeight: isNotesExpanded ? '600' : '400',
+                        lineHeight: 16
+                      },
+                      isNotesExpanded ? undefined : 2
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={{ fontSize: 11, color: theme.textTertiary, fontStyle: 'italic', marginTop: 2 }}>-</Text>
+                )}
+              </View>
+
+              {/* Image Preview Thumbnail */}
+              {item.images && item.images.length > 0 && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => handleOpenImagePreview(item.images!, 0)}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 6,
+                    overflow: 'hidden',
+                    borderWidth: 1,
+                    borderColor: isDarkMode ? '#475569' : '#cbd5e1',
+                    position: 'relative'
+                  }}
+                >
+                  <Image
+                    source={{ uri: item.images[0] }}
+                    style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+                  />
+                  {item.images.length > 1 && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <Text style={{ fontSize: 9, fontWeight: '900', color: '#ffffff' }}>
+                        +{item.images.length - 1}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+            </View>
           </View>
         )}
       </Card>
@@ -960,18 +1019,31 @@ export default function PurchaseOrdersScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [infoCompany, setInfoCompany] = useState<'Viral Fabrics' | 'Viral Enterprise' | null>(null);  
+
+  // Image Preview Modal state
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  const handleOpenImagePreview = useCallback((images: string[], index: number) => {
+    setPreviewImages(images);
+    setPreviewIndex(index);
+    setIsPreviewOpen(true);
+  }, []);
   const [pdfViewerVisible, setPdfViewerVisible] = useState(false);
   const [pdfViewerUrl, setPdfViewerUrl] = useState('');
   const [pdfViewerTitle, setPdfViewerTitle] = useState('');
   const [pdfViewerFilename, setPdfViewerFilename] = useState('');
   const fyOptions = useMemo(() => getCalculatedFYOptions(), []);
+  
   // Draggable FAB setup
+  const FAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 220 : 170;
   const fabPan = useRef(new RNAnimated.ValueXY({ 
     x: screenWidth - 68, 
-    y: screenHeight - 170 
+    y: screenHeight - FAB_BOTTOM_OFFSET 
   })).current;
   const fabX = useRef(screenWidth - 68);
-  const fabY = useRef(screenHeight - 170);
+  const fabY = useRef(screenHeight - FAB_BOTTOM_OFFSET);
 
   const dimensionsRef = useRef({ screenWidth, screenHeight });
   dimensionsRef.current = { screenWidth, screenHeight };
@@ -979,7 +1051,7 @@ export default function PurchaseOrdersScreen() {
   useEffect(() => {
     const isSnappedLeft = fabX.current < screenWidth / 2;
     const targetX = isSnappedLeft ? 20 : screenWidth - 68;
-    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - 80 - (insets.bottom > 0 ? insets.bottom : 16));
+    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - FAB_BOTTOM_OFFSET);
     
     fabX.current = targetX;
     fabY.current = targetY;
@@ -1022,7 +1094,7 @@ export default function PurchaseOrdersScreen() {
         const targetX = currentX < currentScreenWidth / 2 ? snapLeftX : snapRightX;
 
         const minY = 100;
-        const maxY = currentScreenHeight - 80 - (insets.bottom > 0 ? insets.bottom : 16);
+        const maxY = currentScreenHeight - FAB_BOTTOM_OFFSET;
         const targetY = Math.min(Math.max(currentY, minY), maxY);
 
         fabX.current = targetX;
@@ -1119,6 +1191,8 @@ export default function PurchaseOrdersScreen() {
     poDate: new Date().toISOString(),
     specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' }
   });
+  const [selectedImageUris, setSelectedImageUris] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const [nextPoDetails, setNextPoDetails] = useState<{ poNumber: string; sequence: number; financialYear: string } | null>(null);
   
   // State: Deletion
@@ -1152,7 +1226,7 @@ export default function PurchaseOrdersScreen() {
   };
 
   // Debounce search
-  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimerRef = useRef<any>(null);
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
@@ -1354,16 +1428,22 @@ export default function PurchaseOrdersScreen() {
       setInitialNotes(cleanedNotes);
       setFormData({
         ...order,
+        supplierPhone: order.supplierPhone || '',
+        greighMtr: order.greighMtr || '',
+        greighLeadTime: order.greighLeadTime || '',
+        images: order.images || [],
         paymentTerms: cleanedTerms,
         notes: cleanedNotes,
         specs: order.specs || { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' }
       });
+      setSelectedImageUris(order.images || []);
       setNextPoDetails(null);
     } else {
       setIsEditMode(false);
       setEditId(null);
       setInitialTerms('');
       setInitialNotes('');
+      setSelectedImageUris([]);
       setFormData({
         companyHeader: 'Viral Fabrics',
         poDate: new Date().toISOString(),
@@ -1373,9 +1453,13 @@ export default function PurchaseOrdersScreen() {
         supplierName: '',
         supplierAddress: '',
         supplierGstin: '',
+        supplierPhone: '',
         quality: '',
         pcsMtr: '',
         rate: '',
+        greighMtr: '',
+        greighLeadTime: '',
+        images: [],
         delivery: '',
         paymentTerms: '',
         notes: '',
@@ -1401,6 +1485,29 @@ export default function PurchaseOrdersScreen() {
     }).start(() => {
       setIsModalOpen(false);
     });
+  };
+
+  const pickImages = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      alert('Sorry, we need camera roll permissions to make this work!');
+      return;
+    }
+
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets) {
+      const selected = result.assets.map(asset => asset.uri);
+      setSelectedImageUris(prev => [...prev, ...selected]);
+    }
+  };
+
+  const removeImage = (uri: string) => {
+    setSelectedImageUris(prev => prev.filter(item => item !== uri));
   };
 
   const formSheetY = useRef(0);
@@ -1442,20 +1549,67 @@ export default function PurchaseOrdersScreen() {
   ).current;
 
   // Handlers
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.companyHeader) {
       addToast({ type: 'error', title: 'Validation Error', message: 'Company Header is required.' });
       return;
     }
-    const cleanData = {
-      ...formData,
-      paymentTerms: cleanHtmlForInput(formData.paymentTerms),
-      notes: cleanHtmlForInput(formData.notes),
-    };
-    if (isEditMode && editId) {
-      updateMutation.mutate({ id: editId, data: cleanData });
-    } else {
-      createMutation.mutate(cleanData);
+
+    setIsUploading(true);
+    try {
+      const uploadedUrls: string[] = [];
+      const token = await storage.getToken();
+      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+
+      // Filter to find newly picked images (local URIs starting with 'file://' or 'content://' or '/')
+      const newImages = selectedImageUris.filter(uri => uri.startsWith('file:') || uri.startsWith('content:') || uri.startsWith('/'));
+      // Keep existing http/https URLs
+      const existingImages = selectedImageUris.filter(uri => uri.startsWith('http'));
+
+      for (const uri of newImages) {
+        const localUri = uri;
+        const filename = localUri.split('/').pop() || 'image.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+        const uploadData = new FormData();
+        // Cast to any to satisfy React Native FormData file type
+        uploadData.append('file', { uri: localUri, name: filename, type } as any);
+        uploadData.append('folder', 'purchase-orders');
+
+        const uploadRes = await fetch(`${baseUrl}/api/upload`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          body: uploadData
+        });
+        const uploadResult = await uploadRes.json();
+        if (uploadResult.success && uploadResult.url) {
+          uploadedUrls.push(uploadResult.url);
+        } else {
+          throw new Error(uploadResult.message || 'Image upload failed');
+        }
+      }
+
+      const cleanData = {
+        ...formData,
+        images: [...existingImages, ...uploadedUrls],
+        paymentTerms: cleanHtmlForInput(formData.paymentTerms),
+        notes: cleanHtmlForInput(formData.notes),
+      };
+
+      if (isEditMode && editId) {
+        updateMutation.mutate({ id: editId, data: cleanData });
+      } else {
+        createMutation.mutate(cleanData);
+      }
+    } catch (err: any) {
+      console.log('Error saving PO/uploading images:', err);
+      addToast({ type: 'error', title: 'Save Failed', message: err.message || 'Failed to upload images.' });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -1500,7 +1654,7 @@ export default function PurchaseOrdersScreen() {
         });
         
         if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri, {
+          await Sharing.shareAsync(decodeURIComponent(uri), {
             mimeType: 'application/pdf',
             dialogTitle: `Purchase Order ${displayId}`,
             UTI: 'com.adobe.pdf'
@@ -1754,6 +1908,7 @@ export default function PurchaseOrdersScreen() {
                 previewPDF={previewPDF}
                 onPressCompanyHeader={setInfoCompany}
                 numColumns={numColumns}
+                handleOpenImagePreview={handleOpenImagePreview}
               />
             )}
             ListFooterComponent={
@@ -1973,6 +2128,7 @@ export default function PurchaseOrdersScreen() {
                             updateField('supplierName', s.name); 
                             updateField('supplierAddress', s.address || formData.supplierAddress); 
                             updateField('supplierGstin', s.gstin || formData.supplierGstin); 
+                            updateField('supplierPhone', s.phone || formData.supplierPhone); 
                             setShowSupplierSuggestions(false); 
                           }}
                         >
@@ -1996,16 +2152,29 @@ export default function PurchaseOrdersScreen() {
                   />
                 </View>
 
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Supplier GSTIN</Text>
-                  <TextInput
-                    style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
-                    value={formData.supplierGstin || ''}
-                    onChangeText={(t) => updateField('supplierGstin', t.toUpperCase())}
-                    placeholder="e.g. 09AACFW3350K1ZY"
-                    placeholderTextColor={theme.inputPlaceholder}
-                    autoCapitalize="characters"
-                  />
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Supplier GSTIN</Text>
+                    <TextInput
+                      style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
+                      value={formData.supplierGstin || ''}
+                      onChangeText={(t) => updateField('supplierGstin', t.toUpperCase())}
+                      placeholder="e.g. 09AACFW3350K1ZY"
+                      placeholderTextColor={theme.inputPlaceholder}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Supplier Mobile</Text>
+                    <TextInput
+                      style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
+                      value={formData.supplierPhone || ''}
+                      onChangeText={(t) => updateField('supplierPhone', t)}
+                      placeholder="e.g. +91 9988..."
+                      placeholderTextColor={theme.inputPlaceholder}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
                 </View>
 
                 {/* Quality */}
@@ -2045,18 +2214,44 @@ export default function PurchaseOrdersScreen() {
                   </View>
                 </View>
 
-                {/* Rate */}
+                {/* Rate & Greigh Lead Time & Greigh Mtr */}
                 <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Rate</Text>
-                  <TextInput
-                    style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, fontWeight: '600' }}
-                    value={formData.rate || ''}
-                    onChangeText={(t) => updateField('rate', t)}
-                    onFocus={scrollToFormEnd}
-                    placeholder="e.g. 79.50"
-                    placeholderTextColor={theme.inputPlaceholder}
-                    keyboardType="decimal-pad"
-                  />
+                  <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Rate</Text>
+                      <TextInput
+                        style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, fontWeight: '600' }}
+                        value={formData.rate || ''}
+                        onChangeText={(t) => updateField('rate', t)}
+                        onFocus={scrollToFormEnd}
+                        placeholder="e.g. 79.50"
+                        placeholderTextColor={theme.inputPlaceholder}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Greigh Lead Time</Text>
+                      <TextInput
+                        style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
+                        value={formData.greighLeadTime || ''}
+                        onChangeText={(t) => updateField('greighLeadTime', t)}
+                        onFocus={scrollToFormEnd}
+                        placeholder="e.g. 10 Days"
+                        placeholderTextColor={theme.inputPlaceholder}
+                      />
+                    </View>
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Greigh Mtr</Text>
+                    <TextInput
+                      style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
+                      value={formData.greighMtr || ''}
+                      onChangeText={(t) => updateField('greighMtr', t)}
+                      onFocus={scrollToFormEnd}
+                      placeholder="e.g. 5000"
+                      placeholderTextColor={theme.inputPlaceholder}
+                    />
+                  </View>
                 </View>
 
                  {/* Payment Terms */}
@@ -2154,6 +2349,54 @@ export default function PurchaseOrdersScreen() {
                   </View>
                 </View>
 
+                {/* Images Section */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Images (Multiple)</Text>
+                  
+                  {/* Select button */}
+                  <TouchableOpacity 
+                    onPress={pickImages} 
+                    style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      padding: 14, 
+                      borderRadius: 12, 
+                      borderWidth: 1, 
+                      borderStyle: 'dashed', 
+                      borderColor: theme.inputBorder, 
+                      backgroundColor: theme.input,
+                      marginBottom: 12
+                    }}
+                  >
+                    <Plus size={16} color={theme.textSecondary} style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary }}>Choose Images</Text>
+                  </TouchableOpacity>
+
+                  {/* Previews grid */}
+                  {selectedImageUris.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.surface }}>
+                      {selectedImageUris.map((uri, index) => (
+                        <View key={index} style={{ width: 75, height: 75, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: theme.borderLight, position: 'relative' }}>
+                          <Image source={{ uri }} style={{ width: '100%', height: '100%' }} />
+                          {/* New tag if newly picked */}
+                          {(uri.startsWith('file:') || uri.startsWith('content:') || uri.startsWith('/')) && (
+                            <View style={{ position: 'absolute', bottom: 4, left: 4, backgroundColor: '#2563eb', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#fff' }}>NEW</Text>
+                            </View>
+                          )}
+                          <TouchableOpacity 
+                            onPress={() => removeImage(uri)} 
+                            style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#ef4444', borderRadius: 12, width: 20, height: 20, justifyContent: 'center', alignItems: 'center' }}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold', lineHeight: 12 }}>×</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
                 {/* Notes */}
                 <View style={{ marginBottom: 40 }}>
                   <View style={{ marginBottom: 8 }}>
@@ -2200,8 +2443,8 @@ export default function PurchaseOrdersScreen() {
                 
                 {/* Action Bar */}
                 <View style={{ paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.borderLight, backgroundColor: theme.background, paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 16 }}>
-                  <TouchableOpacity onPress={handleSave} disabled={createMutation.isPending || updateMutation.isPending} style={{ width: '100%', padding: 16, borderRadius: 12, backgroundColor: Colors.primary[600], alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
-                    {createMutation.isPending || updateMutation.isPending ? (
+                  <TouchableOpacity onPress={handleSave} disabled={createMutation.isPending || updateMutation.isPending || isUploading} style={{ width: '100%', padding: 16, borderRadius: 12, backgroundColor: Colors.primary[600], alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+                    {createMutation.isPending || updateMutation.isPending || isUploading ? (
                       <ActivityIndicator color={Colors.white} />
                     ) : (
                       <>
@@ -2252,6 +2495,15 @@ export default function PurchaseOrdersScreen() {
         onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
         onClose={() => { setIsDeleteModalOpen(false); setDeleteId(null); }}
         isDeleting={deleteMutation.isPending}
+      />
+
+      {/* Image Preview Modal */}
+      <ImagePreviewModal
+        visible={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        images={previewImages}
+        initialIndex={previewIndex}
+        isDarkMode={isDarkMode}
       />
 
 

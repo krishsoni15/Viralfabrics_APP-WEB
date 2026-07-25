@@ -111,9 +111,9 @@ export default function UsersScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // Animated values for draggable FAB (initially positioned closer to the bottom edge)
-  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 76, y: screenHeight - 170 })).current;
+  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 76, y: screenHeight - 220 })).current;
   const fabX = useRef(screenWidth - 76);
-  const fabY = useRef(screenHeight - 170);
+  const fabY = useRef(screenHeight - 220);
 
   const dimensionsRef = useRef({ screenWidth, screenHeight });
   dimensionsRef.current = { screenWidth, screenHeight };
@@ -121,7 +121,7 @@ export default function UsersScreen() {
   useEffect(() => {
     const isSnappedLeft = fabX.current < screenWidth / 2;
     const targetX = isSnappedLeft ? 20 : screenWidth - 76;
-    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - 170);
+    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - 220);
     
     fabX.current = targetX;
     fabY.current = targetY;
@@ -164,7 +164,7 @@ export default function UsersScreen() {
         const targetX = currentX < currentScreenWidth / 2 ? snapLeftX : snapRightX;
         
         const minY = 100;
-        const maxY = currentScreenHeight - 170;
+        const maxY = currentScreenHeight - 220;
         const targetY = Math.min(Math.max(currentY, minY), maxY);
         
         fabX.current = targetX;

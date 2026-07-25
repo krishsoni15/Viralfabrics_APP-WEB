@@ -76,8 +76,12 @@ function ProfileTabBarIcon({ focused, color }: { focused: boolean; color: any })
   }, [focused]);
 
   // Reset photo error when user photo changes
+  const lastPhotoRef = useRef(user?.profilePhoto);
   useEffect(() => {
-    setPhotoError(false);
+    if (user?.profilePhoto !== lastPhotoRef.current) {
+      lastPhotoRef.current = user?.profilePhoto;
+      setPhotoError(false);
+    }
   }, [user?.profilePhoto]);
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -141,7 +145,7 @@ function ProfileTabBarIcon({ focused, color }: { focused: boolean; color: any })
 
 
 // Custom spring-animated tab button with active capsule background and smooth vertical translation
-function TabBarButton({ children, accessibilityState, onPress, onLongPress, style, hideDot }: any) {
+function TabBarButton({ children, accessibilityState, onPress, onLongPress, style, hideDot, noBorder }: any) {
   const focused = accessibilityState?.selected;
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
@@ -160,13 +164,13 @@ function TabBarButton({ children, accessibilityState, onPress, onLongPress, styl
         { translateY: translateY.value }
       ],
       backgroundColor: withTiming(
-        focused 
+        focused && !noBorder
           ? (isDarkMode ? 'rgba(96, 165, 250, 0.15)' : 'rgba(37, 99, 235, 0.08)') 
           : 'transparent',
         { duration: 120 }
       ),
       borderColor: withTiming(
-        focused
+        focused && !noBorder
           ? (isDarkMode ? 'rgba(96, 165, 250, 0.25)' : 'rgba(37, 99, 235, 0.15)')
           : 'transparent',
         { duration: 120 }
@@ -179,7 +183,11 @@ function TabBarButton({ children, accessibilityState, onPress, onLongPress, styl
       onPress={onPress}
       onLongPress={onLongPress}
       activeOpacity={0.8}
-      style={[style, { flex: 1, justifyContent: 'center', alignItems: 'center' }]}
+      style={[
+        style, 
+        { flex: 1, justifyContent: 'center', alignItems: 'center' },
+        Platform.OS === 'web' && { outlineStyle: 'none' } as any
+      ]}
     >
       <Animated.View style={[
         { 
@@ -188,7 +196,7 @@ function TabBarButton({ children, accessibilityState, onPress, onLongPress, styl
           width: '92%', 
           height: Platform.OS === 'ios' ? 56 : 48,
           borderRadius: 14,
-          borderWidth: 1.2,
+          borderWidth: focused && !noBorder ? 1.2 : 0,
           paddingVertical: 2,
         },
         animatedStyle
@@ -286,6 +294,7 @@ function MenuTabBarIcon({
 }
 
 export default function TabsLayout() {
+  const isLoading = useAppStore((state) => state.isLoading);
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const { isSuperAdmin, user } = useAuth();
@@ -298,6 +307,11 @@ export default function TabsLayout() {
   const [isMenuRendered, setIsMenuRendered] = useState(false);
   const pathname = usePathname();
   const scrollY = useRef(0);
+  const lastPathname = useRef(pathname);
+
+  if (isLoading) {
+    return null;
+  }
   const menuSheetY = useRef(0);
   const menuTouchStartPageY = useRef(0);
   
@@ -341,10 +355,13 @@ export default function TabsLayout() {
 
   // Automatically close and clean up the menu overlay whenever the active route changes
   useEffect(() => {
-    setIsMenuOpen(false);
-    setIsMenuRendered(false);
-    sheetTranslateY.value = offScreenY;
-  }, [pathname]);
+    if (pathname !== lastPathname.current) {
+      lastPathname.current = pathname;
+      setIsMenuOpen(false);
+      setIsMenuRendered(false);
+      sheetTranslateY.value = offScreenY;
+    }
+  }, [pathname, offScreenY]);
 
   const openMenu = () => {
     sheetTranslateY.value = offScreenY;
@@ -510,6 +527,7 @@ export default function TabsLayout() {
                   <TabBarButton
                     {...props}
                     hideDot={false}
+                    noBorder={true}
                     accessibilityState={{
                       ...props.accessibilityState,
                       selected: isMenuOpen || isFabricsActive || isWeaversActive || isGreyActive || isSamplingActive || isFinishActive || isUsersActive || isLogsActive || isPurchaseOrdersActive

@@ -371,10 +371,14 @@ export interface PurchaseOrder {
   supplierName: string;
   supplierAddress: string;
   supplierGstin: string;
+  supplierPhone?: string;
   quality: string;
   pcsMtr: string;
   delivery: string;
   rate: string;
+  greighMtr?: string;
+  greighLeadTime?: string;
+  images?: string[];
   paymentTerms: string;
   specs: {
     finishGsm: string;
@@ -401,4 +405,5 @@ export interface POSupplier {
   name: string;
   address?: string;
   gstin?: string;
+  phone?: string;
 }

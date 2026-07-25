@@ -371,9 +371,10 @@ export default function WeaverListScreen() {
   const [deleting, setDeleting] = useState(false);
 
   // FAB drag
-  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 76, y: screenHeight - 170 })).current;
+  const FAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 220 : 170;
+  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 76, y: screenHeight - FAB_BOTTOM_OFFSET })).current;
   const fabX = useRef(screenWidth - 76);
-  const fabY = useRef(screenHeight - 170);
+  const fabY = useRef(screenHeight - FAB_BOTTOM_OFFSET);
 
   const dimensionsRef = useRef({ screenWidth, screenHeight });
   dimensionsRef.current = { screenWidth, screenHeight };
@@ -381,7 +382,7 @@ export default function WeaverListScreen() {
   React.useEffect(() => {
     const isSnappedLeft = fabX.current < screenWidth / 2;
     const targetX = isSnappedLeft ? 16 : screenWidth - 76;
-    const targetY = Math.min(Math.max(fabY.current, 120), screenHeight - 170);
+    const targetY = Math.min(Math.max(fabY.current, 120), screenHeight - FAB_BOTTOM_OFFSET);
     
     fabX.current = targetX;
     fabY.current = targetY;
@@ -553,7 +554,7 @@ export default function WeaverListScreen() {
         const targetX = currentX < currentScreenWidth / 2 ? snapLeftX : snapRightX;
 
         const minY = 120;
-        const maxY = currentScreenHeight - 170;
+        const maxY = currentScreenHeight - FAB_BOTTOM_OFFSET;
         const targetY = Math.min(Math.max(currentY, minY), maxY);
 
         fabX.current = targetX;

@@ -363,9 +363,10 @@ export default function WeaverDetailScreen() {
   const filterTouchStartPageY = React.useRef(0);
   const filterSheetY = React.useRef(0);
 
-  const pan = React.useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 170 })).current;
+  const FAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 220 : 170;
+  const pan = React.useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - FAB_BOTTOM_OFFSET })).current;
   const fabX = React.useRef(screenWidth - 68);
-  const fabY = React.useRef(screenHeight - 170);
+  const fabY = React.useRef(screenHeight - FAB_BOTTOM_OFFSET);
 
   const dimensionsRef = React.useRef({ screenWidth, screenHeight });
   dimensionsRef.current = { screenWidth, screenHeight };
@@ -373,7 +374,7 @@ export default function WeaverDetailScreen() {
   React.useEffect(() => {
     const isSnappedLeft = fabX.current < screenWidth / 2;
     const targetX = isSnappedLeft ? 16 : screenWidth - 68;
-    const targetY = Math.min(Math.max(fabY.current, 120), screenHeight - 170);
+    const targetY = Math.min(Math.max(fabY.current, 120), screenHeight - FAB_BOTTOM_OFFSET);
     
     fabX.current = targetX;
     fabY.current = targetY;
@@ -399,7 +400,7 @@ export default function WeaverDetailScreen() {
       const currentX = fabX.current + gestureState.dx;
       const currentY = fabY.current + gestureState.dy;
       const snapX = currentX < currentScreenWidth / 2 ? 16 : currentScreenWidth - 68;
-      const snapY = Math.min(Math.max(currentY, 120), currentScreenHeight - 170);
+      const snapY = Math.min(Math.max(currentY, 120), currentScreenHeight - FAB_BOTTOM_OFFSET);
       fabX.current = snapX;
       fabY.current = snapY;
       RNAnimated.spring(pan, { toValue: { x: snapX, y: snapY }, useNativeDriver: false, tension: 40, friction: 12 }).start();

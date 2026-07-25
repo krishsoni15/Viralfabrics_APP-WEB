@@ -1079,19 +1079,21 @@ export default function OrderDetailScreen() {
                     <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>{order.poNumber}</Text>
                   </View>
                 )}
-                {!!order.styleNo && (
-                  <View style={{ flex: 1, paddingLeft: 10 }}>
-                    <Text style={{ fontSize: 11, color: theme.textSecondary }}>Style No</Text>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>{order.styleNo}</Text>
-                  </View>
-                )}
                 {!!order.priority && (
-                  <View style={{ flex: 0.8, paddingLeft: 10 }}>
+                  <View style={{ flex: 1, paddingLeft: 10, alignItems: 'flex-end' }}>
                     <Text style={{ fontSize: 11, color: theme.textSecondary }}>Priority</Text>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>{order.priority}</Text>
                   </View>
                 )}
               </View>
+
+              {/* Style Number (Full Width wrapping support) */}
+              {!!order.styleNo && (
+                <View style={{ marginBottom: 8 }}>
+                  <Text style={{ fontSize: 11, color: theme.textSecondary, marginBottom: 2 }}>Style Number</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text, flexWrap: 'wrap' }}>{order.styleNo}</Text>
+                </View>
+              )}
 
               {/* Dates Grid matching Orders list page */}
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>

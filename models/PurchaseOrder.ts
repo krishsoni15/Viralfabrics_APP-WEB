@@ -17,10 +17,14 @@ export interface IPurchaseOrder extends Document {
   supplierName?: string;
   supplierAddress?: string;
   supplierGstin?: string;
+  supplierPhone?: string;
   quality?: string;
   pcsMtr?: string;
   delivery?: string;
   rate?: string;
+  greighMtr?: string;
+  greighLeadTime?: string;
+  images?: string[];
   paymentTerms?: string;
   specs: IPurchaseOrderSpecs;
   notes?: string;
@@ -82,6 +86,11 @@ const PurchaseOrderSchema = new Schema<IPurchaseOrder>({
     uppercase: true,
     maxlength: [20, "Supplier GSTIN cannot exceed 20 characters"]
   },
+  supplierPhone: {
+    type: String,
+    trim: true,
+    maxlength: [20, "Supplier phone cannot exceed 20 characters"]
+  },
   quality: {
     type: String,
     trim: true,
@@ -101,6 +110,20 @@ const PurchaseOrderSchema = new Schema<IPurchaseOrder>({
     type: String,
     trim: true,
     maxlength: [100, "Rate cannot exceed 100 characters"]
+  },
+  greighMtr: {
+    type: String,
+    trim: true,
+    maxlength: [50, "Greigh meters cannot exceed 50 characters"]
+  },
+  greighLeadTime: {
+    type: String,
+    trim: true,
+    maxlength: [100, "Greigh lead time cannot exceed 100 characters"]
+  },
+  images: {
+    type: [String],
+    default: []
   },
   paymentTerms: {
     type: String,

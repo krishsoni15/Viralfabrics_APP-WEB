@@ -508,19 +508,19 @@ const OrderCard = React.memo(function OrderCard({
         {/* Order Info & Party Grid */}
         <View style={{ borderTopWidth: 1, borderTopColor: theme.borderLight, paddingTop: 10, marginBottom: 8 }}>
           {/* PO, Style, Priority */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 12 }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>PO:</Text>
               <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.poNumber || '—'}</Text>
             </View>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 12 }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>Style:</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.styleNo || '—'}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text, flex: 1 }} numberOfLines={1} ellipsizeMode="tail">{item.styleNo || '—'}</Text>
             </View>
             {!!item.priority && (
-              <View style={{ flex: 0.8, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>Prio:</Text>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.priority}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.priority}</Text>
               </View>
             )}
           </View>
@@ -1683,9 +1683,10 @@ export default function OrdersScreen() {
   }, [millsList, millSearchText]);
 
   // Draggable FAB state & handlers matching User Page
-  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 170 })).current;
+  const FAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 220 : 170;
+  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - FAB_BOTTOM_OFFSET })).current;
   const fabX = useRef(screenWidth - 68);
-  const fabY = useRef(screenHeight - 170);
+  const fabY = useRef(screenHeight - FAB_BOTTOM_OFFSET);
 
   const dimensionsRef = useRef({ screenWidth, screenHeight });
   dimensionsRef.current = { screenWidth, screenHeight };
@@ -1693,7 +1694,7 @@ export default function OrdersScreen() {
   useEffect(() => {
     const isSnappedLeft = fabX.current < screenWidth / 2;
     const targetX = isSnappedLeft ? 20 : screenWidth - 68;
-    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - 170);
+    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - FAB_BOTTOM_OFFSET);
     
     fabX.current = targetX;
     fabY.current = targetY;
@@ -1749,7 +1750,7 @@ export default function OrdersScreen() {
         const targetX = currentX < currentScreenWidth / 2 ? snapLeftX : snapRightX;
 
         const minY = 100;
-        const maxY = currentScreenHeight - 170;
+        const maxY = currentScreenHeight - FAB_BOTTOM_OFFSET;
         const targetY = Math.min(Math.max(currentY, minY), maxY);
 
         fabX.current = targetX;

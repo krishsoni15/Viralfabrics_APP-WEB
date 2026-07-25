@@ -78,14 +78,15 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. Fetch suppliers from Supplier master collection & PurchaseOrders
-    const supplierMap = new Map<string, { _id: string; name: string; address: string; gstin: string; updatedAt: string }>();
+    const supplierMap = new Map<string, { _id: string; name: string; address: string; gstin: string; phone: string; updatedAt: string }>();
 
     const masterSuppliers = await Supplier.find(
       query ? {
         $or: [
           { name: { $regex: query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } },
           { address: { $regex: query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } },
-          { gstin: { $regex: query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } }
+          { gstin: { $regex: query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } },
+          { phone: { $regex: query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } }
         ]
       } : {}
     ).sort({ updatedAt: -1 }).limit(100).lean();
@@ -96,12 +97,14 @@ export async function GET(request: NextRequest) {
         const sName = sItem.name.trim();
         const sAddr = sItem.address ? sItem.address.trim() : '';
         const sGstin = sItem.gstin ? sItem.gstin.trim() : '';
+        const sPhone = sItem.phone ? sItem.phone.trim() : '';
         const key = `${sName.toLowerCase()}_${sAddr.toLowerCase()}_${sGstin.toLowerCase()}`;
         supplierMap.set(key, {
           _id: String(sItem._id),
           name: sName,
           address: sAddr,
           gstin: sGstin,
+          phone: sPhone,
           updatedAt: (sItem.updatedAt || new Date()).toISOString()
         });
       }
@@ -110,7 +113,7 @@ export async function GET(request: NextRequest) {
     // From PurchaseOrders (latest 200 orders)
     const poSuppliers = await PurchaseOrder.find(
       { softDeleted: false, supplierName: { $exists: true, $ne: '' } },
-      'supplierName supplierAddress supplierGstin updatedAt'
+      'supplierName supplierAddress supplierGstin supplierPhone updatedAt'
     ).sort({ updatedAt: -1 }).limit(200).lean();
 
     for (const po of poSuppliers) {
@@ -119,6 +122,7 @@ export async function GET(request: NextRequest) {
         const sName = poItem.supplierName.trim();
         const sAddr = poItem.supplierAddress ? poItem.supplierAddress.trim() : '';
         const sGstin = poItem.supplierGstin ? poItem.supplierGstin.trim().toUpperCase() : '';
+        const sPhone = poItem.supplierPhone ? poItem.supplierPhone.trim() : '';
         const key = `${sName.toLowerCase()}_${sAddr.toLowerCase()}_${sGstin.toLowerCase()}`;
         const existing = supplierMap.get(key);
         if (!existing) {
@@ -127,6 +131,7 @@ export async function GET(request: NextRequest) {
             name: sName,
             address: sAddr,
             gstin: sGstin,
+            phone: sPhone,
             updatedAt: (poItem.updatedAt || new Date()).toISOString()
           });
         }
@@ -140,7 +145,7 @@ export async function GET(request: NextRequest) {
     if (query) {
       const q = query.toLowerCase();
       brokers = brokers.filter(b => b.name.toLowerCase().includes(q) || b.phone.toLowerCase().includes(q));
-      suppliers = suppliers.filter(s => s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q) || s.gstin.toLowerCase().includes(q));
+      suppliers = suppliers.filter(s => s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q) || s.gstin.toLowerCase().includes(q) || s.phone.toLowerCase().includes(q));
     }
 
     return Response.json({

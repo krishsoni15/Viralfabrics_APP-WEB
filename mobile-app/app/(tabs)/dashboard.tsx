@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, ScrollView, RefreshControl, Platform, TouchableOpacity, TextInput, StyleSheet, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, RefreshControl, Platform, TouchableOpacity, TextInput, StyleSheet, Pressable, StatusBar } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShoppingBag, Clock, CheckCircle, Filter, Download, Calendar, Truck, X, ChevronDown, ArrowUp, PieChart, Droplet, Palette, ChevronRight } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -280,6 +280,8 @@ export default function DashboardScreen() {
   const { isLargeScreen, containerMaxWidth, numColumns } = useResponsiveLayout();
   const { setIsBackupModalOpen, isBackupDownloading } = useAppStore();
   const isMaster = user?.role === 'master';
+  const insets = useSafeAreaInsets();
+  const statusBarHeight = Platform.OS === 'ios' ? (insets.top > 0 ? insets.top : 20) : (insets.top > 0 ? insets.top : StatusBar.currentHeight || 24);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     startDate: '',
@@ -560,8 +562,19 @@ export default function DashboardScreen() {
   const borderColor = isDarkMode ? '#334155' : theme.border;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: bgColor }} edges={['top']}>
-      <ScrollView
+    <View style={{ flex: 1, backgroundColor: bgColor }}>
+      {/* Top Status Bar Guard (prevents content overlap in all modes, including Reachability) */}
+      <View style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: statusBarHeight,
+        backgroundColor: bgColor,
+        zIndex: 9999,
+      }} />
+      <View style={{ flex: 1, paddingTop: statusBarHeight }}>
+        <ScrollView
         ref={scrollViewRef}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
@@ -1140,6 +1153,7 @@ export default function DashboardScreen() {
           <ArrowUp size={22} color="#ffffff" />
         </TouchableOpacity>
       )}
-    </SafeAreaView>
+      </View>
+    </View>
   );
 }

@@ -305,11 +305,18 @@ export const generatePoHtml = (po: PurchaseOrder) => {
         <!-- Supplier Address -->
         ${addressHtmlRows}
 
-        <!-- Supplier GSTIN -->
-        <div class="row">
-          <span class="label" style="width: 16mm;">GSTIN</span>
-          <span class="colon" style="width: 3mm;">:</span>
-          <span class="value underline-fill">${po.supplierGstin || ''}</span>
+        <!-- Supplier GSTIN & Mobile -->
+        <div class="row split-row">
+          <div class="left-field" style="width: 70mm;">
+            <span class="label" style="width: 16mm;">GSTIN</span>
+            <span class="colon" style="width: 3mm;">:</span>
+            <span class="value underline-fill" style="width: 50mm; display: inline-block;">${po.supplierGstin || ''}</span>
+          </div>
+          <div class="right-field" style="width: 95mm; display: flex; justify-content: flex-end;">
+            <span class="label" style="width: 25mm; display: inline-block;">Mobile No.</span>
+            <span class="colon" style="width: 2mm; display: inline-block;">:</span>
+            <span class="value underline-fill" style="width: 68mm; display: inline-block;">${po.supplierPhone || ''}</span>
+          </div>
         </div>
 
         <div class="section-divider-thick" style="margin-top: 4mm; margin-bottom: 7.5mm;"></div>
@@ -337,12 +344,26 @@ export const generatePoHtml = (po: PurchaseOrder) => {
           </div>
         </div>
 
-        <!-- Rate -->
-        <div class="row">
-          <div style="width: 70mm;">
+        <!-- Rate & Greigh Lead Time -->
+        <div class="row split-row">
+          <div class="left-field" style="width: 70mm;">
             <span class="label" style="width: 18mm; display: inline-block;">Rate</span>
             <span class="colon" style="width: 2mm; display: inline-block;">:</span>
             <span class="value" style="width: 45mm; border-bottom: 0.3mm solid #000; display: inline-block;">${po.rate ? (/gst/i.test(po.rate) ? po.rate : `${po.rate} + GST`) : ''}</span>
+          </div>
+          <div class="right-field" style="width: 95mm; display: flex; justify-content: flex-end;">
+            <span class="label" style="width: 32mm; display: inline-block;">Greigh Lead Time</span>
+            <span class="colon" style="width: 2mm; display: inline-block;">:</span>
+            <span class="value" style="width: 59mm; border-bottom: 0.3mm solid #000; display: inline-block;">${po.greighLeadTime || ''}</span>
+          </div>
+        </div>
+
+        <!-- Greigh Mtr -->
+        <div class="row">
+          <div style="width: 70mm;">
+            <span class="label" style="width: 18mm; display: inline-block;">Greigh Mtr</span>
+            <span class="colon" style="width: 2mm; display: inline-block;">:</span>
+            <span class="value" style="width: 45mm; border-bottom: 0.3mm solid #000; display: inline-block;">${po.greighMtr || ''}</span>
           </div>
         </div>
 
@@ -356,25 +377,40 @@ export const generatePoHtml = (po: PurchaseOrder) => {
 
         <div class="section-divider-thick" style="margin-top: 4mm; margin-bottom: 6.5mm;"></div>
 
-        <!-- Specs Table -->
-        <table class="specs-table">
-          <tr>
-            <td class="specs-label">Finish GSM:</td>
-            <td class="specs-val">${po.specs?.finishGsm || ''}</td>
-          </tr>
-          <tr>
-            <td class="specs-label">Grey Width:</td>
-            <td class="specs-val">${po.specs?.greyWidth || ''}</td>
-          </tr>
-          <tr>
-            <td class="specs-label">Finish Width:</td>
-            <td class="specs-val">${po.specs?.finishWidth || ''}</td>
-          </tr>
-          <tr>
-            <td class="specs-label">Weight:</td>
-            <td class="specs-val">${po.specs?.weight || ''}</td>
-          </tr>
-        </table>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8mm; width: 100%;">
+          <!-- Specs Table -->
+          <table class="specs-table" style="margin-bottom: 0; margin-right: 5mm;">
+            <tr>
+              <td class="specs-label">Finish GSM:</td>
+              <td class="specs-val">${po.specs?.finishGsm || ''}</td>
+            </tr>
+            <tr>
+              <td class="specs-label">Grey Width:</td>
+              <td class="specs-val">${po.specs?.greyWidth || ''}</td>
+            </tr>
+            <tr>
+              <td class="specs-label">Finish Width:</td>
+              <td class="specs-val">${po.specs?.finishWidth || ''}</td>
+            </tr>
+            <tr>
+              <td class="specs-label">Weight:</td>
+              <td class="specs-val">${po.specs?.weight || ''}</td>
+            </tr>
+          </table>
+
+          <!-- Images Section on the Right Side of Table -->
+          ${(po.images || []).length === 1 ? `
+            <div style="flex-grow: 1; display: flex; justify-content: center; align-items: center; max-width: 95mm;">
+              <img src="${po.images[0]}" style="width: 48mm; height: 30mm; object-fit: contain; background-color: #f8fafc; border: 0.3mm solid #ccc; border-radius: 2mm;" />
+            </div>
+          ` : `
+            <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 4mm; max-width: 95mm;">
+              ${(po.images || []).map(img => `
+                <img src="${img}" style="width: 100%; height: 30mm; object-fit: contain; background-color: #f8fafc; border: 0.3mm solid #ccc; border-radius: 2mm;" />
+              `).join('')}
+            </div>
+          `}
+        </div>
 
         <!-- Notes -->
         <div class="lined-section">

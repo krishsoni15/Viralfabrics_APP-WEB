@@ -31,7 +31,7 @@ export async function GET(
     }
 
     // Generate PDF
-    const doc = generatePurchaseOrderPDF(purchaseOrder);
+    const doc = await generatePurchaseOrderPDF(purchaseOrder);
     const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
     const filename = getPurchaseOrderPDFFileName(purchaseOrder);
 

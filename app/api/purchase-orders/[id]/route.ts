@@ -132,12 +132,13 @@ export async function PUT(
       }
     }
 
-    // Update/Upsert supplier in master DB with latest address, GSTIN & timestamp
+    // Update/Upsert supplier in master DB with latest address, GSTIN, phone & timestamp
     if (updateData.supplierName && updateData.supplierName.trim()) {
       try {
         const trimmedName = updateData.supplierName.trim();
         const trimmedAddress = updateData.supplierAddress ? updateData.supplierAddress.trim() : '';
         const trimmedGstin = updateData.supplierGstin ? updateData.supplierGstin.trim().toUpperCase() : '';
+        const trimmedPhone = updateData.supplierPhone ? updateData.supplierPhone.trim() : '';
 
         let supplierDoc = await Supplier.findOne({
           name: trimmedName,
@@ -145,13 +146,15 @@ export async function PUT(
           gstin: trimmedGstin
         }).collation(collation);
         if (supplierDoc) {
+          supplierDoc.phone = trimmedPhone;
           supplierDoc.updatedAt = new Date();
           await supplierDoc.save();
         } else {
           await Supplier.create({
             name: trimmedName,
             address: trimmedAddress,
-            gstin: trimmedGstin
+            gstin: trimmedGstin,
+            phone: trimmedPhone
           });
         }
       } catch (e: any) {

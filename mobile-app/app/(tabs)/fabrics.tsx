@@ -540,9 +540,10 @@ export default function FabricsScreen() {
   const filterPanY = useRef(new RNAnimated.Value(600)).current;
   const searchTypePanY = useRef(new RNAnimated.Value(600)).current;
   const formPanY = useRef(new RNAnimated.Value(0)).current;
-  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 170 })).current;
+  const FAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 220 : 170;
+  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - FAB_BOTTOM_OFFSET })).current;
   const fabX = useRef(screenWidth - 68);
-  const fabY = useRef(screenHeight - 170);
+  const fabY = useRef(screenHeight - FAB_BOTTOM_OFFSET);
 
   const dimensionsRef = useRef({ screenWidth, screenHeight });
   dimensionsRef.current = { screenWidth, screenHeight };
@@ -556,7 +557,7 @@ export default function FabricsScreen() {
   React.useEffect(() => {
     const isSnappedLeft = fabX.current < screenWidth / 2;
     const targetX = isSnappedLeft ? 20 : screenWidth - 68;
-    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - 170);
+    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - FAB_BOTTOM_OFFSET);
     
     fabX.current = targetX;
     fabY.current = targetY;
@@ -1054,7 +1055,7 @@ export default function FabricsScreen() {
         const targetX = currentX < currentScreenWidth / 2 ? snapLeftX : snapRightX;
 
         const minY = 100;
-        const maxY = currentScreenHeight - 110;
+        const maxY = currentScreenHeight - FAB_BOTTOM_OFFSET;
         const targetY = Math.min(Math.max(currentY, minY), maxY);
 
         fabX.current = targetX;

@@ -37,7 +37,71 @@ export function cleanPoNumber(poNumber?: string | null): string {
   return idStr.replace(/^FY\s*-?\s*/i, '');
 }
 
-export function generatePurchaseOrderPDF(po: any): jsPDF {
+async function getBase64Image(url: string): Promise<{ dataUrl: string; format: string; width: number; height: number } | null> {
+  try {
+    let fetchUrl = url;
+    
+    // If in the browser and the URL is absolute and external, proxy it to bypass CORS restrictions
+    if (typeof window !== 'undefined' && (url.startsWith('http://') || url.startsWith('https://'))) {
+      if (!url.includes(window.location.host)) {
+        fetchUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
+      }
+    }
+
+    const response = await fetch(fetchUrl);
+    if (!response.ok) return null;
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // Cross-environment arraybuffer to base64
+    let binary = '';
+    const bytes = new Uint8Array(arrayBuffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = typeof btoa !== 'undefined' ? btoa(binary) : Buffer.from(arrayBuffer).toString('base64');
+    
+    let format = 'JPEG';
+    const lowerUrl = url.toLowerCase();
+    if (lowerUrl.endsWith('.png')) {
+      format = 'PNG';
+    } else if (lowerUrl.endsWith('.webp')) {
+      format = 'WEBP';
+    }
+    
+    const dataUrl = `data:image/${format.toLowerCase()};base64,${base64}`;
+    
+    let width = 100;
+    let height = 100;
+
+    if (typeof window !== 'undefined') {
+      const img = new window.Image();
+      await new Promise<void>((resolve) => {
+        img.onload = () => {
+          width = img.width || 100;
+          height = img.height || 100;
+          resolve();
+        };
+        img.onerror = () => {
+          resolve();
+        };
+        img.src = dataUrl;
+      });
+    }
+    
+    return {
+      dataUrl,
+      format,
+      width,
+      height
+    };
+  } catch (err) {
+    console.error('Error fetching image for PDF:', err);
+    return null;
+  }
+}
+
+export async function generatePurchaseOrderPDF(po: any): Promise<jsPDF> {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -161,14 +225,22 @@ export function generatePurchaseOrderPDF(po: any): jsPDF {
     });
   }
 
-  // ─── 8. SUPPLIER GSTIN ROW ───
+  // ─── 8. SUPPLIER GSTIN & MOBILE ROW ───
   y += 8.5;
   doc.setFont('helvetica', 'normal');
   doc.text('GSTIN : ', margin, y);
   doc.setFont('helvetica', 'bold');
   doc.text(po.supplierGstin || '', margin + 17, y);
-  // Underline across page
-  doc.line(margin + 16, y + 1, rightMargin, y + 1);
+
+  // Supplier Mobile Number on same row
+  doc.setFont('helvetica', 'normal');
+  doc.text('Mobile No. : ', margin + 85, y);
+  doc.setFont('helvetica', 'bold');
+  doc.text(po.supplierPhone || '', margin + 106, y);
+
+  // Underlines for GSTIN value and Mobile No value separately
+  doc.line(margin + 16, y + 1, margin + 62, y + 1);
+  doc.line(margin + 105, y + 1, rightMargin, y + 1);
 
   // Elegant section divider line below Supplier section
   y += 4;
@@ -207,6 +279,224 @@ export function generatePurchaseOrderPDF(po: any): jsPDF {
   doc.text(po.delivery || '', margin + 104, y);
   // Underline for Delivery
   doc.line(margin + 103, y + 1, rightMargin, y + 1);
+
+  // ─── 11. RATE ROW ───
+  y += 8.5;
+  doc.setFont('helvetica', 'normal');
+  doc.text('Rate', margin, y);
+  doc.text(':', margin + 16, y);
+  doc.setFont('helvetica', 'bold');
+  const formattedRate = po.rate ? (/gst/i.test(po.rate) ? po.rate : `${po.rate} + GST`) : '';
+  doc.text(formattedRate, margin + 20, y);
+  // Underline for Rate
+  doc.line(margin + 19, y + 1, margin + 62, y + 1);
+
+  // Greigh Lead Time on same row
+  doc.setFont('helvetica', 'normal');
+  doc.text('Greigh Lead Time : ', margin + 85, y);
+  doc.setFont('helvetica', 'bold');
+  doc.text(po.greighLeadTime || '', margin + 120, y);
+  doc.line(margin + 119, y + 1, rightMargin, y + 1);
+
+  // ─── 11b. GREIGH MTR ROW ───
+  y += 8.5;
+  doc.setFont('helvetica', 'normal');
+  doc.text('Greigh Mtr', margin, y);
+  doc.text(':', margin + 16, y);
+  doc.setFont('helvetica', 'bold');
+  doc.text(po.greighMtr || '', margin + 20, y);
+  doc.line(margin + 19, y + 1, margin + 62, y + 1);
+
+  // ─── 12. PAYMENT TERMS ROW (Supports Multi-line Payment Terms) ───
+  y += 8.5;
+  if (y > 270) {
+    doc.addPage();
+    y = 23;
+  }
+  doc.setFont('helvetica', 'normal');
+  doc.text('Payment Terms : ', margin, y);
+  if (po.paymentTerms) {
+    const res = renderStyledHtmlToPdf(
+      doc,
+      po.paymentTerms,
+      margin + 34,
+      y,
+      contentWidth - 34,
+      margin,
+      9.5,
+      8.5,
+      true,
+      rightMargin
+    );
+    y = res.endY;
+  }
+
+  // Elegant section divider line below Payment Terms
+  y += 4;
+  doc.setLineWidth(0.35);
+  doc.line(margin, y, rightMargin, y);
+
+  // ─── 13. SPECIFICATIONS TABLE ───
+  y += 6.5;
+  const specs = po.specs || {};
+  const specRows = [
+    { label: 'Finish GSM:', value: specs.finishGsm || '' },
+    { label: 'Grey Width:', value: specs.greyWidth || '' },
+    { key: 'finishWidth', label: 'Finish Width:', value: specs.finishWidth || '' },
+    { key: 'weight', label: 'Weight:', value: specs.weight || '' }
+  ];
+
+  const tableX = margin;
+  const labelWidth = 30;
+  const valueWidth = 45;
+  const tableWidth = labelWidth + valueWidth; // 75mm
+  const rowHeight = 7.5;
+
+  const specTableHeight = rowHeight * specRows.length; // 30mm
+  const imageGridHeight = po.images && po.images.length > 0 
+    ? Math.ceil(po.images.length / 2) * 35 - 4 
+    : 0;
+  const specsSectionHeight = Math.max(specTableHeight, imageGridHeight);
+
+  if (y + specsSectionHeight > 275) {
+    doc.addPage();
+    y = 23;
+  }
+
+  // Table Outer Box
+  doc.setLineWidth(0.35);
+  doc.rect(tableX, y, tableWidth, specTableHeight);
+
+  // Vertical Divider Line
+  doc.line(tableX + labelWidth, y, tableX + labelWidth, y + specTableHeight);
+
+  specRows.forEach((row, i) => {
+    const rowY = y + i * rowHeight;
+
+    // Horizontal inner row line
+    if (i > 0) {
+      doc.line(tableX, rowY, tableX + tableWidth, rowY);
+    }
+
+    // Label (Bold)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.text(row.label, tableX + 2, rowY + 5.2);
+
+    // Value (Bold)
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(row.value), tableX + labelWidth + 3, rowY + 5.2);
+  });
+
+  // Render Images on the right side of Specifications table
+  const specTableStartY = y;
+  if (po.images && po.images.length > 0) {
+    const isSingleImage = po.images.length === 1;
+    const imageWidth = 42;
+    const imageHeight = 31;
+    const gapX = 4;
+    const gapY = 4;
+    const startX = margin + tableWidth + 7; // 15 + 75 + 7 = 97
+    const availableWidth = rightMargin - startX; // 195 - 97 = 98
+    
+    for (let index = 0; index < po.images.length; index++) {
+      const imageUrl = po.images[index];
+      const imgData = await getBase64Image(imageUrl);
+      if (imgData) {
+        let imgX = startX;
+        let imgY = specTableStartY;
+        let maxWidth = imageWidth;
+        let maxHeight = imageHeight;
+        
+        if (isSingleImage) {
+          maxWidth = 46;
+          maxHeight = 31;
+          imgX = startX + (availableWidth - maxWidth) / 2;
+        } else {
+          const row = Math.floor(index / 2);
+          const col = index % 2;
+          imgX = startX + col * (imageWidth + gapX);
+          imgY = specTableStartY + row * (imageHeight + gapY);
+        }
+        
+        // Calculate aspect ratio preserving dimensions within bounding box of maxWidth x maxHeight
+        const imgAspect = imgData.width / imgData.height;
+        const boxAspect = maxWidth / maxHeight;
+        
+        let renderWidth = maxWidth;
+        let renderHeight = maxHeight;
+        
+        if (imgAspect > boxAspect) {
+          // Image is wider than bounding box aspect ratio -> clamp width
+          renderWidth = maxWidth;
+          renderHeight = maxWidth / imgAspect;
+        } else {
+          // Image is taller than bounding box aspect ratio -> clamp height
+          renderHeight = maxHeight;
+          renderWidth = maxHeight * imgAspect;
+        }
+        
+        // Center the image inside the grid slot
+        const xOffset = (maxWidth - renderWidth) / 2;
+        const yOffset = (maxHeight - renderHeight) / 2;
+        
+        doc.addImage(imgData.dataUrl, imgData.format, imgX + xOffset, imgY + yOffset, renderWidth, renderHeight);
+      }
+    }
+  }
+
+  y += specsSectionHeight + 8;
+  if (y > 255) {
+    doc.addPage();
+    y = 23;
+  }
+
+  // ─── 14. NOTES SECTION ───
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Notes : ', margin, y);
+
+  let notesLineCount = 0;
+
+  if (po.notes) {
+    const res = renderStyledHtmlToPdf(
+      doc,
+      po.notes,
+      margin + 18,
+      y,
+      contentWidth - 18,
+      margin,
+      9.5,
+      8.5,
+      true,
+      rightMargin
+    );
+    y = res.endY;
+    notesLineCount = res.lineCount;
+  } else {
+    // Underline for first Notes line if empty
+    doc.setLineWidth(0.3);
+    doc.line(margin + 17, y + 1, rightMargin, y + 1);
+    notesLineCount = 1;
+  }
+
+  // Draw remaining empty notebook line rules to guarantee AT LEAST 4 total lines minimum
+  const totalMinLines = 4;
+  const remainingEmptyLines = Math.max(0, totalMinLines - notesLineCount);
+  for (let i = 0; i < remainingEmptyLines; i++) {
+    // Check if adding rules reaches bottom limit
+    if (y > 275) {
+      doc.addPage();
+      y = 23;
+    } else {
+      y += 8.5;
+    }
+    doc.setLineWidth(0.3);
+    doc.line(margin, y + 1, rightMargin, y + 1);
+  }
+
+  return doc;
+}
 
 interface StyledSpan {
   text: string;
@@ -385,144 +675,6 @@ function renderStyledHtmlToPdf(
   });
 
   return { endY: curY, lineCount };
-}
-
-  // ─── 11. RATE ROW ───
-  y += 8.5;
-  doc.setFont('helvetica', 'normal');
-  doc.text('Rate', margin, y);
-  doc.text(':', margin + 16, y);
-  doc.setFont('helvetica', 'bold');
-  const formattedRate = po.rate ? (/gst/i.test(po.rate) ? po.rate : `${po.rate} + GST`) : '';
-  doc.text(formattedRate, margin + 20, y);
-  // Underline for Rate
-  doc.line(margin + 19, y + 1, margin + 62, y + 1);
-
-  // ─── 12. PAYMENT TERMS ROW (Supports Multi-line Payment Terms) ───
-  y += 8.5;
-  if (y > 270) {
-    doc.addPage();
-    y = 23;
-  }
-  doc.setFont('helvetica', 'normal');
-  doc.text('Payment Terms : ', margin, y);
-  if (po.paymentTerms) {
-    const res = renderStyledHtmlToPdf(
-      doc,
-      po.paymentTerms,
-      margin + 34,
-      y,
-      contentWidth - 34,
-      margin,
-      9.5,
-      8.5,
-      true,
-      rightMargin
-    );
-    y = res.endY;
-  }
-
-  // Elegant section divider line below Payment Terms
-  y += 4;
-  doc.setLineWidth(0.35);
-  doc.line(margin, y, rightMargin, y);
-
-  // ─── 13. SPECIFICATIONS TABLE ───
-  y += 6.5;
-  if (y > 240) {
-    doc.addPage();
-    y = 23;
-  }
-  const specs = po.specs || {};
-  const specRows = [
-    { label: 'Finish GSM:', value: specs.finishGsm || '' },
-    { label: 'Grey Width:', value: specs.greyWidth || '' },
-    { key: 'finishWidth', label: 'Finish Width:', value: specs.finishWidth || '' },
-    { key: 'weight', label: 'Weight:', value: specs.weight || '' }
-  ];
-
-  const tableX = margin;
-  const labelWidth = 30;
-  const valueWidth = 45;
-  const tableWidth = labelWidth + valueWidth;
-  const rowHeight = 7.5;
-
-  // Table Outer Box
-  doc.setLineWidth(0.35);
-  doc.rect(tableX, y, tableWidth, rowHeight * specRows.length);
-
-  // Vertical Divider Line
-  doc.line(tableX + labelWidth, y, tableX + labelWidth, y + rowHeight * specRows.length);
-
-  specRows.forEach((row, i) => {
-    const rowY = y + i * rowHeight;
-
-    // Horizontal inner row line
-    if (i > 0) {
-      doc.line(tableX, rowY, tableX + tableWidth, rowY);
-    }
-
-    // Label (Bold)
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.text(row.label, tableX + 2, rowY + 5.2);
-
-    // Value (Bold)
-    doc.setFont('helvetica', 'bold');
-    doc.text(String(row.value), tableX + labelWidth + 3, rowY + 5.2);
-  });
-
-  y += rowHeight * specRows.length + 8;
-  if (y > 255) {
-    doc.addPage();
-    y = 23;
-  }
-
-  // ─── 14. NOTES SECTION ───
-  doc.setFontSize(9.5);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Notes : ', margin, y);
-
-  let notesLineCount = 0;
-
-  if (po.notes) {
-    const res = renderStyledHtmlToPdf(
-      doc,
-      po.notes,
-      margin + 18,
-      y,
-      contentWidth - 18,
-      margin,
-      9.5,
-      8.5,
-      true,
-      rightMargin
-    );
-    y = res.endY;
-    notesLineCount = res.lineCount;
-  } else {
-    // Underline for first Notes line if empty
-    doc.setLineWidth(0.3);
-    doc.line(margin + 17, y + 1, rightMargin, y + 1);
-    notesLineCount = 1;
-  }
-
-  // Draw remaining empty notebook line rules to guarantee AT LEAST 4 total lines minimum
-  const totalMinLines = 4;
-  const remainingEmptyLines = Math.max(0, totalMinLines - notesLineCount);
-  for (let i = 0; i < remainingEmptyLines; i++) {
-    // Check if adding rules reaches bottom limit
-    if (y > 275) {
-      doc.addPage();
-      y = 23;
-    } else {
-      y += 8.5;
-    }
-    doc.setLineWidth(0.3);
-    doc.line(margin, y + 1, rightMargin, y + 1);
-  }
-
-  return doc;
 }
 
 export function getPurchaseOrderPDFFileName(po: any): string {

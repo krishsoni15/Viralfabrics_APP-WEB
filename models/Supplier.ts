@@ -4,6 +4,7 @@ export interface ISupplier extends Document {
   name: string;
   address?: string;
   gstin?: string;
+  phone?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +33,12 @@ const SupplierSchema = new Schema<ISupplier>({
     uppercase: true,
     default: "",
     maxlength: [20, "GSTIN cannot exceed 20 characters"]
+  },
+  phone: {
+    type: String,
+    trim: true,
+    default: "",
+    maxlength: [20, "Phone cannot exceed 20 characters"]
   }
 }, {
   timestamps: true,
