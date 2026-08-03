@@ -28,8 +28,13 @@ export const authService = {
   },
 
   async logoutAll(): Promise<void> {
-    await api.post('/api/auth/logout-all');
-    await storage.clearAll();
+    try {
+      await api.post('/api/auth/logout-all');
+    } catch (e) {
+      console.warn('Logout all API failed:', e);
+    } finally {
+      await storage.clearAll();
+    }
   },
 
   async validateSession(): Promise<{ valid: boolean; user?: User }> {

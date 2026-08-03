@@ -1097,7 +1097,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   gridContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
   },
   gridRow: {
@@ -1344,7 +1344,7 @@ const styles = StyleSheet.create({
     borderColor: '#000',
   },
   focusGuideContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
   },

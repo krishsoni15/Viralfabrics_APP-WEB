@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { View, Text, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Keyboard, useWindowDimensions } from 'react-native';
+import { View, Text, RefreshControl, Platform, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Pressable, PanResponder, Animated as RNAnimated, Dimensions, Keyboard, useWindowDimensions, Clipboard } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { useSegments, Redirect } from 'expo-router';
-import { Search, X, Plus, Image as ImageIcon, Trash2, Edit, Camera, SlidersHorizontal, RotateCcw, ChevronDown, Package, WifiOff } from 'lucide-react-native';
+import { Search, X, Plus, Image as ImageIcon, Trash2, Edit, Camera, SlidersHorizontal, RotateCcw, ChevronDown, Package, WifiOff, QrCode, Copy, Download, Check, Share2, Tag } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 let ImagePicker: any = null;
@@ -50,8 +50,8 @@ const searchTypePlaceholders: Record<string, string> = { all: 'Search finish lot
 
 // ─── Finish Lot Card ──────────────────────────────────────────────────────
 const FinishLotCard = React.memo(function FinishLotCard({
-  item, index, onEdit, onDelete, isSuperAdmin, isMaster, onPreviewImages, onOpenSticker, numColumns = 1
-}: { item: FinishLotStock; index: number; onEdit: (f: FinishLotStock) => void; onDelete: (f: FinishLotStock) => void; isSuperAdmin: boolean; isMaster: boolean; onPreviewImages: (imgs: string[]) => void; onOpenSticker: (f: FinishLotStock) => void; numColumns?: number }) {
+  item, index, onEdit, onDelete, isSuperAdmin, isMaster, onPreviewImages, onOpenSticker, onOpenQrModal, numColumns = 1
+}: { item: FinishLotStock; index: number; onEdit: (f: FinishLotStock) => void; onDelete: (f: FinishLotStock) => void; isSuperAdmin: boolean; isMaster: boolean; onPreviewImages: (imgs: string[]) => void; onOpenSticker: (f: FinishLotStock) => void; onOpenQrModal: (f: FinishLotStock) => void; numColumns?: number }) {
   const { theme, isDarkMode } = useTheme();
 
   return (
@@ -102,21 +102,29 @@ const FinishLotCard = React.memo(function FinishLotCard({
           </TouchableOpacity>
         )}
 
-        {/* Quality Name */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        {/* Quality Name & Badges Header */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
           <View style={{ flex: 1, paddingRight: 8 }}>
             <Text style={{ fontSize: 17, fontWeight: '800', color: theme.text, letterSpacing: -0.2 }} numberOfLines={2}>
               {item.qualityName}
             </Text>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary, marginTop: 4 }}>
-              {item.sequence || '-'}
-            </Text>
+            {Boolean(item.sequence) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                <View style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: theme.borderLight }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary }}>
+                    Seq: {item.sequence}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
           <View style={{ 
             backgroundColor: item.lotType === 'RFD' ? (isDarkMode ? 'rgba(59,130,246,0.15)' : '#dbeafe') : (isDarkMode ? 'rgba(168,85,247,0.15)' : '#f3e8ff'),
             paddingHorizontal: 8,
             paddingVertical: 4,
             borderRadius: 6,
+            borderWidth: 1,
+            borderColor: item.lotType === 'RFD' ? (isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe') : (isDarkMode ? 'rgba(168,85,247,0.3)' : '#e9d5ff'),
           }}>
             <Text style={{ 
               fontSize: 10, 
@@ -128,23 +136,46 @@ const FinishLotCard = React.memo(function FinishLotCard({
           </View>
         </View>
 
-        {/* Weaver and Mill Details */}
-        {(item.weaverName || item.millName) && (
-          <View style={{ marginBottom: 12, gap: 4 }}>
-            {item.weaverName && (
-              <Text style={{ fontSize: 13, color: theme.textSecondary }}>
-                <Text style={{ fontWeight: '700', color: theme.text }}>Weaver:</Text> {item.weaverName} {item.weaverQuality ? `(${item.weaverQuality})` : ''}
-              </Text>
+        {/* Weaver, Mill & Process Details Section */}
+        {(Boolean(item.weaverName) || Boolean(item.millName) || Boolean(item.processInMill)) && (
+          <View style={{
+            marginBottom: 12,
+            padding: 10,
+            borderRadius: 12,
+            backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.5)' : '#f8fafc',
+            borderWidth: 1,
+            borderColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0',
+            gap: 6,
+          }}>
+            {Boolean(item.weaverName) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.primary[600] }}>Weaver:</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.weaverName}</Text>
+                {Boolean(item.weaverQuality) && (
+                  <View style={{ backgroundColor: isDarkMode ? 'rgba(59,130,246,0.15)' : '#eff6ff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe' }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: Colors.primary[600] }}>{item.weaverQuality}</Text>
+                  </View>
+                )}
+              </View>
             )}
-            {item.millName && (
-              <Text style={{ fontSize: 13, color: theme.textSecondary }}>
-                <Text style={{ fontWeight: '700', color: theme.text }}>Mill:</Text> {item.millName}
-              </Text>
+
+            {Boolean(item.millName) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#34d399' : Colors.success[600] }}>Mill Name:</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.millName}</Text>
+              </View>
+            )}
+
+            {Boolean(item.processInMill) && (
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', flexWrap: 'wrap', gap: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#fde047' : '#d97706' }}>Process In Mill:</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, flex: 1 }}>{item.processInMill}</Text>
+              </View>
             )}
           </View>
         )}
 
-        {/* Metadata Grid (replaces button-like look with clean structure) */}
+        {/* Metadata Grid (Pieces & Meters) */}
         <View style={{
           borderWidth: 1,
           borderColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0',
@@ -152,9 +183,7 @@ const FinishLotCard = React.memo(function FinishLotCard({
           backgroundColor: isDarkMode ? 'rgba(0,0,0,0.1)' : '#f8fafc',
           paddingVertical: 10,
           paddingHorizontal: 12,
-          gap: 10,
         }}>
-          {/* Pieces & Meters Row */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Pieces</Text>
@@ -165,7 +194,7 @@ const FinishLotCard = React.memo(function FinishLotCard({
             <View style={{ width: 1, height: 28, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#e2e8f0' }} />
             <View style={{ flex: 1, paddingLeft: 16 }}>
               <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Meters</Text>
-              <Text style={{ fontSize: 14, fontWeight: '800', color: theme.text }}>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: Colors.primary[600] }}>
                 {item.meter != null && item.meter > 0 ? `${item.meter} Mtr` : '-'}
               </Text>
             </View>
@@ -187,18 +216,33 @@ const FinishLotCard = React.memo(function FinishLotCard({
           </Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {isMaster && (
-              <TouchableOpacity
-                onPress={() => onOpenSticker(item)}
-                activeOpacity={0.75}
-                style={{
-                  width: 34, height: 34, borderRadius: 10,
-                  alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: isDarkMode ? 'rgba(16,185,129,0.12)' : '#ecfdf5',
-                  borderWidth: 1, borderColor: isDarkMode ? 'rgba(16,185,129,0.3)' : '#a7f3d0',
-                }}
-              >
-                <Package size={15} color={isDarkMode ? '#34d399' : Colors.success[600]} />
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  onPress={() => onOpenSticker(item)}
+                  activeOpacity={0.75}
+                  style={{
+                    width: 34, height: 34, borderRadius: 10,
+                    alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: isDarkMode ? 'rgba(167,139,250,0.12)' : '#f5f3ff',
+                    borderWidth: 1, borderColor: isDarkMode ? 'rgba(167,139,250,0.3)' : '#ddd6fe',
+                  }}
+                >
+                  <Tag size={15} color={isDarkMode ? '#a78bfa' : '#7c3aed'} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => onOpenQrModal(item)}
+                  activeOpacity={0.75}
+                  style={{
+                    width: 34, height: 34, borderRadius: 10,
+                    alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: isDarkMode ? 'rgba(139,92,246,0.12)' : '#f5f3ff',
+                    borderWidth: 1, borderColor: isDarkMode ? 'rgba(139,92,246,0.3)' : '#ddd6fe',
+                  }}
+                >
+                  <QrCode size={15} color={isDarkMode ? '#a78bfa' : '#7c3aed'} />
+                </TouchableOpacity>
+              </>
             )}
             {isSuperAdmin && (
               <TouchableOpacity
@@ -260,7 +304,7 @@ export default function FinishLotStockScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<FinishLotStock | null>(null);
-  const [formData, setFormData] = useState<{qualityName: string; piece: string; meter: string; lotType: 'RFD' | 'OTHER'; weaverName: string; weaverQuality: string; millName: string; processInMill: string;}>({ qualityName: '', piece: '', meter: '', lotType: 'RFD', weaverName: '', weaverQuality: '', millName: '', processInMill: '' });
+  const [formData, setFormData] = useState<{qualityName: string; piece: string; meter: string; lotType: string; weaverName: string; weaverQuality: string; millName: string; processInMill: string;}>({ qualityName: '', piece: '', meter: '', lotType: 'RFD', weaverName: '', weaverQuality: '', millName: '', processInMill: '' });
   const [formImages, setFormImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
@@ -269,6 +313,94 @@ export default function FinishLotStockScreen() {
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<FinishLotStock | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // ─ QR Modal State & Callbacks ──
+  const [qrModalItem, setQrModalItem] = useState<FinishLotStock | null>(null);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrCopied, setQrCopied] = useState(false);
+
+  const handleOpenQrModal = useCallback((item: FinishLotStock) => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setQrModalItem(item);
+    setShowQrModal(true);
+    setQrCopied(false);
+  }, []);
+
+  const handleCopyQrText = useCallback(async () => {
+    if (!qrModalItem) return;
+    const qrPayload = `Quality: ${qrModalItem.qualityName || '-'}\nSeq: ${qrModalItem.sequence || '-'}\nType: ${qrModalItem.lotType || '-'}\nWeaver: ${qrModalItem.weaverName || '-'}\nW.Qual: ${qrModalItem.weaverQuality || '-'}\nMill: ${qrModalItem.millName || '-'}\nProc: ${qrModalItem.processInMill || '-'}\nMeter: ${qrModalItem.meter || '-'}\nPiece: ${qrModalItem.piece || '-'}`;
+
+    try {
+      if (Platform.OS === 'web' && navigator?.clipboard) {
+        await navigator.clipboard.writeText(qrPayload);
+      } else {
+        Clipboard.setString(qrPayload);
+      }
+      setQrCopied(true);
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      addToast({ type: 'success', title: 'Copied!', message: 'QR details copied to clipboard' });
+      setTimeout(() => setQrCopied(false), 2000);
+    } catch (err) {
+      addToast({ type: 'error', title: 'Error', message: 'Failed to copy to clipboard' });
+    }
+  }, [qrModalItem, addToast]);
+
+  const handleShareQrImage = useCallback(async () => {
+    if (!qrModalItem) return;
+    const qrPayload = `Quality: ${qrModalItem.qualityName || '-'}\nSeq: ${qrModalItem.sequence || '-'}\nType: ${qrModalItem.lotType || '-'}\nWeaver: ${qrModalItem.weaverName || '-'}\nW.Qual: ${qrModalItem.weaverQuality || '-'}\nMill: ${qrModalItem.millName || '-'}\nProc: ${qrModalItem.processInMill || '-'}\nMeter: ${qrModalItem.meter || '-'}\nPiece: ${qrModalItem.piece || '-'}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrPayload)}`;
+
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && (navigator as any).share) {
+          await (navigator as any).share({ title: 'QR Code', text: qrPayload, url: qrUrl });
+        } else {
+          window.open(qrUrl, '_blank');
+        }
+      } else {
+        const FileSystem = await import('expo-file-system/legacy');
+        const Sharing = await import('expo-sharing');
+        const localPath = `${FileSystem.cacheDirectory}QR_${qrModalItem.sequence || 'code'}.png`;
+        const downloaded = await FileSystem.downloadAsync(qrUrl, localPath);
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(downloaded.uri, { mimeType: 'image/png', dialogTitle: 'Share QR Code' });
+        } else {
+          addToast({ type: 'info', title: 'Share', message: 'Sharing not available on this device' });
+        }
+      }
+    } catch (err) {
+      console.warn('Share error:', err);
+    }
+  }, [qrModalItem, addToast]);
+
+  const handleDownloadQrImage = useCallback(async () => {
+    if (!qrModalItem) return;
+    const qrPayload = `Quality: ${qrModalItem.qualityName || '-'}\nSeq: ${qrModalItem.sequence || '-'}\nType: ${qrModalItem.lotType || '-'}\nWeaver: ${qrModalItem.weaverName || '-'}\nW.Qual: ${qrModalItem.weaverQuality || '-'}\nMill: ${qrModalItem.millName || '-'}\nProc: ${qrModalItem.processInMill || '-'}\nMeter: ${qrModalItem.meter || '-'}\nPiece: ${qrModalItem.piece || '-'}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrPayload)}`;
+
+    try {
+      if (Platform.OS === 'web') {
+        const a = document.createElement('a');
+        a.href = qrUrl;
+        a.download = `QR_${qrModalItem.qualityName.replace(/\s+/g, '_')}.png`;
+        a.target = '_blank';
+        a.click();
+        addToast({ type: 'success', title: 'Downloaded', message: 'QR Image download initiated' });
+      } else {
+        const FileSystem = await import('expo-file-system/legacy');
+        const Sharing = await import('expo-sharing');
+        const localPath = `${FileSystem.cacheDirectory}QR_${qrModalItem.sequence || 'code'}.png`;
+        const downloaded = await FileSystem.downloadAsync(qrUrl, localPath);
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(downloaded.uri, { mimeType: 'image/png', dialogTitle: 'Save QR Image' });
+        } else {
+          addToast({ type: 'success', title: 'Saved', message: 'QR Image saved to cache' });
+        }
+      }
+    } catch (err) {
+      addToast({ type: 'error', title: 'Error', message: 'Failed to download QR code' });
+    }
+  }, [qrModalItem, addToast]);
 
   // ─ Refs ──
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -428,10 +560,11 @@ export default function FinishLotStockScreen() {
   }, [showForm]);
 
   // ─ Callbacks ──
-  const clearAllFilters = useCallback(() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSearch(''); setDebouncedSearch(''); setSearchType('all'); setSortOrder('desc'); }, []);
+  const [filterLotType, setFilterLotType] = useState<'all' | 'RFD' | 'OTHER'>('all');
+  const clearAllFilters = useCallback(() => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSearch(''); setDebouncedSearch(''); setSearchType('all'); setFilterLotType('all'); setSortOrder('desc'); }, []);
   const handleSearch = useCallback((text: string) => { setSearch(text); if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); searchTimeoutRef.current = setTimeout(() => setDebouncedSearch(text), 500); }, []);
 
-  const activeFilterCount = useMemo(() => { let c = 0; if (sortOrder !== 'desc') c++; if (searchType !== 'all') c++; return c; }, [sortOrder, searchType]);
+  const activeFilterCount = useMemo(() => { let c = 0; if (sortOrder !== 'desc') c++; if (searchType !== 'all') c++; if (filterLotType !== 'all') c++; return c; }, [sortOrder, searchType, filterLotType]);
   const totalActiveFiltersCount = useMemo(() => activeFilterCount + (debouncedSearch.trim() !== '' ? 1 : 0), [activeFilterCount, debouncedSearch]);
 
   // ─ Data Fetching ──
@@ -441,13 +574,14 @@ export default function FinishLotStockScreen() {
   });
 
   const query = useInfiniteQuery({
-    queryKey: ['finish-lot-stocks', debouncedSearch, sortOrder, searchType],
+    queryKey: ['finish-lot-stocks', debouncedSearch, sortOrder, searchType, filterLotType],
     enabled: isAuthenticated, initialPageParam: 1,
     staleTime: 30000,
     queryFn: async ({ pageParam = 1 }) => {
       const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
       if (debouncedSearch) { params.search = debouncedSearch; }
       if (searchType !== 'all') { params.status = searchType; }
+      if (filterLotType !== 'all') { params.lotType = filterLotType; }
       const { data } = await api.get('/api/finish-lot-stocks', { params });
       return { items: data?.data || [], hasNext: pageParam < (data?.pagination?.totalPages || 1), nextPage: pageParam + 1, totalCount: data?.pagination?.totalCount || 0 };
     },
@@ -457,7 +591,7 @@ export default function FinishLotStockScreen() {
   const items = query.data?.pages.flatMap(p => p.items) || [];
   const totalMatchingCount = query.data?.pages[0]?.totalCount || 0;
   const grandTotal = unfilteredQuery.data ?? totalMatchingCount;
-  const isFiltered = debouncedSearch.trim() !== '' || searchType !== 'all';
+  const isFiltered = debouncedSearch.trim() !== '' || searchType !== 'all' || filterLotType !== 'all';
 
   // ─ Image Add (No Compression) ──
   const compressAndAdd = useCallback((uris: string[]) => {
@@ -743,7 +877,7 @@ export default function FinishLotStockScreen() {
               </View>
             );
           }}
-          renderItem={({ item, index }) => <FinishLotCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} onPreviewImages={handleOpenPreview} onOpenSticker={handleOpenSticker} numColumns={numColumns} />}
+          renderItem={({ item, index }) => <FinishLotCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} onPreviewImages={handleOpenPreview} onOpenSticker={handleOpenSticker} onOpenQrModal={handleOpenQrModal} numColumns={numColumns} />}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 120, paddingHorizontal: numColumns > 1 ? 8 : 0 }}
           showsVerticalScrollIndicator={false}
           onEndReached={() => { if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage(); }}
@@ -883,6 +1017,34 @@ export default function FinishLotStockScreen() {
                   }}
                 >
                   <Text style={{ color: searchType === key ? '#fff' : theme.textSecondary, fontWeight: '700', fontSize: 13 }}>{searchTypeFullLabels[key]}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Lot Type Filter */}
+            <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Lot Type</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+              {[
+                { key: 'all', label: 'All Types' },
+                { key: 'RFD', label: 'RFD' },
+                { key: 'OTHER', label: 'Other' },
+              ].map((opt) => (
+                <TouchableOpacity 
+                  key={opt.key} 
+                  onPress={() => {
+                    setFilterLotType(opt.key as any);
+                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }} 
+                  style={{ 
+                    paddingHorizontal: 16, 
+                    paddingVertical: 10, 
+                    borderRadius: 10, 
+                    backgroundColor: filterLotType === opt.key ? Colors.primary[600] : isDarkMode ? Colors.neutral[800] : Colors.neutral[100], 
+                    borderWidth: 1, 
+                    borderColor: filterLotType === opt.key ? Colors.primary[600] : isDarkMode ? Colors.neutral[700] : Colors.neutral[200] 
+                  }}
+                >
+                  <Text style={{ color: filterLotType === opt.key ? '#fff' : theme.textSecondary, fontWeight: '700', fontSize: 13 }}>{opt.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1115,6 +1277,144 @@ export default function FinishLotStockScreen() {
 
       {/* Image Preview Modal */}
       <ImagePreviewModal visible={previewVisible} images={previewImages} onClose={() => setPreviewVisible(false)} />
+
+      {/* ═══ QR CODE DETAILS MODAL ═══ */}
+      <Modal visible={showQrModal && Boolean(qrModalItem)} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowQrModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{
+            width: '100%',
+            maxWidth: 420,
+            backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+            borderRadius: 24,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : '#e2e8f0',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 20,
+            elevation: 10,
+          }}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: isDarkMode ? 'rgba(139,92,246,0.15)' : '#f5f3ff', alignItems: 'center', justifyContent: 'center' }}>
+                  <QrCode size={20} color={isDarkMode ? '#c4b5fd' : '#7c3aed'} />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: theme.text }}>QR Code Details</Text>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary }}>{qrModalItem?.qualityName}</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowQrModal(false)} style={{ padding: 4 }}>
+                <X size={20} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* QR Code Image */}
+            {qrModalItem && (
+              <View style={{ alignItems: 'center', marginVertical: 12 }}>
+                <View style={{ padding: 12, backgroundColor: '#ffffff', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                  <Image
+                    source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`Quality: ${qrModalItem.qualityName || '-'}\nSeq: ${qrModalItem.sequence || '-'}\nType: ${qrModalItem.lotType || '-'}\nWeaver: ${qrModalItem.weaverName || '-'}\nW.Qual: ${qrModalItem.weaverQuality || '-'}\nMill: ${qrModalItem.millName || '-'}\nProc: ${qrModalItem.processInMill || '-'}\nMeter: ${qrModalItem.meter || '-'}\nPiece: ${qrModalItem.piece || '-'}`)}` }}
+                    style={{ width: 190, height: 190 }}
+                    contentFit="contain"
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* QR Payload Text Box */}
+            {qrModalItem && (
+              <View style={{
+                backgroundColor: isDarkMode ? 'rgba(15,23,42,0.8)' : '#f8fafc',
+                padding: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
+                marginBottom: 16,
+              }}>
+                <Text style={{ fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: theme.text, lineHeight: 18 }}>
+                  {`Quality: ${qrModalItem.qualityName || '-'}\nSeq: ${qrModalItem.sequence || '-'}\nType: ${qrModalItem.lotType || '-'}\nWeaver: ${qrModalItem.weaverName || '-'}\nW.Qual: ${qrModalItem.weaverQuality || '-'}\nMill: ${qrModalItem.millName || '-'}\nProc: ${qrModalItem.processInMill || '-'}\nMeter: ${qrModalItem.meter || '-'}\nPiece: ${qrModalItem.piece || '-'}`}
+                </Text>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                onPress={handleCopyQrText}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: qrCopied ? (isDarkMode ? '#059669' : '#10b981') : Colors.primary[600],
+                }}
+              >
+                {qrCopied ? <Check size={16} color="#fff" /> : <Copy size={16} color="#fff" />}
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>
+                  {qrCopied ? 'Copied!' : 'Copy Text'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleShareQrImage}
+                activeOpacity={0.8}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  backgroundColor: isDarkMode ? 'rgba(139, 92, 246, 0.15)' : '#f5f3ff',
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.3)' : '#ddd6fe',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Share2 size={16} color={isDarkMode ? '#c4b5fd' : '#7c3aed'} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleDownloadQrImage}
+                activeOpacity={0.8}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5',
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : '#a7f3d0',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Download size={16} color={isDarkMode ? '#34d399' : Colors.success[600]} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setShowQrModal(false)}
+                activeOpacity={0.8}
+                style={{
+                  paddingHorizontal: 14,
+                  height: 44,
+                  borderRadius: 12,
+                  backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100],
+                  borderWidth: 1,
+                  borderColor: theme.borderLight,
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

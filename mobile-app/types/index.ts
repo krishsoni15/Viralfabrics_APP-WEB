@@ -315,10 +315,16 @@ export interface GreyMaterial {
 
 export interface FinishLotStock {
   _id: string;
+  sequence?: string | number;
   qualityName: string;
   images: string[];
   meter: number;
   piece: number;
+  lotType?: string;
+  weaverName?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
   createdAt: string;
   updatedAt: string;
 }

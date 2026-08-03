@@ -11,9 +11,6 @@ export default function Index() {
   }
 
   if (isAuthenticated) {
-    if (user?.role === 'party') {
-      return <Redirect href="/(tabs)/orders" />;
-    }
     return <Redirect href="/(tabs)/dashboard" />;
   }
 

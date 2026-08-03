@@ -143,12 +143,71 @@ const SamplingCard = React.memo(function SamplingCard({
           </TouchableOpacity>
         )}
 
-        {/* Title */}
-        <Text style={{ fontSize: 17, fontWeight: '800', color: theme.text, marginBottom: 12, letterSpacing: -0.2 }} numberOfLines={2}>
-          {item.qualityName}
-        </Text>
+        {/* Title & Badges Header */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: theme.text, flex: 1, paddingRight: 8, letterSpacing: -0.2 }} numberOfLines={2}>
+            {item.qualityName}
+          </Text>
+          {item.whereToPut ? (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              backgroundColor: isDarkMode ? 'rgba(124, 58, 237, 0.15)' : '#f3e8ff',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: isDarkMode ? 'rgba(124, 58, 237, 0.3)' : '#ddd6fe',
+            }}>
+              <MapPin size={12} color={isDarkMode ? '#c4b5fd' : '#7c3aed'} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#c4b5fd' : '#7c3aed' }}>
+                {item.whereToPut}
+              </Text>
+            </View>
+          ) : null}
+        </View>
 
-        {/* Metadata Grid (replaces button-like look with clean structure) */}
+        {/* Weaver, Mill & Process Section */}
+        {(Boolean(item.weaverName) || Boolean(item.weaverQuality) || Boolean(item.millName) || Boolean(item.processInMill)) && (
+          <View style={{
+            marginBottom: 12,
+            padding: 10,
+            borderRadius: 12,
+            backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.5)' : '#f8fafc',
+            borderWidth: 1,
+            borderColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0',
+            gap: 6,
+          }}>
+            {Boolean(item.weaverName) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.primary[600] }}>Weaver:</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.weaverName}</Text>
+                {Boolean(item.weaverQuality) && (
+                  <View style={{ backgroundColor: isDarkMode ? 'rgba(59,130,246,0.15)' : '#eff6ff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe' }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: Colors.primary[600] }}>{item.weaverQuality}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {Boolean(item.millName) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#34d399' : Colors.success[600] }}>Mill Name:</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.millName}</Text>
+              </View>
+            )}
+
+            {Boolean(item.processInMill) && (
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', flexWrap: 'wrap', gap: 4 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#fde047' : '#d97706' }}>Process In Mill:</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, flex: 1 }}>{item.processInMill}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Metadata Grid (Pieces & Meters) */}
         <View style={{
           borderWidth: 1,
           borderColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0',
@@ -156,9 +215,7 @@ const SamplingCard = React.memo(function SamplingCard({
           backgroundColor: isDarkMode ? 'rgba(0,0,0,0.1)' : '#f8fafc',
           paddingVertical: 10,
           paddingHorizontal: 12,
-          gap: 10,
         }}>
-          {/* Pieces & Meters Row */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Pieces</Text>
@@ -169,56 +226,22 @@ const SamplingCard = React.memo(function SamplingCard({
             <View style={{ width: 1, height: 28, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#e2e8f0' }} />
             <View style={{ flex: 1, paddingLeft: 16 }}>
               <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Meters</Text>
-              <Text style={{ fontSize: 14, fontWeight: '800', color: theme.text }}>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: Colors.primary[600] }}>
                 {item.meter != null && item.meter > 0 ? `${item.meter} Mtr` : '-'}
               </Text>
             </View>
           </View>
-
-          {/* Location row */}
-          {item.whereToPut ? (
-            <View style={{ borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0', paddingTop: 8 }}>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Location</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MapPin size={13} color={isDarkMode ? '#a78bfa' : '#7c3aed'} />
-                <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>
-                  {item.whereToPut}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-
-          {/* Weaver & Mill info */}
-          {(item.weaverName || item.weaverQuality || item.millName) ? (
-            <View style={{ borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0', paddingTop: 8 }}>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {item.weaverName ? <View style={{ backgroundColor: isDarkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}><Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#6ee7b7' : '#059669' }}>W: {item.weaverName}</Text></View> : null}
-                {item.weaverQuality ? <View style={{ backgroundColor: isDarkMode ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}><Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#fcd34d' : '#d97706' }}>WQ: {item.weaverQuality}</Text></View> : null}
-                {item.millName ? <View style={{ backgroundColor: isDarkMode ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}><Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#c4b5fd' : '#7c3aed' }}>Mill: {item.millName}</Text></View> : null}
-              </View>
-            </View>
-          ) : null}
-
-          {/* Process in Mill */}
-          {item.processInMill ? (
-            <View style={{ borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0', paddingTop: 8 }}>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Process in Mill</Text>
-              <Text style={{ fontSize: 12.5, color: isDarkMode ? '#67e8f9' : '#0891b2', lineHeight: 18, fontStyle: 'italic' }} numberOfLines={3}>
-                {item.processInMill}
-              </Text>
-            </View>
-          ) : null}
+        </View>
 
           {/* Notes row */}
           {item.notes ? (
-            <View style={{ borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0', paddingTop: 8 }}>
+            <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0', paddingTop: 8 }}>
               <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Notes</Text>
               <Text style={{ fontSize: 12.5, color: theme.textSecondary, lineHeight: 18 }} numberOfLines={3}>
                 {item.notes}
               </Text>
             </View>
           ) : null}
-        </View>
 
         {/* Footer — date + actions */}
         <View style={{
@@ -243,39 +266,39 @@ const SamplingCard = React.memo(function SamplingCard({
                 borderWidth: 1, borderColor: isDarkMode ? 'rgba(167,139,250,0.3)' : '#ddd6fe',
               }}
             >
-                <Tag size={15} color={isDarkMode ? '#a78bfa' : '#7c3aed'} />
+              <Tag size={15} color={isDarkMode ? '#a78bfa' : '#7c3aed'} />
+            </TouchableOpacity>
+            {isSuperAdmin && (
+              <TouchableOpacity
+                onPress={() => onEdit(item)}
+                activeOpacity={0.75}
+                style={{
+                  width: 34, height: 34, borderRadius: 10,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: isDarkMode ? 'rgba(59,130,246,0.12)' : '#eff6ff',
+                  borderWidth: 1, borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
+                }}
+              >
+                <Edit size={15} color={isDarkMode ? '#60a5fa' : Colors.primary[600]} />
               </TouchableOpacity>
-              {isSuperAdmin && (
-                <TouchableOpacity
-                  onPress={() => onEdit(item)}
-                  activeOpacity={0.75}
-                  style={{
-                    width: 34, height: 34, borderRadius: 10,
-                    alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: isDarkMode ? 'rgba(59,130,246,0.12)' : '#eff6ff',
-                    borderWidth: 1, borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
-                  }}
-                >
-                  <Edit size={15} color={isDarkMode ? '#60a5fa' : Colors.primary[600]} />
-                </TouchableOpacity>
-              )}
-              {isMaster && (
-                <TouchableOpacity
-                  onPress={() => onDelete(item)}
-                  activeOpacity={0.75}
-                  style={{
-                    width: 34, height: 34, borderRadius: 10,
-                    alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: isDarkMode ? 'rgba(239,68,68,0.12)' : '#fef2f2',
-                    borderWidth: 1, borderColor: isDarkMode ? 'rgba(239,68,68,0.3)' : '#fecaca',
-                  }}
-                >
-                  <Trash2 size={15} color={isDarkMode ? '#f87171' : Colors.error[600]} />
-                </TouchableOpacity>
-              )}
-            </View>
+            )}
+            {isMaster && (
+              <TouchableOpacity
+                onPress={() => onDelete(item)}
+                activeOpacity={0.75}
+                style={{
+                  width: 34, height: 34, borderRadius: 10,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: isDarkMode ? 'rgba(239,68,68,0.12)' : '#fef2f2',
+                  borderWidth: 1, borderColor: isDarkMode ? 'rgba(239,68,68,0.3)' : '#fecaca',
+                }}
+              >
+                <Trash2 size={15} color={isDarkMode ? '#f87171' : Colors.error[600]} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
+      </View>
     </Animated.View>
   );
 });

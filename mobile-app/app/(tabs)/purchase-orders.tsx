@@ -695,11 +695,12 @@ const PurchaseOrderCard = React.memo(({
   onPressCompanyHeader?: (company: 'Viral Fabrics' | 'Viral Enterprise') => void;
   numColumns?: number;
   handleOpenImagePreview: (images: string[], index: number) => void;
-  onToggleStatus?: (po: PurchaseOrder) => void;
+  onToggleStatus?: (po: PurchaseOrder, newStatus?: 'Pending' | 'Completed') => void;
 }) => {
   const [isAddressExpanded, setIsAddressExpanded] = useState(false);
   const [isPaymentTermsExpanded, setIsPaymentTermsExpanded] = useState(false);
   const [isNotesExpanded, setIsNotesExpanded] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
   const badgeStyles = item.companyHeader === 'Viral Fabrics' 
     ? {
@@ -716,8 +717,8 @@ const PurchaseOrderCard = React.memo(({
       };
 
   return (
-    <View style={{ flex: 1 }}>
-      <Card style={{ marginHorizontal: numColumns && numColumns > 1 ? 8 : 16, marginBottom: 12, padding: 14, borderRadius: 16, flex: 1 }}>
+    <View style={{ flex: 1, zIndex: showStatusDropdown ? 9999 : 1 }}>
+      <Card style={{ marginHorizontal: numColumns && numColumns > 1 ? 8 : 16, marginBottom: 12, padding: 14, borderRadius: 16, flex: 1, overflow: showStatusDropdown ? 'visible' : 'hidden' }}>
         {/* Top Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -763,48 +764,122 @@ const PurchaseOrderCard = React.memo(({
         </View>
 
         {/* Date and Status Row */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, zIndex: showStatusDropdown ? 9999 : 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <CalendarDays size={13} color={theme.textSecondary} />
             <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>
               {formatDate(item.poDate)}
             </Text>
           </View>
-          {item.status === 'Completed' ? (
+
+          {/* Status Dropdown Trigger & Popover */}
+          <View style={{ position: 'relative', zIndex: showStatusDropdown ? 9999 : 1 }}>
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => onToggleStatus?.(item)}
+              onPress={() => {
+                if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowStatusDropdown(!showStatusDropdown);
+              }}
               style={{ 
-                backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5', 
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: item.status === 'Completed' 
+                  ? (isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5')
+                  : (isDarkMode ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb'), 
                 paddingHorizontal: 8, 
-                paddingVertical: 2.5, 
+                paddingVertical: 3, 
                 borderRadius: 8, 
                 borderWidth: 1, 
-                borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : '#a7f3d0'
+                borderColor: item.status === 'Completed'
+                  ? (isDarkMode ? 'rgba(16, 185, 129, 0.3)' : '#a7f3d0')
+                  : (isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fde68a')
               }}
             >
-              <Text style={{ fontSize: 10, fontWeight: 'bold', color: Colors.success[600] }}>
-                Completed
+              <Text style={{ fontSize: 10, fontWeight: 'bold', color: item.status === 'Completed' ? Colors.success[600] : Colors.warning[600] }}>
+                {item.status || 'Pending'}
               </Text>
+              <ChevronDown size={11} color={item.status === 'Completed' ? Colors.success[600] : Colors.warning[600]} />
             </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => onToggleStatus?.(item)}
-              style={{ 
-                backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb', 
-                paddingHorizontal: 8, 
-                paddingVertical: 2.5, 
-                borderRadius: 8, 
-                borderWidth: 1, 
-                borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fde68a'
-              }}
-            >
-              <Text style={{ fontSize: 10, fontWeight: 'bold', color: Colors.warning[600] }}>
-                Pending
-              </Text>
-            </TouchableOpacity>
-          )}
+
+            {showStatusDropdown && (
+              <View style={{
+                position: 'absolute',
+                top: 28,
+                right: 0,
+                width: 120,
+                backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
+                borderRadius: 12,
+                padding: 4,
+                borderWidth: 1,
+                borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: isDarkMode ? 0.4 : 0.15,
+                shadowRadius: 8,
+                elevation: 10,
+                zIndex: 9999,
+              }}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setShowStatusDropdown(false);
+                    if (item.status !== 'Pending') {
+                      onToggleStatus?.(item, 'Pending');
+                    }
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 8,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    backgroundColor: (item.status === 'Pending' || !item.status)
+                      ? (isDarkMode ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb')
+                      : 'transparent',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.warning[500] }} />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.warning[600] }}>Pending</Text>
+                  </View>
+                  {(item.status === 'Pending' || !item.status) && (
+                    <Check size={12} color={Colors.warning[500]} />
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setShowStatusDropdown(false);
+                    if (item.status !== 'Completed') {
+                      onToggleStatus?.(item, 'Completed');
+                    }
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 8,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    backgroundColor: item.status === 'Completed'
+                      ? (isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5')
+                      : 'transparent',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success[500] }} />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.success[600] }}>Completed</Text>
+                  </View>
+                  {item.status === 'Completed' && (
+                    <Check size={12} color={Colors.success[500]} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Broker Row */}
@@ -870,12 +945,29 @@ const PurchaseOrderCard = React.memo(({
         <View style={{ height: 1, backgroundColor: theme.borderLight, marginVertical: 8 }} />
 
         {/* Quality & Delivery */}
-        {!!item.quality && (
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <Text style={{ fontSize: 12, color: theme.textSecondary }}>Quality & Delivery:</Text>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>
-              {item.quality} {item.pcsMtr || item.greighMtr ? `(${item.pcsMtr ? `${item.pcsMtr} Pcs/Mtr` : ''}${item.pcsMtr && item.greighMtr ? ', ' : ''}${item.greighMtr ? `Greigh: ${item.greighMtr} Mtr` : ''})` : ''}
-            </Text>
+        {(Boolean(item.quality) || Boolean(item.pcsMtr) || Boolean(item.greighMtr) || Boolean(item.delivery)) && (
+          <View style={{ marginBottom: 8, gap: 6 }}>
+            {!!item.quality && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '500' }}>Quality:</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text, flex: 1, textAlign: 'right' }}>
+                  {item.quality}
+                </Text>
+              </View>
+            )}
+
+            {(Boolean(item.pcsMtr) || Boolean(item.greighMtr) || Boolean(item.delivery)) && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '500' }}>Delivery / Details:</Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary, flex: 1, textAlign: 'right' }}>
+                  {[
+                    item.pcsMtr ? `${item.pcsMtr} Pcs/Mtr` : '',
+                    item.greighMtr ? `Greigh: ${item.greighMtr} Mtr` : '',
+                    item.delivery ? `Delivery: ${item.delivery}` : ''
+                  ].filter(Boolean).join(' • ')}
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -1059,6 +1151,7 @@ export default function PurchaseOrdersScreen() {
   const [fyFilter, setFyFilter] = useState('');
   const [sortFilter, setSortFilter] = useState('latest_first');
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [statusModalPo, setStatusModalPo] = useState<PurchaseOrder | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [infoCompany, setInfoCompany] = useState<'Viral Fabrics' | 'Viral Enterprise' | null>(null);  
 
@@ -1718,100 +1811,98 @@ export default function PurchaseOrdersScreen() {
     setIsDeleteModalOpen(true);
   };
 
-  const handleToggleStatusPress = useCallback((item: PurchaseOrder) => {
+  const handleToggleStatusPress = useCallback((item: PurchaseOrder, newStatus?: 'Pending' | 'Completed') => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    const isCompleted = item.status === 'Completed';
-    Alert.alert(
-      "Update PO Status",
-      `Select status for PO #${getDisplayOrderId(item.poNumber)}:`,
-      [
-        {
-          text: isCompleted ? "Pending" : "Completed",
-          onPress: () => updateStatusMutation.mutate({ id: item._id!, status: isCompleted ? 'Pending' : 'Completed' }),
-        },
-        {
-          text: "Cancel",
-          style: "cancel",
-        }
-      ]
-    );
+    const targetStatus = newStatus || (item.status === 'Completed' ? 'Pending' : 'Completed');
+    if (item.status === targetStatus) return;
+    updateStatusMutation.mutate({ id: item._id!, status: targetStatus });
   }, [updateStatusMutation]);
   const previewPDF = async (po: PurchaseOrder) => {
-    if (Platform.OS === 'web') {
-      try {
-        const html = generatePoHtml(po);
-        await print.printAsync({ html });
-      } catch (err) {
-        console.log('Error printing PDF:', err);
-        addToast({ type: 'error', title: 'PDF Preview Error', message: 'Failed to open preview.' });
-      }
-    } else {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
-      const displayId = getDisplayOrderId(po.poNumber);
-      storage.getToken().then(token => {
-        const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
-        const filename = `Purchase_Order_${displayId}.pdf`;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const displayId = getDisplayOrderId(po.poNumber);
+    const filename = `Purchase_Order_${displayId}.pdf`;
 
-        setPdfViewerUrl(pdfUrl);
+    try {
+      const html = generatePoHtml(po);
+      if (Platform.OS === 'web') {
+        await print.printAsync({ html });
+      } else {
+        const { uri } = await print.printToFileAsync({ html });
+        setPdfViewerUrl(uri);
         setPdfViewerTitle(`Purchase Order — #${displayId}`);
         setPdfViewerFilename(filename);
         setPdfViewerVisible(true);
-      });
+      }
+    } catch (err) {
+      console.log('Error previewing PDF locally, falling back to endpoint:', err);
+      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+      const token = await storage.getToken();
+      const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
+      setPdfViewerUrl(pdfUrl);
+      setPdfViewerTitle(`Purchase Order — #${displayId}`);
+      setPdfViewerFilename(filename);
+      setPdfViewerVisible(true);
     }
   };
   
   const generatePDF = async (po: PurchaseOrder) => {
-    if (Platform.OS === 'web') {
-      try {
-        const html = generatePoHtml(po);
-        const displayId = getDisplayOrderId(po.poNumber);
-        
-        const { uri } = await print.printToFileAsync({ 
-          html,
-          base64: false
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const displayId = getDisplayOrderId(po.poNumber);
+    const filename = `Purchase_Order_${displayId}.pdf`;
+    
+    try {
+      const html = generatePoHtml(po);
+      const { uri } = await print.printToFileAsync({ html, base64: false });
+      
+      if (Platform.OS === 'web') {
+        const a = document.createElement('a');
+        a.href = uri;
+        a.download = filename;
+        a.click();
+        addToast({ type: 'success', title: 'Downloaded', message: 'Purchase Order PDF generated.' });
+      } else if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(decodeURIComponent(uri), {
+          mimeType: 'application/pdf',
+          dialogTitle: `Purchase Order #${displayId}`,
+          UTI: 'com.adobe.pdf'
         });
-        
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(decodeURIComponent(uri), {
-            mimeType: 'application/pdf',
-            dialogTitle: `Purchase Order ${displayId}`,
-            UTI: 'com.adobe.pdf'
-          });
-        } else {
-          addToast({ type: 'warning', title: 'Sharing Unavailable', message: 'Could not open sharing dialog on this device.' });
-        }
-      } catch (err) {
-        console.log('Error generating PDF:', err);
-        addToast({ type: 'error', title: 'PDF Error', message: 'Failed to generate PDF.' });
-      }
-    } else {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
-      const displayId = getDisplayOrderId(po.poNumber);
-      const token = await storage.getToken();
-      const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
-      const filename = `Purchase_Order_${displayId}.pdf`;
-      
-      addToast({ type: 'info', title: 'Downloading PDF', message: 'Saving Purchase Order to device...' });
-      
-      try {
+      } else {
+        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+        const token = await storage.getToken();
+        const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
         const result = await savePdfToDevice({
           url: pdfUrl,
           filename,
           token,
           dialogTitle: `Purchase Order — #${displayId}`
         });
-        
         if (result.success) {
           addToast({ type: 'success', title: 'Saved Successfully', message: result.message });
         } else {
           addToast({ type: 'error', title: 'Save Failed', message: result.message });
         }
-      } catch (err: any) {
-        addToast({ type: 'error', title: 'Error', message: `Failed to save PDF: ${err.message}` });
+      }
+    } catch (err: any) {
+      console.log('Error generating local PDF, trying endpoint fallback:', err);
+      try {
+        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+        const token = await storage.getToken();
+        const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
+        const result = await savePdfToDevice({
+          url: pdfUrl,
+          filename,
+          token,
+          dialogTitle: `Purchase Order — #${displayId}`
+        });
+        if (result.success) {
+          addToast({ type: 'success', title: 'Saved Successfully', message: result.message });
+        } else {
+          addToast({ type: 'error', title: 'Save Failed', message: result.message });
+        }
+      } catch (fallbackErr: any) {
+        addToast({ type: 'error', title: 'Error', message: `Failed to save PDF: ${fallbackErr.message || err.message}` });
       }
     }
   };

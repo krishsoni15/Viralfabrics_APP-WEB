@@ -335,12 +335,12 @@ export default function OrderDetailScreen() {
   });
 
   const order = orderQuery.data;
-  const displayOrderId = order?.orderId || id;
+  const displayOrderId = order?.orderId;
 
-  const greyQuery = useQuery({ queryKey: ['grey-info', displayOrderId], queryFn: async () => { try { const { data } = await api.get('/api/grey-info', { params: { orderId: displayOrderId } }); return data?.data?.greyInfo || (Array.isArray(data?.data) ? data.data : data?.data || []); } catch { return []; } }, enabled: !!displayOrderId });
-  const millInputQuery = useQuery({ queryKey: ['mill-inputs', displayOrderId], queryFn: async () => { try { const { data } = await api.get('/api/mill-inputs', { params: { orderId: displayOrderId } }); return data?.data?.millInputs || (Array.isArray(data?.data) ? data.data : data?.data || []); } catch { return []; } }, enabled: !!displayOrderId });
-  const millOutputQuery = useQuery({ queryKey: ['mill-outputs', displayOrderId], queryFn: async () => { try { const { data } = await api.get('/api/mill-outputs', { params: { orderId: displayOrderId } }); return data?.data?.millOutputs || (Array.isArray(data?.data) ? data.data : data?.data || []); } catch { return []; } }, enabled: !!displayOrderId });
-  const dispatchQuery = useQuery({ queryKey: ['dispatches', displayOrderId], queryFn: async () => { try { const { data } = await api.get('/api/dispatch', { params: { orderId: displayOrderId } }); return data?.data?.dispatches || (Array.isArray(data?.data) ? data.data : data?.data || []); } catch { return []; } }, enabled: !!displayOrderId });
+  const greyQuery = useQuery({ queryKey: ['grey-info', displayOrderId], queryFn: async () => { if (!displayOrderId) return []; try { const { data } = await api.get('/api/grey-info', { params: { orderId: displayOrderId } }); return data?.data?.greyInfo || (Array.isArray(data?.data) ? data.data : data?.data || []); } catch { return []; } }, enabled: !!displayOrderId });
+  const millInputQuery = useQuery({ queryKey: ['mill-inputs', displayOrderId], queryFn: async () => { if (!displayOrderId) return []; try { const { data } = await api.get('/api/mill-inputs', { params: { orderId: displayOrderId } }); return data?.data?.millInputs || (Array.isArray(data?.data) ? data.data : data?.data || []); } catch { return []; } }, enabled: !!displayOrderId });
+  const millOutputQuery = useQuery({ queryKey: ['mill-outputs', displayOrderId], queryFn: async () => { if (!displayOrderId) return []; try { const { data } = await api.get('/api/mill-outputs', { params: { orderId: displayOrderId } }); return data?.data?.millOutputs || (Array.isArray(data?.data) ? data.data : data?.data || []); } catch { return []; } }, enabled: !!displayOrderId });
+  const dispatchQuery = useQuery({ queryKey: ['dispatches', displayOrderId], queryFn: async () => { if (!displayOrderId) return []; try { const { data } = await api.get('/api/dispatch', { params: { orderId: displayOrderId } }); return data?.data?.dispatches || (Array.isArray(data?.data) ? data.data : data?.data || []); } catch { return []; } }, enabled: !!displayOrderId });
 
   const qualitiesQuery = useQuery({
     queryKey: ['qualities'],
@@ -994,10 +994,10 @@ export default function OrderDetailScreen() {
   if (!order) return <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}><Header title="Order" showBack /><EmptyState title="Order Not Found" subtitle="This order may have been deleted" /></SafeAreaView>;
 
   const partyName = typeof order.party === 'object' ? (order.party as any)?.name : order.party || 'Unknown';
-  const greyInfo = greyQuery.data || [];
-  const millInputs = millInputQuery.data || [];
-  const millOutputs = millOutputQuery.data || [];
-  const dispatches = dispatchQuery.data || [];
+  const greyInfo = (greyQuery.data && greyQuery.data.length > 0) ? greyQuery.data : (order.greyInformation || []);
+  const millInputs = (millInputQuery.data && millInputQuery.data.length > 0) ? millInputQuery.data : (order.millInputs || []);
+  const millOutputs = (millOutputQuery.data && millOutputQuery.data.length > 0) ? millOutputQuery.data : (order.millOutputs || []);
+  const dispatches = (dispatchQuery.data && dispatchQuery.data.length > 0) ? dispatchQuery.data : (order.dispatches || []);
 
   const isSaving = saveGreyMutation.isPending || saveMillInputMutation.isPending || saveMillOutputMutation.isPending || saveDispatchMutation.isPending || saveLabMutation.isPending;
 
@@ -1450,7 +1450,7 @@ export default function OrderDetailScreen() {
         theme={theme}
         onSave={(entries, deletedIds) => saveGreyMutation.mutate({ entries, deletedIds })}
         isSaving={saveGreyMutation.isPending}
-        isLoading={greyQuery.isFetching}
+        isLoading={greyQuery.isFetching && (!greyInfo || greyInfo.length === 0)}
         isMaster={isMaster}
         onDelete={greyInfo && greyInfo.length > 0 ? () => deleteGreyAllForOrderMutation.mutate() : undefined}
       />
@@ -1468,7 +1468,7 @@ export default function OrderDetailScreen() {
           saveMillInputMutation.mutate(payload);
         }}
         isSaving={saveMillInputMutation.isPending}
-        isLoading={millInputQuery.isFetching}
+        isLoading={millInputQuery.isFetching && (!millInputs || millInputs.length === 0)}
         onDelete={millInputs && millInputs.length > 0 ? () => deleteMillInputsForOrderMutation.mutate() : undefined}
         isMaster={isMaster}
       />
@@ -1486,7 +1486,7 @@ export default function OrderDetailScreen() {
         }}
         isSaving={saveMillOutputMutation.isPending}
         onDelete={millOutputs && millOutputs.length > 0 ? () => deleteMillOutputsForOrderMutation.mutate() : undefined}
-        isLoading={millOutputQuery.isFetching}
+        isLoading={millOutputQuery.isFetching && (!millOutputs || millOutputs.length === 0)}
         isMaster={isMaster}
       />
 
@@ -1502,7 +1502,7 @@ export default function OrderDetailScreen() {
           saveDispatchMutation.mutate(payload);
         }}
         isSaving={saveDispatchMutation.isPending}
-        isLoading={dispatchQuery.isFetching}
+        isLoading={dispatchQuery.isFetching && (!dispatches || dispatches.length === 0)}
         onDelete={dispatches && dispatches.length > 0 ? () => deleteDispatchMutation.mutate(undefined) : undefined}
         isMaster={isMaster}
       />
@@ -1522,7 +1522,7 @@ export default function OrderDetailScreen() {
           saveLabMutation.mutate(formData);
         }}
         isSaving={saveLabMutation.isPending}
-        isLoading={orderQuery.isFetching}
+        isLoading={orderQuery.isFetching && (!order?.items || order.items.length === 0)}
         isMaster={isMaster}
         onDelete={editItem && isMaster ? () => deleteLabMutation.mutate(selectedItemId!) : undefined}
       />

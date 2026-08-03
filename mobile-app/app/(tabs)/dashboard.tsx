@@ -283,12 +283,7 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const statusBarHeight = Platform.OS === 'ios' ? (insets.top > 0 ? insets.top : 20) : (insets.top > 0 ? insets.top : StatusBar.currentHeight || 24);
 
-  // Redirect party users to orders tab
-  React.useEffect(() => {
-    if (user && user.role === 'party') {
-      router.replace('/(tabs)/orders');
-    }
-  }, [user]);
+
 
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({

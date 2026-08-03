@@ -349,6 +349,20 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
             Added {formatDate(group.items[0]?.createdAt)}
           </Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
+            {isMaster && (
+              <TouchableOpacity
+                onPress={() => onOpenSticker(group.items[0], group)}
+                activeOpacity={0.75}
+                style={{
+                  width: 34, height: 34, borderRadius: 10,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: isDarkMode ? 'rgba(167,139,250,0.12)' : '#f5f3ff',
+                  borderWidth: 1, borderColor: isDarkMode ? 'rgba(167,139,250,0.3)' : '#ddd6fe',
+                }}
+              >
+                <Tag size={15} color={isDarkMode ? '#a78bfa' : '#7c3aed'} />
+              </TouchableOpacity>
+            )}
             {isSuperAdmin && (
               <TouchableOpacity
                 onPress={() => onEdit(group.items[0])}

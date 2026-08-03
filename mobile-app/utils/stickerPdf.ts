@@ -18,7 +18,7 @@ interface StickerData {
   challanNumber?: string;
   piece?: number;
   meter?: number;
-  sequence?: string;
+  sequence?: string | number;
   lotType?: string;
   weaverQuality?: string;
   millName?: string;
@@ -115,40 +115,6 @@ function generateStickerHtml(data: StickerData): string {
       <tr>
         <td class="label">Remarks</td>
         <td class="value" colspan="3">${data.remarks || ''}</td>
-      </tr>
-    `;
-  } else if (data.type === 'finish-lot-stock') {
-    // Finish Lot Stock Sticker
-    const qrData = encodeURIComponent(`Quality: ${data.qualityName}\nSeq: ${data.sequence || '-'}\nMeters: ${data.meter || 0}`);
-    headerHtml = `
-      <div class="header">
-        <div class="brand">VIRAL FABRICS</div>
-        <div class="slogan">FINISH LOT STOCK</div>
-      </div>
-    `;
-    tableContent = `
-      <tr>
-        <td class="label">Sequence</td>
-        <td class="value" colspan="2" style="font-size: 9pt; font-weight: bold; color: #d32f2f;">${data.sequence || '-'}</td>
-        <td rowspan="5" style="width: 25mm; padding: 2px; text-align: center; border-bottom: 0.5mm solid #000;">
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrData}" style="width: 22mm; height: 22mm; object-fit: contain;" />
-        </td>
-      </tr>
-      <tr>
-        <td class="label">Quality Name</td>
-        <td class="value" colspan="2">${data.qualityName || '-'}</td>
-      </tr>
-      <tr>
-        <td class="label">Lot Type</td>
-        <td class="value" colspan="2">${data.lotType || '-'}</td>
-      </tr>
-      <tr>
-        <td class="label">Meters</td>
-        <td class="value" colspan="2">${data.meter ? `${data.meter} M` : '-'}</td>
-      </tr>
-      <tr>
-        <td class="label">Pieces</td>
-        <td class="value" colspan="2">${data.piece || '-'}</td>
       </tr>
     `;
   } else if (data.type === 'finish-lot-stock') {

@@ -734,8 +734,7 @@ const OrderCard = React.memo(function OrderCard({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 onPress={() => onGreyPill(item)}
-                disabled={isParty}
-                activeOpacity={isParty ? 1 : 0.7}
+                activeOpacity={0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hasGrey ? (isDarkMode ? 'rgba(148, 163, 184, 0.15)' : 'rgba(100, 116, 139, 0.12)') : (isDarkMode ? '#334155' : '#f1f5f9'), borderWidth: 1.5, borderColor: hasGrey ? (isDarkMode ? '#94a3b8' : '#64748b') : (isDarkMode ? '#475569' : '#cbd5e1') }}
               >
@@ -756,8 +755,7 @@ const OrderCard = React.memo(function OrderCard({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 onPress={() => onLabPill(item)}
-                disabled={isParty}
-                activeOpacity={isParty ? 1 : 0.7}
+                activeOpacity={0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hasLab ? 'rgba(139,92,246,0.15)' : (isDarkMode ? '#334155' : '#f1f5f9'), borderWidth: 1.5, borderColor: hasLab ? '#8b5cf6' : (isDarkMode ? '#475569' : '#cbd5e1') }}
               >
@@ -774,8 +772,7 @@ const OrderCard = React.memo(function OrderCard({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 onPress={() => onMillInputPill(item)}
-                disabled={isParty}
-                activeOpacity={isParty ? 1 : 0.7}
+                activeOpacity={0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hasMillInput ? 'rgba(6,182,212,0.15)' : (isDarkMode ? '#334155' : '#f1f5f9'), borderWidth: 1.5, borderColor: hasMillInput ? Colors.info[500] : (isDarkMode ? '#475569' : '#cbd5e1') }}
               >
@@ -796,8 +793,7 @@ const OrderCard = React.memo(function OrderCard({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 onPress={() => onMillOutputPill(item)}
-                disabled={isParty}
-                activeOpacity={isParty ? 1 : 0.7}
+                activeOpacity={0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hasMillOutput ? 'rgba(34,197,94,0.15)' : (isDarkMode ? '#334155' : '#f1f5f9'), borderWidth: 1.5, borderColor: hasMillOutput ? Colors.success[500] : (isDarkMode ? '#475569' : '#cbd5e1') }}
               >
@@ -818,8 +814,7 @@ const OrderCard = React.memo(function OrderCard({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 onPress={() => onDispatchPill(item)}
-                disabled={isParty}
-                activeOpacity={isParty ? 1 : 0.7}
+                activeOpacity={0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hasDispatch ? 'rgba(234, 88, 12, 0.15)' : (isDarkMode ? '#334155' : '#f1f5f9'), borderWidth: 1.5, borderColor: hasDispatch ? '#ea580c' : (isDarkMode ? '#475569' : '#cbd5e1') }}
               >
@@ -2678,7 +2673,6 @@ export default function OrdersScreen() {
 
   // Pill Handlers (Edit first if exists, else Add)
   const handleGreyPill = useCallback(async (order: Order) => {
-    if (isParty) return;
     setSelectedOrder(order);
     setSelectedOrderId(order.orderId);
     setSelectedDbOrderId(order._id);
@@ -2688,23 +2682,24 @@ export default function OrdersScreen() {
     setGreyInfo(cached);
     setActiveModal('grey');
 
-    // ⚡ OPTIMIZATION: If there is no existing data, do NOT trigger any API call or show loading spinner
+    // If no existing data, do NOT trigger API call or show loading line
     if (cached.length === 0) {
       return;
     }
 
-    // ⚡ OPTIMIZATION: If data exists, fetch fresh updates silently in the background (no loading indicator)
     try {
+      setLoadingPill({ orderId: order._id, type: 'grey' });
       const { data } = await api.get('/api/grey-info', { params: { orderId: order.orderId, t: Date.now() } });
       const records = data?.data?.greyInfo || (Array.isArray(data?.data) ? data.data : data?.data || []);
       setGreyInfo(records);
     } catch (err) {
       console.log('Error fetching fresh grey info:', err);
+    } finally {
+      setLoadingPill(null);
     }
-  }, [isParty]);
+  }, []);
 
   const handleMillInputPill = useCallback(async (order: Order) => {
-    if (isParty) return;
     setSelectedOrder(order);
     setSelectedOrderId(order.orderId);
     setSelectedDbOrderId(order._id);
@@ -2714,23 +2709,24 @@ export default function OrdersScreen() {
     setMillInputsList(localMillInputs);
     setActiveModal('mill-input');
 
-    // ⚡ OPTIMIZATION: If there is no existing data, do NOT trigger any API call or show loading spinner
+    // If no existing data, do NOT trigger API call or show loading line
     if (localMillInputs.length === 0) {
       return;
     }
 
-    // ⚡ OPTIMIZATION: If data exists, fetch fresh updates silently in the background (no loading indicator)
     try {
+      setLoadingPill({ orderId: order._id, type: 'mill-input' });
       const { data } = await api.get('/api/mill-inputs', { params: { orderId: order.orderId, t: Date.now() } });
       const records = data?.data?.millInputs || (Array.isArray(data?.data) ? data.data : data?.data || []);
       setMillInputsList(records);
     } catch (err) {
       console.log('Error fetching fresh mill inputs:', err);
+    } finally {
+      setLoadingPill(null);
     }
-  }, [isParty]);
+  }, []);
 
   const handleMillOutputPill = useCallback(async (order: Order) => {
-    if (isParty) return;
     setSelectedOrder(order);
     setSelectedOrderId(order.orderId);
     setSelectedDbOrderId(order._id);
@@ -2740,23 +2736,24 @@ export default function OrdersScreen() {
     setMillOutputsList(localMillOutputs);
     setActiveModal('mill-output');
 
-    // ⚡ OPTIMIZATION: If there is no existing data, do NOT trigger any API call or show loading spinner
+    // If no existing data, do NOT trigger API call or show loading line
     if (localMillOutputs.length === 0) {
       return;
     }
 
-    // ⚡ OPTIMIZATION: If data exists, fetch fresh updates silently in the background (no loading indicator)
     try {
+      setLoadingPill({ orderId: order._id, type: 'mill-output' });
       const { data } = await api.get('/api/mill-outputs', { params: { orderId: order.orderId, t: Date.now() } });
       const records = data?.data?.millOutputs || (Array.isArray(data?.data) ? data.data : data?.data || []);
       setMillOutputsList(records);
     } catch (err) {
       console.log('Error fetching fresh mill outputs:', err);
+    } finally {
+      setLoadingPill(null);
     }
-  }, [isParty]);
+  }, []);
 
   const handleDispatchPill = useCallback(async (order: Order) => {
-    if (isParty) return;
     setSelectedOrder(order);
     setSelectedOrderId(order.orderId);
     setSelectedDbOrderId(order._id);
@@ -2773,8 +2770,13 @@ export default function OrdersScreen() {
     }
     setActiveModal('dispatch');
 
-    // Always fetch fresh data from the API to ensure we have the latest dispatches
+    // If no existing data, do NOT trigger API call or show loading line
+    if (localDispatches.length === 0) {
+      return;
+    }
+
     try {
+      setLoadingPill({ orderId: order._id, type: 'dispatch' });
       const { data } = await api.get('/api/dispatch', { params: { orderId: order.orderId, t: Date.now() } });
       const records = data?.data?.dispatches || (Array.isArray(data?.data) ? data.data : data?.data || []);
       setDispatchesList(records);
@@ -2785,8 +2787,10 @@ export default function OrdersScreen() {
       }
     } catch (err) {
       console.log('Error fetching fresh dispatches:', err);
+    } finally {
+      setLoadingPill(null);
     }
-  }, [isParty]);
+  }, []);
 
   const openLabFormForItem = useCallback((orderItem: any, orderId: string, dbOrderId: string) => {
     setSelectedOrderId(orderId);
@@ -2824,7 +2828,6 @@ export default function OrdersScreen() {
   }, []);
 
   const handleLabPill = useCallback((order: Order) => {
-    if (isParty) return;
     setSelectedOrder(order);
     if (!order.items || order.items.length === 0) {
       addToast({ type: 'error', title: 'This order has no items' });
@@ -2836,7 +2839,7 @@ export default function OrdersScreen() {
       setLabItemSelectorOrder(order);
       setShowLabItemSelector(true);
     }
-  }, [openLabFormForItem, isParty]);
+  }, [openLabFormForItem]);
 
   const handleViewLogs = useCallback((order: Order) => {
     setSelectedOrderForLogs(order);
@@ -4328,7 +4331,7 @@ export default function OrdersScreen() {
         visible={activeModal === 'dispatch'}
         onClose={() => { setActiveModal(null); setEditItem(null); }}
         order={currentSelectedOrder}
-        existingDispatches={currentSelectedOrder?.dispatches || []}
+        existingDispatches={dispatchesList}
         qualities={qualities}
         isDarkMode={isDarkMode}
         theme={theme}
@@ -4336,7 +4339,7 @@ export default function OrdersScreen() {
           saveDispatchMutation.mutate(payload);
         }}
         isSaving={saveDispatchMutation.isPending}
-        onDelete={currentSelectedOrder?.dispatches && currentSelectedOrder.dispatches.length > 0 ? () => deleteDispatchMutation.mutate(undefined) : undefined}
+        onDelete={dispatchesList && dispatchesList.length > 0 ? () => deleteDispatchMutation.mutate(undefined) : undefined}
         isMaster={isMaster}
         isLoading={loadingPill?.type === 'dispatch'}
         isDeleting={deleteDispatchMutation.isPending}

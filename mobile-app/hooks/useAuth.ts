@@ -20,11 +20,7 @@ export function useAuth() {
         setUser(response.user);
         if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         addToast({ type: 'success', title: 'Welcome back!', message: `Signed in as ${response.user.name}` });
-        if (response.user.role === 'party') {
-          router.replace('/(tabs)/orders');
-        } else {
-          router.replace('/(tabs)/dashboard');
-        }
+        router.replace('/(tabs)/dashboard');
         return response;
       } catch (error: any) {
         // If the server explicitly responded with an error (e.g., 401, 423, 500),

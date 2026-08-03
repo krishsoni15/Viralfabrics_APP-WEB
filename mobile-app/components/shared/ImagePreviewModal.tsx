@@ -1698,7 +1698,7 @@ function ImagePreviewModal({
 
           {savingCropped && (
             <View style={{
-              ...StyleSheet.absoluteFillObject,
+              ...StyleSheet.absoluteFill,
               backgroundColor: 'rgba(0, 0, 0, 0.75)',
               justifyContent: 'center',
               alignItems: 'center',

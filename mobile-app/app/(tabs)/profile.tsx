@@ -707,26 +707,28 @@ export default function ProfileScreen() {
             <Text style={{ fontSize: 16, fontWeight: '800', color: isDarkMode ? '#f87171' : '#b91c1c' }}>Sign Out</Text>
           </Pressable>
 
-          <Pressable 
-            onPress={handleLogoutAll} 
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'transparent',
-              borderColor: theme.border,
-              borderWidth: 1.5,
-              height: 56,
-              borderRadius: 20,
-              gap: 10,
-              marginTop: 12,
-              width: '100%',
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Lock size={18} color={theme.textSecondary} />
-            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textSecondary }}>Sign Out All Devices</Text>
-          </Pressable>
+          {(isMaster || user?.role === 'superadmin') && (
+            <Pressable 
+              onPress={handleLogoutAll} 
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'transparent',
+                borderColor: theme.border,
+                borderWidth: 1.5,
+                height: 56,
+                borderRadius: 20,
+                gap: 10,
+                marginTop: 12,
+                width: '100%',
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Lock size={18} color={theme.textSecondary} />
+              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textSecondary }}>Sign Out All Devices</Text>
+            </Pressable>
+          )}
           
           <Text style={{ textAlign: 'center', marginTop: 28, fontSize: 12, color: theme.textTertiary, fontWeight: '600', letterSpacing: 0.5 }}>VIRAL FABRICS CRM v1.0.0</Text>
         </Animated.View>

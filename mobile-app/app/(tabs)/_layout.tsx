@@ -308,10 +308,6 @@ export default function TabsLayout() {
   const pathname = usePathname();
   const scrollY = useRef(0);
   const lastPathname = useRef(pathname);
-
-  if (isLoading) {
-    return null;
-  }
   const menuSheetY = useRef(0);
   const menuTouchStartPageY = useRef(0);
   
@@ -450,6 +446,10 @@ export default function TabsLayout() {
     };
   });
 
+  if (isLoading) {
+    return null;
+  }
+
   return (
     <>
       <Tabs
@@ -495,10 +495,7 @@ export default function TabsLayout() {
             tabBarIcon: ({ color, focused }) => (
               <AnimatedTabBarIcon Icon={Home} color={color} focused={focused} type="home" />
             ),
-            ...(user?.role === 'party'
-              ? { href: null }
-              : { tabBarButton: (props) => <TabBarButton {...props} /> }
-            ),
+            tabBarButton: (props) => <TabBarButton {...props} />,
           }}
         />
         <Tabs.Screen

@@ -341,16 +341,17 @@ export default function GreyInformationModal({
 
       if (hasData) {
         const init: Entry[] = greyInfo.map((g: any) => {
-          const qId = typeof g.quality === 'object' ? g.quality?._id : g.quality || '';
+          const qObj = g.quality;
+          const qId = typeof qObj === 'object' ? (qObj?._id || qObj?.id || qObj?.name || '') : (qObj || '');
           return {
-            id: g._id,
+            id: g._id || `grey-${Date.now()}-${Math.random()}`,
             date: g.date ? g.date.split('T')[0] : '',
             quality: String(qId),
-            quantity: g.quantity ? String(g.quantity) : '',
-            numberOfPieces: g.numberOfPieces ? String(g.numberOfPieces) : '',
+            quantity: g.quantity !== undefined && g.quantity !== null ? String(g.quantity) : '',
+            numberOfPieces: g.numberOfPieces !== undefined && g.numberOfPieces !== null ? String(g.numberOfPieces) : '',
             chalanNo: g.chalanNo || '',
-            weaverName: '',
-            weaverLoaded: false,
+            weaverName: g.weaverName || '',
+            weaverLoaded: !!g.weaverName,
           };
         });
         setEntries(init);
