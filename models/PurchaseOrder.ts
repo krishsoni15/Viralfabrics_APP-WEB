@@ -31,6 +31,7 @@ export interface IPurchaseOrder extends Document {
   financialYear: string;
   createdBy: mongoose.Types.ObjectId;
   softDeleted: boolean;
+  status: 'Pending' | 'Completed';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -155,6 +156,12 @@ const PurchaseOrderSchema = new Schema<IPurchaseOrder>({
   softDeleted: {
     type: Boolean,
     default: false,
+    index: true
+  },
+  status: {
+    type: String,
+    enum: ['Pending', 'Completed'],
+    default: 'Pending',
     index: true
   }
 }, {

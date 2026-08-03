@@ -495,7 +495,10 @@ export default function TabsLayout() {
             tabBarIcon: ({ color, focused }) => (
               <AnimatedTabBarIcon Icon={Home} color={color} focused={focused} type="home" />
             ),
-            tabBarButton: (props) => <TabBarButton {...props} />,
+            ...(user?.role === 'party'
+              ? { href: null }
+              : { tabBarButton: (props) => <TabBarButton {...props} /> }
+            ),
           }}
         />
         <Tabs.Screen
@@ -520,32 +523,34 @@ export default function TabsLayout() {
                 SubIcon={activeSubpageIcon}
               />
             ),
-            href: (user?.role !== 'superadmin' && user?.role !== 'master') ? null : undefined,
-            tabBarButton: (user?.role !== 'superadmin' && user?.role !== 'master') 
-              ? undefined 
-              : (props) => (
-                  <TabBarButton
-                    {...props}
-                    hideDot={false}
-                    noBorder={true}
-                    accessibilityState={{
-                      ...props.accessibilityState,
-                      selected: isMenuOpen || isFabricsActive || isWeaversActive || isGreyActive || isSamplingActive || isFinishActive || isUsersActive || isLogsActive || isPurchaseOrdersActive
-                    }}
-                    onPress={() => {
-                      if (Platform.OS !== 'web') {
-                        requestAnimationFrame(() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                        });
-                      }
-                      if (isMenuOpen) {
-                        closeMenu();
-                      } else {
-                        openMenu();
-                      }
-                    }}
-                  />
-                ),
+            ...((user?.role !== 'superadmin' && user?.role !== 'master')
+              ? { href: null }
+              : {
+                  tabBarButton: (props) => (
+                    <TabBarButton
+                      {...props}
+                      hideDot={false}
+                      noBorder={true}
+                      accessibilityState={{
+                        ...props.accessibilityState,
+                        selected: isMenuOpen || isFabricsActive || isWeaversActive || isGreyActive || isSamplingActive || isFinishActive || isUsersActive || isLogsActive || isPurchaseOrdersActive
+                      }}
+                      onPress={() => {
+                        if (Platform.OS !== 'web') {
+                          requestAnimationFrame(() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                          });
+                        }
+                        if (isMenuOpen) {
+                          closeMenu();
+                        } else {
+                          openMenu();
+                        }
+                      }}
+                    />
+                  )
+                }
+            ),
           }}
         />
         <Tabs.Screen

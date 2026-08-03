@@ -290,7 +290,7 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
                     <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.challanNumber}</Text>
                   </View>
                 )}
-                {item.gsm != null && item.gsm > 0 && (
+                {item.gsm != null && String(item.gsm).trim() !== '' && (
                   <View style={{ minWidth: 60 }}>
                     <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>GSM</Text>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.gsm}</Text>

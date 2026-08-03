@@ -1577,7 +1577,7 @@ interface FabricStickerData {
   qualityCode: string;
   qualityName: string;
   width?: number; // Width in inches
-  gsm?: number;
+  gsm?: string | number;
   content?: string;
   remarks?: string;
   count?: string; // e.g., "80 x 80"
@@ -2243,7 +2243,7 @@ interface SampleStickerData {
   qualityName: string;
   weaverName?: string;
   width?: number; // Finish width in inches
-  gsm?: number;
+  gsm?: string | number;
   content?: string;
   count?: number;
   rxP?: string; // e.g., "112/80"
@@ -2511,12 +2511,19 @@ export const downloadGreyMaterialStickerPDFDirect = (data: GreyMaterialStickerDa
 
 interface SampleStickerData {
   qualityName: string;
+  whereToPut?: string;
   weaverName?: string;
-  width?: number; // Finish width in inches
-  gsm?: number;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
+  notes?: string;
+  meter?: number;
+  piece?: number;
+  width?: number;
+  gsm?: string | number;
   content?: string;
   count?: number;
-  rxP?: string; // e.g., "112/80"
+  rxP?: string;
   danier?: string;
   moq?: number;
   rack?: string;
@@ -2667,31 +2674,25 @@ export const generateSampleStickerPDF = (sample: SampleStickerData): string => {
       currentY += rowHeight;
     };
 
-    // Quality Name
+    // Row 1: Quality Name
     addTableRow('Quality Name', sample.qualityName || '-');
 
-    // Weaver Name (if available)
-    if (sample.weaverName) {
-      addTableRow('Weaver', sample.weaverName);
-    }
+    // Row 2: Where to Put
+    addTableRow('Where to Put', sample.whereToPut || '-');
 
-    // Width (Inch) with Count on right
-    const widthValue = sample.width ? `${sample.width}"` : '-';
-    const countValue = sample.count ? sample.count.toString() : (sample.danier || '');
-    addTableRowWithRight('Width (Inch)', widthValue, 'Count', countValue);
+    // Row 3: Weaver Name with Weaver Quality on right
+    addTableRowWithRight('Weaver', sample.weaverName || '-', 'W. Quality', sample.weaverQuality || '-');
 
-    // GSM with R x P on right
-    const gsmValue = sample.gsm ? sample.gsm.toString() : '-';
-    const rxPValue = sample.rxP || '-';
-    addTableRowWithRight('GSM', gsmValue, 'R x P', rxPValue);
+    // Row 4: Mill Name
+    addTableRow('Mill Name', sample.millName || '-');
 
-    // Content with MOQ on right (if available)
-    const contentValue = sample.content || '-';
-    const moqValue = sample.moq ? sample.moq.toString() : ''; // Empty string for client requirement
-    addTableRowWithRight('Content', contentValue, 'MOQ', moqValue);
+    // Row 5: Meter with Piece on right
+    const meterVal = sample.meter ? `${sample.meter} M` : '-';
+    const pieceVal = sample.piece ? `${sample.piece}` : '-';
+    addTableRowWithRight('Meter', meterVal, 'Piece', pieceVal);
 
-    // Remarks - always show empty like MOQ
-    addTableRow('Remarks', '');
+    // Row 6: Notes
+    addTableRow('Notes', sample.notes || '');
 
     // Return PDF as data URL for preview
     return doc.output('dataurlstring');
@@ -2847,31 +2848,25 @@ export const downloadSampleStickerPDFDirect = (sample: SampleStickerData): void 
       currentY += rowHeight;
     };
 
-    // Quality Name
+    // Row 1: Quality Name
     addTableRow('Quality Name', sample.qualityName || '-');
 
-    // Weaver Name (if available)
-    if (sample.weaverName) {
-      addTableRow('Weaver', sample.weaverName);
-    }
+    // Row 2: Where to Put
+    addTableRow('Where to Put', sample.whereToPut || '-');
 
-    // Width (Inch) with Count on right
-    const widthValue = sample.width ? `${sample.width}"` : '-';
-    const countValue = sample.count ? sample.count.toString() : (sample.danier || '');
-    addTableRowWithRight('Width (Inch)', widthValue, 'Count', countValue);
+    // Row 3: Weaver Name with Weaver Quality on right
+    addTableRowWithRight('Weaver', sample.weaverName || '-', 'W. Quality', sample.weaverQuality || '-');
 
-    // GSM with R x P on right
-    const gsmValue = sample.gsm ? sample.gsm.toString() : '-';
-    const rxPValue = sample.rxP || '-';
-    addTableRowWithRight('GSM', gsmValue, 'R x P', rxPValue);
+    // Row 4: Mill Name
+    addTableRow('Mill Name', sample.millName || '-');
 
-    // Content with MOQ on right (if available)
-    const contentValue = sample.content || '-';
-    const moqValue = sample.moq ? sample.moq.toString() : ''; // Empty string for client requirement
-    addTableRowWithRight('Content', contentValue, 'MOQ', moqValue);
+    // Row 5: Meter with Piece on right
+    const meterVal = sample.meter ? `${sample.meter} M` : '-';
+    const pieceVal = sample.piece ? `${sample.piece}` : '-';
+    addTableRowWithRight('Meter', meterVal, 'Piece', pieceVal);
 
-    // Remarks - always show empty like MOQ
-    addTableRow('Remarks', '');
+    // Row 6: Notes
+    addTableRow('Notes', sample.notes || '');
 
     // Download the PDF using blob method
     const fileName = `SAMPLE_STICKER_${sample.qualityName || 'STICKER'}_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -2906,5 +2901,217 @@ export const downloadSampleStickerPDFDirect = (sample: SampleStickerData): void 
       alert('Failed to download sticker PDF. Please try again.');
     }
     throw error;
+  }
+};
+
+export interface FinishLotStickerData {
+  qualityName: string;
+  sequence: string;
+  lotType: string;
+  weaverName?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
+  meter?: number;
+  piece?: number;
+}
+
+export const generateFinishLotStickerPDF = async (data: FinishLotStickerData): Promise<string> => {
+  try {
+    const widthMM = 100;
+    const heightMM = 50;
+
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: [widthMM, heightMM]
+    });
+
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, widthMM, heightMM, 'F');
+
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.6);
+    const margin = 1.5;
+
+    doc.setLineJoin('round');
+    doc.setLineCap('round');
+    doc.rect(margin, margin, widthMM - (margin * 2), heightMM - (margin * 2), 'S');
+
+    let yPos = margin + 4.0;
+
+    const brandText = 'VIRAL FABRICS';
+    const availableBrandWidth = widthMM - (margin * 2) - 1;
+    let brandFontSize = 10.5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(brandFontSize);
+    let brandWidth = doc.getTextWidth(brandText);
+    while (brandWidth > availableBrandWidth * 0.85 && brandFontSize > 6) {
+      brandFontSize -= 0.5;
+      doc.setFontSize(brandFontSize);
+      brandWidth = doc.getTextWidth(brandText);
+    }
+    doc.setTextColor(0, 0, 0);
+    const brandX = (widthMM - brandWidth) / 2;
+    doc.text(brandText, brandX, yPos);
+
+    yPos += 2.0;
+    const sloganText = 'MFG & SUPPLIER OF ALL TYPES OF EXPORT FABRICS';
+    let sloganFontSize = 4.2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(sloganFontSize);
+    let sloganWidth = doc.getTextWidth(sloganText);
+    const availableSloganWidth = widthMM - (margin * 2) - 1;
+    while (sloganWidth > availableSloganWidth * 0.95 && sloganFontSize > 3) {
+      sloganFontSize -= 0.2;
+      doc.setFontSize(sloganFontSize);
+      sloganWidth = doc.getTextWidth(sloganText);
+    }
+    const sloganX = (widthMM - sloganWidth) / 2;
+    doc.text(sloganText, sloganX, yPos);
+
+    yPos += 2.0;
+
+    const tableX = margin + 0.5;
+    const tableWidth = widthMM - (margin * 2) - 1;
+    let currentY = yPos;
+    const availableHeight = heightMM - currentY - margin - 1.5;
+    const rowCount = 5;
+    const rowHeight = availableHeight / rowCount;
+
+    const leftLabelWidth = 24;
+    const rightDividerX = tableX + tableWidth / 2;
+    const rightLabelWidth = 16;
+    const dividerX = tableX + leftLabelWidth;
+    const leftValueWidth = rightDividerX - dividerX;
+    const rightValueDividerX = rightDividerX + rightLabelWidth;
+    const rightValueWidth = (tableX + tableWidth) - rightValueDividerX;
+
+    const addTableRow = (label: string, value: string) => {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      doc.line(tableX, currentY, tableX + tableWidth, currentY);
+
+      const labelFontSize = 7.5;
+      const valueFontSize = 7.5;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(labelFontSize);
+      doc.setTextColor(0, 0, 0);
+      const textY = currentY + rowHeight / 2 + 1.5;
+
+      doc.text(label, tableX + 0.8, textY);
+
+      doc.setLineWidth(0.5);
+      doc.line(dividerX, currentY, dividerX, currentY + rowHeight);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFontSize);
+
+      let displayValue = value;
+      const maxTextWidth = (tableX + tableWidth) - dividerX - 1;
+      if (doc.getTextWidth(displayValue) > maxTextWidth) {
+         while(displayValue.length > 0 && doc.getTextWidth(displayValue + '..') > maxTextWidth) {
+             displayValue = displayValue.substring(0, displayValue.length - 1);
+         }
+         displayValue += '..';
+      }
+      doc.text(displayValue, dividerX + 0.8, textY);
+
+      currentY += rowHeight;
+    };
+
+    const addTableRowWithRight = (label: string, value: string, rightLabel: string, rightValue: string) => {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      doc.line(tableX, currentY, tableX + tableWidth, currentY);
+
+      const labelFontSize = 7.5;
+      const valueFontSize = 7.5;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(labelFontSize);
+      doc.setTextColor(0, 0, 0);
+      const textY = currentY + rowHeight / 2 + 1.5;
+
+      doc.text(label, tableX + 0.8, textY);
+
+      doc.setLineWidth(0.5);
+      doc.line(dividerX, currentY, dividerX, currentY + rowHeight);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFontSize);
+      
+      let displayValue = value;
+      const maxTextWidth = leftValueWidth - 1;
+      if (doc.getTextWidth(displayValue) > maxTextWidth) {
+         while(displayValue.length > 0 && doc.getTextWidth(displayValue + '..') > maxTextWidth) {
+             displayValue = displayValue.substring(0, displayValue.length - 1);
+         }
+         displayValue += '..';
+      }
+      doc.text(displayValue, dividerX + 0.8, textY);
+
+      doc.setLineWidth(0.5);
+      doc.line(rightDividerX, currentY, rightDividerX, currentY + rowHeight);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(labelFontSize);
+      doc.text(rightLabel, rightDividerX + 0.8, textY);
+
+      doc.setLineWidth(0.5);
+      doc.line(rightValueDividerX, currentY, rightValueDividerX, currentY + rowHeight);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFontSize);
+      
+      let displayRightValue = rightValue;
+      const maxRightTextWidth = rightValueWidth - 1;
+      if (doc.getTextWidth(displayRightValue) > maxRightTextWidth) {
+         while(displayRightValue.length > 0 && doc.getTextWidth(displayRightValue + '..') > maxRightTextWidth) {
+             displayRightValue = displayRightValue.substring(0, displayRightValue.length - 1);
+         }
+         displayRightValue += '..';
+      }
+      doc.text(displayRightValue, rightValueDividerX + 0.8, textY);
+
+      currentY += rowHeight;
+    };
+
+    addTableRow('Quality Name', data.qualityName || '-');
+    addTableRowWithRight('Sequence', data.sequence || '-', 'Type', data.lotType || '-');
+    addTableRowWithRight('Weaver', data.weaverName || '-', 'W.Qual', data.weaverQuality || '-');
+    addTableRowWithRight('Mill Name', data.millName || '-', 'Proc', data.processInMill || '-');
+    const meterVal = data.meter ? `${data.meter} M` : '-';
+    const pieceVal = data.piece ? `${data.piece}` : '-';
+    addTableRowWithRight('Meter', meterVal, 'Piece', pieceVal);
+
+    return doc.output('dataurlstring');
+
+  } catch (error) {
+    console.error('PDF Generator - Error generating finish lot sticker PDF:', error);
+    throw error;
+  }
+};
+
+export const downloadFinishLotStickerPDFDirect = async (data: FinishLotStickerData): Promise<void> => {
+  try {
+    const url = await generateFinishLotStickerPDF(data);
+    const fileName = `FINISH_LOT_STICKER_${data.sequence || 'STICKER'}_${new Date().toISOString().split('T')[0]}.pdf`;
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 100);
+  } catch (error) {
+    console.error('PDF Generator - Error downloading finish lot sticker PDF:', error);
+    if (typeof window !== 'undefined') {
+      alert('Failed to generate sticker PDF. Please try again.');
+    }
   }
 };

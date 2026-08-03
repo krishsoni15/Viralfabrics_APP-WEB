@@ -3978,6 +3978,10 @@ export default function OrdersClient({
 
   // PDF Download function for individual items - fetches fresh data
   const handleDownloadItemPDF = useCallback(async (order: any, item: any, itemIndex: number) => {
+    if (!isMaster) {
+      showMessage('error', 'Only master can download this PDF.', { autoDismiss: true });
+      return;
+    }
     try {
       showMessage('info', 'Fetching latest data for PDF...', {
         autoDismiss: true,
@@ -5877,13 +5881,15 @@ export default function OrdersClient({
           <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 items-start lg:items-center justify-between mt-1 sm:mt-0">
             {/* Mobile Action Toolbar (Hidden on Desktop) */}
             <div className="w-full sm:hidden flex items-center gap-2 order-1">
-              <button
-                onClick={() => setShowQuickActions(!showQuickActions)}
-                className={`flex-1 py-2 flex items-center justify-center rounded-lg border transition-colors active:scale-95 ${showQuickActions ? 'bg-blue-600 text-white border-blue-500' : isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
-                title="Quick Actions"
-              >
-                <BoltIcon className="h-5 w-5" />
-              </button>
+              {!isParty && (
+                <button
+                  onClick={() => setShowQuickActions(!showQuickActions)}
+                  className={`flex-1 py-2 flex items-center justify-center rounded-lg border transition-colors active:scale-95 ${showQuickActions ? 'bg-blue-600 text-white border-blue-500' : isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
+                  title="Quick Actions"
+                >
+                  <BoltIcon className="h-5 w-5" />
+                </button>
+              )}
               
               <button
                 onClick={() => setShowMobileFilters(!showMobileFilters)}
@@ -6445,20 +6451,22 @@ export default function OrdersClient({
 
             {/* Desktop Right Side Actions (Hidden on Mobile) */}
             <div className="hidden sm:flex items-center gap-2 order-1 lg:order-2 w-auto justify-start">
-              <button
-                onClick={() => setShowQuickActions(!showQuickActions)}
-                className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm ${showQuickActions
-                  ? isDarkMode
-                    ? 'bg-white/20 border border-white/30 text-white'
-                    : 'bg-gray-200 border border-gray-400 text-gray-800'
-                  : isDarkMode
-                    ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
-                    : 'bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200'
-                  }`}
-              >
-                <BoltIcon className="h-4 w-4 mr-1.5" />
-                <span className="font-medium">Quick Actions</span>
-              </button>
+              {!isParty && (
+                <button
+                  onClick={() => setShowQuickActions(!showQuickActions)}
+                  className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm ${showQuickActions
+                    ? isDarkMode
+                      ? 'bg-white/20 border border-white/30 text-white'
+                      : 'bg-gray-200 border border-gray-400 text-gray-800'
+                    : isDarkMode
+                      ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                      : 'bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200'
+                    }`}
+                >
+                  <BoltIcon className="h-4 w-4 mr-1.5" />
+                  <span className="font-medium">Quick Actions</span>
+                </button>
+              )}
               <div className={`flex rounded-lg border overflow-hidden ${isDarkMode ? 'border-gray-600' : 'border-gray-300'
                 }`}>
                 <button
@@ -7099,10 +7107,12 @@ export default function OrdersClient({
                                               }`}>
                                               Images
                                             </th>
-                                            <th className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                                              }`}>
+                                            {isMaster && (
+                                              <th className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-200' : 'text-gray-700'
+                                                }`}>
                                                 Actions
                                               </th>
+                                            )}
                                           </tr>
                                         </thead>
                                         <tbody className={`divide-y ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'
@@ -7168,10 +7178,6 @@ export default function OrdersClient({
                                                   {item.description || '-'}
                                                 </div>
                                               </td>
-
-
-
-
 
                                               {/* Process */}
                                               <td className="px-4 py-4">
@@ -7399,8 +7405,8 @@ export default function OrdersClient({
                                                           }
                                                         }}
                                                         className={`w-[180px] h-[180px] sm:w-[190px] sm:h-[190px] md:w-[200px] md:h-[200px] lg:w-[210px] lg:h-[210px] rounded-lg border-2 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 relative overflow-hidden group ${isDarkMode
-                                                          ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600'
-                                                          : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                                                      ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600'
+                                                      : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
                                                           }`}
                                                         title={`View all ${item.imageUrls.length} images`}
                                                       >
@@ -7417,11 +7423,10 @@ export default function OrdersClient({
                                                 )}
                                               </td>
 
-                                              {/* Actions */}
-                                              <td className="px-2 py-2 text-center">
-                                                <div className="flex flex-col gap-2">
-                                                  {/* PDF Download Button - Only show for non-users */}
-                                                  {!isUser && (
+                                              {isMaster && (
+                                                <td className="px-2 py-2 text-center">
+                                                  <div className="flex flex-col gap-2">
+                                                    {/* PDF Download Button - Only show for Master ID */}
                                                     <button
                                                       onClick={() => handleDownloadItemPDF(order, item, index)}
                                                       className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 hover:scale-105 shadow-sm ${isDarkMode
@@ -7433,10 +7438,8 @@ export default function OrdersClient({
                                                       <DocumentArrowDownIcon className="h-3.5 w-3.5 inline mr-1.5" />
                                                       PDF
                                                     </button>
-                                                  )}
 
-                                                  {/* Delete Button */}
-                                                  {isMaster && (
+                                                    {/* Delete Button */}
                                                     <button
                                                       onClick={() => handleDeleteItemClick(order._id, index, item.quality && typeof item.quality === 'object' ? item.quality.name || 'Item' : 'Item')}
                                                       className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 hover:scale-105 shadow-sm delete-button-hover ${isDarkMode
@@ -7448,9 +7451,9 @@ export default function OrdersClient({
                                                       <TrashIcon className="h-3.5 w-3.5 inline mr-1.5" />
                                                       Delete
                                                     </button>
-                                                  )}
                                                 </div>
-                                              </td>
+                                               </td>
+                                               )}
                                             </tr>
                                           ))}
                                         </tbody>
@@ -7464,50 +7467,51 @@ export default function OrdersClient({
                               <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5">
                                 <div className="flex flex-col gap-2">
                                   {/* Row 0: Status Label and Buttons */}
-                                    <div className={`flex items-center justify-center gap-3 px-3 py-2 rounded-lg border transition-colors ${isDarkMode
-                                      ? 'bg-gray-700/50 border-gray-600'
-                                      : 'bg-gray-100 border-gray-300'
+                                  <div className={`flex items-center justify-center gap-3 px-3 py-2 rounded-lg border transition-colors ${isDarkMode
+                                    ? 'bg-gray-700/50 border-gray-600'
+                                    : 'bg-gray-100 border-gray-300'
+                                    }`}>
+                                    <label className={`text-base font-bold whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
                                       }`}>
-                                      <label className={`text-base font-bold whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                                        }`}>
-                                        Status:
-                                      </label>
-                                      <div className="flex items-center gap-1">
-                                        <button
-                                          onClick={() => handleStatusChangeClick(order._id, 'pending', order.orderId)}
-                                          disabled={changingStatus || isParty}
-                                          className={`px-3 py-2 text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center ${(order.status || 'pending') === 'pending'
-                                            ? isDarkMode
-                                              ? 'bg-blue-600 text-white'
-                                              : 'bg-blue-600 text-white'
-                                            : isDarkMode
-                                              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                            } ${changingStatus || isParty ? 'opacity-50 cursor-not-allowed pointer-events-none scale-95' : 'hover:scale-105'}`}
-                                        >
-                                          Pending
-                                        </button>
-                                        <button
-                                          onClick={() => handleStatusChangeClick(order._id, 'delivered', order.orderId)}
-                                          disabled={changingStatus || isParty}
-                                          className={`px-3 py-2 text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center ${order.status === 'delivered'
-                                            ? isDarkMode
-                                              ? 'bg-green-600 text-white'
-                                              : 'bg-green-600 text-white'
-                                            : isDarkMode
-                                              ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                            } ${changingStatus || isParty ? 'opacity-50 cursor-not-allowed pointer-events-none scale-95' : 'hover:scale-105'}`}
-                                        >
-                                          Delivered
-                                        </button>
-                                      </div>
+                                      Status:
+                                    </label>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleStatusChangeClick(order._id, 'pending', order.orderId)}
+                                        disabled={changingStatus || isParty}
+                                        className={`px-3 py-2 text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center ${(order.status || 'pending') === 'pending'
+                                          ? isDarkMode
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-blue-600 text-white'
+                                          : isDarkMode
+                                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                          } ${changingStatus || isParty ? 'opacity-70 cursor-default scale-95' : 'hover:scale-105'}`}
+                                      >
+                                        Pending
+                                      </button>
+                                      <button
+                                        onClick={() => handleStatusChangeClick(order._id, 'delivered', order.orderId)}
+                                        disabled={changingStatus || isParty}
+                                        className={`px-3 py-2 text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap flex items-center justify-center ${order.status === 'delivered'
+                                          ? isDarkMode
+                                            ? 'bg-green-600 text-white'
+                                            : 'bg-green-600 text-white'
+                                          : isDarkMode
+                                            ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                          } ${changingStatus || isParty ? 'opacity-70 cursor-default scale-95' : 'hover:scale-105'}`}
+                                      >
+                                        Delivered
+                                      </button>
                                     </div>
+                                  </div>
 
-                                    {/* Table Actions - 2 Columns Layout (Same as Card View) */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                      {/* Column 1: Lab, Input, Output, Dispatch */}
-                                      <div className="space-y-3">
+                                  {/* Table Actions - 2 Columns Layout */}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    {/* Column 1: Grey, Lab, Input, Output, Dispatch */}
+                                    <div className="space-y-3">
+                                      {(!isParty || hasGreyInfo(order)) && (
                                         <button
                                           type="button"
                                           key={`grey-info-${order._id}-${forceRender}`}
@@ -7517,7 +7521,7 @@ export default function OrdersClient({
                                             ? 'bg-gray-700/50 text-gray-300 border border-gray-600 hover:bg-gray-700'
                                             : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
                                             }`}
-                                          title={hasGreyInfo(order) ? "Edit Grey Information" : "Add Grey Information"}
+                                          title={isParty ? "View Grey Information" : (hasGreyInfo(order) ? "Edit Grey Information" : "Add Grey Information")}
                                         >
                                           {loadingGreyInfo === order._id ? (
                                             <>
@@ -7527,17 +7531,18 @@ export default function OrdersClient({
                                           ) : (
                                             <>
                                               <DocumentTextIcon className="h-4 w-4" />
-                                              <span>{hasGreyInfo(order) ? "Edit Grey Info" : "Add Grey Info"}</span>
+                                              <span>{isParty ? "View Grey Info" : (hasGreyInfo(order) ? "Edit Grey Info" : "Add Grey Info")}</span>
                                             </>
                                           )}
-                                          {/* Status indicator */}
                                           {loadingGreyInfo !== order._id && (
                                             <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
                                               } ${hasGreyInfo(order) ? 'bg-green-500' : 'bg-gray-400'
                                               }`} title={hasGreyInfo(order) ? "Data exists" : "No data"} />
                                           )}
                                         </button>
+                                      )}
 
+                                      {(!isParty || hasLabData(order)) && (
                                         <button
                                           key={`lab-${order._id}-${forceRender}`}
                                           onClick={() => handleLabData(order)}
@@ -7545,16 +7550,17 @@ export default function OrdersClient({
                                             ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30'
                                             : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
                                             }`}
-                                          title={hasLabData(order) ? "Edit Lab Data" : "Add Lab Data"}
+                                          title={isParty ? "View Lab Data" : (hasLabData(order) ? "Edit Lab Data" : "Add Lab Data")}
                                         >
                                           <BeakerIcon className="h-4 w-4" />
-                                          <span>{hasLabData(order) ? "Edit Lab Data" : "Add Lab Data"}</span>
-                                          {/* Status indicator */}
+                                          <span>{isParty ? "View Lab Data" : (hasLabData(order) ? "Edit Lab Data" : "Add Lab Data")}</span>
                                           <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
                                             } ${hasLabData(order) ? 'bg-green-500' : 'bg-gray-400'
                                             }`} title={hasLabData(order) ? "Data exists" : "No data"} />
                                         </button>
+                                      )}
 
+                                      {(!isParty || hasMillInputs(order)) && (
                                         <button
                                           key={`mill-input-${order._id}-${forceRender}`}
                                           onClick={() => handleMillInput(order)}
@@ -7563,7 +7569,7 @@ export default function OrdersClient({
                                             ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30'
                                             : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
                                             } ${loadingMillInput === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
-                                          title={hasMillInputs(order) ? "Edit Mill Input" : "Add Mill Input"}
+                                          title={isParty ? "View Mill Input" : (hasMillInputs(order) ? "Edit Mill Input" : "Add Mill Input")}
                                         >
                                           {loadingMillInput === order._id ? (
                                             <>
@@ -7573,17 +7579,18 @@ export default function OrdersClient({
                                           ) : (
                                             <>
                                               <CubeIcon className="h-4 w-4" />
-                                              <span>{hasMillInputs(order) ? "Edit Mill Input" : "Add Mill Input"}</span>
+                                              <span>{isParty ? "View Mill Input" : (hasMillInputs(order) ? "Edit Mill Input" : "Add Mill Input")}</span>
                                             </>
                                           )}
-                                          {/* Status indicator */}
                                           {loadingMillInput !== order._id && (
                                             <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
                                               } ${hasMillInputs(order) ? 'bg-green-500' : 'bg-gray-400'
                                               }`} title={hasMillInputs(order) ? "Data exists" : "No data"} />
                                           )}
                                         </button>
+                                      )}
 
+                                      {(!isParty || hasMillOutputs(order)) && (
                                         <button
                                           key={`mill-output-${order._id}-${forceRender}`}
                                           onClick={() => handleMillOutput(order)}
@@ -7592,7 +7599,7 @@ export default function OrdersClient({
                                             ? 'bg-teal-600/20 text-teal-400 border border-teal-500/30 hover:bg-teal-600/30'
                                             : 'bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100'
                                             } ${loadingMillOutput === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
-                                          title={hasMillOutputs(order) ? "Edit Mill Output" : "Add Mill Output"}
+                                          title={isParty ? "View Mill Output" : (hasMillOutputs(order) ? "Edit Mill Output" : "Add Mill Output")}
                                         >
                                           {loadingMillOutput === order._id ? (
                                             <>
@@ -7602,17 +7609,18 @@ export default function OrdersClient({
                                           ) : (
                                             <>
                                               <DocumentTextIcon className="h-4 w-4" />
-                                              <span>{hasMillOutputs(order) ? "Edit Mill Output" : "Add Mill Output"}</span>
+                                              <span>{isParty ? "View Mill Output" : (hasMillOutputs(order) ? "Edit Mill Output" : "Add Mill Output")}</span>
                                             </>
                                           )}
-                                          {/* Status indicator */}
                                           {loadingMillOutput !== order._id && (
                                             <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
                                               } ${hasMillOutputs(order) ? 'bg-green-500' : 'bg-gray-400'
                                               }`} title={hasMillOutputs(order) ? "Data exists" : "No data"} />
                                           )}
                                         </button>
+                                      )}
 
+                                      {(!isParty || hasDispatches(order)) && (
                                         <button
                                           key={`dispatch-${order._id}-${forceRender}`}
                                           onClick={() => handleDispatch(order)}
@@ -7621,7 +7629,7 @@ export default function OrdersClient({
                                             ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30 hover:bg-orange-600/30'
                                             : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
                                             } ${loadingDispatch === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
-                                          title={hasDispatches(order) ? "Edit Dispatch" : "Add Dispatch"}
+                                          title={isParty ? "View Dispatch" : (hasDispatches(order) ? "Edit Dispatch" : "Add Dispatch")}
                                         >
                                           {loadingDispatch === order._id ? (
                                             <>
@@ -7631,71 +7639,72 @@ export default function OrdersClient({
                                           ) : (
                                             <>
                                               <TruckIcon className="h-4 w-4" />
-                                              <span>{hasDispatches(order) ? "Edit Dispatch" : "Add Dispatch"}</span>
+                                              <span>{isParty ? "View Dispatch" : (hasDispatches(order) ? "Edit Dispatch" : "Add Dispatch")}</span>
                                             </>
                                           )}
-                                          {/* Status indicator */}
                                           {loadingDispatch !== order._id && (
                                             <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
                                               } ${hasDispatches(order) ? 'bg-green-500' : 'bg-gray-400'
                                               }`} title={hasDispatches(order) ? "Data exists" : "No data"} />
                                           )}
                                         </button>
-                                      </div>
+                                      )}
+                                    </div>
 
-                                      {/* Column 2: View, Edit, Delete, Logs */}
-                                      <div className="space-y-3">
+                                    {/* Column 2: View, Edit, Delete, Logs */}
+                                    <div className="space-y-3">
+                                      <button
+                                        onClick={() => handleView(order)}
+                                        className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 ${isDarkMode
+                                          ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30'
+                                          : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                                          }`}
+                                        title="View Order Details"
+                                      >
+                                        <EyeIcon className="h-4 w-4" />
+                                        <span>View Details</span>
+                                      </button>
+
+                                      <button
+                                        onClick={() => handleEdit(order)}
+                                        className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 ${isDarkMode
+                                          ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30'
+                                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                          }`}
+                                        title={isParty ? "View Order" : "Edit Order"}
+                                      >
+                                        <PencilIcon className="h-4 w-4" />
+                                        <span>{isParty ? "View Order" : "Edit Order"}</span>
+                                      </button>
+
+                                      {isMaster && (
                                         <button
-                                          onClick={() => handleView(order)}
-                                          className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 ${isDarkMode
-                                            ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30'
-                                            : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                                          onClick={() => handleDeleteClick(order)}
+                                          disabled={deletingOrderId === String(order._id)}
+                                          className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 delete-button-hover ${deletingOrderId === String(order._id)
+                                            ? 'opacity-50 cursor-not-allowed'
+                                            : ''
+                                            } ${isDarkMode
+                                              ? 'bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30'
+                                              : 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'
                                             }`}
-                                          title="View Order Details"
+                                          title={deletingOrderId === String(order._id) ? "Deleting..." : "Delete Order"}
                                         >
-                                          <EyeIcon className="h-4 w-4" />
-                                          <span>View Details</span>
+                                          {deletingOrderId === String(order._id) ? (
+                                            <>
+                                              <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                                              <span>Deleting...</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <TrashIcon className="h-4 w-4" />
+                                              <span>Delete ({getDisplayOrderId(order.orderId)})</span>
+                                            </>
+                                          )}
                                         </button>
+                                      )}
 
-                                        <button
-                                          onClick={() => handleEdit(order)}
-                                          className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 ${isDarkMode
-                                            ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30'
-                                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                                            }`}
-                                          title="Edit Order"
-                                        >
-                                          <PencilIcon className="h-4 w-4" />
-                                          <span>Edit Order</span>
-                                        </button>
-
-                                        {isMaster && (
-                                          <button
-                                            onClick={() => handleDeleteClick(order)}
-                                            disabled={deletingOrderId === String(order._id)}
-                                            className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 delete-button-hover ${deletingOrderId === String(order._id)
-                                              ? 'opacity-50 cursor-not-allowed'
-                                              : ''
-                                              } ${isDarkMode
-                                                ? 'bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30'
-                                                : 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'
-                                              }`}
-                                            title={deletingOrderId === String(order._id) ? "Deleting..." : "Delete Order"}
-                                          >
-                                            {deletingOrderId === String(order._id) ? (
-                                              <>
-                                                <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                                                <span>Deleting...</span>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <TrashIcon className="h-4 w-4" />
-                                                <span>Delete ({getDisplayOrderId(order.orderId)})</span>
-                                              </>
-                                            )}
-                                          </button>
-                                        )}
-
+                                      {!isParty && (
                                         <button
                                           onClick={() => handleViewLogs(order)}
                                           className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 ${isDarkMode
@@ -7707,9 +7716,10 @@ export default function OrdersClient({
                                           <ChartBarIcon className="h-4 w-4" />
                                           <span>View Logs</span>
                                         </button>
-                                      </div>
+                                      )}
                                     </div>
                                   </div>
+                                </div>
                               </td>
 
                             </tr>
@@ -7949,7 +7959,7 @@ export default function OrdersClient({
 
                                 {/* Actions */}
                                 <div className="flex items-center gap-1.5">
-                                  {!isUser && (
+                                  {isMaster && (
                                     <button
                                       onClick={() => handleDownloadItemPDF(order, item, itemIndex)}
                                       className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border transition-all hover-lift active:scale-95 ${isDarkMode ? 'bg-blue-600/15 border-blue-600/30' : 'bg-blue-50 border-blue-200'}`}
@@ -8137,13 +8147,15 @@ export default function OrdersClient({
                             <EyeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             <span className="text-[10px] sm:text-xs font-bold">Details</span>
                           </button>
-                          <button
-                            onClick={() => handleViewLogs(order)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-white/5 border-gray-600 text-gray-300 hover:bg-white/10' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-                          >
-                            <ChartBarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            <span className="text-[10px] sm:text-xs font-bold">Logs</span>
-                          </button>
+                          {!isParty && (
+                            <button
+                              onClick={() => handleViewLogs(order)}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-white/5 border-gray-600 text-gray-300 hover:bg-white/10' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                            >
+                              <ChartBarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              <span className="text-[10px] sm:text-xs font-bold">Logs</span>
+                            </button>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5">
                           {!isParty && (

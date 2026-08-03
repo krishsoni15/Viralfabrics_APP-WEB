@@ -317,8 +317,13 @@ export default function WeaverSamplesViewPage() {
     // Wait for auth to be ready before fetching
     if (authLoading) return;
     
-    // Reset fetch state when weaverId changes
-    if (weaverId && lastWeaverIdRef.current !== weaverId) {
+    // Reset fetch state when weaverId changes or if previous fetch was not fully completed
+    const shouldFetch = weaverId && (
+      lastWeaverIdRef.current !== weaverId || 
+      (!hasInitialFetchRef.current && !isFetchingRef.current)
+    );
+
+    if (shouldFetch) {
       hasInitialFetchRef.current = false;
       isFetchingRef.current = false;
       lastWeaverIdRef.current = weaverId;
@@ -355,6 +360,12 @@ export default function WeaverSamplesViewPage() {
       setSamples([]);
       setLoading(false);
     }
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weaverId, authLoading]); // Also depend on authLoading
 
@@ -714,7 +725,7 @@ export default function WeaverSamplesViewPage() {
       greighWidth: sampleData.greighWidth || 0,
       finishWidth: sampleData.finishWidth || 0,
       weight: sampleData.weight || 0,
-      gsm: sampleData.gsm || 0,
+      gsm: sampleData.gsm || '',
       content: sampleData.content || '',
       danier: sampleData.danier || '',
       count: sampleData.count || 0,
@@ -1748,7 +1759,7 @@ export default function WeaverSamplesViewPage() {
                       <p className={`text-sm min-[400px]:text-base md:text-lg font-bold ${
                         isDarkMode ? 'text-white' : 'text-gray-900'
                       }`}>
-                        {sample.gsm > 0 ? sample.gsm : '-'}
+                        {sample.gsm ? sample.gsm : '-'}
                       </p>
                     </div>
 

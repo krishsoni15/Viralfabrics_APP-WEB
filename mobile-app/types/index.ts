@@ -191,7 +191,7 @@ export interface Fabric {
   greighWidth?: number;
   finishWidth?: number;
   weight?: number;
-  gsm?: number;
+  gsm?: string | number;
   content?: string;
   danier?: string;
   count?: string;
@@ -223,7 +223,7 @@ export interface Sample {
   greighWidth?: number;
   finishWidth?: number;
   weight?: number;
-  gsm?: number;
+  gsm?: string | number;
   content?: string;
   danier?: string;
   count?: string;
@@ -302,7 +302,7 @@ export interface GreyMaterial {
   meter?: number;
   challanNumber?: string;
   images?: string[];
-  gsm?: number;
+  gsm?: string | number;
   weight?: number;
   greighWidth?: number;
   finishWidth?: number;
@@ -327,6 +327,10 @@ export interface SamplingItem {
   _id: string;
   qualityName: string;
   whereToPut?: string;
+  weaverName?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
   images: string[];
   notes: string;
   meter: number;
@@ -389,6 +393,7 @@ export interface PurchaseOrder {
   notes: string;
   financialYear: string;
   softDeleted?: boolean;
+  status?: 'Pending' | 'Completed';
   createdBy?: { _id?: string; name: string; username: string };
   createdAt: string;
   updatedAt?: string;

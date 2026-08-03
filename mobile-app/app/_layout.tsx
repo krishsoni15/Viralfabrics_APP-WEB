@@ -1030,7 +1030,7 @@ function RootLayoutNav() {
   );
 }
 
-import { ThemeProvider as NavigationProvider, DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme } from '@react-navigation/native';
+import { ThemeProvider as NavigationProvider, DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme } from 'expo-router';
 
 export default function RootLayout() {
   const isDarkMode = useAppStore((s) => s.isDarkMode);

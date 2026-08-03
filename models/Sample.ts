@@ -8,7 +8,7 @@ export interface ISample extends Document {
   greighWidth: number;
   finishWidth: number;
   weight: number;
-  gsm: number;
+  gsm: string;
   content: string;
   danier: string;
   count: number;
@@ -85,10 +85,9 @@ const SampleSchema = new Schema<ISample>({
     min: [0, 'Weight cannot be negative']
   },
   gsm: {
-    type: Number,
+    type: String,
     required: false,
-    default: 0,
-    min: [0, 'GSM cannot be negative']
+    default: ''
   },
   content: {
     type: String,

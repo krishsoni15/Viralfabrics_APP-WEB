@@ -839,21 +839,14 @@ export default function MillOutputForm({
         }]
       });
 
-      // Smart API logic:
-      // - If isEditing is true → Fetch API (edit mode)
-      // - If isEditing is false → Skip API call (add mode)
-      // ⚡ CRITICAL: Also check if update is in progress - don't reload during update
-      if (isEditing && !operationInProgressRef.current && !justUpdatedRef.current) {
-        console.log('📊 Edit mode detected - fetching existing mill output data');
+      // ⚡ FIX: Always fetch API to auto-populate existing data, regardless of isEditing
+      if (!operationInProgressRef.current && !justUpdatedRef.current) {
+        console.log('📊 Fetching existing mill output data');
         setTimeout(() => {
           fetchExistingMillOutputData();
         }, 100);
       } else {
-        if (operationInProgressRef.current || justUpdatedRef.current) {
-          console.log('⏭️ Skipping data fetch - update in progress or just completed');
-        } else {
-          console.log('⚡ Add mode detected - skipping API call');
-        }
+        console.log('⏭️ Skipping data fetch - update in progress or just completed');
         setLoadingData(false);
       }
     } else if (!isOpen) {
@@ -1093,23 +1086,7 @@ export default function MillOutputForm({
   // Note: Removed dependency on isEditing and existingMillOutputs props
   // Form now fetches data independently from API like LabDataModal
 
-  // Reset form when order changes (but not when editing)
-  useEffect(() => {
-    if (order && !isEditing) {
-      setFormData({
-        orderId: order.orderId,
-        millOutputItems: [{
-          id: '1',
-          recdDate: '',
-          millBillNo: '',
-          finishedMtr: '',
-          quality: '', // Add quality field
-          additionalFinishedMtr: []
-        }]
-      });
-      setErrors({});
-    }
-  }, [order?.orderId, isEditing]);
+  // ⚡ FIX: Removed redundant useEffect that resets form on order change since fetchExistingMillOutputData handles the empty state
 
   // Function to load existing mill outputs from API data (LabDataModal pattern)
   const loadExistingMillOutputsFromData = async (millOutputsData: any[]) => {

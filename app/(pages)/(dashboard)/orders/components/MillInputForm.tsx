@@ -1385,33 +1385,11 @@ export default function MillInputForm({
       setHasExistingData(false);
       setLoadingExistingData(true);
 
-      // Smart API logic:
-      // - If isEditing is true → Fetch API (edit mode)
-      // - If isEditing is false → Skip API call (add mode)
-      if (isEditing) {
-        console.log('📊 Edit mode detected - fetching existing mill input data');
-        setTimeout(() => {
-          fetchExistingMillInputData();
-        }, 100);
-      } else {
-        console.log('⚡ Add mode detected - skipping API call');
-        setLoadingExistingData(false);
-        // Reset form to initial state for add mode
-        setFormData({
-          orderId: order.orderId || '',
-          mill: '',
-          millItems: [{
-            id: '1',
-            millDate: '',
-            chalanNo: '',
-            greighMtr: '',
-            pcs: '',
-            quality: '',
-            process: '',
-            additionalMeters: []
-          }],
-        });
-      }
+      // ⚡ FIX: Always fetch API to auto-populate existing data, regardless of isEditing
+      console.log('📊 Fetching existing mill input data');
+      setTimeout(() => {
+        fetchExistingMillInputData();
+      }, 100);
     } else if (!isOpen) {
       // Reset loading state when form is closed
       setHasExistingData(false);
@@ -1747,13 +1725,7 @@ export default function MillInputForm({
       return;
     }
 
-    // Double-check that we're in edit mode
-    if (!isEditing) {
-      console.log('⚠️ Not in edit mode, skipping data fetch');
-      setHasExistingData(false);
-      setLoadingExistingData(false);
-      return;
-    }
+    // ⚡ FIX: Removed isEditing check so we always fetch and auto-populate
 
     console.log('📡 Fetching mill inputs for order:', order.orderId);
 
@@ -1943,16 +1915,16 @@ export default function MillInputForm({
     }
   }, [order?.orderId, isEditing]);
 
-  // Initialize mill search when editing existing data
+  // Initialize mill search when existing data is loaded
   useEffect(() => {
-    if (isEditing && formData.mill && !millSearch) {
+    if (formData.mill && !millSearch) {
       const millName = getMillName(formData.mill);
       if (millName) {
         setMillSearch(millName);
         setSelectedMillName(millName);
       }
     }
-  }, [isEditing, formData.mill, millSearch]);
+  }, [formData.mill, millSearch]);
 
   // ⚡ FIX: Update selectedMillName immediately when localMills updates and there's a selected mill
   useEffect(() => {

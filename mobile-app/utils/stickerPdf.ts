@@ -3,12 +3,12 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
 interface StickerData {
-  type: 'sample' | 'fabric' | 'grey';
+  type: 'sample' | 'fabric' | 'grey' | 'finish-lot-stock';
   qualityCode?: string;
   qualityName: string;
   weaverName?: string;
   width?: number;
-  gsm?: number;
+  gsm?: string | number;
   content?: string;
   count?: string;
   rxP?: string;
@@ -18,6 +18,11 @@ interface StickerData {
   challanNumber?: string;
   piece?: number;
   meter?: number;
+  sequence?: string;
+  lotType?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
 }
 
 function generateStickerHtml(data: StickerData): string {
@@ -30,6 +35,7 @@ function generateStickerHtml(data: StickerData): string {
 
   let headerHtml = '';
   let tableContent = '';
+  let qrPayload = '';
 
   if (data.type === 'grey') {
     // Grey sticker: Brand + slogan, matches fabric sticker layout
@@ -111,6 +117,78 @@ function generateStickerHtml(data: StickerData): string {
         <td class="value" colspan="3">${data.remarks || ''}</td>
       </tr>
     `;
+  } else if (data.type === 'finish-lot-stock') {
+    // Finish Lot Stock Sticker
+    const qrData = encodeURIComponent(`Quality: ${data.qualityName}\nSeq: ${data.sequence || '-'}\nMeters: ${data.meter || 0}`);
+    headerHtml = `
+      <div class="header">
+        <div class="brand">VIRAL FABRICS</div>
+        <div class="slogan">FINISH LOT STOCK</div>
+      </div>
+    `;
+    tableContent = `
+      <tr>
+        <td class="label">Sequence</td>
+        <td class="value" colspan="2" style="font-size: 9pt; font-weight: bold; color: #d32f2f;">${data.sequence || '-'}</td>
+        <td rowspan="5" style="width: 25mm; padding: 2px; text-align: center; border-bottom: 0.5mm solid #000;">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrData}" style="width: 22mm; height: 22mm; object-fit: contain;" />
+        </td>
+      </tr>
+      <tr>
+        <td class="label">Quality Name</td>
+        <td class="value" colspan="2">${data.qualityName || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Lot Type</td>
+        <td class="value" colspan="2">${data.lotType || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Meters</td>
+        <td class="value" colspan="2">${data.meter ? `${data.meter} M` : '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Pieces</td>
+        <td class="value" colspan="2">${data.piece || '-'}</td>
+      </tr>
+    `;
+  } else if (data.type === 'finish-lot-stock') {
+    headerHtml = `
+      <div class="header">
+        <div class="brand">VIRAL FABRICS</div>
+        <div class="slogan">MFG &amp; SUPPLIER OF ALL TYPES OF EXPORT FABRICS</div>
+      </div>
+    `;
+    tableContent = `
+      <tr>
+        <td class="label">Quality Name</td>
+        <td class="value" colspan="3">${data.qualityName || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Sequence</td>
+        <td class="value">${data.sequence || '-'}</td>
+        <td class="right-label">Type</td>
+        <td class="right-value">${data.lotType || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Weaver</td>
+        <td class="value">${data.weaverName || '-'}</td>
+        <td class="right-label">W.Qual</td>
+        <td class="right-value">${data.weaverQuality || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Mill Name</td>
+        <td class="value">${data.millName || '-'}</td>
+        <td class="right-label">Proc</td>
+        <td class="right-value">${data.processInMill || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Meter</td>
+        <td class="value">${data.meter ? data.meter + ' M' : '-'}</td>
+        <td class="right-label">Piece</td>
+        <td class="right-value">${data.piece || '-'}</td>
+      </tr>
+    `;
+    qrPayload = `Quality: ${data.qualityName || '-'}\nSeq: ${data.sequence || '-'}\nType: ${data.lotType || '-'}\nWeaver: ${data.weaverName || '-'}\nW.Qual: ${data.weaverQuality || '-'}\nMill: ${data.millName || '-'}\nProc: ${data.processInMill || '-'}\nMeter: ${data.meter || '-'}\nPiece: ${data.piece || '-'}`;
   } else {
     // Sample sticker: Brand + slogan, matches website
     headerHtml = `
@@ -219,10 +297,25 @@ function generateStickerHtml(data: StickerData): string {
     margin-top: 0.5mm;
     text-transform: uppercase;
   }
-  .table-container {
-    width: 100%;
+  .body-row {
     flex: 1;
     display: flex;
+    flex-direction: row;
+  }
+  .table-container {
+    height: 100%;
+    display: flex;
+  }
+  .qr-container {
+    width: 24mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-left: 0.5mm solid #000;
+  }
+  .qr-container img {
+    width: 20mm;
+    height: 20mm;
   }
   table {
     width: 100%;
@@ -271,10 +364,17 @@ function generateStickerHtml(data: StickerData): string {
 <body>
 <div class="sticker">
   ${headerHtml}
-  <div class="table-container">
-    <table>
-      ${tableContent}
-    </table>
+  <div class="body-row">
+    <div class="table-container" style="${data.type === 'finish-lot-stock' ? 'width: 73mm;' : 'width: 100%;'}">
+      <table>
+        ${tableContent}
+      </table>
+    </div>
+    ${data.type === 'finish-lot-stock' ? `
+    <div class="qr-container">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrPayload)}" />
+    </div>
+    ` : ''}
   </div>
 </div>
 </body>

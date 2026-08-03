@@ -19,7 +19,7 @@ export interface SampleData {
   greighWidth?: number;
   finishWidth?: number;
   weight?: number;
-  gsm?: number;
+  gsm?: string | number;
   content?: string;
   danier?: string;
   count?: number;
@@ -167,7 +167,7 @@ export async function createSample(data: SampleData) {
     greighWidth: data.greighWidth ? parseFloat(String(data.greighWidth)) : 0,
     finishWidth: data.finishWidth ? parseFloat(String(data.finishWidth)) : 0,
     weight: data.weight ? parseFloat(String(data.weight)) : 0,
-    gsm: data.gsm ? parseFloat(String(data.gsm)) : 0,
+    gsm: data.gsm !== undefined && data.gsm !== null ? String(data.gsm).trim() : '',
     content: data.content ? sanitizeString(data.content.trim(), { maxLength: VALIDATION.CONTENT_MAX_LENGTH }) : '',
     danier: data.danier ? sanitizeString(data.danier.trim(), { maxLength: VALIDATION.DANIER_MAX_LENGTH }) : '',
     count: data.count ? parseFloat(String(data.count)) : 0,

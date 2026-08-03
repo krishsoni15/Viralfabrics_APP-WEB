@@ -37,6 +37,15 @@ export function cleanPoNumber(poNumber?: string | null): string {
   return idStr.replace(/^FY\s*-?\s*/i, '');
 }
 
+export function formatLeadTime(val: string | undefined | null): string {
+  if (!val) return '';
+  const trimmed = val.trim();
+  if (/^\d+$/.test(trimmed)) {
+    return `${trimmed} Days`;
+  }
+  return trimmed;
+}
+
 async function getBase64Image(url: string): Promise<{ dataUrl: string; format: string; width: number; height: number } | null> {
   try {
     let fetchUrl = url;
@@ -262,7 +271,7 @@ export async function generatePurchaseOrderPDF(po: any): Promise<jsPDF> {
   doc.setLineWidth(0.35);
   doc.line(margin, y, rightMargin, y);
 
-  // ─── 10. PCS/MTR & DELIVERY ROW ───
+  // ─── 10. ROW 1: PCS/MTR & DELIVERY ───
   y += 7.5;
   doc.setFont('helvetica', 'normal');
   doc.text('Pcs/Mtr : ', margin, y);
@@ -272,40 +281,42 @@ export async function generatePurchaseOrderPDF(po: any): Promise<jsPDF> {
   doc.setLineWidth(0.3);
   doc.line(margin + 17, y + 1, margin + 62, y + 1);
 
-  // Delivery on same line
+  // Delivery on same line (Right side)
   doc.setFont('helvetica', 'normal');
   doc.text('Delivery : ', margin + 85, y);
   doc.setFont('helvetica', 'bold');
-  doc.text(po.delivery || '', margin + 104, y);
+  doc.text(po.delivery || '', margin + 105, y);
   // Underline for Delivery
-  doc.line(margin + 103, y + 1, rightMargin, y + 1);
+  doc.line(margin + 104, y + 1, rightMargin, y + 1);
 
-  // ─── 11. RATE ROW ───
+  // ─── 11. ROW 2: RATE & GREIGH MTR ───
   y += 8.5;
   doc.setFont('helvetica', 'normal');
   doc.text('Rate', margin, y);
   doc.text(':', margin + 16, y);
   doc.setFont('helvetica', 'bold');
   const formattedRate = po.rate ? (/gst/i.test(po.rate) ? po.rate : `${po.rate} + GST`) : '';
-  doc.text(formattedRate, margin + 20, y);
+  doc.text(formattedRate, margin + 18, y);
   // Underline for Rate
-  doc.line(margin + 19, y + 1, margin + 62, y + 1);
+  doc.line(margin + 17, y + 1, margin + 62, y + 1);
 
-  // Greigh Lead Time on same row
+  // Greigh Mtr on same line (Right side)
   doc.setFont('helvetica', 'normal');
-  doc.text('Greigh Lead Time : ', margin + 85, y);
+  doc.text('Greigh Mtr : ', margin + 85, y);
   doc.setFont('helvetica', 'bold');
-  doc.text(po.greighLeadTime || '', margin + 120, y);
-  doc.line(margin + 119, y + 1, rightMargin, y + 1);
+  doc.text(po.greighMtr || '', margin + 105, y);
+  // Underline for Greigh Mtr
+  doc.line(margin + 104, y + 1, rightMargin, y + 1);
 
-  // ─── 11b. GREIGH MTR ROW ───
+  // ─── 11b. ROW 3: LEAD TIME ───
   y += 8.5;
+  // Lead Time on same line (Right side)
   doc.setFont('helvetica', 'normal');
-  doc.text('Greigh Mtr', margin, y);
-  doc.text(':', margin + 16, y);
+  doc.text('Lead Time : ', margin + 85, y);
   doc.setFont('helvetica', 'bold');
-  doc.text(po.greighMtr || '', margin + 20, y);
-  doc.line(margin + 19, y + 1, margin + 62, y + 1);
+  doc.text(formatLeadTime(po.greighLeadTime), margin + 105, y);
+  // Underline for Lead Time
+  doc.line(margin + 104, y + 1, rightMargin, y + 1);
 
   // ─── 12. PAYMENT TERMS ROW (Supports Multi-line Payment Terms) ───
   y += 8.5;

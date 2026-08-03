@@ -188,6 +188,27 @@ const SamplingCard = React.memo(function SamplingCard({
             </View>
           ) : null}
 
+          {/* Weaver & Mill info */}
+          {(item.weaverName || item.weaverQuality || item.millName) ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0', paddingTop: 8 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {item.weaverName ? <View style={{ backgroundColor: isDarkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}><Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#6ee7b7' : '#059669' }}>W: {item.weaverName}</Text></View> : null}
+                {item.weaverQuality ? <View style={{ backgroundColor: isDarkMode ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}><Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#fcd34d' : '#d97706' }}>WQ: {item.weaverQuality}</Text></View> : null}
+                {item.millName ? <View style={{ backgroundColor: isDarkMode ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}><Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#c4b5fd' : '#7c3aed' }}>Mill: {item.millName}</Text></View> : null}
+              </View>
+            </View>
+          ) : null}
+
+          {/* Process in Mill */}
+          {item.processInMill ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0', paddingTop: 8 }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Process in Mill</Text>
+              <Text style={{ fontSize: 12.5, color: isDarkMode ? '#67e8f9' : '#0891b2', lineHeight: 18, fontStyle: 'italic' }} numberOfLines={3}>
+                {item.processInMill}
+              </Text>
+            </View>
+          ) : null}
+
           {/* Notes row */}
           {item.notes ? (
             <View style={{ borderTopWidth: 1, borderTopColor: isDarkMode ? 'rgba(255,255,255,0.06)' : '#e2e8f0', paddingTop: 8 }}>
@@ -307,7 +328,7 @@ export default function SamplingScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<SamplingItem | null>(null);
-  const [formData, setFormData] = useState({ qualityName: '', whereToPut: '', notes: '', piece: '', meter: '' });
+  const [formData, setFormData] = useState({ qualityName: '', whereToPut: '', weaverName: '', weaverQuality: '', millName: '', processInMill: '', notes: '', piece: '', meter: '' });
   const [formImages, setFormImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
@@ -592,14 +613,14 @@ export default function SamplingScreen() {
 
   const openCreateForm = () => {
     setEditingItem(null);
-    setFormData({ qualityName: '', whereToPut: '', notes: '', piece: '', meter: '' });
+    setFormData({ qualityName: '', whereToPut: '', weaverName: '', weaverQuality: '', millName: '', processInMill: '', notes: '', piece: '', meter: '' });
     setFormImages([]);
     setShowForm(true);
   };
 
   const openEditForm = (item: SamplingItem) => {
     setEditingItem(item);
-    setFormData({ qualityName: item.qualityName || '', whereToPut: item.whereToPut || '', notes: item.notes || '', piece: item.piece?.toString() || '', meter: item.meter?.toString() || '' });
+    setFormData({ qualityName: item.qualityName || '', whereToPut: item.whereToPut || '', weaverName: item.weaverName || '', weaverQuality: item.weaverQuality || '', millName: item.millName || '', processInMill: item.processInMill || '', notes: item.notes || '', piece: item.piece?.toString() || '', meter: item.meter?.toString() || '' });
     setFormImages(item.images || []);
     setShowForm(true);
   };
@@ -645,6 +666,8 @@ export default function SamplingScreen() {
       const imageUrls = await uploadImages(formImages);
       const payload = {
         qualityName: formData.qualityName.trim(), whereToPut: formData.whereToPut.trim(),
+        weaverName: formData.weaverName.trim(), weaverQuality: formData.weaverQuality.trim(),
+        millName: formData.millName.trim(), processInMill: formData.processInMill.trim(),
         notes: formData.notes.trim(), piece: formData.piece ? Number(formData.piece) : 0,
         meter: formData.meter ? Number(formData.meter) : 0, images: imageUrls,
       };
@@ -1197,6 +1220,23 @@ export default function SamplingScreen() {
 
                 <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>Where To Put</Text>
                 <TextInput value={formData.whereToPut} onChangeText={t => setFormData(p => ({ ...p, whereToPut: t }))} placeholder="Location" placeholderTextColor={theme.inputPlaceholder} style={{ backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text, marginBottom: 14 }} />
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>Weaver Name</Text>
+                    <TextInput value={formData.weaverName} onChangeText={t => setFormData(p => ({ ...p, weaverName: t }))} placeholder="Weaver name" placeholderTextColor={theme.inputPlaceholder} style={{ backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text, marginBottom: 14 }} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>Weaver Quality</Text>
+                    <TextInput value={formData.weaverQuality} onChangeText={t => setFormData(p => ({ ...p, weaverQuality: t }))} placeholder="Weaver quality" placeholderTextColor={theme.inputPlaceholder} style={{ backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text, marginBottom: 14 }} />
+                  </View>
+                </View>
+
+                <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>Mill Name</Text>
+                <TextInput value={formData.millName} onChangeText={t => setFormData(p => ({ ...p, millName: t }))} placeholder="Mill name" placeholderTextColor={theme.inputPlaceholder} style={{ backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text, marginBottom: 14 }} />
+
+                <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>Process in Mill</Text>
+                <TextInput value={formData.processInMill} onChangeText={t => setFormData(p => ({ ...p, processInMill: t }))} placeholder="Enter process details..." placeholderTextColor={theme.inputPlaceholder} multiline numberOfLines={3} style={{ backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text, marginBottom: 14, minHeight: 70, textAlignVertical: 'top' }} />
 
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>

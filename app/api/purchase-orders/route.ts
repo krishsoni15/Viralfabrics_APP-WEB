@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate') || '';
     const endDate = searchParams.get('endDate') || '';
     const sort = searchParams.get('sort') || 'latest_first';
+    const status = searchParams.get('status') || '';
 
     // Build query
     const query: any = {
@@ -46,6 +47,21 @@ export async function GET(request: NextRequest) {
         }
       ]
     };
+
+    // Status filter
+    if (status) {
+      if (status === 'Pending') {
+        query.$and.push({
+          $or: [
+            { status: 'Pending' },
+            { status: { $exists: false } },
+            { status: null }
+          ]
+        });
+      } else {
+        query.$and.push({ status });
+      }
+    }
 
     // Company header filter
     if (companyHeader) {
@@ -213,7 +229,8 @@ export async function POST(request: NextRequest) {
       images,
       paymentTerms,
       specs,
-      notes
+      notes,
+      status
     } = body;
 
     if (!companyHeader || !['Viral Fabrics', 'Viral Enterprise'].includes(companyHeader)) {
@@ -317,7 +334,8 @@ export async function POST(request: NextRequest) {
       notes: notes?.trim() || '',
       financialYear: fyCode,
       createdBy: session.id,
-      softDeleted: false
+      softDeleted: false,
+      status: status || 'Pending'
     });
 
     return Response.json(

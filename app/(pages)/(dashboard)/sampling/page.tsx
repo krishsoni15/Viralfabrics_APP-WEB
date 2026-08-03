@@ -19,6 +19,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ArrowUpIcon,
+  ArrowDownTrayIcon,
   ListBulletIcon,
   CloudArrowUpIcon,
   EyeIcon,
@@ -33,11 +34,16 @@ import { useSession } from '../hooks/useSession';
 import CameraModal from '../components/CameraModal';
 import ImagePreviewModal from '../components/ImagePreviewModal';
 import { useRealtimeSync } from '@/app/hooks/useRealtimeSync';
+import { generateSampleStickerPDF, downloadSampleStickerPDFDirect } from '@/lib/pdfGenerator';
 
 interface Sampling {
   _id: string;
   qualityName: string;
   whereToPut?: string;
+  weaverName?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
   images: string[];
   notes: string;
   meter: number;
@@ -76,6 +82,10 @@ export default function SamplingPage() {
   const [formData, setFormData] = useState({
     qualityName: '',
     whereToPut: '',
+    weaverName: '',
+    weaverQuality: '',
+    millName: '',
+    processInMill: '',
     images: [] as string[],
     notes: '',
     meter: '' as string | number,
@@ -102,6 +112,13 @@ export default function SamplingPage() {
   const [showCamera, setShowCamera] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [pendingImages, setPendingImages] = useState<{ file?: File; url: string }[]>([]);
+
+  // Sticker Preview State
+  const [showStickerPreview, setShowStickerPreview] = useState(false);
+  const [stickerPreviewUrl, setStickerPreviewUrl] = useState<string | null>(null);
+  const [currentStickerItem, setCurrentStickerItem] = useState<Sampling | null>(null);
+  const [isLoadingStickerPreview, setIsLoadingStickerPreview] = useState(false);
+  const stickerBlobUrlRef = useRef<string | null>(null);
 
   // Animation Triggers
   const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
@@ -374,6 +391,10 @@ export default function SamplingPage() {
       setFormData({
         qualityName: item.qualityName,
         whereToPut: item.whereToPut || '',
+        weaverName: item.weaverName || '',
+        weaverQuality: item.weaverQuality || '',
+        millName: item.millName || '',
+        processInMill: item.processInMill || '',
         images: item.images || [],
         notes: item.notes || '',
         meter: item.meter,
@@ -385,6 +406,10 @@ export default function SamplingPage() {
       setFormData({
         qualityName: '',
         whereToPut: '',
+        weaverName: '',
+        weaverQuality: '',
+        millName: '',
+        processInMill: '',
         images: [],
         notes: '',
         meter: '',
@@ -445,6 +470,10 @@ export default function SamplingPage() {
       const payload = {
         qualityName: formData.qualityName.trim(),
         whereToPut: formData.whereToPut.trim(),
+        weaverName: formData.weaverName.trim(),
+        weaverQuality: formData.weaverQuality.trim(),
+        millName: formData.millName.trim(),
+        processInMill: formData.processInMill.trim(),
         images: uploadedUrls,
         notes: formData.notes.trim(),
         meter: formData.meter === '' ? 0 : Number(formData.meter),
@@ -606,6 +635,112 @@ export default function SamplingPage() {
       setIsDeleting(false);
     }
   };
+
+  // Handle sticker download - show preview first (or direct download on mobile)
+  const isMobileDevice = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  const handleStickerDownload = async (item: Sampling) => {
+    try {
+      const stickerData = {
+        qualityName: item.qualityName || '-',
+        whereToPut: item.whereToPut || undefined,
+        weaverName: item.weaverName || undefined,
+        weaverQuality: item.weaverQuality || undefined,
+        millName: item.millName || undefined,
+        processInMill: item.processInMill || undefined,
+        notes: item.notes || undefined,
+        meter: item.meter || undefined,
+        piece: item.piece || undefined,
+      };
+
+      // On mobile devices, download directly without preview
+      if (isMobileDevice) {
+        try {
+          downloadSampleStickerPDFDirect(stickerData);
+          showToast('success', 'Sticker PDF downloading...');
+        } catch {
+          showToast('error', 'Failed to download sticker. Please try again.');
+        }
+        return;
+      }
+
+      // Desktop: Show preview first
+      setIsLoadingStickerPreview(true);
+
+      const pdfDataUrl = generateSampleStickerPDF(stickerData);
+
+      try {
+        const base64Data = pdfDataUrl.split(',')[1] || pdfDataUrl.split('base64,')[1];
+        if (base64Data) {
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/pdf' });
+
+          if (stickerBlobUrlRef.current) {
+            URL.revokeObjectURL(stickerBlobUrlRef.current);
+            stickerBlobUrlRef.current = null;
+          }
+
+          const blobUrl = URL.createObjectURL(blob);
+          stickerBlobUrlRef.current = blobUrl;
+
+          setStickerPreviewUrl(blobUrl);
+          setCurrentStickerItem(item);
+          setShowStickerPreview(true);
+          setTimeout(() => setIsLoadingStickerPreview(false), 500);
+        } else {
+          setStickerPreviewUrl(pdfDataUrl);
+          setCurrentStickerItem(item);
+          setShowStickerPreview(true);
+          setTimeout(() => setIsLoadingStickerPreview(false), 500);
+        }
+      } catch {
+        setStickerPreviewUrl(pdfDataUrl);
+        setCurrentStickerItem(item);
+        setShowStickerPreview(true);
+        setTimeout(() => setIsLoadingStickerPreview(false), 500);
+      }
+    } catch {
+      setIsLoadingStickerPreview(false);
+      showToast('error', 'Failed to generate sticker preview. Please try again.');
+    }
+  };
+
+  const handleFinalStickerDownload = useCallback(() => {
+    if (!currentStickerItem) {
+      showToast('error', 'No item selected for download');
+      return;
+    }
+    try {
+      const stickerData = {
+        qualityName: currentStickerItem.qualityName || '-',
+        whereToPut: currentStickerItem.whereToPut || undefined,
+        weaverName: currentStickerItem.weaverName || undefined,
+        weaverQuality: currentStickerItem.weaverQuality || undefined,
+        millName: currentStickerItem.millName || undefined,
+        processInMill: currentStickerItem.processInMill || undefined,
+        notes: currentStickerItem.notes || undefined,
+        meter: currentStickerItem.meter || undefined,
+        piece: currentStickerItem.piece || undefined,
+      };
+      downloadSampleStickerPDFDirect(stickerData);
+
+      if (stickerBlobUrlRef.current) {
+        URL.revokeObjectURL(stickerBlobUrlRef.current);
+        stickerBlobUrlRef.current = null;
+      }
+      setShowStickerPreview(false);
+      setStickerPreviewUrl(null);
+      setCurrentStickerItem(null);
+      showToast('success', 'Sticker PDF downloaded successfully!');
+    } catch {
+      showToast('error', 'Failed to download sticker PDF. Please try again.');
+    }
+  }, [currentStickerItem]);
 
   const handleSortChange = (field: string) => {
     let order = 'desc';
@@ -978,6 +1113,26 @@ export default function SamplingPage() {
                         </th>
                         <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                           <div className="flex items-center space-x-2">
+                            <span>Weaver Name</span>
+                          </div>
+                        </th>
+                        <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="flex items-center space-x-2">
+                            <span>Weaver Quality</span>
+                          </div>
+                        </th>
+                        <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="flex items-center space-x-2">
+                            <span>Mill Name</span>
+                          </div>
+                        </th>
+                        <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="flex items-center space-x-2">
+                            <span>Process in Mill</span>
+                          </div>
+                        </th>
+                        <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="flex items-center space-x-2">
                             <DocumentTextIcon className="h-4 w-4" />
                             <span>Notes</span>
                           </div>
@@ -1093,6 +1248,14 @@ export default function SamplingPage() {
                             <span className="truncate max-w-[150px]" title={item.whereToPut}>{item.whereToPut}</span>
                           </div>
                         )}
+                        {(item.weaverName || item.weaverQuality || item.millName) && (
+                          <div className="flex flex-wrap gap-1.5 mt-1.5">
+                            {item.weaverName && <span className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md">W: {item.weaverName}</span>}
+                            {item.weaverQuality && <span className="text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md">WQ: {item.weaverQuality}</span>}
+                            {item.millName && <span className="text-[10px] font-semibold bg-violet-500/10 text-violet-600 dark:text-violet-400 px-2 py-0.5 rounded-md">Mill: {item.millName}</span>}
+                          </div>
+                        )}
+                        {item.processInMill && <p className="text-xs mt-1.5 line-clamp-2 text-cyan-600 dark:text-cyan-400 italic" title={item.processInMill}>Process: {item.processInMill}</p>}
                         {item.notes && <p className="text-sm mt-2 line-clamp-2 text-gray-500 dark:text-gray-400" title={item.notes}>{item.notes}</p>}
                         <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-dashed dark:border-slate-700/80 border-slate-200">
                           <div className="text-left">
@@ -1107,6 +1270,9 @@ export default function SamplingPage() {
                         <div className="mt-4 flex items-center gap-2">
                           <button onClick={() => handleOpenForm('edit', item)} className={`flex-1 flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-semibold border transition-all ${isDarkMode ? 'border-gray-700 hover:bg-slate-750 text-gray-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'}`}>
                             <PencilIcon className="h-3.5 w-3.5" /><span>Edit</span>
+                          </button>
+                          <button onClick={() => handleStickerDownload(item)} className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'border-blue-500/20 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/40' : 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'}`} title="Download Sticker">
+                            <ArrowDownTrayIcon className="h-4 w-4" />
                           </button>
                           {isMaster && (
                             <button onClick={() => { setSelectedItem(item); setShowDeleteModal(true); }} className="p-2 rounded-xl border border-red-500/20 text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-all cursor-pointer">
@@ -1141,6 +1307,18 @@ export default function SamplingPage() {
                           <MapPinIcon className="h-4 w-4" />
                           <span>Where to Put</span>
                         </div>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span>Weaver Name</span>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span>Weaver Quality</span>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span>Mill Name</span>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span>Process in Mill</span>
                       </th>
                       <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                         <div className="flex items-center space-x-2">
@@ -1195,6 +1373,10 @@ export default function SamplingPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap font-semibold">{item.qualityName}</td>
                           <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.whereToPut || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.weaverName || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.weaverQuality || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.millName || '-'}</td>
+                          <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={item.processInMill}>{item.processInMill || '-'}</td>
                           <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={item.notes}>{item.notes || '-'}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-blue-500">{item.meter} M</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-purple-500">{item.piece}</td>
@@ -1202,6 +1384,9 @@ export default function SamplingPage() {
                             <div className="flex items-center justify-center space-x-2">
                               <button onClick={() => handleOpenForm('edit', item)} className="p-1.5 rounded-lg hover:bg-slate-700/10 dark:hover:bg-slate-200/10 text-blue-500 transition-colors" title="Edit Item">
                                 <PencilIcon className="h-4.5 w-4.5" />
+                              </button>
+                              <button onClick={() => handleStickerDownload(item)} className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-blue-400 hover:bg-blue-500/20' : 'text-blue-600 hover:bg-blue-50'}`} title="Download Sticker">
+                                <ArrowDownTrayIcon className="h-4.5 w-4.5" />
                               </button>
                               {isMaster && (
                                 <button onClick={() => { setSelectedItem(item); setShowDeleteModal(true); }} className="p-1.5 rounded-lg hover:bg-slate-700/10 dark:hover:bg-slate-200/10 text-red-500 transition-colors" title="Delete Item">
@@ -1300,6 +1485,51 @@ export default function SamplingPage() {
                   onChange={(e) => setFormData(prev => ({ ...prev, whereToPut: e.target.value }))}
                   className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Weaver Name</label>
+                  <input
+                    type="text"
+                    placeholder="Enter weaver name..."
+                    value={formData.weaverName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, weaverName: e.target.value }))}
+                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Weaver Quality</label>
+                  <input
+                    type="text"
+                    placeholder="Enter weaver quality..."
+                    value={formData.weaverQuality}
+                    onChange={(e) => setFormData(prev => ({ ...prev, weaverQuality: e.target.value }))}
+                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Mill Name</label>
+                  <input
+                    type="text"
+                    placeholder="Enter mill name..."
+                    value={formData.millName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, millName: e.target.value }))}
+                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Process in Mill</label>
+                  <textarea
+                    placeholder="Enter process details..."
+                    value={formData.processInMill}
+                    onChange={(e) => setFormData(prev => ({ ...prev, processInMill: e.target.value }))}
+                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all resize-none h-20 ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
+                  />
+                </div>
               </div>
 
               <div>
@@ -1527,6 +1757,79 @@ export default function SamplingPage() {
         initialIndex={showImagePreview ? showImagePreview.index : 0}
         isDarkMode={isDarkMode}
       />
+
+      {/* Sticker Preview Modal */}
+      {showStickerPreview && currentStickerItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fade-in backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              if (stickerBlobUrlRef.current) {
+                URL.revokeObjectURL(stickerBlobUrlRef.current);
+                stickerBlobUrlRef.current = null;
+              }
+              setShowStickerPreview(false);
+              setStickerPreviewUrl(null);
+              setCurrentStickerItem(null);
+            }
+          }}
+        >
+          <div
+            className={`relative w-full max-w-4xl h-[90vh] rounded-xl overflow-hidden shadow-2xl ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={`flex items-center justify-between p-4 border-b ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'}`}>
+              <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                Sample Sticker Preview
+              </h3>
+              <div className="flex items-center space-x-2">
+                {stickerPreviewUrl && !isLoadingStickerPreview && (
+                  <button
+                    onClick={handleFinalStickerDownload}
+                    className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center space-x-2 ${isDarkMode
+                      ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
+                      : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
+                    }`}
+                  >
+                    <ArrowDownTrayIcon className="h-5 w-5" />
+                    <span>Download</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (stickerBlobUrlRef.current) {
+                      URL.revokeObjectURL(stickerBlobUrlRef.current);
+                      stickerBlobUrlRef.current = null;
+                    }
+                    setShowStickerPreview(false);
+                    setStickerPreviewUrl(null);
+                    setCurrentStickerItem(null);
+                  }}
+                  className={`p-2 rounded-lg transition-all duration-200 hover:rotate-90 hover:scale-110 active:scale-95 ${isDarkMode
+                    ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                  }`}
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+            <div className="h-[calc(100%-4rem)] overflow-auto">
+              {isLoadingStickerPreview ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-600'}`}></div>
+                </div>
+              ) : stickerPreviewUrl ? (
+                <iframe
+                  src={stickerPreviewUrl}
+                  className="w-full h-full"
+                  title="Sticker Preview"
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

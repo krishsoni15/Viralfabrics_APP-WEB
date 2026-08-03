@@ -318,7 +318,7 @@ const GroupedFabricCard = React.memo(function GroupedFabricCard({
           const hasWeight = w.weight !== undefined && w.weight !== null && Number(w.weight) > 0;
           const hasGreighWidth = w.greighWidth !== undefined && w.greighWidth !== null && Number(w.greighWidth) > 0;
           const hasFinishWidth = w.finishWidth !== undefined && w.finishWidth !== null && Number(w.finishWidth) > 0;
-          const hasGsm = w.gsm !== undefined && w.gsm !== null && Number(w.gsm) > 0;
+          const hasGsm = w.gsm !== undefined && w.gsm !== null && String(w.gsm).trim() !== '';
 
           return (
             <View
@@ -736,7 +736,7 @@ export default function FabricsScreen() {
           greighWidth: w.greighWidth ? Number(w.greighWidth) : 0,
           finishWidth: w.finishWidth ? Number(w.finishWidth) : 0,
           weight: w.weight ? Number(w.weight) : 0,
-          gsm: w.gsm ? Number(w.gsm) : 0,
+          gsm: w.gsm ? String(w.gsm).trim() : '',
           content: w.content.trim(),
           danier: w.danier.trim(),
           count: w.count ? Number(w.count) : 0,
@@ -760,7 +760,7 @@ export default function FabricsScreen() {
           greighWidth: w.greighWidth ? Number(w.greighWidth) : 0,
           finishWidth: w.finishWidth ? Number(w.finishWidth) : 0,
           weight: w.weight ? Number(w.weight) : 0,
-          gsm: w.gsm ? Number(w.gsm) : 0,
+          gsm: w.gsm ? String(w.gsm).trim() : '',
           content: w.content.trim(),
           danier: w.danier.trim(),
           count: w.count ? Number(w.count) : 0,
@@ -843,7 +843,7 @@ export default function FabricsScreen() {
         qualityName: groupData.qualityName || '',
         weaverName: weaverData.weaver || '',
         width: weaverData.finishWidth ? Number(weaverData.finishWidth) : undefined,
-        gsm: weaverData.gsm ? Number(weaverData.gsm) : undefined,
+        gsm: weaverData.gsm ? String(weaverData.gsm).trim() : undefined,
         content: weaverData.content || '',
         count: countVal || undefined,
         rxP: rxPVal || undefined,
@@ -1787,7 +1787,7 @@ export default function FabricsScreen() {
 
                       <View style={{ flexDirection: 'row', gap: 10 }}>
                         <View style={{ flex: 1 }}>{renderInput('Weight (KG)', w.weight, (t) => updateWeaver(wIdx, 'weight', t), 'e.g., 8.0', 'numeric')}</View>
-                        <View style={{ flex: 1 }}>{renderInput('GSM', w.gsm, (t) => updateWeaver(wIdx, 'gsm', t), 'e.g., 72.5', 'numeric')}</View>
+                        <View style={{ flex: 1 }}>{renderInput('GSM', w.gsm, (t) => updateWeaver(wIdx, 'gsm', t), 'e.g., 72.5 or 100-150', 'default')}</View>
                       </View>
 
                       {renderInput('Content', w.content, (t) => updateWeaver(wIdx, 'content', t), 'e.g., 100% Polyester')}

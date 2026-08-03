@@ -633,22 +633,24 @@ const OrderCard = React.memo(function OrderCard({
 
                     {/* Icon Actions */}
                     <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <TouchableOpacity
-                        onPress={() => onDownloadPDF(item._id!, idx)}
-                        activeOpacity={0.7}
-                        style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: 14,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: isDarkMode ? 'rgba(59,130,246,0.15)' : '#eff6ff',
-                          borderWidth: 1,
-                          borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
-                        }}
-                      >
-                        <FileText size={12} color={Colors.primary[600]} />
-                      </TouchableOpacity>
+                      {isMaster && (
+                        <TouchableOpacity
+                          onPress={() => onDownloadPDF(item._id!, idx)}
+                          activeOpacity={0.7}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 14,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: isDarkMode ? 'rgba(59,130,246,0.15)' : '#eff6ff',
+                            borderWidth: 1,
+                            borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
+                          }}
+                        >
+                          <FileText size={12} color={Colors.primary[600]} />
+                        </TouchableOpacity>
+                      )}
 
                       {isMaster && (
                         <TouchableOpacity
@@ -732,7 +734,8 @@ const OrderCard = React.memo(function OrderCard({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 onPress={() => onGreyPill(item)}
-                activeOpacity={0.7}
+                disabled={isParty}
+                activeOpacity={isParty ? 1 : 0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hasGrey ? (isDarkMode ? 'rgba(148, 163, 184, 0.15)' : 'rgba(100, 116, 139, 0.12)') : (isDarkMode ? '#334155' : '#f1f5f9'), borderWidth: 1.5, borderColor: hasGrey ? (isDarkMode ? '#94a3b8' : '#64748b') : (isDarkMode ? '#475569' : '#cbd5e1') }}
               >
@@ -753,7 +756,8 @@ const OrderCard = React.memo(function OrderCard({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 onPress={() => onLabPill(item)}
-                activeOpacity={0.7}
+                disabled={isParty}
+                activeOpacity={isParty ? 1 : 0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hasLab ? 'rgba(139,92,246,0.15)' : (isDarkMode ? '#334155' : '#f1f5f9'), borderWidth: 1.5, borderColor: hasLab ? '#8b5cf6' : (isDarkMode ? '#475569' : '#cbd5e1') }}
               >
@@ -770,7 +774,8 @@ const OrderCard = React.memo(function OrderCard({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 onPress={() => onMillInputPill(item)}
-                activeOpacity={0.7}
+                disabled={isParty}
+                activeOpacity={isParty ? 1 : 0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hasMillInput ? 'rgba(6,182,212,0.15)' : (isDarkMode ? '#334155' : '#f1f5f9'), borderWidth: 1.5, borderColor: hasMillInput ? Colors.info[500] : (isDarkMode ? '#475569' : '#cbd5e1') }}
               >
@@ -791,7 +796,8 @@ const OrderCard = React.memo(function OrderCard({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 onPress={() => onMillOutputPill(item)}
-                activeOpacity={0.7}
+                disabled={isParty}
+                activeOpacity={isParty ? 1 : 0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hasMillOutput ? 'rgba(34,197,94,0.15)' : (isDarkMode ? '#334155' : '#f1f5f9'), borderWidth: 1.5, borderColor: hasMillOutput ? Colors.success[500] : (isDarkMode ? '#475569' : '#cbd5e1') }}
               >
@@ -812,7 +818,8 @@ const OrderCard = React.memo(function OrderCard({
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 onPress={() => onDispatchPill(item)}
-                activeOpacity={0.7}
+                disabled={isParty}
+                activeOpacity={isParty ? 1 : 0.7}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hasDispatch ? 'rgba(234, 88, 12, 0.15)' : (isDarkMode ? '#334155' : '#f1f5f9'), borderWidth: 1.5, borderColor: hasDispatch ? '#ea580c' : (isDarkMode ? '#475569' : '#cbd5e1') }}
               >
@@ -871,10 +878,12 @@ const OrderCard = React.memo(function OrderCard({
                   <Text style={{ color: Colors.primary[600], fontSize: 12, fontWeight: '700' }}>Details</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => onViewLogs(item)} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : '#f1f5f9', borderWidth: 1, borderColor: borderColor, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 4 }}>
-                  <History size={13} color={theme.textSecondary} />
-                  <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}>Logs</Text>
-                </TouchableOpacity>
+                {!isParty && (
+                  <TouchableOpacity onPress={() => onViewLogs(item)} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : '#f1f5f9', borderWidth: 1, borderColor: borderColor, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 4 }}>
+                    <History size={13} color={theme.textSecondary} />
+                    <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}>Logs</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -2661,13 +2670,15 @@ export default function OrdersScreen() {
 
   // Status Change Dialog Handler
   const handleStatusBadgePress = useCallback((order: Order) => {
+    if (isParty) return;
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setStatusModalOrder(order);
     setShowStatusModal(true);
-  }, []);
+  }, [isParty]);
 
   // Pill Handlers (Edit first if exists, else Add)
   const handleGreyPill = useCallback(async (order: Order) => {
+    if (isParty) return;
     setSelectedOrder(order);
     setSelectedOrderId(order.orderId);
     setSelectedDbOrderId(order._id);
@@ -2690,9 +2701,10 @@ export default function OrdersScreen() {
     } catch (err) {
       console.log('Error fetching fresh grey info:', err);
     }
-  }, []);
+  }, [isParty]);
 
   const handleMillInputPill = useCallback(async (order: Order) => {
+    if (isParty) return;
     setSelectedOrder(order);
     setSelectedOrderId(order.orderId);
     setSelectedDbOrderId(order._id);
@@ -2715,9 +2727,10 @@ export default function OrdersScreen() {
     } catch (err) {
       console.log('Error fetching fresh mill inputs:', err);
     }
-  }, []);
+  }, [isParty]);
 
   const handleMillOutputPill = useCallback(async (order: Order) => {
+    if (isParty) return;
     setSelectedOrder(order);
     setSelectedOrderId(order.orderId);
     setSelectedDbOrderId(order._id);
@@ -2740,14 +2753,15 @@ export default function OrdersScreen() {
     } catch (err) {
       console.log('Error fetching fresh mill outputs:', err);
     }
-  }, []);
+  }, [isParty]);
 
   const handleDispatchPill = useCallback(async (order: Order) => {
+    if (isParty) return;
     setSelectedOrder(order);
     setSelectedOrderId(order.orderId);
     setSelectedDbOrderId(order._id);
     
-    // Initialize with local cached data immediately
+    // Initialize with local cached data immediately for instant UI feedback
     const localDispatches = order.dispatches || [];
     setDispatchesList(localDispatches);
     
@@ -2759,12 +2773,7 @@ export default function OrdersScreen() {
     }
     setActiveModal('dispatch');
 
-    // ⚡ OPTIMIZATION: If there is no existing data, do NOT trigger any API call or show loading spinner
-    if (localDispatches.length === 0) {
-      return;
-    }
-
-    // ⚡ OPTIMIZATION: If data exists, fetch fresh updates silently in the background (no loading indicator)
+    // Always fetch fresh data from the API to ensure we have the latest dispatches
     try {
       const { data } = await api.get('/api/dispatch', { params: { orderId: order.orderId, t: Date.now() } });
       const records = data?.data?.dispatches || (Array.isArray(data?.data) ? data.data : data?.data || []);
@@ -2777,7 +2786,7 @@ export default function OrdersScreen() {
     } catch (err) {
       console.log('Error fetching fresh dispatches:', err);
     }
-  }, []);
+  }, [isParty]);
 
   const openLabFormForItem = useCallback((orderItem: any, orderId: string, dbOrderId: string) => {
     setSelectedOrderId(orderId);
@@ -2815,6 +2824,7 @@ export default function OrdersScreen() {
   }, []);
 
   const handleLabPill = useCallback((order: Order) => {
+    if (isParty) return;
     setSelectedOrder(order);
     if (!order.items || order.items.length === 0) {
       addToast({ type: 'error', title: 'This order has no items' });
@@ -2826,7 +2836,7 @@ export default function OrdersScreen() {
       setLabItemSelectorOrder(order);
       setShowLabItemSelector(true);
     }
-  }, [openLabFormForItem]);
+  }, [openLabFormForItem, isParty]);
 
   const handleViewLogs = useCallback((order: Order) => {
     setSelectedOrderForLogs(order);
@@ -2993,6 +3003,10 @@ export default function OrdersScreen() {
   }, []);
 
   const handleDownloadPDF = useCallback((orderId: string, itemIndex: number) => {
+    if (!isMaster) {
+      addToast({ type: 'error', title: 'Access Denied', message: 'Only master can download this PDF.' });
+      return;
+    }
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }

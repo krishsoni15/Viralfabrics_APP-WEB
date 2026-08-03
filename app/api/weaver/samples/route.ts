@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
         greighWidth: greighWidth ? parseFloat(String(greighWidth)) : undefined,
         finishWidth: finishWidth ? parseFloat(String(finishWidth)) : undefined,
         weight: weight ? parseFloat(String(weight)) : undefined,
-        gsm: gsm ? parseFloat(String(gsm)) : undefined,
+        gsm: gsm !== undefined && gsm !== null ? String(gsm).trim() : undefined,
         content: content?.trim(),
         danier: danier?.trim(),
         count: count ? parseFloat(String(count)) : undefined,

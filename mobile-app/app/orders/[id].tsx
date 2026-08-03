@@ -1065,9 +1065,15 @@ export default function OrderDetailScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <OrderTypeBadge type={order.orderType} size="md" />
               </View>
-              <TouchableOpacity onPress={handleStatusChange} activeOpacity={0.7} disabled={isParty}>
-                <StatusBadge status={order.status || 'Not set'} size="md" />
-              </TouchableOpacity>
+              {isParty ? (
+                <View>
+                  <StatusBadge status={order.status || 'Not set'} size="md" />
+                </View>
+              ) : (
+                <TouchableOpacity onPress={handleStatusChange} activeOpacity={0.7}>
+                  <StatusBadge status={order.status || 'Not set'} size="md" />
+                </TouchableOpacity>
+              )}
             </View>
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.text, marginBottom: 8 }}>{partyName}</Text>
             {!!order.contactPhone && <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 2 }}>📞 {order.contactPhone}</Text>}
@@ -1220,18 +1226,20 @@ export default function OrderDetailScreen() {
                   <View style={{ marginTop: 10, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[50], padding: 10, borderRadius: 10, borderWidth: 1, borderColor: theme.borderLight }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                       <Text style={{ fontSize: 10, fontWeight: '800', color: theme.textSecondary, letterSpacing: 0.5 }}>LAB DATA</Text>
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity onPress={() => handleEditLab(item)} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 3, paddingHorizontal: 6, borderRadius: 4, backgroundColor: isDarkMode ? Colors.neutral[700] : Colors.neutral[200] }}>
-                          <Edit size={10} color={theme.text} />
-                          <Text style={{ fontSize: 10, fontWeight: '600', color: theme.text }}>Edit</Text>
-                        </TouchableOpacity>
-                        {isMaster && (
-                          <TouchableOpacity onPress={() => handleDeleteLab(item._id || '')} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 3, paddingHorizontal: 6, borderRadius: 4, backgroundColor: 'rgba(239, 68, 68, 0.2)' }}>
-                            <Trash2 size={10} color={Colors.error[600]} />
-                            <Text style={{ fontSize: 10, fontWeight: '600', color: Colors.error[600] }}>Delete</Text>
+                      {!isParty && (
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity onPress={() => handleEditLab(item)} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 3, paddingHorizontal: 6, borderRadius: 4, backgroundColor: isDarkMode ? Colors.neutral[700] : Colors.neutral[200] }}>
+                            <Edit size={10} color={theme.text} />
+                            <Text style={{ fontSize: 10, fontWeight: '600', color: theme.text }}>Edit</Text>
                           </TouchableOpacity>
-                        )}
-                      </View>
+                          {isMaster && (
+                            <TouchableOpacity onPress={() => handleDeleteLab(item._id || '')} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 3, paddingHorizontal: 6, borderRadius: 4, backgroundColor: 'rgba(239, 68, 68, 0.2)' }}>
+                              <Trash2 size={10} color={Colors.error[600]} />
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: Colors.error[600] }}>Delete</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
                     </View>
                     <View style={{ gap: 2 }}>
                       <Text style={{ fontSize: 12, color: theme.textSecondary }}>Sent: <Text style={{ fontWeight: '600', color: theme.text }}>{formatDate(item.labData.labSendDate)}</Text></Text>
@@ -1240,14 +1248,14 @@ export default function OrderDetailScreen() {
                       {item.labData.status ? <StatusBadge status={item.labData.status} style={{ marginTop: 4, alignSelf: 'flex-start' }} /> : null}
                     </View>
                   </View>
-                ) : (
+                ) : !isParty ? (
                   <View style={{ marginTop: 10, flexDirection: 'row', justifyContent: 'flex-start' }}>
                     <TouchableOpacity onPress={() => handleAddLab(item)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDarkMode ? 'rgba(147, 51, 234, 0.2)' : '#f3e8ff', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: isDarkMode ? 'rgba(147, 51, 234, 0.3)' : '#e9d5ff' }}>
                       <Beaker size={12} color={isDarkMode ? '#c084fc' : '#9333ea'} />
                       <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#c084fc' : '#9333ea' }}>Add Lab Data</Text>
                     </TouchableOpacity>
                   </View>
-                )}
+                ) : null}
               </View>
             );
           }) : <Text style={{ fontSize: 13, color: theme.textSecondary, paddingTop: 8 }}>No items</Text>}
@@ -1255,12 +1263,14 @@ export default function OrderDetailScreen() {
 
         {/* Grey Information */}
         <CollapsibleSection title="Grey Information" icon={<FileText size={18} color={Colors.neutral[500]} />} count={greyInfo.length} isLoading={greyQuery.isLoading}>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, marginTop: 4 }}>
-            <TouchableOpacity onPress={handleAddGrey} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100], paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: isDarkMode ? Colors.neutral[700] : Colors.neutral[300] }}>
-              <Plus size={14} color={isDarkMode ? Colors.neutral[300] : Colors.neutral[600]} />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? Colors.neutral[300] : Colors.neutral[600] }}>Add Grey Info</Text>
-            </TouchableOpacity>
-          </View>
+          {!isParty && (
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, marginTop: 4 }}>
+              <TouchableOpacity onPress={handleAddGrey} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100], paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: isDarkMode ? Colors.neutral[700] : Colors.neutral[300] }}>
+                <Plus size={14} color={isDarkMode ? Colors.neutral[300] : Colors.neutral[600]} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? Colors.neutral[300] : Colors.neutral[600] }}>Add Grey Info</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           {greyInfo.length ? greyInfo.map((g: any, i: number) => (
             <View key={g._id || i} style={{ paddingVertical: 12, borderBottomWidth: i < greyInfo.length - 1 ? 1 : 0, borderBottomColor: theme.borderLight, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <View style={{ flex: 1, paddingRight: 8, gap: 3 }}>
@@ -1274,28 +1284,32 @@ export default function OrderDetailScreen() {
                   {!!g.date && <Text style={{ fontSize: 12, color: theme.textSecondary }}>{formatDate(g.date)}</Text>}
                 </View>
               </View>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={() => handleEditGrey(g)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100] }}>
-                  <Edit size={14} color={theme.textSecondary} />
-                </TouchableOpacity>
-                {isMaster && (
-                  <TouchableOpacity onPress={() => handleDeleteGrey(g._id)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }}>
-                    <Trash2 size={14} color={Colors.error[600]} />
+              {!isParty && (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity onPress={() => handleEditGrey(g)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100] }}>
+                    <Edit size={14} color={theme.textSecondary} />
                   </TouchableOpacity>
-                )}
-              </View>
+                  {isMaster && (
+                    <TouchableOpacity onPress={() => handleDeleteGrey(g._id)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }}>
+                      <Trash2 size={14} color={Colors.error[600]} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </View>
           )) : <Text style={{ fontSize: 13, color: theme.textSecondary, paddingTop: 8 }}>No grey information</Text>}
         </CollapsibleSection>
 
         {/* Mill Inputs */}
         <CollapsibleSection title="Mill Inputs" icon={<FileInput size={18} color={Colors.primary[600]} />} count={millInputs.length} isLoading={millInputQuery.isLoading}>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, marginTop: 4 }}>
-            <TouchableOpacity onPress={handleAddMillInput} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : Colors.primary[50], paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: isDarkMode ? 'rgba(37, 99, 235, 0.3)' : Colors.primary[200] }}>
-              <Plus size={14} color={isDarkMode ? Colors.primary[400] : Colors.primary[600]} />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>Add Mill Input</Text>
-            </TouchableOpacity>
-          </View>
+          {!isParty && (
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, marginTop: 4 }}>
+              <TouchableOpacity onPress={handleAddMillInput} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : Colors.primary[50], paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: isDarkMode ? 'rgba(37, 99, 235, 0.3)' : Colors.primary[200] }}>
+                <Plus size={14} color={isDarkMode ? Colors.primary[400] : Colors.primary[600]} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>Add Mill Input</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           {millInputs.length ? millInputs.map((m: any, i: number) => (
             <View key={m._id || i} style={{ paddingVertical: 12, borderBottomWidth: i < millInputs.length - 1 ? 1 : 0, borderBottomColor: theme.borderLight }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1321,16 +1335,18 @@ export default function OrderDetailScreen() {
                     </View>
                   )}
                 </View>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={() => handleEditMillInput(m)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100] }}>
-                  <Edit size={14} color={theme.textSecondary} />
-                </TouchableOpacity>
-                {isMaster && (
-                  <TouchableOpacity onPress={() => handleDeleteMillInput(m._id)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }}>
-                    <Trash2 size={14} color={Colors.error[600]} />
+              {!isParty && (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity onPress={() => handleEditMillInput(m)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100] }}>
+                    <Edit size={14} color={theme.textSecondary} />
                   </TouchableOpacity>
-                )}
-              </View>
+                  {isMaster && (
+                    <TouchableOpacity onPress={() => handleDeleteMillInput(m._id)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }}>
+                      <Trash2 size={14} color={Colors.error[600]} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
               </View>
             </View>
           )) : <Text style={{ fontSize: 13, color: theme.textSecondary, paddingTop: 8 }}>No mill inputs</Text>}
@@ -1338,12 +1354,14 @@ export default function OrderDetailScreen() {
 
         {/* Mill Outputs */}
         <CollapsibleSection title="Mill Outputs" icon={<FileOutput size={18} color={'#0d9488'} />} count={millOutputs.length} isLoading={millOutputQuery.isLoading}>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, marginTop: 4 }}>
-            <TouchableOpacity onPress={handleAddMillOutput} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDarkMode ? 'rgba(13, 148, 136, 0.2)' : '#ccfbf1', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: isDarkMode ? 'rgba(13, 148, 136, 0.3)' : '#99f6e4' }}>
-              <Plus size={14} color={isDarkMode ? '#2dd4bf' : '#0d9488'} />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? '#2dd4bf' : '#0d9488' }}>Add Mill Output</Text>
-            </TouchableOpacity>
-          </View>
+          {!isParty && (
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, marginTop: 4 }}>
+              <TouchableOpacity onPress={handleAddMillOutput} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDarkMode ? 'rgba(13, 148, 136, 0.2)' : '#ccfbf1', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: isDarkMode ? 'rgba(13, 148, 136, 0.3)' : '#99f6e4' }}>
+                <Plus size={14} color={isDarkMode ? '#2dd4bf' : '#0d9488'} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? '#2dd4bf' : '#0d9488' }}>Add Mill Output</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           {millOutputs.length ? millOutputs.map((m: any, i: number) => (
             <View key={m._id || i} style={{ paddingVertical: 12, borderBottomWidth: i < millOutputs.length - 1 ? 1 : 0, borderBottomColor: theme.borderLight }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1358,16 +1376,18 @@ export default function OrderDetailScreen() {
                     {!!m.recdDate && <Text style={{ fontSize: 11, color: theme.textSecondary }}>{formatDate(m.recdDate)}</Text>}
                   </View>
                 </View>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={() => handleEditMillOutput(m)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100] }}>
-                  <Edit size={14} color={theme.textSecondary} />
-                </TouchableOpacity>
-                {isMaster && (
-                  <TouchableOpacity onPress={() => handleDeleteMillOutput(m._id)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }}>
-                    <Trash2 size={14} color={Colors.error[600]} />
+              {!isParty && (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity onPress={() => handleEditMillOutput(m)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100] }}>
+                    <Edit size={14} color={theme.textSecondary} />
                   </TouchableOpacity>
-                )}
-              </View>
+                  {isMaster && (
+                    <TouchableOpacity onPress={() => handleDeleteMillOutput(m._id)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }}>
+                      <Trash2 size={14} color={Colors.error[600]} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
               </View>
             </View>
           )) : <Text style={{ fontSize: 13, color: theme.textSecondary, paddingTop: 8 }}>No mill outputs</Text>}
@@ -1375,12 +1395,14 @@ export default function OrderDetailScreen() {
 
         {/* Dispatches */}
         <CollapsibleSection title="Dispatches" icon={<Truck size={18} color={'#ea580c'} />} count={dispatches.length} isLoading={dispatchQuery.isLoading}>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, marginTop: 4 }}>
-            <TouchableOpacity onPress={handleAddDispatch} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDarkMode ? 'rgba(234, 88, 12, 0.2)' : '#ffedd5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: isDarkMode ? 'rgba(234, 88, 12, 0.3)' : '#fed7aa' }}>
-              <Plus size={14} color={isDarkMode ? '#fb923c' : '#ea580c'} />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? '#fb923c' : '#ea580c' }}>Add Dispatch</Text>
-            </TouchableOpacity>
-          </View>
+          {!isParty && (
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8, marginTop: 4 }}>
+              <TouchableOpacity onPress={handleAddDispatch} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDarkMode ? 'rgba(234, 88, 12, 0.2)' : '#ffedd5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: isDarkMode ? 'rgba(234, 88, 12, 0.3)' : '#fed7aa' }}>
+                <Plus size={14} color={isDarkMode ? '#fb923c' : '#ea580c'} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? '#fb923c' : '#ea580c' }}>Add Dispatch</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           {dispatches.length ? dispatches.map((d: any, i: number) => (
             <View key={d._id || i} style={{ paddingVertical: 12, borderBottomWidth: i < dispatches.length - 1 ? 1 : 0, borderBottomColor: theme.borderLight }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1399,16 +1421,18 @@ export default function OrderDetailScreen() {
                     {!!d.lrNo && <Text style={{ fontSize: 11, color: theme.textSecondary }}>LR: {d.lrNo}</Text>}
                   </View>
                 </View>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={() => handleEditDispatch(d)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100] }}>
-                  <Edit size={14} color={theme.textSecondary} />
-                </TouchableOpacity>
-                {isMaster && (
-                  <TouchableOpacity onPress={() => handleDeleteDispatch(d._id)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }}>
-                    <Trash2 size={14} color={Colors.error[600]} />
+              {!isParty && (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity onPress={() => handleEditDispatch(d)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100] }}>
+                    <Edit size={14} color={theme.textSecondary} />
                   </TouchableOpacity>
-                )}
-              </View>
+                  {isMaster && (
+                    <TouchableOpacity onPress={() => handleDeleteDispatch(d._id)} style={{ padding: 6, borderRadius: 6, backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }}>
+                      <Trash2 size={14} color={Colors.error[600]} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
               </View>
             </View>
           )) : <Text style={{ fontSize: 13, color: theme.textSecondary, paddingTop: 8 }}>No dispatches</Text>}

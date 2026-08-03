@@ -95,7 +95,7 @@ const SampleCard = React.memo(function SampleCard({
   const hasWeight = item.weight !== undefined && item.weight !== null && Number(item.weight) > 0;
   const hasGreighWidth = item.greighWidth !== undefined && item.greighWidth !== null && Number(item.greighWidth) > 0;
   const hasFinishWidth = item.finishWidth !== undefined && item.finishWidth !== null && Number(item.finishWidth) > 0;
-  const hasGsm = item.gsm !== undefined && item.gsm !== null && Number(item.gsm) > 0;
+  const hasGsm = item.gsm !== undefined && item.gsm !== null && String(item.gsm).trim() !== '';
 
   const gridCell = (label: string, value: string, color: string, hasDivider?: boolean) => (
     <View style={{ 
@@ -723,7 +723,7 @@ export default function WeaverDetailScreen() {
         greighWidth: formData.greighWidth ? Number(formData.greighWidth) : undefined,
         finishWidth: formData.finishWidth ? Number(formData.finishWidth) : undefined,
         weight: formData.weight ? Number(formData.weight) : undefined,
-        gsm: formData.gsm ? Number(formData.gsm) : undefined,
+        gsm: formData.gsm ? formData.gsm.trim() : undefined,
         content: formData.content.trim(), danier: formData.danier.trim(), count: formData.count.trim(),
         reed: formData.reed.trim(), pick: formData.pick.trim(),
         greighRate: formData.greighRate ? Number(formData.greighRate) : undefined,
@@ -815,7 +815,7 @@ export default function WeaverDetailScreen() {
         qualityName: (sample as any).qualityName || '',
         weaverName: weaver?.name || '',
         width: (sample as any).finishWidth ? Number((sample as any).finishWidth) : undefined,
-        gsm: (sample as any).gsm ? Number((sample as any).gsm) : undefined,
+        gsm: (sample as any).gsm ? String((sample as any).gsm).trim() : undefined,
         content: (sample as any).content || '',
         count: countVal || undefined,
         rxP: rxPVal || undefined,
@@ -852,7 +852,7 @@ export default function WeaverDetailScreen() {
         qualityName: sample.qualityName || '',
         weaverName: weaver?.name || '',
         width: sample.finishWidth ? Number(sample.finishWidth) : undefined,
-        gsm: sample.gsm ? Number(sample.gsm) : undefined,
+        gsm: sample.gsm ? String(sample.gsm).trim() : undefined,
         content: sample.content || '',
         count: countVal || undefined,
         rxP: rxPVal || undefined,
@@ -1437,7 +1437,7 @@ export default function WeaverDetailScreen() {
                     {renderFormField('Weight (KG)', formData.weight, 'weight', 'e.g., 8.0', 'numeric')}
                   </View>
                   <View style={{ flex: 1 }}>
-                    {renderFormField('GSM', formData.gsm, 'gsm', 'e.g., 72.5', 'numeric')}
+                    {renderFormField('GSM', formData.gsm, 'gsm', 'e.g., 72.5 or 100-150', 'default')}
                   </View>
                 </View>
 

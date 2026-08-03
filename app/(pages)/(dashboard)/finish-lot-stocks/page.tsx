@@ -26,17 +26,27 @@ import {
   Cog8ToothIcon,
   InformationCircleIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  ArrowDownTrayIcon,
+  QrCodeIcon
 } from '@heroicons/react/24/outline';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useSession } from '../hooks/useSession';
 import CameraModal from '../components/CameraModal';
 import ImagePreviewModal from '../components/ImagePreviewModal';
 import { useRealtimeSync } from '@/app/hooks/useRealtimeSync';
+import { generateFinishLotStickerPDF, downloadFinishLotStickerPDFDirect } from '@/lib/pdfGenerator';
+import QRCode from 'qrcode';
 
 interface FinishLotStock {
   _id: string;
   qualityName: string;
+  lotType: 'RFD' | 'OTHER';
+  sequence: string;
+  weaverName?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
   images: string[];
   meter: number;
   piece: number;
@@ -79,6 +89,11 @@ export default function FinishLotStockPage() {
   const [selectedStock, setSelectedStock] = useState<FinishLotStock | null>(null);
   const [formData, setFormData] = useState({
     qualityName: '',
+    lotType: 'RFD' as 'RFD' | 'OTHER',
+    weaverName: '',
+    weaverQuality: '',
+    millName: '',
+    processInMill: '',
     images: [] as string[],
     meter: '' as string | number,
     piece: '' as string | number
@@ -103,6 +118,18 @@ export default function FinishLotStockPage() {
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [showLimitDropdown, setShowLimitDropdown] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState<{ urls: string[]; index: number } | null>(null);
+  
+  // Sticker Preview State
+  const [showStickerPreview, setShowStickerPreview] = useState(false);
+  const [stickerPreviewUrl, setStickerPreviewUrl] = useState<string | null>(null);
+  const [currentStickerItem, setCurrentStickerItem] = useState<FinishLotStock | null>(null);
+  const [isLoadingStickerPreview, setIsLoadingStickerPreview] = useState(false);
+  const stickerBlobUrlRef = useRef<string | null>(null);
+
+  // QR Modal State
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrModalUrl, setQrModalUrl] = useState<string | null>(null);
+  const [currentQrStock, setCurrentQrStock] = useState<FinishLotStock | null>(null);
 
   // Animation Triggers matching sampling page
   const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
@@ -122,6 +149,9 @@ export default function FinishLotStockPage() {
     totalMeters: 0,
     uniqueQualities: 0
   });
+
+  const [filterLotType, setFilterLotType] = useState<'ALL' | 'RFD' | 'OTHER'>('ALL');
+  const [showLotTypeDropdown, setShowLotTypeDropdown] = useState(false);
 
   const sortDropdownRef = useRef<HTMLDivElement>(null);
   const limitDropdownRef = useRef<HTMLDivElement>(null);
@@ -226,12 +256,15 @@ export default function FinishLotStockPage() {
   // Click outside elements helpers
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node;
-      if (sortDropdownRef.current && !sortDropdownRef.current.contains(target)) {
+      const target = event.target as Element;
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(target as unknown as Node)) {
         setShowSortDropdown(false);
       }
-      if (limitDropdownRef.current && !limitDropdownRef.current.contains(target)) {
+      if (limitDropdownRef.current && !limitDropdownRef.current.contains(target as unknown as Node)) {
         setShowLimitDropdown(false);
+      }
+      if (target && target.closest && !target.closest('.lottype-dropdown')) {
+        setShowLotTypeDropdown(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -251,6 +284,9 @@ export default function FinishLotStockPage() {
       params.append('search', debouncedSearch);
       params.append('sortBy', sortBy);
       params.append('sortOrder', sortOrder);
+      if (filterLotType !== 'ALL') {
+        params.append('lotType', filterLotType);
+      }
 
       if (minMeter) params.append('minMeter', minMeter);
       if (maxMeter) params.append('maxMeter', maxMeter);
@@ -280,7 +316,7 @@ export default function FinishLotStockPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, limit, debouncedSearch, minMeter, maxMeter, minPiece, maxPiece, sortBy, sortOrder]);
+  }, [currentPage, limit, debouncedSearch, minMeter, maxMeter, minPiece, maxPiece, sortBy, sortOrder, filterLotType]);
 
   // Fetch qualities for autocomplete
   useEffect(() => {
@@ -387,6 +423,56 @@ export default function FinishLotStockPage() {
     }));
   };
 
+  const cleanupStickerUrl = useCallback(() => {
+    if (stickerBlobUrlRef.current) {
+      URL.revokeObjectURL(stickerBlobUrlRef.current);
+      stickerBlobUrlRef.current = null;
+    }
+  }, []);
+
+  const handleOpenQrModal = async (stock: FinishLotStock) => {
+    try {
+      const qrPayload = `Quality: ${stock.qualityName || '-'}\nSeq: ${stock.sequence || '-'}\nType: ${stock.lotType || '-'}\nWeaver: ${stock.weaverName || '-'}\nW.Qual: ${stock.weaverQuality || '-'}\nMill: ${stock.millName || '-'}\nProc: ${stock.processInMill || '-'}\nMeter: ${stock.meter || '-'}\nPiece: ${stock.piece || '-'}`;
+      const dataUrl = await QRCode.toDataURL(qrPayload, { margin: 1, width: 300 });
+      setQrModalUrl(dataUrl);
+      setCurrentQrStock(stock);
+      setShowQrModal(true);
+    } catch (err) {
+      console.error("Error generating QR code:", err);
+      showToast('error', 'Failed to generate QR code');
+    }
+  };
+
+  const handleStickerDownload = async (stock: FinishLotStock) => {
+    try {
+      setIsLoadingStickerPreview(true);
+      setCurrentStickerItem(stock);
+      setShowStickerPreview(true);
+      cleanupStickerUrl();
+      const dataUrl = await generateFinishLotStickerPDF({
+        qualityName: stock.qualityName,
+        sequence: stock.sequence,
+        lotType: stock.lotType,
+        weaverName: stock.weaverName,
+        weaverQuality: stock.weaverQuality,
+        millName: stock.millName,
+        processInMill: stock.processInMill,
+        meter: stock.meter,
+        piece: stock.piece
+      });
+
+      stickerBlobUrlRef.current = dataUrl;
+      setStickerPreviewUrl(dataUrl);
+      setTimeout(() => setIsLoadingStickerPreview(false), 500);
+    } catch (error) {
+      console.error('Error generating sticker preview:', error);
+      showToast('error', 'Failed to generate sticker preview');
+      setShowStickerPreview(false);
+    } finally {
+      setIsLoadingStickerPreview(false);
+    }
+  };
+
   const cleanupPreviews = () => {
     pendingImageFiles.forEach(item => {
       URL.revokeObjectURL(item.previewUrl);
@@ -403,6 +489,11 @@ export default function FinishLotStockPage() {
       setSelectedStock(stock);
       setFormData({
         qualityName: stock.qualityName,
+        lotType: stock.lotType || 'OTHER',
+        weaverName: stock.weaverName || '',
+        weaverQuality: stock.weaverQuality || '',
+        millName: stock.millName || '',
+        processInMill: stock.processInMill || '',
         images: stock.images || [],
         meter: stock.meter,
         piece: stock.piece
@@ -411,6 +502,11 @@ export default function FinishLotStockPage() {
       setSelectedStock(null);
       setFormData({
         qualityName: '',
+        lotType: 'RFD',
+        weaverName: '',
+        weaverQuality: '',
+        millName: '',
+        processInMill: '',
         images: [],
         meter: '',
         piece: ''
@@ -502,6 +598,11 @@ export default function FinishLotStockPage() {
       const token = localStorage.getItem('token');
       const payload = {
         qualityName: formData.qualityName.trim(),
+        lotType: formData.lotType,
+        weaverName: formData.weaverName.trim(),
+        weaverQuality: formData.weaverQuality.trim(),
+        millName: formData.millName.trim(),
+        processInMill: formData.processInMill.trim(),
         images: allImages,
         meter: formData.meter === '' ? 0 : Number(formData.meter),
         piece: formData.piece === '' ? 0 : Number(formData.piece)
@@ -683,128 +784,143 @@ export default function FinishLotStockPage() {
       {/* Main Content */}
       <div className="w-full pb-6">
         <div className={`border-2 shadow-xl overflow-hidden ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-white'}`}>
-          {/* Search and Controls Bar */}
-          <div className={`mb-4 sm:mb-6 flex flex-col gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-b transition-all duration-200 ${isDarkMode ? 'bg-[#1E2938] border-gray-700' : 'bg-white border-gray-200'}`}>
+          {/* ─── TOOLBAR CONTAINER ─── */}
+          <div className={`mb-4 sm:mb-6 flex flex-col gap-3 p-3 sm:p-4 rounded-2xl border shadow-lg transition-all duration-200 ${isDarkMode ? 'bg-[#1E2938] border-gray-700' : 'bg-white border-gray-200'}`}>
             
-            {/* First Row - Search Bar & Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 z-10 relative">
-              <div className="flex-1 w-full flex items-center justify-between gap-2 sm:gap-3 order-1">
-                
-                {/* Search Bar Container */}
-                <div className="flex-grow w-full max-w-xl flex relative group">
-                  <div className="relative w-full">
-                    <MagnifyingGlassIcon className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-                    
-                    <input
-                      type="text"
-                      placeholder="Search by quality name..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className={`w-full pl-10 pr-10 py-2 sm:py-2.5 rounded-lg border-2 transition-all duration-300 font-medium text-xs sm:text-sm outline-none ${
-                        isDarkMode
-                          ? 'bg-white/10 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-0'
-                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-0'
-                      }`}
-                    />
-                    
-                    {searchTerm && (
-                      <button
-                        onClick={() => setSearchTerm('')}
-                        className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
-                        title="Clear search"
-                      >
-                        <XMarkIcon className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Add Button */}
-                <div className="flex items-center order-2 flex-shrink-0">
-                  <button
-                    onClick={() => handleOpenForm('create')}
-                    className={`inline-flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all duration-200 hover-lift active:scale-95 text-xs sm:text-sm shadow-md hover:shadow-lg ${
-                      isDarkMode
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
-                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
-                    }`}
-                    title="Add Stock Item"
-                  >
-                    <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 sm:mr-1.5" />
-                    <span className="font-medium hidden sm:inline">Add Stock Item</span>
+            {/* ROW 1: SEARCH BAR + ADD BUTTON */}
+            <div className="flex flex-row items-center justify-between gap-2.5">
+              <div className={`relative flex-1 flex items-center rounded-xl border overflow-hidden transition-all focus-within:ring-2 focus-within:ring-blue-500 ${
+                isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-slate-50 focus-within:bg-white'
+              }`}>
+                <MagnifyingGlassIcon className={`absolute left-3 w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`} />
+                <input
+                  type="text"
+                  placeholder="Search by quality name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={`w-full pl-9 pr-8 py-2 sm:py-2.5 text-xs sm:text-sm bg-transparent outline-none ${
+                    isDarkMode ? 'text-white placeholder-gray-400' : 'text-slate-900 placeholder-slate-500 font-medium'
+                  }`}
+                />
+                {searchTerm && (
+                  <button onClick={() => setSearchTerm('')} className="absolute right-2.5 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                    <XMarkIcon className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
                   </button>
-                </div>
+                )}
               </div>
+
+              <button
+                onClick={() => handleOpenForm('create')}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all active:scale-[0.98] shrink-0"
+                title="Add Stock Item"
+              >
+                <PlusIcon className="w-4 h-4 stroke-[3]" />
+                <span className="hidden sm:inline">Add Stock</span>
+              </button>
             </div>
 
-            {/* Micro search results indicator below Row 1 */}
             {searchTerm && (
-              <div className={`text-xs -mt-1.5 font-semibold ${isDarkMode ? 'text-blue-450' : 'text-blue-600'}`}>
+              <div className={`text-xs -mt-1 font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                 Found {totalCount} result{totalCount !== 1 ? 's' : ''} for "{searchTerm}"
               </div>
             )}
 
-            {/* Second Row - Filters & Actions */}
-            <div className="flex flex-row items-center justify-between gap-2 mt-1 sm:mt-0 w-full">
-              {/* Left Side: Sort Controls */}
-              <div className="flex items-center gap-2">
-                <span className={`text-xs sm:text-sm font-medium hidden sm:inline ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Sort:</span>
-                <div className={`flex rounded-lg border overflow-hidden ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            {/* ROW 2: FILTERS + VIEW MODES */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 w-full">
+              
+              {/* Left Side: Filter Pills */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Sort Pill */}
+                <div className="relative">
                   <button
-                    onClick={() => { handleSortChange('createdAt'); setSortOrder('desc'); }}
-                    className={`px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm transition-colors ${
-                      (sortBy === 'createdAt' && (sortOrder === 'desc' || !sortOrder))
-                        ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white' 
-                        : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50'
+                    onClick={() => setShowSortDropdown(!showSortDropdown)}
+                    className={`px-2 sm:px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all ${
+                      (sortBy === 'createdAt' && sortOrder === 'desc')
+                        ? (isDarkMode ? 'bg-gray-700/80 border-gray-600 text-gray-200' : 'bg-gray-100 border-gray-300 text-gray-800')
+                        : 'bg-blue-600 text-white border-blue-600'
                     }`}
-                    title="Latest First"
                   >
-                    Latest
+                    <span>{sortOrder === 'desc' ? 'Latest' : 'Oldest'}</span>
+                    <ChevronDownIcon className="w-3 h-3 opacity-60" />
                   </button>
+                  {showSortDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setShowSortDropdown(false)} />
+                      <div className={`absolute left-0 top-full mt-1 w-32 rounded-xl border shadow-xl z-40 py-1 ${isDarkMode ? 'bg-slate-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                        <button
+                          onClick={() => { handleSortChange('createdAt'); setSortOrder('desc'); setShowSortDropdown(false); }}
+                          className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-gray-700 ${sortOrder === 'desc' ? 'text-blue-500 font-bold' : (isDarkMode ? 'text-gray-300' : 'text-gray-700')}`}
+                        >
+                          Latest First
+                        </button>
+                        <button
+                          onClick={() => { handleSortChange('createdAt'); setSortOrder('asc'); setShowSortDropdown(false); }}
+                          className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-gray-700 ${sortOrder === 'asc' ? 'text-blue-500 font-bold' : (isDarkMode ? 'text-gray-300' : 'text-gray-700')}`}
+                        >
+                          Oldest First
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Type Pill */}
+                <div className="relative lottype-dropdown">
                   <button
-                    onClick={() => { handleSortChange('createdAt'); setSortOrder('asc'); }}
-                    className={`px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm transition-colors ${
-                      sortBy === 'createdAt' && sortOrder === 'asc'
-                        ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
-                        : isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50'
+                    onClick={() => setShowLotTypeDropdown(!showLotTypeDropdown)}
+                    className={`px-2 sm:px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all ${
+                      filterLotType !== 'ALL'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : isDarkMode ? 'bg-gray-700/80 border-gray-600 text-gray-200' : 'bg-gray-100 border-gray-300 text-gray-800'
                     }`}
-                    title="Oldest First"
                   >
-                    Oldest
+                    <span>{filterLotType === 'ALL' ? 'Type' : filterLotType}</span>
+                    <ChevronDownIcon className="w-3 h-3 opacity-60" />
                   </button>
+                  {showLotTypeDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setShowLotTypeDropdown(false)} />
+                      <div className={`absolute left-0 top-full mt-1 w-28 rounded-xl border shadow-xl z-40 py-1 ${isDarkMode ? 'bg-slate-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                        {['ALL', 'RFD', 'OTHER'].map(type => (
+                          <button
+                            key={type}
+                            onClick={() => { setFilterLotType(type as any); setShowLotTypeDropdown(false); setCurrentPage(1); }}
+                            className={`w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-gray-100 dark:hover:bg-gray-700 ${filterLotType === type ? 'text-blue-500 font-bold' : (isDarkMode ? 'text-gray-300' : 'text-gray-700')}`}
+                          >
+                            {type === 'ALL' ? 'All Types' : type}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
               {/* Right Side: View Mode & Refresh */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <div className={`flex rounded-lg border overflow-hidden h-[36px] sm:h-[42px] ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <div className="flex items-center gap-2">
+                <div className={`flex rounded-lg border overflow-hidden ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-100'}`}>
                   <button
                     onClick={() => handleViewModeChange('table')}
-                    className={`px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm transition-colors flex items-center justify-center ${viewMode === 'table' ? (isDarkMode ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-white') : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50')}`}
+                    className={`p-1.5 sm:px-2.5 sm:py-1.5 text-xs transition-colors ${viewMode === 'table' ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-white shadow text-blue-600') : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700')}`}
                     title="Table View"
                   >
                     <ListBulletIcon className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => handleViewModeChange('cards')}
-                    className={`px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm transition-colors flex items-center justify-center ${viewMode === 'cards' ? (isDarkMode ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-white') : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-50')}`}
+                    className={`p-1.5 sm:px-2.5 sm:py-1.5 text-xs transition-colors ${viewMode === 'cards' ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-white shadow text-blue-600') : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700')}`}
                     title="Card View"
                   >
                     <Squares2X2Icon className="h-4 w-4" />
                   </button>
                 </div>
-
                 <button
                   onClick={fetchStocks}
                   disabled={loading}
-                  className={`group inline-flex items-center justify-center px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg font-medium transition-all duration-200 hover-lift text-xs sm:text-sm h-[36px] sm:h-[42px] ${loading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode
-                      ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
-                      : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                    }`}
+                  className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border transition-all hover:bg-gray-50 dark:hover:bg-gray-700 ${loading ? 'opacity-50 cursor-not-allowed' : ''} ${isDarkMode ? 'border-gray-700 text-gray-300' : 'border-gray-200 text-gray-700'}`}
                   title="Refresh"
                 >
-                  <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : 'hover-rotate-icon'} sm:mr-1`} />
-                  <span className="font-medium hidden sm:inline">Refresh</span>
+                  <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 </button>
               </div>
             </div>
@@ -1143,6 +1259,22 @@ export default function FinishLotStockPage() {
                           {stock.qualityName}
                         </h3>
 
+                        <div className="flex justify-between items-center mt-1">
+                          <span className={`text-[10px] uppercase font-bold tracking-wider ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {stock.sequence || '-'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${stock.lotType === 'RFD' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'}`}>
+                            {stock.lotType === 'RFD' ? 'RFD' : 'OTHER'}
+                          </span>
+                        </div>
+
+                        {(stock.weaverName || stock.millName) && (
+                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex flex-col gap-0.5">
+                            {stock.weaverName && <span className="line-clamp-1"><span className="font-semibold text-gray-700 dark:text-gray-300">Weaver:</span> {stock.weaverName} {stock.weaverQuality ? `(${stock.weaverQuality})` : ''}</span>}
+                            {stock.millName && <span className="line-clamp-1"><span className="font-semibold text-gray-700 dark:text-gray-300">Mill:</span> {stock.millName}</span>}
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-dashed dark:border-slate-700/80 border-slate-200">
                           <div className="text-left">
                             <span className={`text-[10px] uppercase font-bold tracking-wider ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -1174,6 +1306,15 @@ export default function FinishLotStockPage() {
                             <PencilIcon className="h-3.5 w-3.5" />
                             <span>Edit</span>
                           </button>
+                          {isMaster && (
+                            <button
+                              onClick={() => handleStickerDownload(stock)}
+                              className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'border-blue-500/20 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/40' : 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'}`}
+                              title="Download Sticker"
+                            >
+                              <ArrowDownTrayIcon className="h-4 w-4" />
+                            </button>
+                          )}
                           {isMaster && (
                             <button
                               onClick={() => {
@@ -1214,8 +1355,36 @@ export default function FinishLotStockPage() {
                       <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
                         }`}>
                         <div className="flex items-center space-x-2">
+                          <HashtagIcon className="h-4 w-4" />
+                          <span>Sequence</span>
+                        </div>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                        <div className="flex items-center space-x-2">
+                          <TagIcon className="h-4 w-4" />
+                          <span>Type</span>
+                        </div>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                        <div className="flex items-center space-x-2">
                           <TagIcon className="h-4 w-4" />
                           <span>Quality Name</span>
+                        </div>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                        <div className="flex items-center space-x-2">
+                          <HashtagIcon className="h-4 w-4" />
+                          <span>Weaver Name</span>
+                        </div>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                        <div className="flex items-center space-x-2">
+                          <HashtagIcon className="h-4 w-4" />
+                          <span>Mill Name</span>
                         </div>
                       </th>
                       <th className={`px-6 py-4 text-right text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'
@@ -1311,7 +1480,25 @@ export default function FinishLotStockPage() {
                           </td>
                           <td className={`px-6 py-4 whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-900'
                             }`}>
+                            <span className="font-bold text-emerald-500">{stock.sequence || '-'}</span>
+                          </td>
+                          <td className={`px-6 py-4 whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                            <span className={`px-2 py-1 rounded-md text-xs font-bold ${stock.lotType === 'RFD' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'}`}>
+                              {stock.lotType === 'RFD' ? 'RFD' : 'OTHER'}
+                            </span>
+                          </td>
+                          <td className={`px-6 py-4 whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
                             <span className="font-semibold break-words min-w-0">{stock.qualityName}</span>
+                          </td>
+                          <td className={`px-6 py-4 whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                            <span className="font-medium text-sm">{stock.weaverName || '-'}</span>
+                          </td>
+                          <td className={`px-6 py-4 whitespace-nowrap ${isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                            <span className="font-medium text-sm">{stock.millName || '-'}</span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-blue-500">{stock.meter} M</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-purple-500">{stock.piece}</td>
@@ -1324,6 +1511,24 @@ export default function FinishLotStockPage() {
                               >
                                 <PencilIcon className="h-4.5 w-4.5" />
                               </button>
+                              {isMaster && (
+                                <button
+                                  onClick={() => handleStickerDownload(stock)}
+                                  className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-blue-400 hover:bg-blue-500/20' : 'text-blue-600 hover:bg-blue-50'}`}
+                                  title="Download Sticker"
+                                >
+                                  <ArrowDownTrayIcon className="h-4.5 w-4.5" />
+                                </button>
+                              )}
+                              {isMaster && (
+                                <button
+                                  onClick={() => handleOpenQrModal(stock)}
+                                  className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-indigo-400 hover:bg-indigo-500/20' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                                  title="View QR Code"
+                                >
+                                  <QrCodeIcon className="h-4.5 w-4.5" />
+                                </button>
+                              )}
                               {isMaster && (
                                 <button
                                   onClick={() => {
@@ -1420,6 +1625,37 @@ export default function FinishLotStockPage() {
 
             {/* Modal Form Content */}
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
+              {/* Lot Type */}
+              <div className="relative">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                  Lot Type <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="lotType"
+                      value="RFD"
+                      checked={formData.lotType === 'RFD'}
+                      onChange={() => setFormData(prev => ({ ...prev, lotType: 'RFD' }))}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>RFD Fabric</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="lotType"
+                      value="OTHER"
+                      checked={formData.lotType === 'OTHER'}
+                      onChange={() => setFormData(prev => ({ ...prev, lotType: 'OTHER' }))}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Other Finish Fabric</span>
+                  </label>
+                </div>
+              </div>
+
               {/* Quality Name */}
               <div className="relative">
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
@@ -1436,6 +1672,74 @@ export default function FinishLotStockPage() {
                   className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.qualityName
                     ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
                     : isDarkMode
+                      ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
+                      : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
+                    }`}
+                />
+              </div>
+
+              {/* Weaver and Mill Fields */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                    Weaver Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Weaver name..."
+                    value={formData.weaverName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, weaverName: e.target.value }))}
+                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode
+                        ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
+                        : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
+                      }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                    Weaver Quality
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Weaver quality..."
+                    value={formData.weaverQuality}
+                    onChange={(e) => setFormData(prev => ({ ...prev, weaverQuality: e.target.value }))}
+                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode
+                        ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
+                        : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
+                      }`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                    Mill Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Mill name..."
+                    value={formData.millName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, millName: e.target.value }))}
+                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode
+                        ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
+                        : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
+                      }`}
+                  />
+                </div>
+              </div>
+
+              <div className="relative">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                  Process in Mill
+                </label>
+                <textarea
+                  placeholder="Enter process details..."
+                  rows={2}
+                  value={formData.processInMill}
+                  onChange={(e) => setFormData(prev => ({ ...prev, processInMill: e.target.value }))}
+                  className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all resize-none ${isDarkMode
                       ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
                       : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
                     }`}
@@ -1705,6 +2009,141 @@ export default function FinishLotStockPage() {
         onCapture={handleCameraCapture}
         isDarkMode={isDarkMode}
       />
+
+      {/* Sticker Preview Modal */}
+      {showStickerPreview && currentStickerItem && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className={`w-full max-w-3xl h-[85vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden border transform transition-all animate-scale-up ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <div className={`px-4 py-3 flex items-center justify-between border-b ${isDarkMode ? 'border-slate-700 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
+              <div className="flex items-center space-x-3">
+                <div className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-lg">
+                  <TagIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className={`font-bold text-lg ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                    Sticker Preview: {currentStickerItem.qualityName}
+                  </h3>
+                  <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Sequence: {currentStickerItem.sequence || '-'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    if (stickerPreviewUrl) {
+                      const link = document.createElement('a');
+                      link.href = stickerPreviewUrl;
+                      link.download = `Finish_Lot_Sticker_${currentStickerItem.sequence || currentStickerItem.qualityName}.pdf`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }
+                  }}
+                  disabled={!stickerPreviewUrl || isLoadingStickerPreview}
+                  className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-all disabled:opacity-50"
+                >
+                  <ArrowDownTrayIcon className="h-4 w-4" />
+                  <span>Download PDF</span>
+                </button>
+                <button
+                  onClick={() => setShowStickerPreview(false)}
+                  className={`p-1.5 rounded-lg transition-all ${isDarkMode ? 'hover:bg-slate-700 text-gray-400' : 'hover:bg-slate-200 text-gray-500'}`}
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            
+            <div className={`flex-1 relative ${isDarkMode ? 'bg-slate-900' : 'bg-gray-100'}`}>
+              {isLoadingStickerPreview ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-4 border-emerald-500 border-t-transparent mb-4" />
+                  <p className={`font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Generating Sticker PDF...</p>
+                </div>
+              ) : stickerPreviewUrl ? (
+                <iframe
+                  src={`${stickerPreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                  className="w-full h-full border-none"
+                  title="Sticker PDF Preview"
+                />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-red-500">
+                  <ExclamationTriangleIcon className="h-10 w-10 mb-4" />
+                  <p className="font-semibold">Failed to load preview.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Modal */}
+      {showQrModal && currentQrStock && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className={`w-full max-w-sm flex flex-col rounded-2xl shadow-2xl overflow-hidden border transform transition-all animate-scale-up ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <div className={`px-4 py-3 flex items-center justify-between border-b ${isDarkMode ? 'border-slate-700 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
+              <div className="flex items-center space-x-3">
+                <div className="p-1.5 bg-indigo-500/10 text-indigo-500 rounded-lg">
+                  <QrCodeIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className={`font-bold text-lg ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                    QR Code
+                  </h3>
+                  <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {currentQrStock.qualityName}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowQrModal(false)}
+                  className={`p-1.5 rounded-lg transition-all ${isDarkMode ? 'hover:bg-slate-700 text-gray-400' : 'hover:bg-slate-200 text-gray-500'}`}
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            
+            <div className={`p-6 flex flex-col items-center justify-center ${isDarkMode ? 'bg-slate-900' : 'bg-gray-50'}`}>
+              {qrModalUrl ? (
+                <div className="bg-white p-4 rounded-xl shadow-inner border border-gray-200">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qrModalUrl} alt="QR Code" className="w-64 h-64 object-contain" />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 text-red-500">
+                  <ExclamationTriangleIcon className="h-10 w-10 mb-4" />
+                  <p className="font-semibold">Failed to generate QR Code.</p>
+                </div>
+              )}
+              
+              <div className="mt-6 text-center">
+                <p className={`text-sm mb-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Scan this code to view all detail info.
+                </p>
+                {qrModalUrl && (
+                  <button
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = qrModalUrl;
+                      link.download = `QR_${currentQrStock.sequence || currentQrStock.qualityName}.png`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="flex items-center justify-center space-x-2 w-full px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all shadow-md hover:shadow-lg"
+                  >
+                    <ArrowDownTrayIcon className="h-5 w-5" />
+                    <span>Download QR Image</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

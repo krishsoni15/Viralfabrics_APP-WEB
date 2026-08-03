@@ -1214,7 +1214,7 @@ export default function WeaverSamplesScreen() {
                     {renderFormField('Weight (KG)', formData.weight, 'weight', 'e.g., 8.0', 'numeric')}
                   </View>
                   <View style={{ flex: 1 }}>
-                    {renderFormField('GSM', formData.gsm, 'gsm', 'e.g., 72.5', 'numeric')}
+                    {renderFormField('GSM', formData.gsm, 'gsm', 'e.g., 72.5 or 100-150', 'default')}
                   </View>
                 </View>
 

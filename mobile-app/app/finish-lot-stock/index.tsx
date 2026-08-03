@@ -50,8 +50,8 @@ const searchTypePlaceholders: Record<string, string> = { all: 'Search finish lot
 
 // ─── Finish Lot Card ──────────────────────────────────────────────────────
 const FinishLotCard = React.memo(function FinishLotCard({
-  item, index, onEdit, onDelete, isSuperAdmin, isMaster, onPreviewImages, numColumns = 1
-}: { item: FinishLotStock; index: number; onEdit: (f: FinishLotStock) => void; onDelete: (f: FinishLotStock) => void; isSuperAdmin: boolean; isMaster: boolean; onPreviewImages: (imgs: string[]) => void; numColumns?: number }) {
+  item, index, onEdit, onDelete, isSuperAdmin, isMaster, onPreviewImages, onOpenSticker, numColumns = 1
+}: { item: FinishLotStock; index: number; onEdit: (f: FinishLotStock) => void; onDelete: (f: FinishLotStock) => void; isSuperAdmin: boolean; isMaster: boolean; onPreviewImages: (imgs: string[]) => void; onOpenSticker: (f: FinishLotStock) => void; numColumns?: number }) {
   const { theme, isDarkMode } = useTheme();
 
   return (
@@ -103,9 +103,46 @@ const FinishLotCard = React.memo(function FinishLotCard({
         )}
 
         {/* Quality Name */}
-        <Text style={{ fontSize: 17, fontWeight: '800', color: theme.text, marginBottom: 12, letterSpacing: -0.2 }} numberOfLines={2}>
-          {item.qualityName}
-        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: theme.text, letterSpacing: -0.2 }} numberOfLines={2}>
+              {item.qualityName}
+            </Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary, marginTop: 4 }}>
+              {item.sequence || '-'}
+            </Text>
+          </View>
+          <View style={{ 
+            backgroundColor: item.lotType === 'RFD' ? (isDarkMode ? 'rgba(59,130,246,0.15)' : '#dbeafe') : (isDarkMode ? 'rgba(168,85,247,0.15)' : '#f3e8ff'),
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 6,
+          }}>
+            <Text style={{ 
+              fontSize: 10, 
+              fontWeight: '800', 
+              color: item.lotType === 'RFD' ? (isDarkMode ? '#93c5fd' : '#1d4ed8') : (isDarkMode ? '#d8b4fe' : '#7e22ce')
+            }}>
+              {item.lotType === 'RFD' ? 'RFD' : 'OTHER'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Weaver and Mill Details */}
+        {(item.weaverName || item.millName) && (
+          <View style={{ marginBottom: 12, gap: 4 }}>
+            {item.weaverName && (
+              <Text style={{ fontSize: 13, color: theme.textSecondary }}>
+                <Text style={{ fontWeight: '700', color: theme.text }}>Weaver:</Text> {item.weaverName} {item.weaverQuality ? `(${item.weaverQuality})` : ''}
+              </Text>
+            )}
+            {item.millName && (
+              <Text style={{ fontSize: 13, color: theme.textSecondary }}>
+                <Text style={{ fontWeight: '700', color: theme.text }}>Mill:</Text> {item.millName}
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* Metadata Grid (replaces button-like look with clean structure) */}
         <View style={{
@@ -149,6 +186,20 @@ const FinishLotCard = React.memo(function FinishLotCard({
             {formatDate(item.createdAt)}
           </Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
+            {isMaster && (
+              <TouchableOpacity
+                onPress={() => onOpenSticker(item)}
+                activeOpacity={0.75}
+                style={{
+                  width: 34, height: 34, borderRadius: 10,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: isDarkMode ? 'rgba(16,185,129,0.12)' : '#ecfdf5',
+                  borderWidth: 1, borderColor: isDarkMode ? 'rgba(16,185,129,0.3)' : '#a7f3d0',
+                }}
+              >
+                <Package size={15} color={isDarkMode ? '#34d399' : Colors.success[600]} />
+              </TouchableOpacity>
+            )}
             {isSuperAdmin && (
               <TouchableOpacity
                 onPress={() => onEdit(item)}
@@ -209,7 +260,7 @@ export default function FinishLotStockScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<FinishLotStock | null>(null);
-  const [formData, setFormData] = useState({ qualityName: '', piece: '', meter: '' });
+  const [formData, setFormData] = useState<{qualityName: string; piece: string; meter: string; lotType: 'RFD' | 'OTHER'; weaverName: string; weaverQuality: string; millName: string; processInMill: string;}>({ qualityName: '', piece: '', meter: '', lotType: 'RFD', weaverName: '', weaverQuality: '', millName: '', processInMill: '' });
   const [formImages, setFormImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
@@ -423,13 +474,62 @@ export default function FinishLotStockScreen() {
 
   const handleOpenPreview = useCallback((imgs: string[]) => { setPreviewImages(imgs); setPreviewVisible(true); }, []);
 
+  const handleOpenSticker = useCallback(async (item: FinishLotStock) => {
+    try {
+      if (!item) return;
+      
+      const stickerData = {
+        type: 'finish-lot-stock' as const,
+        qualityName: item.qualityName,
+        sequence: item.sequence,
+        lotType: item.lotType,
+        weaverName: item.weaverName,
+        weaverQuality: item.weaverQuality,
+        millName: item.millName,
+        processInMill: item.processInMill,
+        meter: item.meter,
+        piece: item.piece,
+      };
+
+      const { generateStickerPdf } = await import('../../utils/stickerPdf');
+      const filename = `FinishLotStock_Sticker_${item.sequence || item.qualityName.replace(/\s+/g, '_')}.pdf`;
+      const pdf = await generateStickerPdf(stickerData, filename);
+
+      if (Platform.OS === 'web' && pdf.uri) {
+        const printFrame = document.createElement('iframe');
+        printFrame.style.display = 'none';
+        printFrame.src = pdf.uri;
+        document.body.appendChild(printFrame);
+        printFrame.onload = () => {
+          setTimeout(() => {
+            printFrame.contentWindow?.print();
+          }, 500);
+        };
+      } else if (pdf.uri) {
+        const Sharing = await import('expo-sharing');
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(pdf.uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Share Finish Lot Sticker',
+          });
+        } else {
+          addToast({ type: 'error', title: 'Error', message: 'Sharing not available' });
+        }
+      }
+    } catch (e: any) {
+      console.error('Sticker Error:', e);
+      addToast({ type: 'error', title: 'Error', message: 'Failed to generate sticker' });
+    }
+  }, [addToast]);
+
   // ─ Form ──
   const openCreateForm = useCallback(() => {
-    setEditingItem(null); setFormData({ qualityName: '', piece: '', meter: '' }); setFormImages([]); setShowForm(true);
+    setEditingItem(null); setFormData({ qualityName: '', piece: '', meter: '', lotType: 'RFD', weaverName: '', weaverQuality: '', millName: '', processInMill: '' }); setFormImages([]); setShowForm(true);
   }, []);
 
   const openEditForm = useCallback((item: FinishLotStock) => {
-    setEditingItem(item); setFormData({ qualityName: item.qualityName || '', piece: item.piece?.toString() || '', meter: item.meter?.toString() || '' }); setFormImages(item.images || []); setShowForm(true);
+    setEditingItem(item); setFormData({ qualityName: item.qualityName || '', piece: item.piece?.toString() || '', meter: item.meter?.toString() || '', lotType: item.lotType || 'RFD', weaverName: item.weaverName || '', weaverQuality: item.weaverQuality || '', millName: item.millName || '', processInMill: item.processInMill || '' }); setFormImages(item.images || []); setShowForm(true);
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -443,7 +543,7 @@ export default function FinishLotStockScreen() {
           urls.push(await uploadSingleImage(uri, 'finish-lot-stocks'));
         } catch (e) { console.error('Upload error:', e); }
       }
-      const payload = { qualityName: formData.qualityName.trim(), piece: formData.piece ? Number(formData.piece) : 0, meter: formData.meter ? Number(formData.meter) : 0, images: urls };
+      const payload = { qualityName: formData.qualityName.trim(), piece: formData.piece ? Number(formData.piece) : 0, meter: formData.meter ? Number(formData.meter) : 0, lotType: formData.lotType, weaverName: formData.weaverName.trim(), weaverQuality: formData.weaverQuality.trim(), millName: formData.millName.trim(), processInMill: formData.processInMill.trim(), images: urls };
       if (editingItem) {
         await api.put(`/api/finish-lot-stocks/${editingItem._id}`, payload);
         addToast({ type: 'success', title: 'Updated', message: 'Finish lot stock updated' });
@@ -643,7 +743,7 @@ export default function FinishLotStockScreen() {
               </View>
             );
           }}
-          renderItem={({ item, index }) => <FinishLotCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} onPreviewImages={handleOpenPreview} numColumns={numColumns} />}
+          renderItem={({ item, index }) => <FinishLotCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} onPreviewImages={handleOpenPreview} onOpenSticker={handleOpenSticker} numColumns={numColumns} />}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 120, paddingHorizontal: numColumns > 1 ? 8 : 0 }}
           showsVerticalScrollIndicator={false}
           onEndReached={() => { if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage(); }}
@@ -864,10 +964,43 @@ export default function FinishLotStockScreen() {
               >
                 {renderInput('Quality Name *', formData.qualityName, t => setFormData(p => ({ ...p, qualityName: t })), 'Enter quality name')}
 
+                {/* Weaver & Mill Fields */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>{renderInput('Weaver Name', formData.weaverName, t => setFormData(p => ({ ...p, weaverName: t })), 'Enter weaver name')}</View>
+                  <View style={{ flex: 1 }}>{renderInput('Weaver Quality', formData.weaverQuality, t => setFormData(p => ({ ...p, weaverQuality: t })), 'Enter weaver quality')}</View>
+                </View>
+
+                {renderInput('Mill Name', formData.millName, t => setFormData(p => ({ ...p, millName: t })), 'Enter mill name')}
+
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>Process in Mill</Text>
+                  <TextInput value={formData.processInMill} onChangeText={t => setFormData(p => ({ ...p, processInMill: t }))} placeholder="Enter process details" placeholderTextColor={theme.inputPlaceholder} multiline={true} numberOfLines={3}
+                    style={{ backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text, minHeight: 80, textAlignVertical: 'top' }} />
+                </View>
+
                 {/* Piece + Meter in row */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>{renderInput('Piece', formData.piece, t => setFormData(p => ({ ...p, piece: t })), '0', 'numeric')}</View>
                   <View style={{ flex: 1 }}>{renderInput('Meter', formData.meter, t => setFormData(p => ({ ...p, meter: t })), '0', 'numeric')}</View>
+                </View>
+
+                {/* Lot Type */}
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8 }}>Lot Type *</Text>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => setFormData(p => ({ ...p, lotType: 'RFD' }))}
+                      style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center', backgroundColor: formData.lotType === 'RFD' ? (isDarkMode ? 'rgba(59,130,246,0.15)' : '#eff6ff') : 'transparent', borderColor: formData.lotType === 'RFD' ? (isDarkMode ? '#3b82f6' : '#2563eb') : theme.borderLight }}
+                    >
+                      <Text style={{ fontWeight: '700', color: formData.lotType === 'RFD' ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textSecondary }}>RFD</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setFormData(p => ({ ...p, lotType: 'OTHER' }))}
+                      style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center', backgroundColor: formData.lotType === 'OTHER' ? (isDarkMode ? 'rgba(168,85,247,0.15)' : '#faf5ff') : 'transparent', borderColor: formData.lotType === 'OTHER' ? (isDarkMode ? '#a855f7' : '#9333ea') : theme.borderLight }}
+                    >
+                      <Text style={{ fontWeight: '700', color: formData.lotType === 'OTHER' ? (isDarkMode ? '#c084fc' : '#9333ea') : theme.textSecondary }}>OTHER</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {/* Images */}

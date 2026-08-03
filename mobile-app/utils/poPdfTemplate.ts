@@ -26,6 +26,15 @@ const COMPANY_HEADERS: Record<string, {
   }
 };
 
+function formatLeadTime(val: string | undefined | null): string {
+  if (!val) return '';
+  const trimmed = val.trim();
+  if (/^\d+$/.test(trimmed)) {
+    return `${trimmed} Days`;
+  }
+  return trimmed;
+}
+
 function formatDateDDMMYYYY(date: Date | string | null | undefined): string {
   if (!date) return '';
   const d = typeof date === 'string' ? new Date(date) : date;
@@ -344,7 +353,7 @@ export const generatePoHtml = (po: PurchaseOrder) => {
           </div>
         </div>
 
-        <!-- Rate & Greigh Lead Time -->
+        <!-- Rate & Greigh Mtr -->
         <div class="row split-row">
           <div class="left-field" style="width: 70mm;">
             <span class="label" style="width: 18mm; display: inline-block;">Rate</span>
@@ -352,18 +361,20 @@ export const generatePoHtml = (po: PurchaseOrder) => {
             <span class="value" style="width: 45mm; border-bottom: 0.3mm solid #000; display: inline-block;">${po.rate ? (/gst/i.test(po.rate) ? po.rate : `${po.rate} + GST`) : ''}</span>
           </div>
           <div class="right-field" style="width: 95mm; display: flex; justify-content: flex-end;">
-            <span class="label" style="width: 32mm; display: inline-block;">Greigh Lead Time</span>
+            <span class="label" style="width: 18mm; display: inline-block;">Greigh Mtr</span>
             <span class="colon" style="width: 2mm; display: inline-block;">:</span>
-            <span class="value" style="width: 59mm; border-bottom: 0.3mm solid #000; display: inline-block;">${po.greighLeadTime || ''}</span>
+            <span class="value" style="width: 73mm; border-bottom: 0.3mm solid #000; display: inline-block;">${po.greighMtr || ''}</span>
           </div>
         </div>
 
-        <!-- Greigh Mtr -->
-        <div class="row">
-          <div style="width: 70mm;">
-            <span class="label" style="width: 18mm; display: inline-block;">Greigh Mtr</span>
+        <!-- Lead Time -->
+        <div class="row split-row">
+          <div class="left-field" style="width: 70mm;">
+          </div>
+          <div class="right-field" style="width: 95mm; display: flex; justify-content: flex-end;">
+            <span class="label" style="width: 18mm; display: inline-block;">Lead Time</span>
             <span class="colon" style="width: 2mm; display: inline-block;">:</span>
-            <span class="value" style="width: 45mm; border-bottom: 0.3mm solid #000; display: inline-block;">${po.greighMtr || ''}</span>
+            <span class="value" style="width: 73mm; border-bottom: 0.3mm solid #000; display: inline-block;">${formatLeadTime(po.greighLeadTime)}</span>
           </div>
         </div>
 
@@ -398,10 +409,9 @@ export const generatePoHtml = (po: PurchaseOrder) => {
             </tr>
           </table>
 
-          <!-- Images Section on the Right Side of Table -->
           ${(po.images || []).length === 1 ? `
             <div style="flex-grow: 1; display: flex; justify-content: center; align-items: center; max-width: 95mm;">
-              <img src="${po.images[0]}" style="width: 48mm; height: 30mm; object-fit: contain; background-color: #f8fafc; border: 0.3mm solid #ccc; border-radius: 2mm;" />
+              <img src="${po.images?.[0] || ''}" style="width: 48mm; height: 30mm; object-fit: contain; background-color: #f8fafc; border: 0.3mm solid #ccc; border-radius: 2mm;" />
             </div>
           ` : `
             <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 4mm; max-width: 95mm;">

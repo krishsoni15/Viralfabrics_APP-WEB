@@ -1390,13 +1390,11 @@ export default function DispatchForm({
       // This prevents flickering in add mode - modal opens immediately without loading overlay
       setHasExistingData(false);
 
-      // Smart API logic:
-      // - If isEditing is true → Fetch API (edit mode) - show loading
-      // - If isEditing is false → Skip API call (add mode) - no loading
+      // ⚡ FIX: Always fetch API to auto-populate existing data, regardless of isEditing
       // ⚡ 100% CRITICAL: Also check if update is in progress - don't reload during update
       // ⚡ 100% FIX: Also check hasFetchedRef to prevent multiple calls
-      if (isEditing && !operationInProgressRef.current && !justUpdatedRef.current && !hasFetchedRef.current) {
-        console.log('📊 Edit mode detected - fetching existing dispatch data');
+      if (!operationInProgressRef.current && !justUpdatedRef.current && !hasFetchedRef.current) {
+        console.log('📊 Fetching existing dispatch data');
         // ⚡ FIX: Only set loading when actually fetching
         setLoadingExistingData(true);
         // ⚡ 100% FIX: Call fetchExistingDispatchData - flag is set inside the function
@@ -1407,12 +1405,7 @@ export default function DispatchForm({
           hasFetchedRef.current = false; // Reset on error
         });
       } else {
-        if (operationInProgressRef.current || justUpdatedRef.current) {
-          console.log('⏭️ Skipping data fetch - update in progress or just completed');
-        } else {
-          console.log('⚡ Add mode detected - skipping API call (no loading overlay)');
-        }
-        // ⚡ FIX: Ensure loading is false in add mode - no flickering
+        console.log('⏭️ Skipping data fetch - update in progress or already fetched');
         setLoadingExistingData(false);
       }
     }
@@ -1456,29 +1449,7 @@ export default function DispatchForm({
   // Note: Removed dependency on isEditing and existingDispatches props
   // Form now fetches data independently from API like LabDataModal
 
-  // Reset form when order changes (but not when editing or when there's existing data)
-  useEffect(() => {
-    if (order && !isEditing && !hasExistingData) {
-      setFormData({
-        orderId: order.orderId,
-        dispatchItems: [{
-          id: '1',
-          dispatchDate: '',
-          billNo: '',
-          transportNo: '',
-          lrNo: '',
-          finishMtr: '',
-          quality: '',
-          subItems: [{
-            id: '1_1',
-            finishMtr: '',
-            quality: ''
-          }]
-        }]
-      });
-      setErrors({});
-    }
-  }, [order?.orderId, isEditing, hasExistingData]);
+  // ⚡ FIX: Removed redundant useEffect that resets form on order change since fetchExistingDispatchData handles the empty state
 
   // Function to load existing dispatches from props (fixed logic)
   const loadExistingDispatches = async () => {

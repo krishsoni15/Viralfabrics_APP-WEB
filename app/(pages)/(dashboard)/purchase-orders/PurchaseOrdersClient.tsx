@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -13,6 +14,7 @@ import {
   ChevronRightIcon,
   CalendarDaysIcon,
   CheckIcon,
+  CheckCircleIcon,
   ExclamationTriangleIcon,
   EyeIcon,
   ListBulletIcon,
@@ -93,6 +95,7 @@ interface PurchaseOrder {
   };
   notes: string;
   financialYear: string;
+  status?: 'Pending' | 'Completed';
   createdBy?: { name: string; username: string };
   createdAt: string;
   updatedAt?: string;
@@ -937,6 +940,9 @@ export default function PurchaseOrdersClient() {
   const [companyFilter, setCompanyFilter] = useState('');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
 
+  const [statusFilter, setStatusFilter] = useState('');
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+
   const [fyFilter, setFyFilter] = useState('');
   const [showFYDropdown, setShowFYDropdown] = useState(false);
 
@@ -965,6 +971,11 @@ export default function PurchaseOrdersClient() {
   // Delete Confirmation Modal
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+
+  // Status menu popover state
+  const [activeStatusMenuPo, setActiveStatusMenuPo] = useState<PurchaseOrder | null>(null);
+  const [activeStatusMenuRect, setActiveStatusMenuRect] = useState<DOMRect | null>(null);
 
   // Toast
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -993,7 +1004,8 @@ export default function PurchaseOrdersClient() {
     images: [] as string[],
     paymentTerms: '',
     specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
-    notes: ''
+    notes: '',
+    status: 'Pending' as 'Pending' | 'Completed'
   });
 
   // Suggestions state & keyboard navigation
@@ -1067,6 +1079,7 @@ export default function PurchaseOrdersClient() {
       params.set('limit', String(limit));
       if (search) params.set('search', search);
       if (companyFilter) params.set('companyHeader', companyFilter);
+      if (statusFilter) params.set('status', statusFilter);
       if (fyFilter) params.set('fy', fyFilter);
       if (startDate) params.set('startDate', startDate);
       if (endDate) params.set('endDate', endDate);
@@ -1087,7 +1100,7 @@ export default function PurchaseOrdersClient() {
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [search, companyFilter, fyFilter, startDate, endDate, sortOrder, limit, page, getHeaders]);
+  }, [search, companyFilter, statusFilter, fyFilter, startDate, endDate, sortOrder, limit, page, getHeaders]);
 
   useEffect(() => {
     fetchPOs(page);
@@ -1138,7 +1151,8 @@ export default function PurchaseOrdersClient() {
       images: [],
       paymentTerms: '',
       specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
-      notes: ''
+      notes: '',
+      status: 'Pending'
     });
     setBrokerHighlightIndex(-1);
     setSupplierHighlightIndex(-1);
@@ -1168,7 +1182,8 @@ export default function PurchaseOrdersClient() {
       images: po.images || [],
       paymentTerms: po.paymentTerms || '',
       specs: po.specs || { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
-      notes: po.notes || ''
+      notes: po.notes || '',
+      status: po.status || 'Pending'
     });
     setBrokerHighlightIndex(-1);
     setSupplierHighlightIndex(-1);
@@ -1328,6 +1343,48 @@ export default function PurchaseOrdersClient() {
       setShowDeleteConfirm(null);
     }
   }, [getHeaders, fetchPOs, page]);
+
+  // Update status instantly with optimistic state update
+  const handleUpdateStatus = useCallback(async (po: PurchaseOrder, newStatus: 'Pending' | 'Completed') => {
+    if (po.status === newStatus) return;
+
+    setUpdatingStatusId(po._id);
+    
+    // Optimistic local state update
+    setPurchaseOrders(prev =>
+      prev.map(item => (item._id === po._id ? { ...item, status: newStatus } : item))
+    );
+
+    try {
+      const res = await fetch(`/api/purchase-orders/${po._id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          status: newStatus
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToast({
+          message: `PO #${getDisplayOrderId(po.poNumber)} status updated to ${newStatus}`,
+          type: 'success'
+        });
+      } else {
+        throw new Error(data.message || 'Failed to update status');
+      }
+    } catch (error: any) {
+      // Revert local state if request fails
+      setPurchaseOrders(prev =>
+        prev.map(item => (item._id === po._id ? { ...item, status: po.status || 'Pending' } : item))
+      );
+      setToast({
+        message: error.message || 'Failed to update status',
+        type: 'error'
+      });
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  }, [getHeaders, setToast]);
 
   // Open PDF Preview Modal
   const handleOpenPdfPreview = useCallback(async (po: PurchaseOrder) => {
@@ -1575,9 +1632,9 @@ export default function PurchaseOrdersClient() {
         </div>
 
         {/* ROW 2: FILTER DROPDOWNS + VIEW SWITCHER (SINGLE ROW ON ALL SCREENS) */}
-        <div className="flex flex-row items-center justify-between gap-1.5 sm:gap-3 overflow-x-auto no-scrollbar py-0.5 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-1 w-full">
           {/* Left: Filter dropdown pills */}
-          <div className="flex flex-row items-center gap-1 sm:gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Sort Dropdown Pill */}
             <div className="relative">
               <button
@@ -1648,6 +1705,43 @@ export default function PurchaseOrdersClient() {
               )}
             </div>
 
+            {/* Status Dropdown Pill */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className={`px-2 sm:px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all ${
+                  statusFilter
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : isDarkMode ? 'bg-slate-700/80 border-slate-600 text-gray-200' : 'bg-gray-100 border-gray-300 text-gray-800'
+                }`}
+              >
+                <span>{statusFilter || 'All Statuses'}</span>
+                <ChevronDownIcon className="w-3 h-3 opacity-60" />
+              </button>
+              {showStatusDropdown && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowStatusDropdown(false)} />
+                  <div className={`absolute left-0 top-full mt-1 w-40 rounded-xl border shadow-xl z-40 py-1 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+                    {[
+                      { value: '', label: 'All Statuses' },
+                      { value: 'Pending', label: 'Pending' },
+                      { value: 'Completed', label: 'Completed' }
+                    ].map(st => (
+                      <button
+                        key={st.value}
+                        type="button"
+                        onClick={() => { setStatusFilter(st.value); setShowStatusDropdown(false); setPage(1); }}
+                        className={`w-full text-left px-3 py-2 text-xs font-medium ${hoverBg} ${statusFilter === st.value ? 'text-blue-500 font-bold bg-blue-500/10' : textPrimary}`}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Financial Year Dropdown Pill */}
             <div className="relative">
               <button
@@ -1689,10 +1783,11 @@ export default function PurchaseOrdersClient() {
             </div>
 
             {/* Clear Filters (if active) */}
-            {(companyFilter || fyFilter || searchInput || sortOrder !== 'latest_first') && (
+            {(companyFilter || statusFilter || fyFilter || searchInput || sortOrder !== 'latest_first') && (
               <button
                 onClick={() => {
                   setCompanyFilter('');
+                  setStatusFilter('');
                   setFyFilter('');
                   setSearchInput('');
                   setSortOrder('latest_first');
@@ -1760,7 +1855,7 @@ export default function PurchaseOrdersClient() {
               <thead>
                 <tr className={`border-b ${isDarkMode ? 'bg-slate-800/90 border-slate-700 text-slate-200' : 'bg-gray-50 border-gray-200/90 text-slate-800 font-bold'}`}>
                   <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">PO & Company</th>
-                  <th className="px-3.5 py-3.5 font-bold uppercase tracking-wider text-xs">Date</th>
+                  <th className="px-3.5 py-3.5 font-bold uppercase tracking-wider text-xs">Date & Status</th>
                   <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">Broker</th>
                   <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">Supplier</th>
                   <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">Quality & Delivery</th>
@@ -1808,7 +1903,7 @@ export default function PurchaseOrdersClient() {
                         <tr key={po._id} className={`${hoverBg} transition-colors`}>
                           {/* 1. PO No & Company Header */}
                           <td className="px-4 py-4">
-                            <div className="font-bold text-blue-600 dark:text-blue-400 text-base">#{getDisplayOrderId(po.poNumber)}</div>
+                            <div className="font-extrabold text-blue-600 dark:text-blue-400 text-lg">#{getDisplayOrderId(po.poNumber)}</div>
                             <button
                               onClick={() => setSelectedCompanyInfo(companyInfo)}
                               title="Click to view full company details"
@@ -1826,19 +1921,52 @@ export default function PurchaseOrdersClient() {
                             </button>
                           </td>
 
-                          {/* 2. Date + Timestamps */}
-                          <td className="px-3.5 py-4 whitespace-nowrap">
-                            <div className={`font-bold text-sm ${textPrimary}`}>{formatDate(po.poDate)}</div>
-                            {po.createdAt && (
-                              <div className={`text-[11px] font-medium mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                Created: {formatDateTime(po.createdAt)}
+                          {/* 2. Date & Status (Combined) */}
+                          <td className="px-3.5 py-4 whitespace-nowrap relative">
+                            <div className="flex flex-col items-start gap-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className={`font-bold text-sm ${textPrimary}`}>{formatDate(po.poDate)}</div>
+                                <div className="relative">
+                                  {updatingStatusId === po._id ? (
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold rounded-lg border bg-gray-500/10 text-gray-500 border-gray-500/20">
+                                      <ArrowPathIcon className="w-3 h-3 animate-spin" />
+                                      <span>Updating...</span>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        setActiveStatusMenuRect(rect);
+                                        setActiveStatusMenuPo(po);
+                                      }}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-bold rounded-lg border hover:scale-105 active:scale-95 transition-all shadow-sm duration-150 cursor-pointer ${
+                                        po.status === 'Completed'
+                                          ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 hover:bg-emerald-500/20'
+                                          : 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 hover:bg-amber-500/20'
+                                      }`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full ${
+                                        (po.status || 'Pending') === 'Completed' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                                      }`} />
+                                      <span className="ml-1">{po.status || 'Pending'}</span>
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                            {po.updatedAt && po.updatedAt !== po.createdAt && (
-                              <div className={`text-[11px] font-medium ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
-                                Updated: {formatDateTime(po.updatedAt)}
-                              </div>
-                            )}
+
+                              {po.createdAt && (
+                                <div className="text-[10px] font-medium opacity-65 text-slate-500 dark:text-slate-400 mt-0.5">
+                                  Created: {formatDateTime(po.createdAt)}
+                                </div>
+                              )}
+                              {po.updatedAt && po.updatedAt !== po.createdAt && (
+                                <div className="text-[10px] font-semibold text-amber-600 dark:text-amber-400/80">
+                                  Updated: {formatDateTime(po.updatedAt)}
+                                </div>
+                              )}
+                            </div>
                           </td>
 
                           {/* 3. Broker */}
@@ -2069,7 +2197,7 @@ export default function PurchaseOrdersClient() {
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-base font-bold text-blue-600 dark:text-blue-400">#{getDisplayOrderId(po.poNumber)}</span>
+                          <span className="text-lg font-extrabold text-blue-600 dark:text-blue-400">#{getDisplayOrderId(po.poNumber)}</span>
                           <button
                             onClick={() => setSelectedCompanyInfo(companyInfo)}
                             className={`inline-flex px-2.5 py-0.5 text-xs font-bold rounded-full cursor-pointer hover:scale-105 transition-all ${
@@ -2085,10 +2213,40 @@ export default function PurchaseOrdersClient() {
                             {po.companyHeader}
                           </button>
                         </div>
-                        <p className={`text-xs ${textSecondary} flex items-center gap-1 mt-1`}>
-                          <CalendarDaysIcon className="w-3.5 h-3.5" />
-                          {formatDate(po.poDate)}
-                        </p>
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <p className={`text-xs ${textSecondary} flex items-center gap-1`}>
+                            <CalendarDaysIcon className="w-3.5 h-3.5" />
+                            {formatDate(po.poDate)}
+                          </p>
+                          <div className="relative">
+                            {updatingStatusId === po._id ? (
+                              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold rounded-lg border bg-gray-500/10 text-gray-500 border-gray-500/20">
+                                <ArrowPathIcon className="w-3 h-3 animate-spin" />
+                                <span>Updating...</span>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setActiveStatusMenuRect(rect);
+                                  setActiveStatusMenuPo(po);
+                                }}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-bold rounded-lg border hover:scale-105 active:scale-95 transition-all shadow-sm duration-150 cursor-pointer ${
+                                  po.status === 'Completed'
+                                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 hover:bg-emerald-500/20'
+                                    : 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 hover:bg-amber-500/20'
+                                }`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                  (po.status || 'Pending') === 'Completed' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                                }`} />
+                                <span className="ml-1">{po.status || 'Pending'}</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-1">
@@ -2462,6 +2620,8 @@ export default function PurchaseOrdersClient() {
         </div>
       )}
 
+
+
       {/* Create / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => !saving && setShowModal(false)}>
@@ -2519,8 +2679,8 @@ export default function PurchaseOrdersClient() {
                 </div>
               </div>
 
-              {/* PO Date with Custom Calendar DatePicker */}
-              <div>
+              {/* PO Date Selector */}
+              <div className="mb-3">
                 <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>PO Date</label>
                 <CustomDatePicker
                   value={formData.poDate}
@@ -2708,7 +2868,7 @@ export default function PurchaseOrdersClient() {
                   />
                 </div>
                 <div>
-                  <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Greigh Lead Time</label>
+                  <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Lead Time</label>
                   <input
                     type="text"
                     value={formData.greighLeadTime || ''}
@@ -2981,6 +3141,86 @@ export default function PurchaseOrdersClient() {
             </div>
           </div>
         </div>
+      )}
+
+      {activeStatusMenuPo && activeStatusMenuRect && createPortal(
+        <>
+          {/* Backdrop to close menu */}
+          <div 
+            className="fixed inset-0 z-[9999998]" 
+            onClick={() => {
+              setActiveStatusMenuPo(null);
+              setActiveStatusMenuRect(null);
+            }} 
+          />
+          {/* Menu box */}
+          <div
+            className={`fixed z-[9999999] min-w-[130px] py-1.5 px-1 rounded-xl border shadow-2xl ${
+              isDarkMode 
+                ? 'bg-slate-800 border-slate-700 text-slate-100' 
+                : 'bg-white border-gray-200 text-gray-800'
+            }`}
+            style={{
+              top: (() => {
+                const spaceBelow = window.innerHeight - activeStatusMenuRect.bottom;
+                return spaceBelow < 120 ? activeStatusMenuRect.top - 85 : activeStatusMenuRect.bottom + 4;
+              })(),
+              left: activeStatusMenuRect.left,
+            }}
+          >
+            <div className="flex flex-col gap-1">
+              {activeStatusMenuPo.status === 'Completed' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleUpdateStatus(activeStatusMenuPo, 'Pending');
+                    setActiveStatusMenuPo(null);
+                    setActiveStatusMenuRect(null);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer transition-colors ${
+                    isDarkMode ? 'hover:bg-slate-700/50 text-amber-400' : 'hover:bg-gray-100 text-amber-600'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <span>Pending</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleUpdateStatus(activeStatusMenuPo, 'Completed');
+                    setActiveStatusMenuPo(null);
+                    setActiveStatusMenuRect(null);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer transition-colors ${
+                    isDarkMode ? 'hover:bg-slate-700/50 text-emerald-400' : 'hover:bg-gray-100 text-emerald-600'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span>Completed</span>
+                </button>
+              )}
+              
+              {/* Divider */}
+              <div className={`h-[1px] my-0.5 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-100'}`} />
+              
+              {/* Cancel Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveStatusMenuPo(null);
+                  setActiveStatusMenuRect(null);
+                }}
+                className={`w-full text-center px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition-colors ${
+                  isDarkMode ? 'hover:bg-slate-700/50 text-slate-400' : 'hover:bg-gray-100 text-slate-500'
+                }`}
+              >
+                <span>Cancel</span>
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body
       )}
 
       <ImagePreviewModal

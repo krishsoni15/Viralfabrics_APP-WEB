@@ -179,7 +179,7 @@ export default function DeleteConfirmation({
                     }`}>
                       {item.finishWidth > 0 && `${item.finishWidth}"`}
                       {item.weight > 0 && ` • ${item.weight}KG`}
-                      {item.gsm > 0 && ` • GSM:${item.gsm}`}
+                      {item.gsm && String(item.gsm).trim() && ` • GSM:${item.gsm}`}
                       {item.greighRate > 0 && ` • ₹${item.greighRate}`}
                     </div>
                   </div>

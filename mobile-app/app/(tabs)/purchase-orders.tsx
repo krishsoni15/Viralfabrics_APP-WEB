@@ -21,6 +21,7 @@ import {
   useWindowDimensions,
   StatusBar,
   Image,
+  Alert,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import * as print from 'expo-print';
@@ -679,6 +680,8 @@ const PurchaseOrderCard = React.memo(({
   previewPDF,
   onPressCompanyHeader,
   numColumns = 1,
+  handleOpenImagePreview,
+  onToggleStatus,
 }: { 
   item: PurchaseOrder; 
   index: number; 
@@ -692,6 +695,7 @@ const PurchaseOrderCard = React.memo(({
   onPressCompanyHeader?: (company: 'Viral Fabrics' | 'Viral Enterprise') => void;
   numColumns?: number;
   handleOpenImagePreview: (images: string[], index: number) => void;
+  onToggleStatus?: (po: PurchaseOrder) => void;
 }) => {
   const [isAddressExpanded, setIsAddressExpanded] = useState(false);
   const [isPaymentTermsExpanded, setIsPaymentTermsExpanded] = useState(false);
@@ -758,12 +762,49 @@ const PurchaseOrderCard = React.memo(({
           </View>
         </View>
 
-        {/* Date Row */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
-          <CalendarDays size={13} color={theme.textSecondary} />
-          <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>
-            {formatDate(item.poDate)}
-          </Text>
+        {/* Date and Status Row */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <CalendarDays size={13} color={theme.textSecondary} />
+            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>
+              {formatDate(item.poDate)}
+            </Text>
+          </View>
+          {item.status === 'Completed' ? (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onToggleStatus?.(item)}
+              style={{ 
+                backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5', 
+                paddingHorizontal: 8, 
+                paddingVertical: 2.5, 
+                borderRadius: 8, 
+                borderWidth: 1, 
+                borderColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : '#a7f3d0'
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: 'bold', color: Colors.success[600] }}>
+                Completed
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onToggleStatus?.(item)}
+              style={{ 
+                backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb', 
+                paddingHorizontal: 8, 
+                paddingVertical: 2.5, 
+                borderRadius: 8, 
+                borderWidth: 1, 
+                borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fde68a'
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: 'bold', color: Colors.warning[600] }}>
+                Pending
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Broker Row */}
@@ -1014,6 +1055,7 @@ export default function PurchaseOrdersScreen() {
   const [searchVal, setSearchVal] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [companyHeader, setCompanyHeader] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [fyFilter, setFyFilter] = useState('');
   const [sortFilter, setSortFilter] = useState('latest_first');
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -1261,11 +1303,11 @@ export default function PurchaseOrdersScreen() {
   // Reset page to 1 when filters change
   useEffect(() => {
     setPage(1);
-  }, [companyHeader, fyFilter, sortFilter]);
+  }, [companyHeader, statusFilter, fyFilter, sortFilter]);
 
   // Fetch PO List
   const { data, isLoading, isFetching, refetch, isRefetching } = useQuery({
-    queryKey: ['purchaseOrders', page, debouncedSearch, companyHeader, fyFilter, sortFilter],
+    queryKey: ['purchaseOrders', page, debouncedSearch, companyHeader, statusFilter, fyFilter, sortFilter],
     staleTime: 30000,
     queryFn: async () => {
       if (page > 1) {
@@ -1284,6 +1326,7 @@ export default function PurchaseOrdersScreen() {
       }
 
       if (companyHeader) params.append('companyHeader', companyHeader);
+      if (statusFilter) params.append('status', statusFilter);
       if (fyFilter) params.append('fy', fyFilter);
 
       const res = await api.get(`/api/purchase-orders?${params.toString()}`);
@@ -1332,10 +1375,11 @@ export default function PurchaseOrdersScreen() {
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (companyHeader !== '') count++;
+    if (statusFilter !== '') count++;
     if (fyFilter !== '') count++;
     if (sortFilter !== 'latest_first') count++;
     return count;
-  }, [companyHeader, fyFilter, sortFilter]);
+  }, [companyHeader, statusFilter, fyFilter, sortFilter]);
 
   const totalActiveFiltersCount = useMemo(() => {
     let count = activeFilterCount;
@@ -1348,6 +1392,7 @@ export default function PurchaseOrdersScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     setCompanyHeader('');
+    setStatusFilter('');
     setFyFilter('');
     setSortFilter('latest_first');
     setSearchVal('');
@@ -1394,6 +1439,17 @@ export default function PurchaseOrdersScreen() {
     }
   });
 
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string, status: 'Pending' | 'Completed' }) => api.put(`/api/purchase-orders/${id}`, { status }),
+    onSuccess: (res, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+      addToast({ type: 'success', title: 'Status Updated', message: `PO status updated to ${variables.status}.` });
+    },
+    onError: (error: any) => {
+      addToast({ type: 'error', title: 'Error', message: error.response?.data?.message || 'Failed to update status.' });
+    }
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/api/purchase-orders/${id}`),
     onSuccess: () => {
@@ -1434,7 +1490,8 @@ export default function PurchaseOrdersScreen() {
         images: order.images || [],
         paymentTerms: cleanedTerms,
         notes: cleanedNotes,
-        specs: order.specs || { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' }
+        specs: order.specs || { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
+        status: order.status || 'Pending'
       });
       setSelectedImageUris(order.images || []);
       setNextPoDetails(null);
@@ -1463,7 +1520,8 @@ export default function PurchaseOrdersScreen() {
         delivery: '',
         paymentTerms: '',
         notes: '',
-        specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' }
+        specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
+        status: 'Pending'
       });
     }
     
@@ -1487,22 +1545,64 @@ export default function PurchaseOrdersScreen() {
     });
   };
 
-  const pickImages = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      alert('Sorry, we need camera roll permissions to make this work!');
+  const pickImages = () => {
+    if (Platform.OS === 'web') {
+      launchImagePicker(false);
       return;
     }
+    
+    Alert.alert(
+      'Upload Image',
+      'Choose an option to add images',
+      [
+        {
+          text: 'Take Photo',
+          onPress: () => launchImagePicker(true),
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: () => launchImagePicker(false),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
 
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    });
+  const launchImagePicker = async (useCamera: boolean) => {
+    try {
+      let result;
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Camera permission is required to take photos.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Gallery permission is required to select photos.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsMultipleSelection: true,
+          quality: 0.8,
+        });
+      }
 
-    if (!result.canceled && result.assets) {
-      const selected = result.assets.map(asset => asset.uri);
-      setSelectedImageUris(prev => [...prev, ...selected]);
+      if (!result.canceled && result.assets) {
+        const selected = result.assets.map(asset => asset.uri);
+        setSelectedImageUris(prev => [...prev, ...selected]);
+      }
+    } catch (err) {
+      console.error('Image picker error:', err);
     }
   };
 
@@ -1617,6 +1717,27 @@ export default function PurchaseOrdersScreen() {
     setDeleteId(id);
     setIsDeleteModalOpen(true);
   };
+
+  const handleToggleStatusPress = useCallback((item: PurchaseOrder) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    const isCompleted = item.status === 'Completed';
+    Alert.alert(
+      "Update PO Status",
+      `Select status for PO #${getDisplayOrderId(item.poNumber)}:`,
+      [
+        {
+          text: isCompleted ? "Pending" : "Completed",
+          onPress: () => updateStatusMutation.mutate({ id: item._id!, status: isCompleted ? 'Pending' : 'Completed' }),
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+        }
+      ]
+    );
+  }, [updateStatusMutation]);
   const previewPDF = async (po: PurchaseOrder) => {
     if (Platform.OS === 'web') {
       try {
@@ -1909,6 +2030,7 @@ export default function PurchaseOrdersScreen() {
                 onPressCompanyHeader={setInfoCompany}
                 numColumns={numColumns}
                 handleOpenImagePreview={handleOpenImagePreview}
+                onToggleStatus={handleToggleStatusPress}
               />
             )}
             ListFooterComponent={
@@ -2059,6 +2181,7 @@ export default function PurchaseOrdersScreen() {
                     <CalendarDays size={18} color={theme.textTertiary} />
                   </TouchableOpacity>
                 </View>
+
 
                 {/* Broker Info */}
                 <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20, zIndex: 100 }}>
@@ -2230,7 +2353,7 @@ export default function PurchaseOrdersScreen() {
                       />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Greigh Lead Time</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Lead Time</Text>
                       <TextInput
                         style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
                         value={formData.greighLeadTime || ''}
@@ -2378,7 +2501,13 @@ export default function PurchaseOrdersScreen() {
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.surface }}>
                       {selectedImageUris.map((uri, index) => (
                         <View key={index} style={{ width: 75, height: 75, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: theme.borderLight, position: 'relative' }}>
-                          <Image source={{ uri }} style={{ width: '100%', height: '100%' }} />
+                          <TouchableOpacity 
+                            style={{ flex: 1 }} 
+                            activeOpacity={0.8}
+                            onPress={() => handleOpenImagePreview(selectedImageUris, index)}
+                          >
+                            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} />
+                          </TouchableOpacity>
                           {/* New tag if newly picked */}
                           {(uri.startsWith('file:') || uri.startsWith('content:') || uri.startsWith('/')) && (
                             <View style={{ position: 'absolute', bottom: 4, left: 4, backgroundColor: '#2563eb', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
@@ -2556,6 +2685,7 @@ export default function PurchaseOrdersScreen() {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       }
                       setCompanyHeader('');
+                      setStatusFilter('');
                       setFyFilter('');
                       setSortFilter('latest_first');
                     }}
@@ -2648,6 +2778,46 @@ export default function PurchaseOrdersScreen() {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         }
                         setCompanyHeader(opt.id);
+                      }}
+                      activeOpacity={0.7}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 20,
+                        backgroundColor: isSelected ? Colors.primary[600] : (isDarkMode ? '#334155' : '#f1f5f9'),
+                        borderWidth: 1,
+                        borderColor: isSelected ? Colors.primary[600] : theme.borderLight,
+                      }}
+                    >
+                      <Text style={{
+                        fontSize: 12.5,
+                        fontWeight: '600',
+                        color: isSelected ? Colors.white : theme.textSecondary,
+                      }}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Status Section */}
+              <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Status</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
+                {[
+                  { id: '', label: 'All Statuses' },
+                  { id: 'Pending', label: 'Pending' },
+                  { id: 'Completed', label: 'Completed' },
+                ].map((opt) => {
+                  const isSelected = statusFilter === opt.id;
+                  return (
+                    <TouchableOpacity
+                      key={opt.id}
+                      onPress={() => {
+                        if (Platform.OS !== 'web') {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }
+                        setStatusFilter(opt.id);
                       }}
                       activeOpacity={0.7}
                       style={{

@@ -381,8 +381,8 @@ export default function FabricsPage() {
           bValue = b.weaver?.toLowerCase() || '';
           break;
         case 'gsm':
-          aValue = a.gsm || 0;
-          bValue = b.gsm || 0;
+          aValue = parseFloat(String(a.gsm)) || 0;
+          bValue = parseFloat(String(b.gsm)) || 0;
           break;
         case 'weight':
           aValue = a.weight || 0;
@@ -4470,7 +4470,7 @@ export default function FabricsPage() {
                                                 GSM:
                                               </div>
                                               <div className={`font-bold ${isDarkMode ? 'text-pink-300' : 'text-pink-600'}`}>
-                                                {fabric.gsm > 0 ? fabric.gsm : '-'}
+                                                {fabric.gsm && String(fabric.gsm).trim() ? fabric.gsm : '-'}
                                               </div>
                                             </div>
 
@@ -5010,7 +5010,7 @@ export default function FabricsPage() {
                                   <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'
                                     }`}>
                                     <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-pink-300' : 'text-pink-600'}`}>
-                                      {fabric.gsm > 0 ? fabric.gsm : '-'}
+                                      {fabric.gsm && String(fabric.gsm).trim() ? fabric.gsm : '-'}
                                     </span>
                                   </td>
 

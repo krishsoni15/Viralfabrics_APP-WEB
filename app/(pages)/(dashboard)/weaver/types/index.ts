@@ -25,7 +25,7 @@ export interface Sample {
   greighWidth: number;
   finishWidth: number;
   weight: number;
-  gsm: number;
+  gsm: string | number;
   content: string;
   danier: string;
   count: number;

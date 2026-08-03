@@ -403,7 +403,7 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
           greighWidth: (item.greighWidth && item.greighWidth > 0) ? item.greighWidth.toString() : '',
           finishWidth: (item.finishWidth && item.finishWidth > 0) ? item.finishWidth.toString() : '',
           weight: (item.weight && item.weight > 0) ? item.weight.toString() : '',
-          gsm: (item.gsm && item.gsm > 0) ? item.gsm.toString() : '',
+          gsm: item.gsm ? item.gsm.toString() : '',
           content: item.content || '',
           danier: item.danier || '',
           count: (item.count && item.count > 0) ? item.count.toString() : '',
@@ -1239,7 +1239,7 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
           greighWidth: parseFloat(item.greighWidth) || 0,
           finishWidth: parseFloat(item.finishWidth) || 0,
           weight: parseFloat(item.weight) || 0,
-          gsm: parseFloat(item.gsm) || 0,
+          gsm: item.gsm?.trim() || '',
           content: item.content || '',
           danier: item.danier,
           count: parseInt(item.count) || 0,
@@ -1283,7 +1283,7 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
               greighWidth: parseFloat(formData.items[0]?.greighWidth) || 0,
               finishWidth: parseFloat(formData.items[0]?.finishWidth) || 0,
               weight: parseFloat(formData.items[0]?.weight) || 0,
-              gsm: parseFloat(formData.items[0]?.gsm) || 0,
+              gsm: formData.items[0]?.gsm?.trim() || '',
               content: formData.items[0]?.content || '',
               danier: formData.items[0]?.danier || '',
               count: parseInt(formData.items[0]?.count) || 0,
@@ -1321,7 +1321,7 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
                 greighWidth: parseFloat(formData.items[0]?.greighWidth) || 0,
                 finishWidth: parseFloat(formData.items[0]?.finishWidth) || 0,
                 weight: parseFloat(formData.items[0]?.weight) || 0,
-                gsm: parseFloat(formData.items[0]?.gsm) || 0,
+                gsm: formData.items[0]?.gsm?.trim() || '',
                 content: formData.items[0]?.content || '',
                 danier: formData.items[0]?.danier || '',
                 count: parseInt(formData.items[0]?.count) || 0,
@@ -1372,7 +1372,7 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
                   greighWidth: parseFloat(formData.items[0]?.greighWidth) || 0,
                   finishWidth: parseFloat(formData.items[0]?.finishWidth) || 0,
                   weight: parseFloat(formData.items[0]?.weight) || 0,
-                  gsm: parseFloat(formData.items[0]?.gsm) || 0,
+                  gsm: formData.items[0]?.gsm?.trim() || '',
                   content: formData.items[0]?.content || '',
                   danier: formData.items[0]?.danier || '',
                   count: parseInt(formData.items[0]?.count) || 0,
@@ -1577,7 +1577,7 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
             greighWidth: parseFloat(item.greighWidth) || 0,
             finishWidth: parseFloat(item.finishWidth) || 0,
             weight: parseFloat(item.weight) || 0,
-            gsm: parseFloat(item.gsm) || 0,
+            gsm: item.gsm?.trim() || '',
             content: item.content || '',
             danier: item.danier || '',
             count: parseInt(item.count) || 0,
@@ -2655,7 +2655,7 @@ export default function CreateFabricPage({ embedMode = false, fabric = null, onC
                       type="text"
                       value={item.gsm}
                       onChange={(e) => handleItemChange(index, 'gsm', e.target.value)}
-                      placeholder="e.g., 72.5"
+                      placeholder="e.g., 72.5 or 100-150"
                         className={`w-full p-3 pr-10 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:scale-[1.01] hover:border-blue-300 input-focus ${
                         isDarkMode 
                           ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
