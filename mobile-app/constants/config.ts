@@ -1,12 +1,14 @@
 import Constants from 'expo-constants';
 
+const DEFAULT_PROD_API_URL = 'https://viralfabrics-app-web.vercel.app';
+
 // Dynamically extract the Metro host IP address to fallback if EXPO_PUBLIC_API_URL is missing or local
 const getDevApiUrl = () => {
   const hostUri = Constants.expoConfig?.hostUri || 
                   (Constants.expoConfig as any)?.debuggerHost || 
                   (Constants.manifest as any)?.debuggerHost;
                   
-  if (!hostUri) return 'http://localhost:3000';
+  if (!hostUri) return DEFAULT_PROD_API_URL;
   const ip = hostUri.split(':')[0];
   
   // If it's a tunnel connection, we shouldn't append port 3000
@@ -22,7 +24,10 @@ const getApiUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
-  return getDevApiUrl();
+  if (__DEV__) {
+    return getDevApiUrl();
+  }
+  return DEFAULT_PROD_API_URL;
 };
 
 export const CONFIG = {
