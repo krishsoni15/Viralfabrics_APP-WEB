@@ -102,6 +102,8 @@ import DeleteConfirmModal from '../../components/shared/DeleteConfirmModal';
 import PdfViewer from '../../components/orders/PdfViewer';
 import PdfViewerModal from '../../components/shared/PdfViewerModal';
 import { savePdfToDevice } from '../../utils/pdfUtils';
+import { generateOrderHtml } from '../../utils/orderPdfTemplate';
+import * as Print from 'expo-print';
 
 const getFullImageUrl = (url: string | null | undefined) => {
   return resolveImageUrl(url) || null;
@@ -3009,7 +3011,7 @@ export default function OrdersScreen() {
     setDeleteItemTarget({ orderId, itemIndex });
   }, []);
 
-  const handleDownloadPDF = useCallback((orderId: string, itemIndex: number) => {
+  const handleDownloadPDF = useCallback(async (orderId: string, itemIndex: number) => {
     if (!isMaster) {
       addToast({ type: 'error', title: 'Access Denied', message: 'Only master can download this PDF.' });
       return;
@@ -3024,20 +3026,32 @@ export default function OrdersScreen() {
       // Web: show the old preview modal with iframe
       setPdfPreviewData({ order, itemIndex });
     } else {
-      // Native: directly open PdfViewerModal with Save & Share
-      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
-      storage.getToken().then(token => {
-        const pdfUrl = `${baseUrl}/api/orders/${order._id}/pdf?itemIndex=${itemIndex}${token ? `&token=${token}` : ''}`;
-        const sanitizedOrderId = order.orderId.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const filename = `Purchase_Order_${sanitizedOrderId}_Item_${itemIndex + 1}.pdf`;
+      // Native: generate local HTML PDF for instant offline high-fidelity preview
+      const sanitizedOrderId = (order.orderId || 'Order').replace(/[^a-zA-Z0-9-_]/g, '_');
+      const filename = `Order_Sheet_${sanitizedOrderId}_Item_${itemIndex + 1}.pdf`;
+      const title = `Order Sheet — ${getDisplayOrderId(order.orderId)} • Item ${itemIndex + 1}`;
 
-        setOrderPdfViewerUrl(pdfUrl);
-        setOrderPdfViewerTitle(`Purchase Order — ${getDisplayOrderId(order.orderId)} • Item ${itemIndex + 1}`);
+      try {
+        const html = generateOrderHtml(order, itemIndex);
+        const { uri } = await Print.printToFileAsync({ html });
+
+        setOrderPdfViewerUrl(uri);
+        setOrderPdfViewerTitle(title);
         setOrderPdfViewerFilename(filename);
         setOrderPdfViewerVisible(true);
-      });
+      } catch (err) {
+        console.warn('[Orders] Local Order HTML generation failed, falling back to API URL:', err);
+        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+        const token = await storage.getToken();
+        const pdfUrl = `${baseUrl}/api/orders/${order._id}/pdf?itemIndex=${itemIndex}${token ? `&token=${token}` : ''}`;
+
+        setOrderPdfViewerUrl(pdfUrl);
+        setOrderPdfViewerTitle(title);
+        setOrderPdfViewerFilename(filename);
+        setOrderPdfViewerVisible(true);
+      }
     }
-  }, [orders]);
+  }, [orders, isMaster, addToast]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: Order; index: number }) => (

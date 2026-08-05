@@ -18,6 +18,7 @@ import { FinishLotSkeletonList } from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import ImagePreviewModal from '../../components/shared/ImagePreviewModal';
 import CustomCameraModal from '../../components/shared/CustomCameraModal';
+import PdfViewerModal from '../../components/shared/PdfViewerModal';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
@@ -315,6 +316,14 @@ export default function FinishLotStockScreen() {
   const [deleteTarget, setDeleteTarget] = useState<FinishLotStock | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [generatingSticker, setGeneratingSticker] = useState(false);
+
+  // ─ Sticker PDF Viewer State ──
+  const [stickerPdfVisible, setStickerPdfVisible] = useState(false);
+  const [stickerPdfUrl, setStickerPdfUrl] = useState('');
+  const [stickerPdfTitle, setStickerPdfTitle] = useState('');
+  const [stickerPdfFilename, setStickerPdfFilename] = useState('');
+  const [stickerPdfLocalUri, setStickerPdfLocalUri] = useState<string | undefined>(undefined);
+  const [stickerPdfLocalBase64, setStickerPdfLocalBase64] = useState<string | undefined>(undefined);
 
   // ─ QR Modal State & Callbacks ──
   const [qrModalItem, setQrModalItem] = useState<FinishLotStock | null>(null);
@@ -648,16 +657,12 @@ export default function FinishLotStockScreen() {
           }, 500);
         };
       } else if (pdf.uri) {
-        const Sharing = await import('expo-sharing');
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(pdf.uri, {
-            mimeType: 'application/pdf',
-            dialogTitle: 'Share Finish Lot Sticker',
-          });
-        } else {
-          addToast({ type: 'error', title: 'Error', message: 'Sharing not available' });
-        }
+        setStickerPdfLocalUri(pdf.uri);
+        setStickerPdfLocalBase64(pdf.base64);
+        setStickerPdfUrl('');
+        setStickerPdfTitle(`Finish Lot Sticker — ${item.qualityName || 'Sticker'}`);
+        setStickerPdfFilename(filename);
+        setStickerPdfVisible(true);
       }
     } catch (e: any) {
       console.error('Sticker Error:', e);
@@ -1425,6 +1430,18 @@ export default function FinishLotStockScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ═══ STICKER PDF VIEWER MODAL ═══ */}
+      <PdfViewerModal
+        visible={stickerPdfVisible}
+        onClose={() => setStickerPdfVisible(false)}
+        pdfUrl={stickerPdfUrl}
+        title={stickerPdfTitle}
+        filename={stickerPdfFilename}
+        localUri={stickerPdfLocalUri}
+        localBase64={stickerPdfLocalBase64}
+        addToast={addToast}
+      />
     </SafeAreaView>
   );
 }
