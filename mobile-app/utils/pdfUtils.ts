@@ -127,6 +127,17 @@ async function savePdfNative(
     if (!url) {
       throw new Error('No download URL provided');
     }
+
+    // If the URL is a local file:// URI, treat it as a local file — don't download
+    if (url.startsWith('file://') || !url.startsWith('http')) {
+      const decodedUrl = decodeURIComponent(url);
+      if (Platform.OS === 'android') {
+        return await saveToAndroidDownloads(decodedUrl, filename);
+      } else {
+        return await saveToIosFiles(decodedUrl, filename, dialogTitle);
+      }
+    }
+
     // Step 1: Download to cache
     const cacheUri = `${FileSystem.cacheDirectory}${filename}`;
     const downloadResult = await FileSystem.downloadAsync(url, cacheUri, {

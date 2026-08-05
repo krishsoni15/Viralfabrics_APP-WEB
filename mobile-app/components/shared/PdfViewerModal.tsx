@@ -288,11 +288,28 @@ export default function PdfViewerModal({
     };
   }, [visible, pdfUrl, localUri, localBase64]);
 
+  const isLocalFile = pdfUrl?.startsWith('file://') || (pdfUrl && !pdfUrl.startsWith('http'));
+
   const preCachePdf = useCallback(async () => {
     try {
       const cacheUri = `${FileSystem.cacheDirectory}${filename}`;
-      const token = await storage.getToken();
       console.log('[PDF Preview] preCachePdf starting for URL:', pdfUrl);
+
+      // If pdfUrl is a local file URI, copy instead of download
+      if (pdfUrl?.startsWith('file://') || (pdfUrl && !pdfUrl.startsWith('http'))) {
+        const decodedPdfUrl = decodeURIComponent(pdfUrl);
+        await FileSystem.copyAsync({ from: decodedPdfUrl, to: cacheUri });
+        if (Platform.OS === 'android') {
+          const base64 = await FileSystem.readAsStringAsync(cacheUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          setPdfBase64(base64);
+        }
+        setCachedUri(cacheUri);
+        return;
+      }
+
+      const token = await storage.getToken();
       const result = await FileSystem.downloadAsync(pdfUrl, cacheUri, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -327,12 +344,14 @@ export default function PdfViewerModal({
 
     try {
       const token = await storage.getToken();
+      // Use cachedUri or the original pdfUrl as localUri when it's a file:// URI
+      const effectiveLocalUri = cachedUri || (isLocalFile ? decodeURIComponent(pdfUrl) : undefined);
       const result = await savePdfToDevice({
         url: pdfUrl,
         filename,
         token,
         dialogTitle: title,
-        localUri: cachedUri || undefined,
+        localUri: effectiveLocalUri,
       });
 
       if (result.success) {
@@ -371,7 +390,7 @@ export default function PdfViewerModal({
     } finally {
       setIsDownloading(false);
     }
-  }, [pdfUrl, filename, title, isDownloading, addToast, onDownloadComplete, cachedUri]);
+  }, [pdfUrl, filename, title, isDownloading, addToast, onDownloadComplete, cachedUri, isLocalFile]);
 
   const handleShare = useCallback(async () => {
     if (isSharing) return;
@@ -386,15 +405,23 @@ export default function PdfViewerModal({
       let uriToShare = cachedUri;
 
       if (!uriToShare) {
-        // Download first
-        const token = await storage.getToken();
         const cacheUri = `${FileSystem.cacheDirectory}${filename}`;
-        const result = await FileSystem.downloadAsync(pdfUrl, cacheUri, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (result.status === 200) {
-          uriToShare = result.uri;
-          setCachedUri(result.uri);
+
+        // If pdfUrl is a local file, copy it; otherwise download
+        if (isLocalFile) {
+          const decodedPdfUrl = decodeURIComponent(pdfUrl);
+          await FileSystem.copyAsync({ from: decodedPdfUrl, to: cacheUri });
+          uriToShare = cacheUri;
+          setCachedUri(cacheUri);
+        } else {
+          const token = await storage.getToken();
+          const result = await FileSystem.downloadAsync(pdfUrl, cacheUri, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (result.status === 200) {
+            uriToShare = result.uri;
+            setCachedUri(result.uri);
+          }
         }
       }
 
