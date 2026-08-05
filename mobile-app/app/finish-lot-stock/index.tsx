@@ -25,6 +25,7 @@ import { Colors } from '../../constants/colors';
 import { FinishLotStock } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { formatDate, resolveImageUrl, uploadSingleImage } from '../../utils/helpers';
+import { generateStickerPdf } from '../../utils/stickerPdf';
 
 const PAGE_SIZE = 5;
 const FinishProgressBar = () => {
@@ -313,6 +314,7 @@ export default function FinishLotStockScreen() {
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<FinishLotStock | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [generatingSticker, setGeneratingSticker] = useState(false);
 
   // ─ QR Modal State & Callbacks ──
   const [qrModalItem, setQrModalItem] = useState<FinishLotStock | null>(null);
@@ -609,8 +611,15 @@ export default function FinishLotStockScreen() {
   const handleOpenPreview = useCallback((imgs: string[]) => { setPreviewImages(imgs); setPreviewVisible(true); }, []);
 
   const handleOpenSticker = useCallback(async (item: FinishLotStock) => {
+    if (generatingSticker) return;
     try {
       if (!item) return;
+      setGeneratingSticker(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      addToast({ type: 'info', title: 'Generating Sticker...', message: 'Please wait a moment' });
+
+      // Let the UI update (show toast/spinner) before starting heavy work
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       const stickerData = {
         type: 'finish-lot-stock' as const,
@@ -625,7 +634,6 @@ export default function FinishLotStockScreen() {
         piece: item.piece,
       };
 
-      const { generateStickerPdf } = await import('../../utils/stickerPdf');
       const filename = `FinishLotStock_Sticker_${item.sequence || item.qualityName.replace(/\s+/g, '_')}.pdf`;
       const pdf = await generateStickerPdf(stickerData, filename);
 
@@ -654,8 +662,10 @@ export default function FinishLotStockScreen() {
     } catch (e: any) {
       console.error('Sticker Error:', e);
       addToast({ type: 'error', title: 'Error', message: 'Failed to generate sticker' });
+    } finally {
+      setGeneratingSticker(false);
     }
-  }, [addToast]);
+  }, [addToast, generatingSticker]);
 
   // ─ Form ──
   const openCreateForm = useCallback(() => {
