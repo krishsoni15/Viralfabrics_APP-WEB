@@ -51,7 +51,7 @@ export function generateOrderHtml(order: Order, itemIndex: number = 0): string {
   const company = COMPANY_HEADERS[companyKey] || COMPANY_HEADERS['Viral Fabrics'];
   
   const items = order.items || [];
-  const currentItem = items[itemIndex] || items[0] || {};
+  const currentItem: any = items[itemIndex] || items[0] || {};
   const qualityName = typeof currentItem.quality === 'object' && currentItem.quality?.name
     ? currentItem.quality.name
     : (typeof currentItem.quality === 'string' ? currentItem.quality : 'N/A');
