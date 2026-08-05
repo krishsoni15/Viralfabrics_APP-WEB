@@ -1628,7 +1628,8 @@ export default function OrdersScreen() {
       const { data } = await api.get('/api/parties');
       return Array.isArray(data) ? data : data?.data || [];
     },
-    enabled: isAuthenticated
+    enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000, // 10 min — parties rarely change
   });
   const parties = useMemo(() => partiesQuery.data || [], [partiesQuery.data]);
 
@@ -1638,7 +1639,8 @@ export default function OrdersScreen() {
       const { data } = await api.get('/api/qualities');
       return Array.isArray(data) ? data : data?.data || [];
     },
-    enabled: isAuthenticated
+    enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000,
   });
 
   const millsQuery = useQuery({
@@ -1647,7 +1649,8 @@ export default function OrdersScreen() {
       const { data } = await api.get('/api/mills');
       return Array.isArray(data) ? data : data?.data || [];
     },
-    enabled: isAuthenticated
+    enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000,
   });
 
   const qualities = useMemo(() => qualitiesQuery.data || [], [qualitiesQuery.data]);
@@ -1659,7 +1662,8 @@ export default function OrdersScreen() {
       const { data } = await api.get('/api/orders/financial-years');
       return data?.data?.options || [];
     },
-    enabled: isAuthenticated
+    enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000,
   });
   const fyOptions = fyQuery.data || [];
 
@@ -2891,7 +2895,7 @@ export default function OrdersScreen() {
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
 
-      params.t = Date.now();
+
 
       const { data } = await api.get('/api/orders', { params });
       return data;

@@ -359,7 +359,7 @@ export default function DashboardScreen() {
         };
       }
     },
-    staleTime: 10000,
+    staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: false,
     enabled: isAuthenticated,

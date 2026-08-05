@@ -1403,10 +1403,6 @@ export default function PurchaseOrdersScreen() {
     queryKey: ['purchaseOrders', page, debouncedSearch, companyHeader, statusFilter, fyFilter, sortFilter],
     staleTime: 30000,
     queryFn: async () => {
-      if (page > 1) {
-        // Simulated transition delay for page > 1 so the circular loading animation is clearly visible
-        await new Promise(resolve => setTimeout(resolve, 800));
-      }
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '5',
