@@ -28,8 +28,13 @@ export async function GET(req: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
     const status = searchParams.get('status') || 'all';
+    const lotType = searchParams.get('lotType') || 'ALL';
     
     const query: any = {};
+
+    if (lotType !== 'ALL') {
+      query.lotType = lotType;
+    }
 
     if (status === 'open') {
       query.$and = query.$and || [];
@@ -138,9 +143,14 @@ export async function POST(req: NextRequest) {
     const data = await req.json();
     const {
       qualityName,
+      lotType,
       images,
       meter,
-      piece
+      piece,
+      weaverName,
+      weaverQuality,
+      millName,
+      processInMill
     } = data;
     
     if (!qualityName?.trim()) {
@@ -149,9 +159,35 @@ export async function POST(req: NextRequest) {
         message: "Quality name is required" 
       }), { status: 400 });
     }
+
+    const type = lotType === 'RFD' ? 'RFD' : 'OTHER';
+    const prefix = type === 'RFD' ? 'RFD' : 'OTH';
+
+    // Generate sequence
+    const latestEntry = await FinishLotStock.findOne({ lotType: type })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    let nextNumber = 1;
+    if (latestEntry && latestEntry.sequence) {
+      const parts = latestEntry.sequence.split('-');
+      if (parts.length === 2) {
+        const num = parseInt(parts[1], 10);
+        if (!isNaN(num)) {
+          nextNumber = num + 1;
+        }
+      }
+    }
+    const sequenceStr = `${prefix}-${nextNumber.toString().padStart(4, '0')}`;
     
     const finishLotStock = new FinishLotStock({
       qualityName: qualityName.trim(),
+      lotType: type,
+      sequence: sequenceStr,
+      weaverName: weaverName?.trim() || '',
+      weaverQuality: weaverQuality?.trim() || '',
+      millName: millName?.trim() || '',
+      processInMill: processInMill?.trim() || '',
       images: images || [],
       piece: piece ? Number(piece) : 0,
       meter: meter ? Number(meter) : 0

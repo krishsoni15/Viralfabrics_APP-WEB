@@ -12,9 +12,11 @@ import {
   ActivityIndicator,
   Image,
   StyleSheet,
-  useColorScheme
+  useColorScheme,
+  useWindowDimensions,
+  StatusBar
 } from 'react-native';
-import { X, Share2, Download, Maximize2, Minimize2, Crop, Check } from 'lucide-react-native';
+import { X, Share2, Download, Maximize2, Minimize2, Crop, Check, FlipHorizontal } from 'lucide-react-native';
 import {
   GestureHandlerRootView,
   Gesture,
@@ -31,7 +33,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import * as Haptics from 'expo-haptics';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
 
 // ── Image cache helpers (expo-file-system) ──
 const imageCache = new Map<string, string>();
@@ -46,7 +48,7 @@ async function getCachedImageUri(remoteUri: string): Promise<string> {
   }
 
   try {
-    const FileSystem = require('expo-file-system');
+    const FileSystem = require('expo-file-system/legacy');
     const FS = FileSystem?.default || FileSystem;
     if (!FS?.cacheDirectory || !FS?.getInfoAsync || !FS?.downloadAsync) {
       imageCache.set(remoteUri, remoteUri);
@@ -92,7 +94,8 @@ async function cropImageOnWeb(
   originX: number,
   originY: number,
   width: number,
-  height: number
+  height: number,
+  isFlipped = false
 ): Promise<string> {
   return new Promise((resolve) => {
     const img = new (window as any).Image() as HTMLImageElement;
@@ -108,7 +111,13 @@ async function cropImageOnWeb(
         resolve(uri);
         return;
       }
-      ctx.drawImage(img, originX, originY, width, height, 0, 0, width, height);
+      if (isFlipped) {
+        ctx.translate(width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, img.width - originX - width, originY, width, height, 0, 0, width, height);
+      } else {
+        ctx.drawImage(img, originX, originY, width, height, 0, 0, width, height);
+      }
       resolve(canvas.toDataURL('image/jpeg', 0.9));
     };
     img.onerror = (err) => {
@@ -119,7 +128,7 @@ async function cropImageOnWeb(
   });
 }
 
-function getCropBoxDimensions(ratio: '4:3' | '16:9' | '1:1' | 'Full', imgAspect: number) {
+function getCropBoxDimensions(ratio: '4:3' | '16:9' | '1:1' | 'Full', imgAspect: number, screenWidth: number, screenHeight: number) {
   const maxW = screenWidth - 40;
   const maxH = (screenHeight * 0.75) - 40;
 
@@ -181,9 +190,10 @@ interface ZoomableImageProps {
   cropBoxH: SharedValue<number>;
   naturalSize: { width: number; height: number } | null;
   onLoadSize?: (size: { width: number; height: number }) => void;
+  isFlipped: boolean;
 }
 
-function ZoomableImage({
+const ZoomableImage = React.memo(({
   uri,
   zoomMode,
   onZoomChange,
@@ -200,8 +210,10 @@ function ZoomableImage({
   cropBoxW,
   cropBoxH,
   naturalSize,
-  onLoadSize
-}: ZoomableImageProps) {
+  onLoadSize,
+  isFlipped
+}: ZoomableImageProps) => {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isZoomedRef = useRef(false);
   const [isZoomed, setIsZoomed] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -349,6 +361,7 @@ function ZoomableImage({
     return {
       transform: [
         { scale: scale.value },
+        { scaleX: isFlipped ? -1 : 1 },
         { translateX: translationX.value },
         { translateY: translationY.value },
       ],
@@ -395,7 +408,7 @@ function ZoomableImage({
       </View>
     </GestureDetector>
   );
-}
+});
 
 const fetchImageSize = async (uri: string): Promise<{ width: number; height: number }> => {
   return new Promise((resolve, reject) => {
@@ -439,7 +452,7 @@ const fetchImageSize = async (uri: string): Promise<{ width: number; height: num
   });
 };
 
-export default function ImagePreviewModal({
+function ImagePreviewModal({
   visible,
   images,
   initialIndex = 0,
@@ -448,8 +461,9 @@ export default function ImagePreviewModal({
   singlePhoto,
   isDarkMode
 }: ImagePreviewModalProps) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const colorScheme = useColorScheme();
-  const effectiveIsDarkMode = isDarkMode ?? colorScheme === 'dark';
+  const effectiveIsDarkMode = true; // Force dark theme for premium photo crop / preview experience
   const themeSurface = effectiveIsDarkMode ? '#020617' : '#f8fafc';
   const themePanel = effectiveIsDarkMode ? 'rgba(15, 23, 42, 0.98)' : 'rgba(255, 255, 255, 0.98)';
   const themeBorder = effectiveIsDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)';
@@ -462,11 +476,18 @@ export default function ImagePreviewModal({
   const imagesSerialized = JSON.stringify(images);
   const [localImages, setLocalImages] = useState<string[]>(images);
   const insets = useSafeAreaInsets();
+  const statusBarHeight = Platform.OS === 'android'
+    ? (StatusBar.currentHeight || 24)
+    : (insets.top > 0 ? insets.top : 20);
+  const modalBottomInset = Platform.OS === 'android'
+    ? 36
+    : (insets.bottom > 0 ? insets.bottom : 20);
   const [currentActiveIndex, setCurrentActiveIndex] = useState(initialIndex);
   const [zoomMode, setZoomMode] = useState<'contain' | 'cover'>('contain');
   const [isZoomed, setIsZoomed] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [isCropping, setIsCropping] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
   const [savingCropped, setSavingCropped] = useState(false);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [cropRatio, setCropRatio] = useState<'4:3' | '16:9' | '1:1' | 'Full'>('Full');
@@ -483,6 +504,7 @@ export default function ImagePreviewModal({
   useEffect(() => {
     const currentUrl = localImages?.[currentActiveIndex];
     setNaturalSize(null); // Reset natural size when active image changes
+    setIsFlipped(false); // Reset flip state when active image changes
     if (currentUrl) {
       fetchImageSize(currentUrl)
         .then((size) => {
@@ -523,7 +545,7 @@ export default function ImagePreviewModal({
   const dragGesture = Gesture.Pan()
     .activeOffsetY([-10, 10])
     .failOffsetX([-10, 10])
-    .enabled(!isZoomed && !isCropping) // Lock drag-to-dismiss in zoom or crop modes
+    .enabled(!isZoomed) // Allow drag-to-dismiss even when cropping as long as image is not scaled/zoomed
     .onUpdate((e) => {
       if (e.translationY > 0) {
         translateY.value = e.translationY;
@@ -550,19 +572,19 @@ export default function ImagePreviewModal({
 
   const resetCropBox = useCallback((ratio: '4:3' | '16:9' | '1:1' | 'Full', size: { width: number; height: number } | null) => {
     const aspect = size ? size.width / size.height : 1;
-    const { width: initW, height: initH } = getCropBoxDimensions(ratio, aspect);
+    const { width: initW, height: initH } = getCropBoxDimensions(ratio, aspect, screenWidth, screenHeight);
     cropBoxW.value = initW;
     cropBoxH.value = initH;
     cropBoxX.value = (screenWidth - initW) / 2;
     cropBoxY.value = (screenHeight * 0.75 - initH) / 2;
-  }, []);
+  }, [screenWidth, screenHeight]);
 
   // Sync active index when modal becomes visible or initialIndex changes
   useEffect(() => {
     if (visible) {
       setCurrentActiveIndex(initialIndex);
       setZoomMode('contain'); // Reset zoom mode when opening
-      setIsZoomed(singlePhoto ? true : false);
+      setIsZoomed(false); // Enable unzoomed state initially to support slide-to-close gestures
       setIsCropping(singlePhoto ? true : false);
       setSavingCropped(false);
       setCropRatio('Full'); // Default crop ratio
@@ -637,8 +659,8 @@ export default function ImagePreviewModal({
         return;
       }
 
-      const FileSystem = require('expo-file-system');
-      const MediaLibrary = require('expo-media-library');
+      const FileSystem = require('expo-file-system/legacy');
+      const MediaLibrary = require('expo-media-library/legacy');
 
       const FileSystemLib = FileSystem ? (FileSystem.default || FileSystem) : null;
       const MediaLibraryLib = MediaLibrary ? (MediaLibrary.default || MediaLibrary) : null;
@@ -654,19 +676,25 @@ export default function ImagePreviewModal({
         return;
       }
 
-      const filename = currentUrl.split('/').pop() || 'download.jpg';
-      const cleanFilename = filename.split('?')[0];
-      const fileUri = `${FileSystemLib.documentDirectory}${Date.now()}_${cleanFilename}`;
+      let savedUri = currentUrl;
 
-      const downloadRes = await FileSystemLib.downloadAsync(currentUrl, fileUri);
-      if (downloadRes.status !== 200) {
-        throw new Error('Server returned status code ' + downloadRes.status);
+      // Only perform network download for remote URLs (http/https)
+      if (currentUrl.startsWith('http://') || currentUrl.startsWith('https://')) {
+        const filename = currentUrl.split('/').pop() || 'download.jpg';
+        const cleanFilename = filename.split('?')[0];
+        const fileUri = `${FileSystemLib.documentDirectory}${Date.now()}_${cleanFilename}`;
+
+        const downloadRes = await FileSystemLib.downloadAsync(currentUrl, fileUri);
+        if (downloadRes.status !== 200) {
+          throw new Error('Server returned status code ' + downloadRes.status);
+        }
+        savedUri = downloadRes.uri;
       }
 
-      const asset = await MediaLibraryLib.createAssetAsync(downloadRes.uri);
+      const asset = await MediaLibraryLib.createAssetAsync(savedUri);
       await MediaLibraryLib.createAlbumAsync('Viral Fabrics', asset, false);
 
-      Alert.alert('Success', 'Image downloaded successfully and saved to your Gallery!');
+      Alert.alert('Success', 'Image saved successfully to your Gallery!');
     } catch (error: any) {
       Alert.alert('Error', 'Could not save the image: ' + error.message);
     } finally {
@@ -765,7 +793,7 @@ export default function ImagePreviewModal({
       let manipulateResult: { uri: string } = { uri: currentUrl };
 
       if (Platform.OS === 'web') {
-        const croppedDataUrl = await cropImageOnWeb(currentUrl, originX, originY, width, height);
+        const croppedDataUrl = await cropImageOnWeb(currentUrl, originX, originY, width, height, isFlipped);
         manipulateResult = { uri: croppedDataUrl };
       } else {
         try {
@@ -777,18 +805,24 @@ export default function ImagePreviewModal({
             throw new Error('expo-image-manipulator is not available.');
           }
 
+          const actions: any[] = [
+            {
+              crop: {
+                originX: isFlipped ? (naturalSize.width - originX - width) : originX,
+                originY,
+                width,
+                height,
+              },
+            },
+          ];
+
+          if (isFlipped) {
+            actions.push({ flip: 'horizontal' });
+          }
+
           manipulateResult = await ImageManipulatorLib.manipulateAsync(
             currentUrl,
-            [
-              {
-                crop: {
-                  originX,
-                  originY,
-                  width,
-                  height,
-                },
-              },
-            ],
+            actions,
             { compress: 0.9, format: ImageManipulatorLib.SaveFormat.JPEG }
           );
         } catch (nativeErr: any) {
@@ -1082,19 +1116,22 @@ export default function ImagePreviewModal({
   return (
     <Modal
       visible={visible}
-      transparent={true}
+      transparent={false}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent={true}
+      navigationBarTranslucent={true}
       animationType="fade"
       onRequestClose={onClose}
     >
       {visible && localImages && localImages.length > 0 ? (
-        <GestureHandlerRootView style={{ flex: 1 }}>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: themeSurface }}>
           <GestureDetector gesture={dragGesture}>
             <Animated.View style={[{ flex: 1, width: '100%', backgroundColor: themeSurface, justifyContent: 'center', alignItems: 'center' }, animatedStyle]}>
             
             {/* Header Controls */}
             <View style={{
               position: 'absolute',
-              top: insets.top > 0 ? insets.top + 8 : 20,
+              top: statusBarHeight + 8,
               left: 0,
               right: 0,
               flexDirection: 'row',
@@ -1337,6 +1374,7 @@ export default function ImagePreviewModal({
                       savedTranslationY={savedTranslationY}
                       isActive={currentActiveIndex === idx}
                       isCropping={isCropping}
+                      isFlipped={currentActiveIndex === idx ? isFlipped : false}
                       cropBoxX={cropBoxX}
                       cropBoxY={cropBoxY}
                       cropBoxW={cropBoxW}
@@ -1536,7 +1574,7 @@ export default function ImagePreviewModal({
             {isCropping && (
               <View style={{
                 position: 'absolute',
-                bottom: insets.bottom > 0 ? insets.bottom + 10 : 30,
+                bottom: modalBottomInset + 10,
                 left: 0,
                 right: 0,
                 flexDirection: 'row',
@@ -1580,6 +1618,35 @@ export default function ImagePreviewModal({
                     </TouchableOpacity>
                   );
                 })}
+                
+                {/* Horizontal Flip Button */}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (Platform.OS !== 'web') {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }
+                    setIsFlipped(!isFlipped);
+                  }}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
+                    borderRadius: 14,
+                    backgroundColor: isFlipped ? '#3b82f6' : (effectiveIsDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'),
+                    borderWidth: 0,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <FlipHorizontal size={13} color="#fff" />
+                  <Text style={{
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: '700',
+                  }}>{isFlipped ? 'Flipped' : 'Flip'}</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -1587,7 +1654,7 @@ export default function ImagePreviewModal({
             {!isCropping && onSaveCroppedImage && singlePhoto && (
               <View style={{
                 position: 'absolute',
-                bottom: insets.bottom > 0 ? insets.bottom + 20 : 40,
+                bottom: modalBottomInset + 20,
                 left: 0,
                 right: 0,
                 alignItems: 'center',
@@ -1673,6 +1740,8 @@ export default function ImagePreviewModal({
     </Modal>
   );
 }
+
+export default React.memo(ImagePreviewModal);
 
 const styles = StyleSheet.create({
   cropCorner: {

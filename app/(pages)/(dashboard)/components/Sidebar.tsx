@@ -184,7 +184,7 @@ export default function Sidebar({
       }
     ];
 
-    // Show only Dashboard and Orders for party users
+    // Show Dashboard and Orders for party users
     if (user?.role === 'party') {
       return items.filter(item => item.name === 'Dashboard' || item.name === 'Orders');
     }
@@ -481,18 +481,19 @@ export default function Sidebar({
           <div className={`border-t transition-colors duration-300 ${mounted && isDarkMode ? 'border-white/10' : 'border-gray-200'
             }`}>
             {/* Profile Section */}
-            <div className="relative p-4" data-profile-dropdown>
+            <div className={`relative ${shouldShowText ? 'p-4' : 'p-3 py-3'}`} data-profile-dropdown>
               <button
                 onClick={toggleProfileDropdown}
-                className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-all duration-300 cursor-pointer ${isDarkMode
+                className={`w-full flex items-center transition-all duration-300 cursor-pointer rounded-xl ${shouldShowText ? 'space-x-3 p-3 justify-start' : 'justify-center p-2.5'} ${isDarkMode
                   ? 'bg-white/10 text-white hover:bg-white/20'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   } shadow-lg backdrop-blur-sm`}
                 aria-label="User profile menu"
+                title={!shouldShowText ? (user?.name || 'User Profile') : undefined}
               >
                 <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-all duration-300 overflow-hidden ${isDarkMode
-                  ? 'bg-gradient-to-br from-purple-500 to-indigo-650 text-white border-purple-500/30'
-                  : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white border-purple-200'
+                  ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white border-blue-500/30'
+                  : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-200'
                   }`} title="User Profile">
                   {user?.profilePhoto ? (
                     <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover" />
@@ -506,7 +507,7 @@ export default function Sidebar({
                       }`}>
                       {user?.name || 'User'}
                     </span>
-                    <span className={`block text-xs transition-colors duration-300 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'
+                    <span className={`block text-xs transition-colors duration-300 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'
                       }`}>
                       {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                     </span>
@@ -516,7 +517,7 @@ export default function Sidebar({
 
               {/* Dropdown Menu */}
               {isProfileDropdownOpen && (
-                <div className={`absolute bottom-full left-3 mb-2 rounded-xl shadow-2xl transition-all duration-300 z-50 dropdown-slide-down ${shouldShowText ? 'w-56' : 'w-48'
+                <div className={`absolute bottom-full mb-2 rounded-xl shadow-2xl transition-all duration-300 z-50 dropdown-slide-down ${shouldShowText ? 'left-3 w-56' : 'left-full ml-2 w-48'
                   }`}>
                   <div className={`py-2 transition-all duration-300 ${isDarkMode
                     ? 'bg-slate-800 border border-slate-700 shadow-slate-900/50'
@@ -529,7 +530,7 @@ export default function Sidebar({
                           }`}>
                           {user?.name || 'User'}
                         </p>
-                        <p className={`text-xs transition-colors duration-300 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'
+                        <p className={`text-xs transition-colors duration-300 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'
                           }`}>
                           {user?.role === 'master' ? 'Master' : user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : 'User'}
                         </p>
@@ -612,8 +613,8 @@ export default function Sidebar({
                           }}
                           disabled={isInstalling}
                           className={`w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${isDarkMode
-                            ? 'text-purple-300 hover:bg-purple-500/10'
-                            : 'text-purple-600 hover:bg-purple-50'
+                            ? 'text-blue-300 hover:bg-blue-500/10'
+                            : 'text-blue-600 hover:bg-blue-50'
                             }`}
                         >
                           <div className="flex items-center space-x-2">

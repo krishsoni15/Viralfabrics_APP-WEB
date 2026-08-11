@@ -1,12 +1,15 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
-  View, Text, FlatList, RefreshControl, Platform, TextInput,
+  View, Text, RefreshControl, Platform, TextInput,
   TouchableOpacity, StyleSheet, Modal, Alert, KeyboardAvoidingView, ScrollView, Switch,
-  PanResponder, Animated as RNAnimated, Dimensions, Image, ActivityIndicator, Pressable
+  PanResponder, Animated as RNAnimated, Dimensions, Image, ActivityIndicator, Pressable,
+  useWindowDimensions, StatusBar
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { useSegments } from 'expo-router';
 import {
   Users, Shield, Search, Clock, Briefcase, Plus,
@@ -100,14 +103,35 @@ export default function UsersScreen() {
   const segments = useSegments();
   const isInTabs = (segments as string[]).includes('(tabs)');
   const { theme, isDarkMode } = useTheme();
+  const { isLargeScreen, modalMaxWidth, containerMaxWidth, numColumns } = useResponsiveLayout();
   const { isSuperAdmin, user: currentUser } = useAuth();
   const isMaster = currentUser?.role === 'master';
   const queryClient = useQueryClient();
 
-  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // Animated values for draggable FAB (initially positioned closer to the bottom edge)
-  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 76, y: screenHeight - 150 - insets.bottom })).current;
+  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 76, y: screenHeight - 220 })).current;
+  const fabX = useRef(screenWidth - 76);
+  const fabY = useRef(screenHeight - 220);
+
+  const dimensionsRef = useRef({ screenWidth, screenHeight });
+  dimensionsRef.current = { screenWidth, screenHeight };
+
+  useEffect(() => {
+    const isSnappedLeft = fabX.current < screenWidth / 2;
+    const targetX = isSnappedLeft ? 20 : screenWidth - 76;
+    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - 220);
+    
+    fabX.current = targetX;
+    fabY.current = targetY;
+    
+    RNAnimated.spring(pan, {
+      toValue: { x: targetX, y: targetY },
+      useNativeDriver: false,
+      friction: 6,
+    }).start();
+  }, [screenWidth, screenHeight, insets.bottom]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -117,8 +141,8 @@ export default function UsersScreen() {
       },
       onPanResponderGrant: () => {
         pan.setOffset({
-          x: (pan.x as any)._value,
-          y: (pan.y as any)._value
+          x: fabX.current,
+          y: fabY.current
         });
         pan.setValue({ x: 0, y: 0 });
       },
@@ -128,17 +152,23 @@ export default function UsersScreen() {
       ),
       onPanResponderRelease: (e, gestureState) => {
         pan.flattenOffset();
+
+        const currentScreenWidth = dimensionsRef.current.screenWidth;
+        const currentScreenHeight = dimensionsRef.current.screenHeight;
         
-        const currentX = (pan.x as any)._value;
-        const currentY = (pan.y as any)._value;
+        const currentX = fabX.current + gestureState.dx;
+        const currentY = fabY.current + gestureState.dy;
         
         const snapLeftX = 20;
-        const snapRightX = screenWidth - 76;
-        const targetX = currentX < screenWidth / 2 ? snapLeftX : snapRightX;
+        const snapRightX = currentScreenWidth - 76;
+        const targetX = currentX < currentScreenWidth / 2 ? snapLeftX : snapRightX;
         
         const minY = 100;
-        const maxY = screenHeight - 150 - insets.bottom;
+        const maxY = currentScreenHeight - 220;
         const targetY = Math.min(Math.max(currentY, minY), maxY);
+        
+        fabX.current = targetX;
+        fabY.current = targetY;
         
         RNAnimated.spring(pan, {
           toValue: { x: targetX, y: targetY },
@@ -164,13 +194,12 @@ export default function UsersScreen() {
   const [isPhotoSheetVisible, setIsPhotoSheetVisible] = useState(false);
   const [previewUser, setPreviewUser] = useState<any>(null);
   const [isUserListPreviewVisible, setIsUserListPreviewVisible] = useState(false);
-
   // Filters & Pagination States
   const [roleFilter, setRoleFilter] = useState('all');
   const [dateSort, setDateSort] = useState<'latest' | 'oldest'>('latest');
-  const [visibleCount, setVisibleCount] = useState(5);
+  const [visibleCount, setVisibleCount] = useState(10);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-
   // Dropdown Picker Visibility States
   const [showFiltersModal, setShowFiltersModal] = useState(false);
   const [showFormRolePicker, setShowFormRolePicker] = useState(false);
@@ -190,34 +219,63 @@ export default function UsersScreen() {
 
   const pickerTranslateY = useRef(new RNAnimated.Value(0)).current;
 
+  const formScrollViewRef = useRef<ScrollView>(null);
+  const addPartyScrollViewRef = useRef<ScrollView>(null);
+
+  const scrollToFormEnd = () => {
+    setTimeout(() => {
+      formScrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 120);
+  };
+
+  const scrollToAddPartyEnd = () => {
+    setTimeout(() => {
+      addPartyScrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 120);
+  };
+
+  const pickerScrollOffset = useRef(0);
+  const pickerCapturedDy = useRef(0);
+
   const pickerPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return pickerScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return pickerScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: (_, gs) => {
+        pickerCapturedDy.current = gs.dy;
+      },
       onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          pickerTranslateY.setValue(gestureState.dy);
-        }
+        const dragY = gestureState.dy - pickerCapturedDy.current;
+        const translateY = dragY < 0 ? dragY * 0.22 : dragY;
+        pickerTranslateY.setValue(translateY);
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 80 || gestureState.vy > 0.5) {
+        const dragY = gestureState.dy - pickerCapturedDy.current;
+        if (dragY > 120 || gestureState.vy > 0.55) {
           if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           RNAnimated.timing(pickerTranslateY, {
             toValue: 500,
             duration: 150,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }).start(() => {
             setShowFormRolePicker(false);
             setShowFormPartyPicker(false);
             setShowFiltersModal(false);
+            pickerTranslateY.setValue(0);
           });
         } else {
           RNAnimated.spring(pickerTranslateY, {
             toValue: 0,
-            useNativeDriver: true,
-            friction: 5,
+            useNativeDriver: false,
+            stiffness: 300,
+            damping: 30,
+            mass: 1,
           }).start();
         }
       }
@@ -227,6 +285,7 @@ export default function UsersScreen() {
   useEffect(() => {
     if (showFormRolePicker || showFormPartyPicker || showFiltersModal) {
       pickerTranslateY.setValue(0);
+      pickerScrollOffset.current = 0;
     }
   }, [showFormRolePicker, showFormPartyPicker, showFiltersModal]);
 
@@ -251,6 +310,7 @@ export default function UsersScreen() {
       }
     },
     placeholderData: keepPreviousData,
+    staleTime: 30000,
   });
 
   const partiesQuery = useQuery({
@@ -267,6 +327,7 @@ export default function UsersScreen() {
         return [];
       }
     },
+    staleTime: 30000,
   });
 
   const parties = partiesQuery.data || [];
@@ -398,10 +459,9 @@ export default function UsersScreen() {
 
     return result;
   }, [users, searchQuery, roleFilter, dateSort]);
-
   // Reset visibleCount on filter change
   useEffect(() => {
-    setVisibleCount(5);
+    setVisibleCount(10);
   }, [searchQuery, roleFilter, dateSort]);
 
   const paginatedUsers = useMemo(() => {
@@ -409,23 +469,34 @@ export default function UsersScreen() {
   }, [filteredUsers, visibleCount]);
 
   const handleLoadMore = useCallback(() => {
+    if (isLoadingMore) return;
     if (filteredUsers.length > visibleCount) {
+      setIsLoadingMore(true);
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setVisibleCount(prev => Math.min(prev + 5, filteredUsers.length));
+      setTimeout(() => {
+        setVisibleCount(prev => Math.min(prev + 10, filteredUsers.length));
+        setIsLoadingMore(false);
+      }, 800);
     }
-  }, [filteredUsers.length, visibleCount]);
+  }, [filteredUsers.length, visibleCount, isLoadingMore]);
 
   // Render Pagination Controls (Top or Bottom)
   const renderPaginationControls = (position: 'top' | 'bottom') => {
     if (filteredUsers.length === 0) return null;
     if (position === 'bottom') {
-      if (visibleCount < filteredUsers.length) {
-        const remainingCount = Math.min(5, filteredUsers.length - visibleCount);
+      if (isLoadingMore) {
         return (
-          <View style={{ paddingVertical: 12 }}>
-            {Array.from({ length: remainingCount }).map((_, idx) => (
-              <UserSkeletonCard key={`footer-skeleton-${idx}`} />
-            ))}
+          <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="small" color={Colors.primary[500]} />
+          </View>
+        );
+      }
+      if (visibleCount >= filteredUsers.length && filteredUsers.length > 0) {
+        return (
+          <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 11, color: theme.textTertiary, fontStyle: 'italic' }}>
+              No more users to load
+            </Text>
           </View>
         );
       }
@@ -448,8 +519,6 @@ export default function UsersScreen() {
       </View>
     );
   };
-
-
   const renderSelectionModal = (
     visible: boolean,
     onClose: () => void,
@@ -470,15 +539,18 @@ export default function UsersScreen() {
           onPress={onClose}
           style={{
             flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
+            backgroundColor: 'rgba(0,0,0,0.05)',
+            justifyContent: isLargeScreen ? 'center' : 'flex-end',
+            alignItems: isLargeScreen ? 'center' : 'stretch',
           }}
         >
           <RNAnimated.View
+            {...pickerPanResponder.panHandlers}
             style={{
               width: '100%',
+              maxWidth: modalMaxWidth,
               maxHeight: '50%',
-              transform: [{ translateY: pickerTranslateY }],
+              transform: isLargeScreen ? undefined : [{ translateY: pickerTranslateY }],
             }}
           >
             <TouchableOpacity
@@ -487,15 +559,17 @@ export default function UsersScreen() {
                 backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
                 borderTopLeftRadius: 24,
                 borderTopRightRadius: 24,
+                borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+                borderBottomRightRadius: isLargeScreen ? 24 : 0,
                 paddingTop: 16,
-                paddingBottom: (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
+                paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
                 borderTopWidth: 1,
                 borderTopColor: borderColor,
                 width: '100%',
               }}
             >
               {/* Header Drag Zone */}
-              <View {...pickerPanResponder.panHandlers} style={{ width: '100%' }}>
+              <View style={{ width: '100%' }}>
                 {/* Header indicator bar */}
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
                 
@@ -518,7 +592,11 @@ export default function UsersScreen() {
                 <X size={20} color={theme.textSecondary} />
               </TouchableOpacity>
 
-              <ScrollView style={{ paddingHorizontal: 16 }}>
+              <ScrollView
+                style={{ paddingHorizontal: 16 }}
+                scrollEventThrottle={16}
+                onScroll={(e) => { pickerScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+              >
                 {options.map((opt) => {
                   const isSelected = selectedValue === opt.value;
                   return (
@@ -574,15 +652,18 @@ export default function UsersScreen() {
           onPress={() => setShowFiltersModal(false)}
           style={{
             flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
+            backgroundColor: 'rgba(0,0,0,0.05)',
+            justifyContent: isLargeScreen ? 'center' : 'flex-end',
+            alignItems: isLargeScreen ? 'center' : 'stretch',
           }}
         >
           <RNAnimated.View
+            {...pickerPanResponder.panHandlers}
             style={{
               width: '100%',
+              maxWidth: modalMaxWidth,
               maxHeight: '75%',
-              transform: [{ translateY: pickerTranslateY }],
+              transform: isLargeScreen ? undefined : [{ translateY: pickerTranslateY }],
             }}
           >
             <TouchableOpacity
@@ -591,15 +672,17 @@ export default function UsersScreen() {
                 backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
                 borderTopLeftRadius: 24,
                 borderTopRightRadius: 24,
+                borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+                borderBottomRightRadius: isLargeScreen ? 24 : 0,
                 paddingTop: 16,
-                paddingBottom: (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
+                paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
                 borderTopWidth: 1,
                 borderTopColor: borderColor,
                 width: '100%',
               }}
             >
               {/* Header Drag Zone */}
-              <View {...pickerPanResponder.panHandlers} style={{ width: '100%' }}>
+              <View style={{ width: '100%' }}>
                 {/* Header indicator bar */}
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
                 
@@ -622,7 +705,11 @@ export default function UsersScreen() {
                 <X size={20} color={theme.textSecondary} />
               </TouchableOpacity>
 
-              <ScrollView style={{ paddingHorizontal: 20 }}>
+              <ScrollView
+                style={{ paddingHorizontal: 20 }}
+                scrollEventThrottle={16}
+                onScroll={(e) => { pickerScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+              >
                 {/* Role Filter Section */}
                 <Text style={{ fontSize: 13, fontWeight: '800', color: theme.textTertiary, marginBottom: 12, letterSpacing: 0.5 }}>FILTER BY ROLE</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
@@ -758,16 +845,19 @@ export default function UsersScreen() {
             onPress={() => setShowFormPartyPicker(false)}
             style={{
               flex: 1,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              justifyContent: 'flex-end',
+              backgroundColor: 'rgba(0,0,0,0.05)',
+              justifyContent: isLargeScreen ? 'center' : 'flex-end',
+              alignItems: isLargeScreen ? 'center' : 'stretch',
             }}
           >
             <RNAnimated.View
+              {...pickerPanResponder.panHandlers}
               style={{
                 width: '100%',
+                maxWidth: modalMaxWidth,
                 maxHeight: '85%',
                 minHeight: '50%',
-                transform: [{ translateY: pickerTranslateY }],
+                transform: isLargeScreen ? undefined : [{ translateY: pickerTranslateY }],
               }}
             >
               <TouchableOpacity
@@ -776,15 +866,17 @@ export default function UsersScreen() {
                   backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
                   borderTopLeftRadius: 24,
                   borderTopRightRadius: 24,
+                  borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+                  borderBottomRightRadius: isLargeScreen ? 24 : 0,
                   paddingTop: 16,
-                  paddingBottom: (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
+                  paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
                   borderTopWidth: 1,
                   borderTopColor: borderColor,
                   width: '100%',
                 }}
               >
                 {/* Header Drag Zone */}
-                <View {...pickerPanResponder.panHandlers} style={{ width: '100%' }}>
+                <View style={{ width: '100%' }}>
                   {/* Header indicator bar */}
                   <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
                   
@@ -838,7 +930,12 @@ export default function UsersScreen() {
                 </View>
 
                 {/* Parties List */}
-                <ScrollView keyboardShouldPersistTaps="handled" style={{ paddingHorizontal: 16, maxHeight: 350 }}>
+                <ScrollView 
+                  keyboardShouldPersistTaps="handled" 
+                  style={{ paddingHorizontal: 16, maxHeight: 350 }}
+                  scrollEventThrottle={16}
+                  onScroll={(e) => { pickerScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                >
                   {parties.length === 0 ? (
                     <Text style={{ color: theme.textTertiary, padding: 12, textAlign: 'center' }}>Loading parties...</Text>
                   ) : filteredParties.length === 0 ? (
@@ -1060,11 +1157,19 @@ export default function UsersScreen() {
 
   // ─── Form Modal (shared between Create & Edit) ───
   const renderFormModal = (visible: boolean, onClose: () => void, onSubmit: () => void, title: string, isEdit: boolean) => (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={false}
+      statusBarTranslucent={true}
+      navigationBarTranslucent={true}
+      presentationStyle={isLargeScreen ? 'pageSheet' : 'overFullScreen'}
+      onRequestClose={onClose}
+    >
       <SafeAreaView style={{ flex: 1, backgroundColor: modalBg }}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 40}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
           style={{ flex: 1 }}
         >
           {/* Modal Header */}
@@ -1087,7 +1192,12 @@ export default function UsersScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            ref={formScrollViewRef}
+            contentContainerStyle={{ padding: 20 }}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={true}
+          >
             {/* Profile Photo Selector */}
             <View style={{ alignItems: 'center', marginBottom: 24 }}>
               <View style={{ position: 'relative', width: 90, height: 90 }}>
@@ -1173,6 +1283,7 @@ export default function UsersScreen() {
               <TouchableOpacity
                 onPress={() => {
                   if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  pickerScrollOffset.current = 0;
                   pickerTranslateY.setValue(0);
                   setShowFormRolePicker(true);
                 }}
@@ -1214,6 +1325,7 @@ export default function UsersScreen() {
                 <TouchableOpacity
                   onPress={() => {
                     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    pickerScrollOffset.current = 0;
                     pickerTranslateY.setValue(0);
                     setPartySearch('');
                     setShowFormPartyPicker(true);
@@ -1324,6 +1436,7 @@ export default function UsersScreen() {
                 value={formData.phoneNumber}
                 onChangeText={(t) => setFormData(p => ({ ...p, phoneNumber: t }))}
                 keyboardType="phone-pad"
+                onFocus={scrollToFormEnd}
               />
             </View>
 
@@ -1337,6 +1450,7 @@ export default function UsersScreen() {
                 value={formData.address}
                 onChangeText={(t) => setFormData(p => ({ ...p, address: t }))}
                 multiline
+                onFocus={scrollToFormEnd}
               />
             </View>
           </ScrollView>
@@ -1347,11 +1461,19 @@ export default function UsersScreen() {
 
   // ─── Add Party Modal ───
   const renderAddPartyModal = () => (
-    <Modal visible={showAddPartyModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAddPartyModal(false)}>
+    <Modal
+      visible={showAddPartyModal}
+      animationType="slide"
+      transparent={false}
+      statusBarTranslucent={true}
+      navigationBarTranslucent={true}
+      presentationStyle={isLargeScreen ? 'pageSheet' : 'overFullScreen'}
+      onRequestClose={() => setShowAddPartyModal(false)}
+    >
       <SafeAreaView style={{ flex: 1, backgroundColor: modalBg }}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 40}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
           style={{ flex: 1 }}
         >
           <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
@@ -1370,7 +1492,12 @@ export default function UsersScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            ref={addPartyScrollViewRef}
+            contentContainerStyle={{ padding: 20 }}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={true}
+          >
             {/* Party Name */}
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Party Name *</Text>
@@ -1419,6 +1546,7 @@ export default function UsersScreen() {
                 value={newPartyForm.address}
                 onChangeText={(t) => setNewPartyForm(p => ({ ...p, address: t }))}
                 multiline
+                onFocus={scrollToAddPartyEnd}
               />
             </View>
           </ScrollView>
@@ -1463,10 +1591,14 @@ export default function UsersScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: isDarkMode ? '#0f172a' : Colors.neutral[50] }} edges={['top']}>
-      {!isInTabs && <Header title="User Management" showBack />}
-
-      {/* Search & Filters */}
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : ((showCreateModal || showEditModal || showAddPartyModal || showFiltersModal || cameraVisible || isPreviewVisible || isUserListPreviewVisible) ? 'light-content' : 'dark-content')}
+      />
+      <View style={{ flex: 1, width: '100%', maxWidth: containerMaxWidth, alignSelf: 'center' }}>
+      {!isInTabs && (
+        <Header title="Users Management" showBack />
+      )}{/* Search & Filters */}
       <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 8, marginBottom: 8, alignItems: 'center' }}>
         <View style={[styles.searchContainer, { backgroundColor: cardBg, borderColor, flex: 1, flexDirection: 'row', alignItems: 'center', height: 44 }]}>
           <Search size={18} color={theme.textTertiary} style={{ marginRight: 8 }} />
@@ -1488,6 +1620,7 @@ export default function UsersScreen() {
         {/* Unified Filter Modal Button */}
         <TouchableOpacity
           onPress={() => {
+            pickerScrollOffset.current = 0;
             pickerTranslateY.setValue(0);
             setShowFiltersModal(true);
           }}
@@ -1535,9 +1668,12 @@ export default function UsersScreen() {
           subtitle={searchQuery ? `No match for "${searchQuery}"` : 'No registered accounts'}
         />
       ) : (
-        <FlatList
+        <FlashList
           data={paginatedUsers}
+          key={numColumns}
+          numColumns={numColumns}
           keyExtractor={(item: any) => item._id}
+          drawDistance={800}
           ListHeaderComponent={() => renderPaginationControls('top')}
           ListFooterComponent={() => renderPaginationControls('bottom')}
           onEndReached={handleLoadMore}
@@ -1566,8 +1702,8 @@ export default function UsersScreen() {
             const photoUrl = getProfilePhotoUrl(item.profilePhoto);
 
             return (
-              <Animated.View entering={FadeInDown.duration(300).delay((index % 5) * 50)}>
-                <View style={[styles.userCard, { backgroundColor: cardBg, borderColor }]}>
+              <View style={{ flex: 1 }}>
+                <View style={[styles.userCard, { backgroundColor: cardBg, borderColor, marginHorizontal: numColumns > 1 ? 8 : 16, flex: 1 }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <TouchableOpacity
                       onPress={() => {
@@ -1662,12 +1798,12 @@ export default function UsersScreen() {
                         )}
                       </View>
                     )}
-                  </View>
                 </View>
-              </Animated.View>
-            );
+              </View>
+            </View>
+          );
           }}
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: 110 + insets.bottom }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 110 + insets.bottom, paddingHorizontal: numColumns > 1 ? 8 : 0 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             Platform.OS !== 'web' ? (
@@ -1682,9 +1818,10 @@ export default function UsersScreen() {
         <RNAnimated.View
           {...panResponder.panHandlers}
           style={{
-            left: pan.x,
-            top: pan.y,
             position: 'absolute',
+            left: 0,
+            top: 0,
+            transform: [{ translateX: pan.x }, { translateY: pan.y }],
             zIndex: 9999,
           }}
         >
@@ -1714,6 +1851,7 @@ export default function UsersScreen() {
           </TouchableOpacity>
         </RNAnimated.View>
       )}
+      </View>
 
       {/* Modals */}
       {renderFormModal(showCreateModal, () => { setShowCreateModal(false); resetForm(); }, handleCreate, 'Create User', false)}
@@ -1842,7 +1980,7 @@ export default function UsersScreen() {
         <Pressable 
           style={{
             flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: 'rgba(0,0,0,0.05)',
             justifyContent: 'flex-end',
           }}
           onPress={() => setIsPhotoSheetVisible(false)}
@@ -2133,7 +2271,7 @@ const styles = StyleSheet.create({
   fieldInput: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, height: 48, fontSize: 15 },
   fieldError: { fontSize: 12, color: '#ef4444', fontWeight: '600', marginTop: 4 },
   // Delete modal styles
-  deleteOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 },
+  deleteOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.15)', justifyContent: 'center', alignItems: 'center', padding: 32 },
   deleteCard: { borderRadius: 24, padding: 28, borderWidth: 1, width: '100%', maxWidth: 360, alignItems: 'center' },
   deleteIconWrap: {
     width: 56, height: 56, borderRadius: 16, backgroundColor: 'rgba(239, 68, 68, 0.1)',

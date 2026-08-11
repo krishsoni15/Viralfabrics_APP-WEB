@@ -19,7 +19,6 @@ import {
   ActivityIndicator,
   Platform,
   StyleSheet,
-  Dimensions,
 } from 'react-native';
 import { X, Download, Share2, FileText, CheckCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -30,6 +29,8 @@ import { Colors } from '../../constants/colors';
 import { savePdfToDevice, sharePdf } from '../../utils/pdfUtils';
 import { storage } from '../../utils/storage';
 import * as Print from 'expo-print';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import ToastContainer from '../ui/Toast';
 
 // Dynamically import WebView to avoid crashes on web
 let WebView: any = null;
@@ -39,7 +40,7 @@ try {
   // react-native-webview not available (e.g., on web)
 }
 
-const { width: screenWidth } = Dimensions.get('window');
+
 
 /**
  * Generate HTML with PDF.js for rendering PDFs on Android.
@@ -76,7 +77,7 @@ const getAndroidHtml = (base64: string, isDarkMode: boolean) => {
           margin-bottom: 20px;
           box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
           background-color: #ffffff;
-          border-radius: 12px;
+          border-radius: 0px;
           overflow: hidden;
           width: 92%;
           max-width: 800px;
@@ -237,6 +238,7 @@ export default function PdfViewerModal({
 }: PdfViewerModalProps) {
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
+  const { isLargeScreen, modalMaxWidth } = useResponsiveLayout();
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -252,8 +254,23 @@ export default function PdfViewerModal({
     if (visible) {
       if (localUri) {
         setCachedUri(localUri);
-        if (localBase64) setPdfBase64(localBase64);
-        setPdfLoading(false);
+        if (localBase64) {
+          setPdfBase64(localBase64);
+          setPdfLoading(false);
+        } else if (Platform.OS === 'android') {
+          setPdfLoading(true);
+          FileSystem.readAsStringAsync(localUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          }).then(base64 => {
+            setPdfBase64(base64);
+            setPdfLoading(false);
+          }).catch(err => {
+            console.warn('[PDF Preview] Failed to read local base64:', err);
+            setPdfLoading(false);
+          });
+        } else {
+          setPdfLoading(false);
+        }
       } else if (pdfUrl) {
         setPdfLoading(true);
         setPdfError(false);
@@ -271,11 +288,28 @@ export default function PdfViewerModal({
     };
   }, [visible, pdfUrl, localUri, localBase64]);
 
+  const isLocalFile = pdfUrl?.startsWith('file://') || (pdfUrl && !pdfUrl.startsWith('http'));
+
   const preCachePdf = useCallback(async () => {
     try {
       const cacheUri = `${FileSystem.cacheDirectory}${filename}`;
-      const token = await storage.getToken();
       console.log('[PDF Preview] preCachePdf starting for URL:', pdfUrl);
+
+      // If pdfUrl is a local file URI, copy instead of download
+      if (pdfUrl?.startsWith('file://') || (pdfUrl && !pdfUrl.startsWith('http'))) {
+        const decodedPdfUrl = decodeURIComponent(pdfUrl);
+        await FileSystem.copyAsync({ from: decodedPdfUrl, to: cacheUri });
+        if (Platform.OS === 'android') {
+          const base64 = await FileSystem.readAsStringAsync(cacheUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          setPdfBase64(base64);
+        }
+        setCachedUri(cacheUri);
+        return;
+      }
+
+      const token = await storage.getToken();
       const result = await FileSystem.downloadAsync(pdfUrl, cacheUri, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -310,16 +344,21 @@ export default function PdfViewerModal({
 
     try {
       const token = await storage.getToken();
+      // Use cachedUri or the original pdfUrl as localUri when it's a file:// URI
+      const effectiveLocalUri = cachedUri || (isLocalFile ? decodeURIComponent(pdfUrl) : undefined);
       const result = await savePdfToDevice({
         url: pdfUrl,
         filename,
         token,
         dialogTitle: title,
+        localUri: effectiveLocalUri,
       });
 
       if (result.success) {
         setDownloadComplete(true);
-        if (result.localUri) setCachedUri(result.localUri);
+        if (result.localUri && !result.localUri.startsWith('content://')) {
+          setCachedUri(result.localUri);
+        }
 
         if (Platform.OS !== 'web') {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -351,7 +390,7 @@ export default function PdfViewerModal({
     } finally {
       setIsDownloading(false);
     }
-  }, [pdfUrl, filename, title, isDownloading, addToast, onDownloadComplete]);
+  }, [pdfUrl, filename, title, isDownloading, addToast, onDownloadComplete, cachedUri, isLocalFile]);
 
   const handleShare = useCallback(async () => {
     if (isSharing) return;
@@ -366,15 +405,23 @@ export default function PdfViewerModal({
       let uriToShare = cachedUri;
 
       if (!uriToShare) {
-        // Download first
-        const token = await storage.getToken();
         const cacheUri = `${FileSystem.cacheDirectory}${filename}`;
-        const result = await FileSystem.downloadAsync(pdfUrl, cacheUri, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (result.status === 200) {
-          uriToShare = result.uri;
-          setCachedUri(result.uri);
+
+        // If pdfUrl is a local file, copy it; otherwise download
+        if (isLocalFile) {
+          const decodedPdfUrl = decodeURIComponent(pdfUrl);
+          await FileSystem.copyAsync({ from: decodedPdfUrl, to: cacheUri });
+          uriToShare = cacheUri;
+          setCachedUri(cacheUri);
+        } else {
+          const token = await storage.getToken();
+          const result = await FileSystem.downloadAsync(pdfUrl, cacheUri, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (result.status === 200) {
+            uriToShare = result.uri;
+            setCachedUri(result.uri);
+          }
         }
       }
 
@@ -545,12 +592,13 @@ export default function PdfViewerModal({
   return (
     <Modal
       visible={visible}
-      transparent={false}
-      animationType="slide"
+      transparent={isLargeScreen}
+      animationType={isLargeScreen ? 'fade' : 'slide'}
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={[styles.container, { backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc' }]}>
+      <View style={{ flex: 1, backgroundColor: isLargeScreen ? 'rgba(0,0,0,0.15)' : undefined, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={[styles.container, { backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc', width: isLargeScreen ? '100%' : '100%', maxWidth: isLargeScreen ? modalMaxWidth : '100%', height: isLargeScreen ? '90%' : '100%', borderRadius: 0, overflow: 'hidden' }]}>
         {/* ─── Header ─── */}
         <View style={[
           styles.header,
@@ -600,11 +648,11 @@ export default function PdfViewerModal({
           {renderPdfPreview()}
         </View>
 
-        {/* ─── Bottom Action Bar ─── */}
+        {/* ─── Bottom Actions ─── */}
         <View style={[
           styles.actionBar,
           {
-            paddingBottom: insets.bottom + 12,
+            paddingBottom: isLargeScreen ? 20 : Math.max(insets.bottom, 16),
             backgroundColor: isDarkMode ? '#0f172a' : '#ffffff',
             borderTopColor: isDarkMode ? '#1e293b' : '#e2e8f0',
           },
@@ -658,6 +706,8 @@ export default function PdfViewerModal({
             )}
           </TouchableOpacity>
         </View>
+        </View>
+        <ToastContainer />
       </View>
     </Modal>
   );
@@ -717,7 +767,6 @@ const styles = StyleSheet.create({
   webViewContainer: {
     flex: 1,
     margin: 12,
-    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#ffffff',
   },

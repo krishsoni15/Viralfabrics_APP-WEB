@@ -3,6 +3,10 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface ISampling extends Document {
   qualityName: string;
   whereToPut?: string;
+  weaverName?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
   images?: string[];
   notes?: string;
   meter?: number;
@@ -23,6 +27,30 @@ const SamplingSchema = new Schema<ISampling>({
     required: false,
     trim: true,
     maxlength: 200
+  },
+  weaverName: {
+    type: String,
+    required: false,
+    trim: true,
+    maxlength: 200
+  },
+  weaverQuality: {
+    type: String,
+    required: false,
+    trim: true,
+    maxlength: 200
+  },
+  millName: {
+    type: String,
+    required: false,
+    trim: true,
+    maxlength: 200
+  },
+  processInMill: {
+    type: String,
+    required: false,
+    trim: true,
+    maxlength: 500
   },
   images: {
     type: [String],

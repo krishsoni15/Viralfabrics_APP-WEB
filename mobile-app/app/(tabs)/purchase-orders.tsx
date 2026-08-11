@@ -2,7 +2,6 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
   View,
   Text,
-  FlatList,
   RefreshControl,
   TouchableOpacity,
   ScrollView,
@@ -17,12 +16,21 @@ import {
   Modal,
   StyleSheet,
   TouchableWithoutFeedback,
+  Linking,
+  Keyboard,
+  useWindowDimensions,
+  StatusBar,
+  Image,
+  Alert,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import * as print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as ImagePicker from 'expo-image-picker';
+import { Tabs } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS, Easing } from 'react-native-reanimated';
 import {
   ChevronLeft,
   ChevronRight,
@@ -45,12 +53,15 @@ import {
   Info,
   Eye,
   FileDown,
+  MapPin,
+  Mail,
+  Globe,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import api from '../../services/api';
 import Card from '../../components/ui/Card';
-import { SkeletonList } from '../../components/ui/Skeleton';
+import { PurchaseOrderSkeletonList } from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import DatePickerModal from '../../components/shared/DatePickerModal';
 import DeleteConfirmModal from '../../components/shared/DeleteConfirmModal';
@@ -59,9 +70,23 @@ import { Colors } from '../../constants/colors';
 import { formatDate, getCalculatedFYOptions, getDisplayOrderId } from '../../utils/helpers';
 import { PurchaseOrder } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
+import { CONFIG } from '../../constants/config';
+import { storage } from '../../utils/storage';
+import PdfViewerModal from '../../components/shared/PdfViewerModal';
 import { generatePoHtml } from '../../utils/poPdfTemplate';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { savePdfToDevice } from '../../utils/pdfUtils';
+import ImagePreviewModal from '../../components/shared/ImagePreviewModal';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+// Dynamically import WebView to avoid crashes on web
+let WebView: any = null;
+try {
+  WebView = require('react-native-webview').WebView;
+} catch (e) {
+  // react-native-webview not available (e.g. on web)
+}
+
+
 
 // Date conversion helpers for DatePickerModal
 const toDisplayDate = (dateStr?: string) => {
@@ -154,14 +179,496 @@ const sortFilterLabels: Record<string, string> = {
   po_number_asc: 'PO Number Asc',
   po_number_desc: 'PO Number Desc',
 };
-
 const companyLabels: Record<string, string> = {
   '': 'All Companies',
   'Viral Fabrics': 'Viral Fabrics',
   'Viral Enterprise': 'Viral Enterprise',
 };
 
-const PurchaseOrderCard = ({ 
+const cleanHtmlForInput = (text?: string): string => {
+  if (!text) return '';
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/<strong[^>]*>/gi, '<b>')
+    .replace(/<\/strong>/gi, '</b>')
+    .replace(/<em[^>]*>/gi, '<i>')
+    .replace(/<\/em>/gi, '</i>')
+    .replace(/<span[^>]*font-weight:\s*bold[^>]*>(.*?)<\/span>/gi, '<b>$1</b>')
+    .replace(/<span[^>]*font-weight:\s*bolder[^>]*>(.*?)<\/span>/gi, '<b>$1</b>')
+    .replace(/<span[^>]*font-style:\s*italic[^>]*>(.*?)<\/span>/gi, '<i>$1</i>')
+    .replace(/<span[^>]*text-decoration:\s*underline[^>]*>(.*?)<\/span>/gi, '<u>$1</u>')
+    .replace(/<span[^>]*>(.*?)<\/span>/gi, '$1')
+    .replace(/<\/span>/gi, '')
+    .replace(/<(?!(\/?(b|i|u))\b)[^>]+>/gi, '')
+    .replace(/\n\s*\n/g, '\n')
+    .trim();
+};
+
+const getEditorHtml = (initialValue: string, isDarkMode: boolean, placeholder: string = 'Enter text...') => {
+  const textColor = isDarkMode ? '#f8fafc' : '#0f172a';
+  const bgColor = isDarkMode ? '#1e293b' : '#ffffff';
+  const toolbarBg = isDarkMode ? '#1e293b' : '#f8fafc';
+  const toolbarBorder = isDarkMode ? '#334155' : '#cbd5e1';
+  const btnBorder = isDarkMode ? '#475569' : '#cbd5e1';
+  const btnBg = isDarkMode ? '#334155' : '#ffffff';
+  const btnText = isDarkMode ? '#cbd5e1' : '#475569';
+  const btnActiveBg = isDarkMode ? '#60a5fa' : '#2563eb';
+  const btnActiveBorder = isDarkMode ? '#60a5fa' : '#2563eb';
+  const btnActiveText = isDarkMode ? '#0f172a' : '#ffffff';
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <style>
+        * {
+          box-sizing: border-box;
+        }
+        body {
+          margin: 0;
+          padding: 0;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          background-color: ${bgColor};
+          color: ${textColor};
+          display: flex;
+          flex-direction: column;
+          height: 100vh;
+          overflow: hidden;
+        }
+        #toolbar {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background-color: ${toolbarBg};
+          border-bottom: 1px solid ${toolbarBorder};
+          height: 42px;
+          box-sizing: border-box;
+        }
+        .btn {
+          width: 30px;
+          height: 30px;
+          border-radius: 6px;
+          border: 1px solid ${btnBorder};
+          background-color: ${btnBg};
+          color: ${btnText};
+          font-size: 13px;
+          font-weight: 800;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          outline: none;
+          box-sizing: border-box;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .btn.active {
+          background-color: ${btnActiveBg};
+          border-color: ${btnActiveBorder};
+          color: ${btnActiveText};
+        }
+        #editor {
+          flex: 1;
+          padding: 10px 12px;
+          outline: none;
+          word-wrap: break-word;
+          overflow-y: auto;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        #editor u {
+          text-decoration: underline;
+        }
+        #editor[placeholder]:empty:before {
+          content: attr(placeholder);
+          color: ${isDarkMode ? '#64748b' : '#94a3b8'};
+          font-style: italic;
+        }
+      </style>
+    </head>
+    <body>
+      <div id="toolbar">
+        <button type="button" class="btn" data-command="bold">B</button>
+        <button type="button" class="btn" data-command="italic" style="font-style: italic;">I</button>
+        <button type="button" class="btn" data-command="underline" style="text-decoration: underline;">U</button>
+      </div>
+      <div id="editor" contenteditable="true" placeholder="${placeholder}">${initialValue || ''}</div>
+      <script>
+        const editor = document.getElementById('editor');
+        const buttons = document.querySelectorAll('.btn');
+        
+        try {
+          document.execCommand('styleWithCSS', false, false);
+        } catch (e) {}
+
+        buttons.forEach(btn => {
+          btn.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent editor from losing focus
+          });
+          
+          btn.addEventListener('click', (e) => {
+            const command = btn.getAttribute('data-command');
+            document.execCommand(command, false, null);
+            updateButtonStates();
+            sendState();
+          });
+        });
+
+        function updateButtonStates() {
+          buttons.forEach(btn => {
+            const command = btn.getAttribute('data-command');
+            const isActive = document.queryCommandState(command);
+            if (isActive) {
+              btn.classList.add('active');
+            } else {
+              btn.classList.remove('active');
+            }
+          });
+        }
+
+        function sendState() {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'change',
+            value: editor.innerHTML
+          }));
+        }
+
+        editor.addEventListener('input', sendState);
+        
+        document.addEventListener('selectionchange', () => {
+          updateButtonStates();
+          sendState();
+        });
+
+        editor.addEventListener('focus', () => {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'focus'
+          }));
+        });
+      </script>
+    </body>
+    </html>
+  `;
+};
+
+const renderFormattedText = (text: string, style?: any, numberOfLines?: number) => {
+  if (!text) return null;
+
+  const normalized = cleanHtmlForInput(text);
+  const preparedText = normalized.replace(/<br\s*\/?>/gi, '\n');
+  const tokens = preparedText.split(/(<\/?[biu]>)/gi);
+  
+  let isBold = false;
+  let isItalic = false;
+  let isUnderline = false;
+  
+  const elements = tokens.map((token, idx) => {
+    const lowerToken = token.toLowerCase();
+    if (lowerToken === '<b>') {
+      isBold = true;
+      return null;
+    } else if (lowerToken === '</b>') {
+      isBold = false;
+      return null;
+    } else if (lowerToken === '<i>') {
+      isItalic = true;
+      return null;
+    } else if (lowerToken === '</i>') {
+      isItalic = false;
+      return null;
+    } else if (lowerToken === '<u>') {
+      isUnderline = true;
+      return null;
+    } else if (lowerToken === '</u>') {
+      isUnderline = false;
+      return null;
+    }
+    
+    if (!token) return null;
+    
+    const textStyle: any = {};
+    if (isBold) textStyle.fontWeight = 'bold';
+    if (isItalic) textStyle.fontStyle = 'italic';
+    if (isUnderline) textStyle.textDecorationLine = 'underline';
+    
+    return (
+      <Text key={idx} style={textStyle}>
+        {token}
+      </Text>
+    );
+  }).filter(el => el !== null);
+  
+  return <Text style={style} numberOfLines={numberOfLines}>{elements}</Text>;
+};
+
+interface CompanyInfoModalProps {
+  visible: boolean;
+  onClose: () => void;
+  companyName: 'Viral Fabrics' | 'Viral Enterprise' | null;
+  theme: any;
+  isDarkMode: boolean;
+}
+
+const CompanyInfoModal: React.FC<CompanyInfoModalProps> = ({
+  visible,
+  onClose,
+  companyName,
+  theme,
+  isDarkMode
+}) => {
+  const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
+  const translateY = useRef(new RNAnimated.Value(screenHeight)).current;
+  const companyInfoScrollOffset = useRef(0);
+  const companyInfoCapturedDy = useRef(0);
+
+  useEffect(() => {
+    if (visible) {
+      RNAnimated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 20,
+        stiffness: 150,
+      }).start();
+    } else {
+      translateY.setValue(screenHeight);
+    }
+  }, [visible, screenHeight]);
+
+  const handleClose = () => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    RNAnimated.timing(translateY, {
+      toValue: screenHeight,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose();
+    });
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return companyInfoScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return companyInfoScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: (_, gs) => {
+        companyInfoCapturedDy.current = gs.dy;
+      },
+      onPanResponderMove: (_, gs) => {
+        const dragY = gs.dy - companyInfoCapturedDy.current;
+        const transY = dragY < 0 ? dragY * 0.22 : dragY;
+        translateY.setValue(transY);
+      },
+      onPanResponderRelease: (_, gs) => {
+        const dragY = gs.dy - companyInfoCapturedDy.current;
+        if (dragY > 120 || gs.vy > 0.55) {
+          handleClose();
+        } else {
+          RNAnimated.spring(translateY, {
+            toValue: 0,
+            stiffness: 300,
+            damping: 30,
+            mass: 1,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  if (!visible || !companyName) return null;
+
+  const isViralFabrics = companyName === 'Viral Fabrics';
+  const info = isViralFabrics 
+    ? {
+        name: 'VIRAL FABRICS',
+        address: 'PLOT NO.37-38, KRISHNA IND.SOC., OPP.UMIYA RESI. BAMROLI, PANDESARA, SURAT 394210',
+        phone: '094279 88999',
+        phoneUrl: 'tel:09427988999',
+        gstin: '24AXYPP4119J1ZW',
+        email: 'viralfabrics@yahoo.com',
+        website: 'www.viralfabrics.com',
+        websiteUrl: 'https://www.viralfabrics.com',
+        location: null,
+      }
+    : {
+        name: 'VIRAL ENTERPRISE',
+        address: 'Plot 37,38, Krishna Industrial Society, Opposite Umiya Residency, Near Milan Point, Bamroli - Vadod Road, Bamroli, Pandesara, Surat. Pin: 394210',
+        phone: '+91-9427988999',
+        phoneUrl: 'tel:+919427988999',
+        gstin: '24AAJHV2286E1Z0',
+        email: 'viralfabrics@yahoo.com',
+        website: 'www.viralfabrics.com',
+        websiteUrl: 'https://www.viralfabrics.com',
+        location: 'https://maps.app.goo.gl/Q1FkRLFxuZeUbNPp6?g_st=iw',
+      };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent={true}
+      navigationBarTranslucent={true}
+      onRequestClose={handleClose}
+    >
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0)', justifyContent: 'flex-end' }}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+        
+        <RNAnimated.View
+          {...panResponder.panHandlers}
+          style={{
+            backgroundColor: theme.background,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            paddingBottom: insets.bottom + 20,
+            maxHeight: '80%',
+            transform: [{ translateY }],
+          }}
+        >
+          {/* Handle */}
+          <View 
+            style={{
+              alignItems: 'center',
+              paddingVertical: 12,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+            }}
+          >
+            <View style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: isDarkMode ? '#475569' : '#cbd5e1' }} />
+          </View>
+
+          {/* Header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 }}>
+            <Text style={{ fontSize: 20, fontWeight: '900', color: theme.text }}>
+              Company Details
+            </Text>
+            <TouchableOpacity onPress={handleClose} style={{ padding: 4 }}>
+              <X size={20} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={{ paddingHorizontal: 20 }}
+            onScroll={(e) => { companyInfoScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+            scrollEventThrottle={16}
+          >
+            {/* Logo Placeholder / Icon */}
+            <View style={{ alignItems: 'center', marginVertical: 15 }}>
+              <View style={{
+                width: 70,
+                height: 70,
+                borderRadius: 35,
+                backgroundColor: isViralFabrics ? 'rgba(59, 130, 246, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 10
+              }}>
+                <Building2 size={36} color={isViralFabrics ? Colors.primary[500] : '#a855f7'} />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text, textAlign: 'center' }}>
+                {info.name}
+              </Text>
+            </View>
+
+            {/* Details List */}
+            <View style={{ gap: 16, marginTop: 10 }}>
+              {/* Address */}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <MapPin size={20} color={Colors.primary[500]} style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }}>Address</Text>
+                  <Text style={{ fontSize: 14, color: theme.text, marginTop: 2, lineHeight: 20 }}>
+                    {info.address}
+                  </Text>
+                  {!!info.location && (
+                    <TouchableOpacity 
+                      onPress={() => Linking.openURL(info.location!)}
+                      style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <Text style={{ fontSize: 13, color: Colors.primary[600], fontWeight: '700' }}>
+                        View on Google Maps
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Phone */}
+              <TouchableOpacity 
+                activeOpacity={0.7}
+                onPress={() => Linking.openURL(info.phoneUrl)}
+                style={{ flexDirection: 'row', gap: 12 }}
+              >
+                <Phone size={20} color={Colors.success[600]} style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }}>Phone / Contact</Text>
+                  <Text style={{ fontSize: 15, color: Colors.success[600], fontWeight: '700', marginTop: 2 }}>
+                    {info.phone}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Email */}
+              <TouchableOpacity 
+                activeOpacity={0.7}
+                onPress={() => Linking.openURL(`mailto:${info.email}`)}
+                style={{ flexDirection: 'row', gap: 12 }}
+              >
+                <Mail size={20} color="#ea4335" style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }}>Email ID</Text>
+                  <Text style={{ fontSize: 14, color: theme.text, marginTop: 2 }}>
+                    {info.email}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Website */}
+              <TouchableOpacity 
+                activeOpacity={0.7}
+                onPress={() => Linking.openURL(info.websiteUrl)}
+                style={{ flexDirection: 'row', gap: 12 }}
+              >
+                <Globe size={20} color="#0f9d58" style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }}>Website</Text>
+                  <Text style={{ fontSize: 14, color: Colors.primary[600], fontWeight: '600', marginTop: 2 }}>
+                    {info.website}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* GSTIN */}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <Info size={20} color="#f4b400" style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }}>GSTIN</Text>
+                  <Text style={{ fontSize: 14, color: theme.text, fontWeight: '700', marginTop: 2, letterSpacing: 0.5 }}>
+                    {info.gstin}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        </RNAnimated.View>
+      </View>
+    </Modal>
+  );
+};
+
+const PurchaseOrderCard = React.memo(({ 
   item, 
   index, 
   isMaster, 
@@ -170,7 +677,11 @@ const PurchaseOrderCard = ({
   openModal, 
   handleDelete, 
   generatePDF, 
-  previewPDF 
+  previewPDF,
+  onPressCompanyHeader,
+  numColumns = 1,
+  handleOpenImagePreview,
+  onToggleStatus,
 }: { 
   item: PurchaseOrder; 
   index: number; 
@@ -180,11 +691,16 @@ const PurchaseOrderCard = ({
   openModal: (po: PurchaseOrder) => void; 
   handleDelete: (id: string) => void; 
   generatePDF: (po: PurchaseOrder) => void; 
-  previewPDF: (po: PurchaseOrder) => void; 
+  previewPDF: (po: PurchaseOrder) => void;
+  onPressCompanyHeader?: (company: 'Viral Fabrics' | 'Viral Enterprise') => void;
+  numColumns?: number;
+  handleOpenImagePreview: (images: string[], index: number) => void;
+  onToggleStatus?: (po: PurchaseOrder, newStatus?: 'Pending' | 'Completed') => void;
 }) => {
   const [isAddressExpanded, setIsAddressExpanded] = useState(false);
   const [isPaymentTermsExpanded, setIsPaymentTermsExpanded] = useState(false);
   const [isNotesExpanded, setIsNotesExpanded] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
   const badgeStyles = item.companyHeader === 'Viral Fabrics' 
     ? {
@@ -201,28 +717,31 @@ const PurchaseOrderCard = ({
       };
 
   return (
-    <Animated.View entering={FadeInDown.duration(300).delay((index % 5) * 60)}>
-      <Card style={{ marginHorizontal: 16, marginBottom: 12, padding: 14, borderRadius: 16 }}>
+    <View style={{ flex: 1, zIndex: showStatusDropdown ? 9999 : 1 }}>
+      <Card style={{ marginHorizontal: numColumns && numColumns > 1 ? 8 : 16, marginBottom: 12, padding: 14, borderRadius: 16, flex: 1, overflow: showStatusDropdown ? 'visible' : 'hidden' }}>
         {/* Top Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={{ fontSize: 18, fontWeight: '900', color: Colors.primary[600], letterSpacing: -0.5 }}>
               #{getDisplayOrderId(item.poNumber)}
             </Text>
-            <View style={{ 
-              backgroundColor: badgeStyles.bg, 
-              paddingHorizontal: 8, 
-              paddingVertical: 3, 
-              borderRadius: 12, 
-              borderWidth: 1, 
-              borderColor: badgeStyles.border 
-            }}>
+            <TouchableOpacity 
+              activeOpacity={0.7}
+              onPress={() => onPressCompanyHeader?.(item.companyHeader)}
+              style={{ 
+                backgroundColor: badgeStyles.bg, 
+                paddingHorizontal: 8, 
+                paddingVertical: 3, 
+                borderRadius: 12, 
+                borderWidth: 1, 
+                borderColor: badgeStyles.border 
+              }}
+            >
               <Text style={{ fontSize: 10, fontWeight: '700', color: badgeStyles.text }}>
                 {badgeStyles.label}
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
-
           {/* Action Icons */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity onPress={() => previewPDF(item)} style={{ padding: 4 }}>
@@ -244,16 +763,127 @@ const PurchaseOrderCard = ({
           </View>
         </View>
 
-        {/* Date Row */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
-          <CalendarDays size={13} color={theme.textSecondary} />
-          <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>
-            {formatDate(item.poDate)}
-          </Text>
+        {/* Date and Status Row */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, zIndex: showStatusDropdown ? 9999 : 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <CalendarDays size={13} color={theme.textSecondary} />
+            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>
+              {formatDate(item.poDate)}
+            </Text>
+          </View>
+
+          {/* Status Dropdown Trigger & Popover */}
+          <View style={{ position: 'relative', zIndex: showStatusDropdown ? 9999 : 1 }}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowStatusDropdown(!showStatusDropdown);
+              }}
+              style={{ 
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: item.status === 'Completed' 
+                  ? (isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5')
+                  : (isDarkMode ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb'), 
+                paddingHorizontal: 8, 
+                paddingVertical: 3, 
+                borderRadius: 8, 
+                borderWidth: 1, 
+                borderColor: item.status === 'Completed'
+                  ? (isDarkMode ? 'rgba(16, 185, 129, 0.3)' : '#a7f3d0')
+                  : (isDarkMode ? 'rgba(245, 158, 11, 0.3)' : '#fde68a')
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: 'bold', color: item.status === 'Completed' ? Colors.success[600] : Colors.warning[600] }}>
+                {item.status || 'Pending'}
+              </Text>
+              <ChevronDown size={11} color={item.status === 'Completed' ? Colors.success[600] : Colors.warning[600]} />
+            </TouchableOpacity>
+
+            {showStatusDropdown && (
+              <View style={{
+                position: 'absolute',
+                top: 28,
+                right: 0,
+                width: 120,
+                backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
+                borderRadius: 12,
+                padding: 4,
+                borderWidth: 1,
+                borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: isDarkMode ? 0.4 : 0.15,
+                shadowRadius: 8,
+                elevation: 10,
+                zIndex: 9999,
+              }}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setShowStatusDropdown(false);
+                    if (item.status !== 'Pending') {
+                      onToggleStatus?.(item, 'Pending');
+                    }
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 8,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    backgroundColor: (item.status === 'Pending' || !item.status)
+                      ? (isDarkMode ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb')
+                      : 'transparent',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.warning[500] }} />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.warning[600] }}>Pending</Text>
+                  </View>
+                  {(item.status === 'Pending' || !item.status) && (
+                    <Check size={12} color={Colors.warning[500]} />
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setShowStatusDropdown(false);
+                    if (item.status !== 'Completed') {
+                      onToggleStatus?.(item, 'Completed');
+                    }
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 8,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    backgroundColor: item.status === 'Completed'
+                      ? (isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5')
+                      : 'transparent',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success[500] }} />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.success[600] }}>Completed</Text>
+                  </View>
+                  {item.status === 'Completed' && (
+                    <Check size={12} color={Colors.success[500]} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Broker Row */}
-        {item.brokerName && (
+        {!!item.brokerName && (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <Text style={{ fontSize: 12, color: theme.textSecondary }}>Broker:</Text>
             <Text style={{ fontSize: 12, fontWeight: '600', color: theme.text }}>
@@ -265,7 +895,7 @@ const PurchaseOrderCard = ({
         <View style={{ height: 1, backgroundColor: theme.borderLight, marginVertical: 8 }} />
 
         {/* Supplier Section */}
-        {item.supplierName && (
+        {!!item.supplierName && (
           <View style={{ marginBottom: 8 }}>
             <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: theme.textSecondary, marginBottom: 4 }}>
               SUPPLIER DETAILS
@@ -273,7 +903,7 @@ const PurchaseOrderCard = ({
             <Text style={{ fontSize: 14, fontWeight: '800', color: theme.text }}>
               {item.supplierName}
             </Text>
-            {item.supplierAddress && (
+            {!!item.supplierAddress && (
               <TouchableOpacity 
                 activeOpacity={0.7}
                 onPress={() => setIsAddressExpanded(!isAddressExpanded)}
@@ -299,9 +929,14 @@ const PurchaseOrderCard = ({
                 </Text>
               </TouchableOpacity>
             )}
-            {item.supplierGstin && (
+            {!!item.supplierGstin && (
               <Text style={{ fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: theme.textTertiary, marginTop: 4 }}>
                 GSTIN: {item.supplierGstin}
+              </Text>
+            )}
+            {!!item.supplierPhone && (
+              <Text style={{ fontSize: 10, color: theme.textTertiary, marginTop: 2 }}>
+                Phone: {item.supplierPhone}
               </Text>
             )}
           </View>
@@ -310,17 +945,34 @@ const PurchaseOrderCard = ({
         <View style={{ height: 1, backgroundColor: theme.borderLight, marginVertical: 8 }} />
 
         {/* Quality & Delivery */}
-        {item.quality && (
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <Text style={{ fontSize: 12, color: theme.textSecondary }}>Quality & Delivery:</Text>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>
-              {item.quality} {item.pcsMtr ? `(${item.pcsMtr} Pcs/Mtr)` : ''}
-            </Text>
+        {(Boolean(item.quality) || Boolean(item.pcsMtr) || Boolean(item.greighMtr) || Boolean(item.delivery)) && (
+          <View style={{ marginBottom: 8, gap: 6 }}>
+            {!!item.quality && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '500' }}>Quality:</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text, flex: 1, textAlign: 'right' }}>
+                  {item.quality}
+                </Text>
+              </View>
+            )}
+
+            {(Boolean(item.pcsMtr) || Boolean(item.greighMtr) || Boolean(item.delivery)) && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '500' }}>Delivery / Details:</Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary, flex: 1, textAlign: 'right' }}>
+                  {[
+                    item.pcsMtr ? `${item.pcsMtr} Pcs/Mtr` : '',
+                    item.greighMtr ? `Greigh: ${item.greighMtr} Mtr` : '',
+                    item.delivery ? `Delivery: ${item.delivery}` : ''
+                  ].filter(Boolean).join(' • ')}
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
         {/* Rate & Terms */}
-        {item.rate && (
+        {!!item.rate && (
           <View style={{ marginTop: 2 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 12, color: theme.textSecondary }}>Rate & Terms:</Text>
@@ -328,7 +980,7 @@ const PurchaseOrderCard = ({
                 ₹ {item.rate}
               </Text>
             </View>
-            {item.paymentTerms && (
+            {!!item.paymentTerms && (
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => setIsPaymentTermsExpanded(!isPaymentTermsExpanded)}
@@ -341,24 +993,23 @@ const PurchaseOrderCard = ({
                   marginTop: 4
                 } : { marginTop: 2, alignItems: 'flex-end' }}
               >
-                <Text 
-                  numberOfLines={isPaymentTermsExpanded ? undefined : 1}
-                  style={{ 
+                {renderFormattedText(
+                  item.paymentTerms,
+                  { 
                     fontSize: 11, 
                     color: isPaymentTermsExpanded ? (isDarkMode ? '#93c5fd' : '#1e293b') : theme.textSecondary,
                     fontWeight: isPaymentTermsExpanded ? '600' : '400',
                     textAlign: isPaymentTermsExpanded ? 'left' : 'right'
-                  }}
-                >
-                  {item.paymentTerms}
-                </Text>
+                  },
+                  isPaymentTermsExpanded ? undefined : 1
+                )}
               </TouchableOpacity>
             )}
           </View>
         )}
 
         {/* Specs Grid */}
-        {(item.specs?.finishGsm || item.specs?.greyWidth || item.specs?.finishWidth || item.specs?.weight) && (
+        {!!(item.specs?.finishGsm || item.specs?.greyWidth || item.specs?.finishWidth || item.specs?.weight) && (
           <View style={{ marginTop: 10 }}>
             <View style={{ height: 1, backgroundColor: theme.borderLight, marginBottom: 8 }} />
             <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: theme.textSecondary, marginBottom: 6 }}>
@@ -391,72 +1042,161 @@ const PurchaseOrderCard = ({
           </View>
         )}
 
-        {/* Notes */}
-        {item.notes && (
+        {/* Notes & Images */}
+        {(!!item.notes || (item.images && item.images.length > 0)) && (
           <View style={{ marginTop: 10 }}>
             <View style={{ height: 1, backgroundColor: theme.borderLight, marginBottom: 8 }} />
             <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: theme.textSecondary, marginBottom: 4 }}>
-              Notes:
+              Notes & Images:
             </Text>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setIsNotesExpanded(!isNotesExpanded)}
-              style={isNotesExpanded ? {
-                backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.8)' : '#f1f5f9',
-                padding: 8,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: theme.borderLight,
-                marginTop: 2
-              } : { marginTop: 2 }}
-            >
-              <Text 
-                numberOfLines={isNotesExpanded ? undefined : 1}
-                style={{ 
-                  fontSize: 11, 
-                  color: isNotesExpanded ? (isDarkMode ? '#93c5fd' : '#1e293b') : theme.textSecondary,
-                  fontWeight: isNotesExpanded ? '600' : '400',
-                  lineHeight: 16
-                }}
-              >
-                {item.notes ? item.notes.replace(/<[^>]+>/g, '') : ''}
-              </Text>
-            </TouchableOpacity>
+            
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+              {/* Notes Text Column */}
+              <View style={{ flex: 1 }}>
+                {!!item.notes ? (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => setIsNotesExpanded(!isNotesExpanded)}
+                    style={isNotesExpanded ? {
+                      backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.8)' : '#f1f5f9',
+                      padding: 8,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: theme.borderLight,
+                      marginTop: 2
+                    } : { marginTop: 2 }}
+                  >
+                    {renderFormattedText(
+                      item.notes,
+                      { 
+                        fontSize: 11, 
+                        color: isNotesExpanded ? (isDarkMode ? '#93c5fd' : '#1e293b') : theme.textSecondary,
+                        fontWeight: isNotesExpanded ? '600' : '400',
+                        lineHeight: 16
+                      },
+                      isNotesExpanded ? undefined : 2
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={{ fontSize: 11, color: theme.textTertiary, fontStyle: 'italic', marginTop: 2 }}>-</Text>
+                )}
+              </View>
+
+              {/* Image Preview Thumbnail */}
+              {item.images && item.images.length > 0 && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => handleOpenImagePreview(item.images!, 0)}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 6,
+                    overflow: 'hidden',
+                    borderWidth: 1,
+                    borderColor: isDarkMode ? '#475569' : '#cbd5e1',
+                    position: 'relative'
+                  }}
+                >
+                  <Image
+                    source={{ uri: item.images[0] }}
+                    style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+                  />
+                  {item.images.length > 1 && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <Text style={{ fontSize: 9, fontWeight: '900', color: '#ffffff' }}>
+                        +{item.images.length - 1}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
       </Card>
-    </Animated.View>
+    </View>
   );
-};
-
-// ─── Purchase Orders Tab ───
+});// ─── Purchase Orders Tab ───
 
 export default function PurchaseOrdersScreen() {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const { isLargeScreen, isTablet, isDesktop, modalMaxWidth, numColumns, containerMaxWidth } = useResponsiveLayout();
   const user = useAppStore((state) => state.user);
   const addToast = useAppStore((state) => state.addToast);
   
   const isMaster = user?.role === 'master' || user?.role === 'superadmin';
+  const isWeb = Platform.OS === 'web';
+  const showWebViewEditor = !isWeb && WebView;
 
   // State: List & Filters
   const [page, setPage] = useState(1);
   const [searchVal, setSearchVal] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [companyHeader, setCompanyHeader] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [fyFilter, setFyFilter] = useState('');
   const [sortFilter, setSortFilter] = useState('latest_first');
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [statusModalPo, setStatusModalPo] = useState<PurchaseOrder | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  const fyOptions = useMemo(() => getCalculatedFYOptions(), []);
+  const [infoCompany, setInfoCompany] = useState<'Viral Fabrics' | 'Viral Enterprise' | null>(null);  
 
+  // Image Preview Modal state
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  const handleOpenImagePreview = useCallback((images: string[], index: number) => {
+    setPreviewImages(images);
+    setPreviewIndex(index);
+    setIsPreviewOpen(true);
+  }, []);
+  const [pdfViewerVisible, setPdfViewerVisible] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState('');
+  const [pdfViewerTitle, setPdfViewerTitle] = useState('');
+  const [pdfViewerFilename, setPdfViewerFilename] = useState('');
+  const fyOptions = useMemo(() => getCalculatedFYOptions(), []);
+  
   // Draggable FAB setup
+  const FAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 220 : 170;
   const fabPan = useRef(new RNAnimated.ValueXY({ 
     x: screenWidth - 68, 
-    y: screenHeight - 110 - (insets.bottom > 0 ? insets.bottom : 16) 
+    y: screenHeight - FAB_BOTTOM_OFFSET 
   })).current;
+  const fabX = useRef(screenWidth - 68);
+  const fabY = useRef(screenHeight - FAB_BOTTOM_OFFSET);
+
+  const dimensionsRef = useRef({ screenWidth, screenHeight });
+  dimensionsRef.current = { screenWidth, screenHeight };
+
+  useEffect(() => {
+    const isSnappedLeft = fabX.current < screenWidth / 2;
+    const targetX = isSnappedLeft ? 20 : screenWidth - 68;
+    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - FAB_BOTTOM_OFFSET);
+    
+    fabX.current = targetX;
+    fabY.current = targetY;
+    
+    RNAnimated.spring(fabPan, {
+      toValue: { x: targetX, y: targetY },
+      useNativeDriver: false,
+      friction: 6,
+    }).start();
+  }, [screenWidth, screenHeight]);
   
   const fabPanResponder = useRef(
     PanResponder.create({
@@ -466,8 +1206,8 @@ export default function PurchaseOrdersScreen() {
       },
       onPanResponderGrant: () => {
         fabPan.setOffset({
-          x: (fabPan.x as any)._value || 0,
-          y: (fabPan.y as any)._value || 0,
+          x: fabX.current,
+          y: fabY.current,
         });
         fabPan.setValue({ x: 0, y: 0 });
       },
@@ -478,16 +1218,22 @@ export default function PurchaseOrdersScreen() {
       onPanResponderRelease: (e, gestureState) => {
         fabPan.flattenOffset();
 
-        const currentX = (fabPan.x as any)._value;
-        const currentY = (fabPan.y as any)._value;
+        const currentScreenWidth = dimensionsRef.current.screenWidth;
+        const currentScreenHeight = dimensionsRef.current.screenHeight;
+
+        const currentX = fabX.current + gestureState.dx;
+        const currentY = fabY.current + gestureState.dy;
 
         const snapLeftX = 20;
-        const snapRightX = screenWidth - 68;
-        const targetX = currentX < screenWidth / 2 ? snapLeftX : snapRightX;
+        const snapRightX = currentScreenWidth - 68;
+        const targetX = currentX < currentScreenWidth / 2 ? snapLeftX : snapRightX;
 
         const minY = 100;
-        const maxY = screenHeight - 110 - (insets.bottom > 0 ? insets.bottom : 16);
+        const maxY = currentScreenHeight - FAB_BOTTOM_OFFSET;
         const targetY = Math.min(Math.max(currentY, minY), maxY);
+
+        fabX.current = targetX;
+        fabY.current = targetY;
 
         RNAnimated.spring(fabPan, {
           toValue: { x: targetX, y: targetY },
@@ -500,31 +1246,44 @@ export default function PurchaseOrdersScreen() {
 
   // Swipe down to close Filter Modal
   const filterScrollOffset = useRef(0);
+  const filterCapturedDy = useRef(0);
+  const filterSheetY = useRef(0);
   const filterPanY = useRef(new RNAnimated.Value(600)).current;
 
   const closeFilterModal = useCallback(() => {
     RNAnimated.timing(filterPanY, {
       toValue: 600,
       duration: 160,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
     }).start(() => {
       setShowFilterModal(false);
     });
   }, [filterPanY]);
-
   const filterPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          filterPanY.setValue(gestureState.dy);
-        }
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - filterSheetY.current;
+        return touchY > 0 && touchY <= 85;
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dy > 40 || gestureState.vy > 0.2) {
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: (_, gs) => {
+        filterCapturedDy.current = gs.dy;
+        Keyboard.dismiss();
+      },
+      onPanResponderMove: (_, gs) => {
+        const dragY = gs.dy - filterCapturedDy.current;
+        const translateY = dragY < 0 ? dragY * 0.22 : dragY;
+        filterPanY.setValue(translateY);
+      },
+      onPanResponderRelease: (_, gs) => {
+        const dragY = gs.dy - filterCapturedDy.current;
+        if (dragY > 120 || gs.vy > 0.55) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -532,8 +1291,10 @@ export default function PurchaseOrdersScreen() {
         } else {
           RNAnimated.spring(filterPanY, {
             toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
-            friction: 7,
+            stiffness: 300,
+            damping: 30,
+            mass: 1,
+            useNativeDriver: false,
           }).start();
         }
       },
@@ -545,7 +1306,7 @@ export default function PurchaseOrdersScreen() {
       filterPanY.setValue(600);
       RNAnimated.spring(filterPanY, {
         toValue: 0,
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: false,
         damping: 15,
         stiffness: 120,
       }).start();
@@ -565,6 +1326,8 @@ export default function PurchaseOrdersScreen() {
     poDate: new Date().toISOString(),
     specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' }
   });
+  const [selectedImageUris, setSelectedImageUris] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const [nextPoDetails, setNextPoDetails] = useState<{ poNumber: string; sequence: number; financialYear: string } | null>(null);
   
   // State: Deletion
@@ -584,8 +1347,21 @@ export default function PurchaseOrdersScreen() {
   const [termsSel, setTermsSel] = useState({ start: 0, end: 0 });
   const [notesSel, setNotesSel] = useState({ start: 0, end: 0 });
 
+  // WebView editor states & refs
+  const [initialTerms, setInitialTerms] = useState('');
+  const [initialNotes, setInitialNotes] = useState('');
+  const termsEditorRef = useRef<any>(null);
+  const notesEditorRef = useRef<any>(null);
+  const formScrollViewRef = useRef<ScrollView>(null);
+
+  const scrollToFormEnd = () => {
+    setTimeout(() => {
+      formScrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 150);
+  };
+
   // Debounce search
-  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimerRef = useRef<any>(null);
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
@@ -615,16 +1391,21 @@ export default function PurchaseOrdersScreen() {
       fetchSuggestions('');
     }
   }, [isModalOpen]);
+  const [allOrders, setAllOrders] = useState<PurchaseOrder[]>([]);
 
-
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [companyHeader, statusFilter, fyFilter, sortFilter]);
 
   // Fetch PO List
-  const { data, isLoading, isFetching, refetch } = useQuery({
-    queryKey: ['purchaseOrders', page, debouncedSearch, companyHeader, fyFilter, sortFilter],
+  const { data, isLoading, isFetching, refetch, isRefetching } = useQuery({
+    queryKey: ['purchaseOrders', page, debouncedSearch, companyHeader, statusFilter, fyFilter, sortFilter],
+    staleTime: 30000,
     queryFn: async () => {
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '20',
+        limit: '5',
         sort: sortFilter,
       });
 
@@ -634,6 +1415,7 @@ export default function PurchaseOrdersScreen() {
       }
 
       if (companyHeader) params.append('companyHeader', companyHeader);
+      if (statusFilter) params.append('status', statusFilter);
       if (fyFilter) params.append('fy', fyFilter);
 
       const res = await api.get(`/api/purchase-orders?${params.toString()}`);
@@ -642,7 +1424,20 @@ export default function PurchaseOrdersScreen() {
     placeholderData: keepPreviousData,
   });
 
-  const orders: PurchaseOrder[] = data?.data || [];
+  useEffect(() => {
+    if (data?.data) {
+      if (page === 1) {
+        setAllOrders(data.data);
+      } else {
+        setAllOrders((prev) => {
+          const newItems = data.data.filter((item: any) => !prev.some((p) => p._id === item._id));
+          return [...prev, ...newItems];
+        });
+      }
+    }
+  }, [data, page]);
+
+  const orders: PurchaseOrder[] = allOrders;
   const pagination = data?.pagination || { totalPages: 1, hasNext: false };
 
   // Fetch Next PO Number
@@ -669,10 +1464,11 @@ export default function PurchaseOrdersScreen() {
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (companyHeader !== '') count++;
+    if (statusFilter !== '') count++;
     if (fyFilter !== '') count++;
     if (sortFilter !== 'latest_first') count++;
     return count;
-  }, [companyHeader, fyFilter, sortFilter]);
+  }, [companyHeader, statusFilter, fyFilter, sortFilter]);
 
   const totalActiveFiltersCount = useMemo(() => {
     let count = activeFilterCount;
@@ -685,6 +1481,7 @@ export default function PurchaseOrdersScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     setCompanyHeader('');
+    setStatusFilter('');
     setFyFilter('');
     setSortFilter('latest_first');
     setSearchVal('');
@@ -731,6 +1528,17 @@ export default function PurchaseOrdersScreen() {
     }
   });
 
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string, status: 'Pending' | 'Completed' }) => api.put(`/api/purchase-orders/${id}`, { status }),
+    onSuccess: (res, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+      addToast({ type: 'success', title: 'Status Updated', message: `PO status updated to ${variables.status}.` });
+    },
+    onError: (error: any) => {
+      addToast({ type: 'error', title: 'Error', message: error.response?.data?.message || 'Failed to update status.' });
+    }
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/api/purchase-orders/${id}`),
     onSuccess: () => {
@@ -746,87 +1554,251 @@ export default function PurchaseOrdersScreen() {
   });
 
   // Modal Handling
-  const sheetTranslateY = useSharedValue(screenHeight);
+  const pan = useRef(new RNAnimated.Value(0)).current;
+  const formScrollOffset = useRef(0);
+  const formCapturedDy = useRef(0);
+  const backdropBgColor = pan.interpolate({
+    inputRange: [0, screenHeight],
+    outputRange: ['rgba(0, 0, 0, 0.5)', 'rgba(0, 0, 0, 0)'],
+    extrapolate: 'clamp',
+  });
 
   const openModal = (order?: PurchaseOrder) => {
     if (order) {
       setIsEditMode(true);
       setEditId(order._id);
+      const cleanedTerms = cleanHtmlForInput(order.paymentTerms);
+      const cleanedNotes = cleanHtmlForInput(order.notes);
+      setInitialTerms(cleanedTerms);
+      setInitialNotes(cleanedNotes);
       setFormData({
         ...order,
-        specs: order.specs || { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' }
+        supplierPhone: order.supplierPhone || '',
+        greighMtr: order.greighMtr || '',
+        greighLeadTime: order.greighLeadTime || '',
+        images: order.images || [],
+        paymentTerms: cleanedTerms,
+        notes: cleanedNotes,
+        specs: order.specs || { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
+        status: order.status || 'Pending'
       });
+      setSelectedImageUris(order.images || []);
       setNextPoDetails(null);
     } else {
       setIsEditMode(false);
       setEditId(null);
+      setInitialTerms('');
+      setInitialNotes('');
+      setSelectedImageUris([]);
       setFormData({
         companyHeader: 'Viral Fabrics',
         poDate: new Date().toISOString(),
-        specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' }
+        poNumber: '',
+        brokerName: '',
+        brokerPhone: '',
+        supplierName: '',
+        supplierAddress: '',
+        supplierGstin: '',
+        supplierPhone: '',
+        quality: '',
+        pcsMtr: '',
+        rate: '',
+        greighMtr: '',
+        greighLeadTime: '',
+        images: [],
+        delivery: '',
+        paymentTerms: '',
+        notes: '',
+        specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
+        status: 'Pending'
       });
     }
     
     setIsModalOpen(true);
-    sheetTranslateY.value = screenHeight;
-    sheetTranslateY.value = withSpring(0, { damping: 25, stiffness: 250, mass: 0.8 });
+    pan.setValue(screenHeight);
+    RNAnimated.spring(pan, {
+      toValue: 0,
+      useNativeDriver: true,
+      damping: 20,
+      stiffness: 250,
+    }).start();
   };
 
-  const closeModal = (velocity = 0) => {
-    const handleFinished = () => {
+  const closeModal = () => {
+    RNAnimated.timing(pan, {
+      toValue: screenHeight,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
       setIsModalOpen(false);
-    };
+    });
+  };
 
-    if (velocity > 0) {
-      sheetTranslateY.value = withSpring(
-        screenHeight,
-        { damping: 30, stiffness: 280, mass: 0.8, velocity },
-        (isFinished) => { if (isFinished) { import('react-native-reanimated').then(rea => rea.runOnJS(handleFinished)()); } }
-      );
-    } else {
-      sheetTranslateY.value = withSpring(
-        screenHeight,
-        { damping: 28, stiffness: 300, mass: 0.8 },
-        (isFinished) => { if (isFinished) { import('react-native-reanimated').then(rea => rea.runOnJS(handleFinished)()); } }
-      );
+  const pickImages = () => {
+    if (Platform.OS === 'web') {
+      launchImagePicker(false);
+      return;
+    }
+    
+    Alert.alert(
+      'Upload Image',
+      'Choose an option to add images',
+      [
+        {
+          text: 'Take Photo',
+          onPress: () => launchImagePicker(true),
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: () => launchImagePicker(false),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const launchImagePicker = async (useCamera: boolean) => {
+    try {
+      let result;
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Camera permission is required to take photos.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Gallery permission is required to select photos.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsMultipleSelection: true,
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets) {
+        const selected = result.assets.map(asset => asset.uri);
+        setSelectedImageUris(prev => [...prev, ...selected]);
+      }
+    } catch (err) {
+      console.error('Image picker error:', err);
     }
   };
 
-  const animatedSheetStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ translateY: sheetTranslateY.value }]
-    };
-  });
+  const removeImage = (uri: string) => {
+    setSelectedImageUris(prev => prev.filter(item => item !== uri));
+  };
+
+  const formSheetY = useRef(0);
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 15 && g.dy > Math.abs(g.dx),
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) {
-          sheetTranslateY.value = g.dy;
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - formSheetY.current;
+        return touchY > 0 && touchY <= 85;
+      },
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: () => {
+        Keyboard.dismiss();
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          pan.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 80 || g.vy > 0.3) {
-          closeModal(g.vy * 1000);
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
+          closeModal();
         } else {
-          sheetTranslateY.value = withSpring(0, { damping: 25, stiffness: 280, mass: 0.8 });
+          RNAnimated.spring(pan, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 40,
+            friction: 8,
+          }).start();
         }
       },
     })
   ).current;
 
   // Handlers
-  const handleSave = () => {
-    if (!formData.companyHeader || !formData.poDate || !formData.quality) {
-      addToast({ type: 'error', title: 'Validation Error', message: 'Company, Date, and Quality are required.' });
+  const handleSave = async () => {
+    if (!formData.companyHeader) {
+      addToast({ type: 'error', title: 'Validation Error', message: 'Company Header is required.' });
       return;
     }
-    if (isEditMode && editId) {
-      updateMutation.mutate({ id: editId, data: formData });
-    } else {
-      createMutation.mutate(formData);
+
+    setIsUploading(true);
+    try {
+      const uploadedUrls: string[] = [];
+      const token = await storage.getToken();
+      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+
+      // Filter to find newly picked images (local URIs starting with 'file://' or 'content://' or '/')
+      const newImages = selectedImageUris.filter(uri => uri.startsWith('file:') || uri.startsWith('content:') || uri.startsWith('/'));
+      // Keep existing http/https URLs
+      const existingImages = selectedImageUris.filter(uri => uri.startsWith('http'));
+
+      for (const uri of newImages) {
+        const localUri = uri;
+        const filename = localUri.split('/').pop() || 'image.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+        const uploadData = new FormData();
+        // Cast to any to satisfy React Native FormData file type
+        uploadData.append('file', { uri: localUri, name: filename, type } as any);
+        uploadData.append('folder', 'purchase-orders');
+
+        const uploadRes = await fetch(`${baseUrl}/api/upload`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          body: uploadData
+        });
+        const uploadResult = await uploadRes.json();
+        if (uploadResult.success && uploadResult.url) {
+          uploadedUrls.push(uploadResult.url);
+        } else {
+          throw new Error(uploadResult.message || 'Image upload failed');
+        }
+      }
+
+      const cleanData = {
+        ...formData,
+        images: [...existingImages, ...uploadedUrls],
+        paymentTerms: cleanHtmlForInput(formData.paymentTerms),
+        notes: cleanHtmlForInput(formData.notes),
+      };
+
+      if (isEditMode && editId) {
+        updateMutation.mutate({ id: editId, data: cleanData });
+      } else {
+        createMutation.mutate(cleanData);
+      }
+    } catch (err: any) {
+      console.log('Error saving PO/uploading images:', err);
+      addToast({ type: 'error', title: 'Save Failed', message: err.message || 'Failed to upload images.' });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -835,41 +1807,101 @@ export default function PurchaseOrdersScreen() {
     setIsDeleteModalOpen(true);
   };
 
+  const handleToggleStatusPress = useCallback((item: PurchaseOrder, newStatus?: 'Pending' | 'Completed') => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    const targetStatus = newStatus || (item.status === 'Completed' ? 'Pending' : 'Completed');
+    if (item.status === targetStatus) return;
+    updateStatusMutation.mutate({ id: item._id!, status: targetStatus });
+  }, [updateStatusMutation]);
   const previewPDF = async (po: PurchaseOrder) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const displayId = getDisplayOrderId(po.poNumber);
+    const filename = `Purchase_Order_${displayId}.pdf`;
+
     try {
       const html = generatePoHtml(po);
-      await print.printAsync({ html });
+      if (Platform.OS === 'web') {
+        await print.printAsync({ html });
+      } else {
+        const { uri } = await print.printToFileAsync({ html });
+        setPdfViewerUrl(uri);
+        setPdfViewerTitle(`Purchase Order — #${displayId}`);
+        setPdfViewerFilename(filename);
+        setPdfViewerVisible(true);
+      }
     } catch (err) {
-      console.log('Error printing PDF:', err);
-      addToast({ type: 'error', title: 'PDF Preview Error', message: 'Failed to open preview.' });
+      console.log('Error previewing PDF locally, falling back to endpoint:', err);
+      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+      const token = await storage.getToken();
+      const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
+      setPdfViewerUrl(pdfUrl);
+      setPdfViewerTitle(`Purchase Order — #${displayId}`);
+      setPdfViewerFilename(filename);
+      setPdfViewerVisible(true);
     }
   };
   
   const generatePDF = async (po: PurchaseOrder) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const displayId = getDisplayOrderId(po.poNumber);
+    const filename = `Purchase_Order_${displayId}.pdf`;
+    
     try {
       const html = generatePoHtml(po);
-      const displayId = getDisplayOrderId(po.poNumber);
+      const { uri } = await print.printToFileAsync({ html, base64: false });
       
-      const { uri } = await print.printToFileAsync({ 
-        html,
-        base64: false
-      });
-      
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
+      if (Platform.OS === 'web') {
+        const a = document.createElement('a');
+        a.href = uri;
+        a.download = filename;
+        a.click();
+        addToast({ type: 'success', title: 'Downloaded', message: 'Purchase Order PDF generated.' });
+      } else if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(decodeURIComponent(uri), {
           mimeType: 'application/pdf',
-          dialogTitle: `Purchase Order ${displayId}`,
+          dialogTitle: `Purchase Order #${displayId}`,
           UTI: 'com.adobe.pdf'
         });
       } else {
-        addToast({ type: 'warning', title: 'Sharing Unavailable', message: 'Could not open sharing dialog on this device.' });
+        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+        const token = await storage.getToken();
+        const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
+        const result = await savePdfToDevice({
+          url: pdfUrl,
+          filename,
+          token,
+          dialogTitle: `Purchase Order — #${displayId}`
+        });
+        if (result.success) {
+          addToast({ type: 'success', title: 'Saved Successfully', message: result.message });
+        } else {
+          addToast({ type: 'error', title: 'Save Failed', message: result.message });
+        }
       }
-    } catch (err) {
-      console.log('Error generating PDF:', err);
-      addToast({ type: 'error', title: 'PDF Error', message: 'Failed to generate PDF.' });
+    } catch (err: any) {
+      console.log('Error generating local PDF, trying endpoint fallback:', err);
+      try {
+        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+        const token = await storage.getToken();
+        const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
+        const result = await savePdfToDevice({
+          url: pdfUrl,
+          filename,
+          token,
+          dialogTitle: `Purchase Order — #${displayId}`
+        });
+        if (result.success) {
+          addToast({ type: 'success', title: 'Saved Successfully', message: result.message });
+        } else {
+          addToast({ type: 'error', title: 'Save Failed', message: result.message });
+        }
+      } catch (fallbackErr: any) {
+        addToast({ type: 'error', title: 'Error', message: `Failed to save PDF: ${fallbackErr.message || err.message}` });
+      }
     }
   };
-
   // Form Input Helpers
   const sanitizeNumeric = (val: string) => {
     if (!val) return '';
@@ -889,47 +1921,58 @@ export default function PurchaseOrdersScreen() {
   };
 
   const handleFormatMobile = (field: 'paymentTerms' | 'notes', formatType: 'bold' | 'italic' | 'underline' | 'bullet' | 'number') => {
+    if (showWebViewEditor) {
+      const ref = field === 'paymentTerms' ? termsEditorRef : notesEditorRef;
+      if (ref.current) {
+        let command = formatType;
+        if (formatType === 'bullet') command = 'insertUnorderedList' as any;
+        else if (formatType === 'number') command = 'insertOrderedList' as any;
+        ref.current.postMessage(JSON.stringify({ type: 'format', command }));
+      }
+      return;
+    }
+
     const val = (formData as any)[field] || '';
     const sel = field === 'paymentTerms' ? termsSel : notesSel;
-    const start = sel.start;
-    const end = sel.end;
+    const start = sel.start || 0;
+    const end = sel.end || 0;
     const selectedText = (start !== end && start < end) ? val.substring(start, end) : '';
 
     let newText = val;
-    if (formatType === 'bold') {
+    let newCursorPos = start;
+
+    if (formatType === 'bold' || formatType === 'italic' || formatType === 'underline') {
+      const tagOpen = formatType === 'bold' ? '<b>' : (formatType === 'italic' ? '<i>' : '<u>');
+      const tagClose = formatType === 'bold' ? '</b>' : (formatType === 'italic' ? '</i>' : '</u>');
+
       if (selectedText) {
-        if (selectedText.startsWith('<b>') && selectedText.endsWith('</b>')) {
-          newText = val.substring(0, start) + selectedText.slice(3, -4) + val.substring(end);
+        if (selectedText.startsWith(tagOpen) && selectedText.endsWith(tagClose)) {
+          newText = val.substring(0, start) + selectedText.slice(tagOpen.length, -tagClose.length) + val.substring(end);
+          newCursorPos = start + selectedText.length - tagOpen.length - tagClose.length;
         } else {
-          newText = val.substring(0, start) + `<b>${selectedText}</b>` + val.substring(end);
+          newText = val.substring(0, start) + `${tagOpen}${selectedText}${tagClose}` + val.substring(end);
+          newCursorPos = start + tagOpen.length + selectedText.length + tagClose.length;
         }
       } else {
-        newText = val ? `${val} <b>bold text</b>` : '<b>bold text</b>';
+        newText = val.substring(0, start) + `${tagOpen}${tagClose}` + val.substring(start);
+        newCursorPos = start + tagOpen.length;
       }
-    } else if (formatType === 'italic') {
-      if (selectedText) {
-        if (selectedText.startsWith('<i>') && selectedText.endsWith('</i>')) {
-          newText = val.substring(0, start) + selectedText.slice(3, -4) + val.substring(end);
-        } else {
-          newText = val.substring(0, start) + `<i>${selectedText}</i>` + val.substring(end);
-        }
+
+      if (field === 'paymentTerms') {
+        setTermsSel({ start: newCursorPos, end: newCursorPos });
       } else {
-        newText = val ? `${val} <i>italic text</i>` : '<i>italic text</i>';
-      }
-    } else if (formatType === 'underline') {
-      if (selectedText) {
-        if (selectedText.startsWith('<u>') && selectedText.endsWith('</u>')) {
-          newText = val.substring(0, start) + selectedText.slice(3, -4) + val.substring(end);
-        } else {
-          newText = val.substring(0, start) + `<u>${selectedText}</u>` + val.substring(end);
-        }
-      } else {
-        newText = val ? `${val} <u>underlined text</u>` : '<u>underlined text</u>';
+        setNotesSel({ start: newCursorPos, end: newCursorPos });
       }
     } else if (formatType === 'bullet') {
-      newText = val ? `${val}\n• ` : '• ';
+      newText = val.substring(0, start) + (start === 0 || val[start - 1] === '\n' ? '• ' : '\n• ') + val.substring(start);
+      newCursorPos = start + (start === 0 || val[start - 1] === '\n' ? 2 : 3);
+      if (field === 'paymentTerms') setTermsSel({ start: newCursorPos, end: newCursorPos });
+      else setNotesSel({ start: newCursorPos, end: newCursorPos });
     } else if (formatType === 'number') {
-      newText = val ? `${val}\n1. ` : '1. ';
+      newText = val.substring(0, start) + (start === 0 || val[start - 1] === '\n' ? '1. ' : '\n1. ') + val.substring(start);
+      newCursorPos = start + (start === 0 || val[start - 1] === '\n' ? 3 : 4);
+      if (field === 'paymentTerms') setTermsSel({ start: newCursorPos, end: newCursorPos });
+      else setNotesSel({ start: newCursorPos, end: newCursorPos });
     }
 
     updateField(field, newText);
@@ -943,7 +1986,12 @@ export default function PurchaseOrdersScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : ((isModalOpen || showFilterModal || !!infoCompany) ? 'light-content' : 'dark-content')}
+      />
+      <Tabs.Screen options={{ tabBarStyle: isModalOpen ? { display: 'none' } : undefined }} />
+      <View style={{ flex: 1, width: '100%', maxWidth: containerMaxWidth, alignSelf: 'center' }}>
       {/* Unified Search & Filters Row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingHorizontal: 16 }}>
         {/* Custom Search Bar */}
@@ -1031,13 +2079,10 @@ export default function PurchaseOrdersScreen() {
         </TouchableOpacity>
       </View>
 
-
-
-
       {/* List */}
       <View style={{ flex: 1 }}>
-        {isLoading && page === 1 ? (
-          <SkeletonList count={5} height={180} />
+        {(isLoading || (isFetching && !isRefetching)) && page === 1 ? (
+          <PurchaseOrderSkeletonList count={5} />
         ) : orders.length === 0 ? (
           <EmptyState
             icon={<ClipboardList size={48} color={Colors.primary[500]} />}
@@ -1047,13 +2092,17 @@ export default function PurchaseOrdersScreen() {
             onAction={isMaster ? () => openModal() : undefined}
           />
         ) : (
-          <FlatList
+          <FlashList
+            key={numColumns}
+            numColumns={numColumns}
             data={orders}
-            keyExtractor={(item) => item._id}
-            contentContainerStyle={{ paddingVertical: 16, paddingBottom: 100 }}
+            keyExtractor={(item: PurchaseOrder) => item._id}
+            drawDistance={800}
+            contentContainerStyle={{ paddingVertical: 16, paddingBottom: 100, paddingHorizontal: numColumns > 1 ? 8 : 0 }}
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={Colors.primary[500]} />}
             onEndReached={loadMore}
             onEndReachedThreshold={0.5}
+            removeClippedSubviews={false}
             renderItem={({ item, index }) => (
               <PurchaseOrderCard
                 item={item}
@@ -1065,6 +2114,10 @@ export default function PurchaseOrdersScreen() {
                 handleDelete={handleDelete}
                 generatePDF={generatePDF}
                 previewPDF={previewPDF}
+                onPressCompanyHeader={setInfoCompany}
+                numColumns={numColumns}
+                handleOpenImagePreview={handleOpenImagePreview}
+                onToggleStatus={handleToggleStatusPress}
               />
             )}
             ListFooterComponent={
@@ -1072,78 +2125,50 @@ export default function PurchaseOrdersScreen() {
                 <View style={{ paddingVertical: 20, alignItems: 'center' }}>
                   <ActivityIndicator size="small" color={Colors.primary[500]} />
                 </View>
+              ) : (!pagination.hasNext && orders.length > 0) ? (
+                <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 11, color: theme.textTertiary, fontStyle: 'italic' }}>
+                    No more purchase orders to load
+                  </Text>
+                </View>
               ) : <View style={{ height: 40 }} />
             }
           />
         )}
       </View>
-
-      {/* Draggable FAB */}
-      {isMaster && (
-        <RNAnimated.View
-          {...fabPanResponder.panHandlers}
-          style={{
-            left: fabPan.x,
-            top: fabPan.y,
-            position: 'absolute',
-            zIndex: 9999,
-          }}
-        >
-          <TouchableOpacity
-            onPress={() => {
-              if (Platform.OS !== 'web') {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              }
-              openModal();
-            }}
-            activeOpacity={0.8}
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: Colors.primary[600],
-              shadowColor: Colors.primary[600],
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 8,
-            }}
-          >
-            <View style={{ position: 'relative', width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
-              <ClipboardList size={24} color="#ffffff" />
-              <View style={{ position: 'absolute', top: -5, right: -5, backgroundColor: Colors.primary[600], borderRadius: 7, width: 14, height: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#ffffff' }}>
-                <Plus size={9} color="#ffffff" />
-              </View>
-            </View>
-          </TouchableOpacity>
-        </RNAnimated.View>
-      )}
+      </View>
 
       {/* Full Screen Bottom Sheet Modal for Create/Edit */}
       <Modal
         visible={isModalOpen}
         transparent={true}
         animationType="none"
+        statusBarTranslucent={true}
+        navigationBarTranslucent={true}
         onRequestClose={() => closeModal()}
       >
         <View style={[{ flex: 1, position: 'relative' }]}>
-          <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: theme.overlay }]} />
+          <TouchableWithoutFeedback onPress={() => closeModal()}>
+            <RNAnimated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: backdropBgColor }]} />
+          </TouchableWithoutFeedback>
           
-          <Animated.View 
+          <RNAnimated.View 
+            onLayout={(e) => {
+              formSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...panResponder.panHandlers}
             style={[
-              { position: 'absolute', left: 0, right: 0, bottom: 0, top: insets.top + 20, backgroundColor: theme.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20 },
-              animatedSheetStyle
+              { position: 'absolute', left: 0, right: 0, bottom: 0, top: isLargeScreen ? undefined : insets.top + 20, height: isLargeScreen ? '92%' : undefined, maxWidth: isLargeScreen ? 850 : '100%', width: '100%', alignSelf: 'center', backgroundColor: theme.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 20 },
+              { transform: [{ translateY: pan }] }
             ]}
           >
             {/* Draggable Header */}
-            <View {...panResponder.panHandlers} style={{ borderBottomWidth: 1, borderBottomColor: theme.borderLight, paddingBottom: 12 }}>
+            <View style={{ borderBottomWidth: 1, borderBottomColor: theme.borderLight, paddingBottom: 12 }}>
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? Colors.neutral[600] : Colors.neutral[300], alignSelf: 'center', marginTop: 12, marginBottom: 12 }} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 }}>
                 <View style={{ flex: 1, paddingRight: 12 }}>
                   <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }} numberOfLines={1}>
-                    {isEditMode ? 'Edit Purchase Order' : 'Create Purchase Order'} {(!isEditMode && nextPoDetails?.poNumber) ? `#${nextPoDetails.poNumber}` : (isEditMode && formData.poNumber ? `#${formData.poNumber}` : '')}
+                    {isEditMode ? 'Edit Purchase Order' : 'Create Purchase Order'} {(!isEditMode && nextPoDetails?.poNumber) ? `#${getDisplayOrderId(nextPoDetails.poNumber)}` : (isEditMode && formData.poNumber ? `#${getDisplayOrderId(formData.poNumber)}` : '')}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => closeModal()} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100], alignItems: 'center', justifyContent: 'center' }}>
@@ -1153,7 +2178,16 @@ export default function PurchaseOrdersScreen() {
             </View>
 
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-              <ScrollView style={{ flex: 1, padding: 20 }} contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} keyboardShouldPersistTaps="handled">
+              <View style={{ flex: 1, position: 'relative' }}>
+                <ScrollView
+                  ref={formScrollViewRef}
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: insets.bottom > 0 ? insets.bottom + 80 : 100 }}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="none"
+                  onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                  scrollEventThrottle={16}
+                >
                 
                 {/* Company Header Selector */}
                 <View style={{ marginBottom: 20 }}>
@@ -1191,7 +2225,18 @@ export default function PurchaseOrdersScreen() {
                             <Text style={{ fontSize: 12, fontWeight: '700', color: isSelected ? Colors.primary[600] : theme.text }}>
                               {company.name}
                             </Text>
-                            <Info size={14} color={isSelected ? Colors.primary[500] : theme.textTertiary} />
+                            <TouchableOpacity 
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                if (Platform.OS !== 'web') {
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                }
+                                setInfoCompany(company.id as any);
+                              }}
+                              style={{ padding: 4 }}
+                            >
+                              <Info size={16} color={isSelected ? Colors.primary[500] : theme.textTertiary} />
+                            </TouchableOpacity>
                           </View>
                           <Text style={{ fontSize: 10.5, fontWeight: '600', color: isSelected ? Colors.primary[500] : theme.textTertiary, marginTop: 6 }}>
                             GSTIN: {company.gstin}
@@ -1224,6 +2269,7 @@ export default function PurchaseOrdersScreen() {
                   </TouchableOpacity>
                 </View>
 
+
                 {/* Broker Info */}
                 <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20, zIndex: 100 }}>
                   <View style={{ flex: 1, position: 'relative' }}>
@@ -1232,10 +2278,12 @@ export default function PurchaseOrdersScreen() {
                       style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
                       value={formData.brokerName || ''}
                       onChangeText={(t) => { updateField('brokerName', t); setShowBrokerSuggestions(true); fetchSuggestions(t); }}
+                      onFocus={() => { setShowBrokerSuggestions(true); fetchSuggestions(formData.brokerName || ''); }}
+                      onBlur={() => { setTimeout(() => setShowBrokerSuggestions(false), 200); }}
                       placeholder="Type or press Arrow keys..."
                       placeholderTextColor={theme.inputPlaceholder}
                     />
-                    {showBrokerSuggestions && brokerSuggestions.length > 0 && formData.brokerName && (
+                    {showBrokerSuggestions && brokerSuggestions.length > 0 && (
                       <View style={{ position: 'absolute', top: 76, left: 0, right: 0, backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, zIndex: 1000, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 }}>
                         {brokerSuggestions.slice(0, 3).map((b, i) => (
                           <TouchableOpacity 
@@ -1275,10 +2323,12 @@ export default function PurchaseOrdersScreen() {
                     style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
                     value={formData.supplierName || ''}
                     onChangeText={(t) => { updateField('supplierName', t); setShowSupplierSuggestions(true); fetchSuggestions(t); }}
+                    onFocus={() => { setShowSupplierSuggestions(true); fetchSuggestions(formData.supplierName || ''); }}
+                    onBlur={() => { setTimeout(() => setShowSupplierSuggestions(false), 200); }}
                     placeholder="Type or press Arrow keys..."
                     placeholderTextColor={theme.inputPlaceholder}
                   />
-                  {showSupplierSuggestions && supplierSuggestions.length > 0 && formData.supplierName && (
+                  {showSupplierSuggestions && supplierSuggestions.length > 0 && (
                     <View style={{ position: 'absolute', top: 76, left: 0, right: 0, backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, zIndex: 1000, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 }}>
                       {supplierSuggestions.slice(0, 3).map((s, i) => (
                         <TouchableOpacity 
@@ -1288,6 +2338,7 @@ export default function PurchaseOrdersScreen() {
                             updateField('supplierName', s.name); 
                             updateField('supplierAddress', s.address || formData.supplierAddress); 
                             updateField('supplierGstin', s.gstin || formData.supplierGstin); 
+                            updateField('supplierPhone', s.phone || formData.supplierPhone); 
                             setShowSupplierSuggestions(false); 
                           }}
                         >
@@ -1311,21 +2362,34 @@ export default function PurchaseOrdersScreen() {
                   />
                 </View>
 
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Supplier GSTIN</Text>
-                  <TextInput
-                    style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
-                    value={formData.supplierGstin || ''}
-                    onChangeText={(t) => updateField('supplierGstin', t.toUpperCase())}
-                    placeholder="e.g. 09AACFW3350K1ZY"
-                    placeholderTextColor={theme.inputPlaceholder}
-                    autoCapitalize="characters"
-                  />
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Supplier GSTIN</Text>
+                    <TextInput
+                      style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
+                      value={formData.supplierGstin || ''}
+                      onChangeText={(t) => updateField('supplierGstin', t.toUpperCase())}
+                      placeholder="e.g. 09AACFW3350K1ZY"
+                      placeholderTextColor={theme.inputPlaceholder}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Supplier Mobile</Text>
+                    <TextInput
+                      style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
+                      value={formData.supplierPhone || ''}
+                      onChangeText={(t) => updateField('supplierPhone', t)}
+                      placeholder="e.g. +91 9988..."
+                      placeholderTextColor={theme.inputPlaceholder}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
                 </View>
 
                 {/* Quality */}
                 <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Quality *</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Quality</Text>
                   <TextInput
                     style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
                     value={formData.quality || ''}
@@ -1360,59 +2424,88 @@ export default function PurchaseOrdersScreen() {
                   </View>
                 </View>
 
-                {/* Rate */}
+                {/* Rate & Greigh Lead Time & Greigh Mtr */}
                 <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Rate</Text>
-                  <TextInput
-                    style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, fontWeight: '600' }}
-                    value={formData.rate || ''}
-                    onChangeText={(t) => updateField('rate', t)}
-                    placeholder="e.g. 79.50"
-                    placeholderTextColor={theme.inputPlaceholder}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-
-                {/* Payment Terms */}
-                <View style={{ marginBottom: 20 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Payment Terms</Text>
-                    {/* Rich Formatting Toolbar */}
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('paymentTerms', 'bold')}
-                        style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: 8, backgroundColor: isDarkMode ? '#1e293b' : '#ffffff', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#cbd5e1' }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '900', color: theme.text }}>B</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('paymentTerms', 'italic')}
-                        style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: 8, backgroundColor: isDarkMode ? '#1e293b' : '#ffffff', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#cbd5e1' }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontStyle: 'italic', fontWeight: '900', color: theme.text }}>I</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('paymentTerms', 'underline')}
-                        style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: 8, backgroundColor: isDarkMode ? '#1e293b' : '#ffffff', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#cbd5e1' }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '900', textDecorationLine: 'underline', color: theme.text }}>U</Text>
-                      </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Rate</Text>
+                      <TextInput
+                        style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, fontWeight: '600' }}
+                        value={formData.rate || ''}
+                        onChangeText={(t) => updateField('rate', t)}
+                        onFocus={scrollToFormEnd}
+                        placeholder="e.g. 79.50"
+                        placeholderTextColor={theme.inputPlaceholder}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Lead Time</Text>
+                      <TextInput
+                        style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
+                        value={formData.greighLeadTime || ''}
+                        onChangeText={(t) => updateField('greighLeadTime', t)}
+                        onFocus={scrollToFormEnd}
+                        placeholder="e.g. 10 Days"
+                        placeholderTextColor={theme.inputPlaceholder}
+                      />
                     </View>
                   </View>
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Greigh Mtr</Text>
+                    <TextInput
+                      style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
+                      value={formData.greighMtr || ''}
+                      onChangeText={(t) => updateField('greighMtr', t)}
+                      onFocus={scrollToFormEnd}
+                      placeholder="e.g. 5000"
+                      placeholderTextColor={theme.inputPlaceholder}
+                    />
+                  </View>
+                </View>
 
-                  <TextInput
-                    style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, minHeight: 80, textAlignVertical: 'top' }}
-                    value={formData.paymentTerms || ''}
-                    onChangeText={(t) => updateField('paymentTerms', t)}
-                    onSelectionChange={(e) => setTermsSel(e.nativeEvent.selection)}
-                    placeholder="e.g. 30 Days"
-                    placeholderTextColor={theme.inputPlaceholder}
-                    multiline
-                    numberOfLines={3}
-                  />
+                 {/* Payment Terms */}
+                <View style={{ marginBottom: 20 }}>
+                  <View style={{ marginBottom: 8 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Payment Terms</Text>
+                  </View>
+
+                  {showWebViewEditor ? (
+                    <View style={{ height: 150, borderRadius: 12, borderWidth: 1, borderColor: theme.inputBorder, overflow: 'hidden', backgroundColor: theme.input }}>
+                      <WebView
+                        ref={termsEditorRef}
+                        source={{ html: getEditorHtml(initialTerms, isDarkMode, 'e.g. 30 Days') }}
+                        style={{ flex: 1, backgroundColor: 'transparent' }}
+                        onMessage={(e: any) => {
+                          try {
+                            const data = JSON.parse(e.nativeEvent.data);
+                            if (data.type === 'focus') {
+                              scrollToFormEnd();
+                            } else if (data.type === 'change') {
+                              updateField('paymentTerms', data.value);
+                            }
+                          } catch (err) {}
+                        }}
+                        originWhitelist={['*']}
+                        javaScriptEnabled={true}
+                        domStorageEnabled={true}
+                        keyboardDisplayRequiresUserAction={false}
+                      />
+                    </View>
+                  ) : (
+                    <TextInput
+                      style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, minHeight: 80, textAlignVertical: 'top' }}
+                      value={formData.paymentTerms || ''}
+                      onChangeText={(t) => updateField('paymentTerms', t)}
+                      onFocus={scrollToFormEnd}
+                      selection={termsSel}
+                      onSelectionChange={(e) => setTermsSel(e.nativeEvent.selection)}
+                      placeholder="e.g. 30 Days"
+                      placeholderTextColor={theme.inputPlaceholder}
+                      multiline
+                      numberOfLines={3}
+                    />
+                  )}
                 </View>
 
                 {/* Specifications Table Layout */}
@@ -1457,6 +2550,7 @@ export default function PurchaseOrdersScreen() {
                           }}
                           value={formData.specs?.[spec.key as keyof typeof formData.specs] || ''}
                           onChangeText={(t) => updateSpec(spec.key as any, t)}
+                          onFocus={scrollToFormEnd}
                           placeholder=""
                           keyboardType="decimal-pad"
                         />
@@ -1465,66 +2559,120 @@ export default function PurchaseOrdersScreen() {
                   </View>
                 </View>
 
+                {/* Images Section */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Images (Multiple)</Text>
+                  
+                  {/* Select button */}
+                  <TouchableOpacity 
+                    onPress={pickImages} 
+                    style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      padding: 14, 
+                      borderRadius: 12, 
+                      borderWidth: 1, 
+                      borderStyle: 'dashed', 
+                      borderColor: theme.inputBorder, 
+                      backgroundColor: theme.input,
+                      marginBottom: 12
+                    }}
+                  >
+                    <Plus size={16} color={theme.textSecondary} style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary }}>Choose Images</Text>
+                  </TouchableOpacity>
+
+                  {/* Previews grid */}
+                  {selectedImageUris.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.surface }}>
+                      {selectedImageUris.map((uri, index) => (
+                        <View key={index} style={{ width: 75, height: 75, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: theme.borderLight, position: 'relative' }}>
+                          <TouchableOpacity 
+                            style={{ flex: 1 }} 
+                            activeOpacity={0.8}
+                            onPress={() => handleOpenImagePreview(selectedImageUris, index)}
+                          >
+                            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} />
+                          </TouchableOpacity>
+                          {/* New tag if newly picked */}
+                          {(uri.startsWith('file:') || uri.startsWith('content:') || uri.startsWith('/')) && (
+                            <View style={{ position: 'absolute', bottom: 4, left: 4, backgroundColor: '#2563eb', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#fff' }}>NEW</Text>
+                            </View>
+                          )}
+                          <TouchableOpacity 
+                            onPress={() => removeImage(uri)} 
+                            style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#ef4444', borderRadius: 12, width: 20, height: 20, justifyContent: 'center', alignItems: 'center' }}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold', lineHeight: 12 }}>×</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
                 {/* Notes */}
                 <View style={{ marginBottom: 40 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ marginBottom: 8 }}>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Notes</Text>
-                    {/* Rich Formatting Toolbar */}
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('notes', 'bold')}
-                        style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: 8, backgroundColor: isDarkMode ? '#1e293b' : '#ffffff', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#cbd5e1' }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '900', color: theme.text }}>B</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('notes', 'italic')}
-                        style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: 8, backgroundColor: isDarkMode ? '#1e293b' : '#ffffff', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#cbd5e1' }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontStyle: 'italic', fontWeight: '900', color: theme.text }}>I</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleFormatMobile('notes', 'underline')}
-                        style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: 8, backgroundColor: isDarkMode ? '#1e293b' : '#ffffff', borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#cbd5e1' }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '900', textDecorationLine: 'underline', color: theme.text }}>U</Text>
-                      </TouchableOpacity>
-                    </View>
                   </View>
 
-                  <TextInput
-                    style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, minHeight: 100, textAlignVertical: 'top' }}
-                    value={formData.notes}
-                    onChangeText={(t) => updateField('notes', t)}
-                    onSelectionChange={(e) => setNotesSel(e.nativeEvent.selection)}
-                    placeholder="Additional notes..."
-                    placeholderTextColor={theme.inputPlaceholder}
-                    multiline
-                  />
+                  {showWebViewEditor ? (
+                    <View style={{ height: 170, borderRadius: 12, borderWidth: 1, borderColor: theme.inputBorder, overflow: 'hidden', backgroundColor: theme.input }}>
+                      <WebView
+                        ref={notesEditorRef}
+                        source={{ html: getEditorHtml(initialNotes, isDarkMode, 'Additional notes...') }}
+                        style={{ flex: 1, backgroundColor: 'transparent' }}
+                        onMessage={(e: any) => {
+                          try {
+                            const data = JSON.parse(e.nativeEvent.data);
+                            if (data.type === 'focus') {
+                              scrollToFormEnd();
+                            } else if (data.type === 'change') {
+                              updateField('notes', data.value);
+                            }
+                          } catch (err) {}
+                        }}
+                        originWhitelist={['*']}
+                        javaScriptEnabled={true}
+                        domStorageEnabled={true}
+                        keyboardDisplayRequiresUserAction={false}
+                      />
+                    </View>
+                  ) : (
+                    <TextInput
+                      style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text, minHeight: 100, textAlignVertical: 'top' }}
+                      value={formData.notes}
+                      onChangeText={(t) => updateField('notes', t)}
+                      onFocus={scrollToFormEnd}
+                      selection={notesSel}
+                      onSelectionChange={(e) => setNotesSel(e.nativeEvent.selection)}
+                      placeholder="Additional notes..."
+                      placeholderTextColor={theme.inputPlaceholder}
+                      multiline
+                    />
+                  )}
                 </View>
-              </ScrollView>
+                </ScrollView>
+                
+                {/* Action Bar */}
+                <View style={{ paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.borderLight, backgroundColor: theme.background, paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 16 }}>
+                  <TouchableOpacity onPress={handleSave} disabled={createMutation.isPending || updateMutation.isPending || isUploading} style={{ width: '100%', padding: 16, borderRadius: 12, backgroundColor: Colors.primary[600], alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+                    {createMutation.isPending || updateMutation.isPending || isUploading ? (
+                      <ActivityIndicator color={Colors.white} />
+                    ) : (
+                      <>
+                        <Check size={18} color={Colors.white} />
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.white }}>{isEditMode ? 'Update Order' : 'Create Order'}</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
             </KeyboardAvoidingView>
-            
-            {/* Action Bar */}
-            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: theme.background, borderTopWidth: 1, borderTopColor: theme.borderLight, paddingHorizontal: 20, paddingTop: 16, paddingBottom: insets.bottom + 16, flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity onPress={() => closeModal()} style={{ flex: 1, padding: 16, borderRadius: 12, backgroundColor: isDarkMode ? Colors.neutral[800] : Colors.neutral[100], alignItems: 'center' }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleSave} disabled={createMutation.isPending || updateMutation.isPending} style={{ flex: 2, padding: 16, borderRadius: 12, backgroundColor: Colors.primary[600], alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
-                {createMutation.isPending || updateMutation.isPending ? (
-                  <ActivityIndicator color={Colors.white} />
-                ) : (
-                  <>
-                    <Check size={18} color={Colors.white} />
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.white }}>{isEditMode ? 'Update Order' : 'Create Order'}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+          </RNAnimated.View>
         </View>
       </Modal>
 
@@ -1536,7 +2684,24 @@ export default function PurchaseOrdersScreen() {
         value={toDisplayDate(formData.poDate)}
       />
 
+      {/* Company Details Information Modal */}
+      <CompanyInfoModal
+        visible={infoCompany !== null}
+        onClose={() => setInfoCompany(null)}
+        companyName={infoCompany}
+        theme={theme}
+        isDarkMode={isDarkMode}
+      />
 
+      {/* PDF Preview & Download Modal */}
+      <PdfViewerModal
+        visible={pdfViewerVisible}
+        onClose={() => setPdfViewerVisible(false)}
+        pdfUrl={pdfViewerUrl}
+        title={pdfViewerTitle}
+        filename={pdfViewerFilename}
+        addToast={addToast}
+      />
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
@@ -1546,6 +2711,15 @@ export default function PurchaseOrdersScreen() {
         onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
         onClose={() => { setIsDeleteModalOpen(false); setDeleteId(null); }}
         isDeleting={deleteMutation.isPending}
+      />
+
+      {/* Image Preview Modal */}
+      <ImagePreviewModal
+        visible={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        images={previewImages}
+        initialIndex={previewIndex}
+        isDarkMode={isDarkMode}
       />
 
 
@@ -1558,21 +2732,27 @@ export default function PurchaseOrdersScreen() {
         visible={showFilterModal}
         animationType="none"
         transparent={true}
+        statusBarTranslucent={true}
+        navigationBarTranslucent={true}
         onRequestClose={closeFilterModal}
       >
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           {/* Backdrop Overlay sibling */}
           <TouchableWithoutFeedback onPress={closeFilterModal}>
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0)' }]} />
           </TouchableWithoutFeedback>
 
           <RNAnimated.View
+            onLayout={(e) => {
+              filterSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...filterPanResponder.panHandlers}
             style={{
               backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               paddingTop: 16,
-              paddingBottom: (Platform.OS === 'ios' ? 16 : 12) + insets.bottom,
+              paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 16,
               borderTopWidth: 1,
               borderTopColor: theme.borderLight,
               maxHeight: '85%',
@@ -1580,7 +2760,7 @@ export default function PurchaseOrdersScreen() {
             }}
           >
             {/* Header Drag Zone */}
-            <View {...filterPanResponder.panHandlers} style={{ width: '100%' }}>
+            <View style={{ width: '100%' }}>
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
               
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16, paddingRight: 60 }}>
@@ -1592,6 +2772,7 @@ export default function PurchaseOrdersScreen() {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       }
                       setCompanyHeader('');
+                      setStatusFilter('');
                       setFyFilter('');
                       setSortFilter('latest_first');
                     }}
@@ -1625,9 +2806,7 @@ export default function PurchaseOrdersScreen() {
             <ScrollView
               style={{ paddingHorizontal: 20 }}
               showsVerticalScrollIndicator={false}
-              onScroll={(event) => {
-                filterScrollOffset.current = event.nativeEvent.contentOffset.y;
-              }}
+              onScroll={(e) => { filterScrollOffset.current = e.nativeEvent.contentOffset.y; }}
               scrollEventThrottle={16}
             >
               {/* Sort Order Section */}
@@ -1686,6 +2865,46 @@ export default function PurchaseOrdersScreen() {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         }
                         setCompanyHeader(opt.id);
+                      }}
+                      activeOpacity={0.7}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 20,
+                        backgroundColor: isSelected ? Colors.primary[600] : (isDarkMode ? '#334155' : '#f1f5f9'),
+                        borderWidth: 1,
+                        borderColor: isSelected ? Colors.primary[600] : theme.borderLight,
+                      }}
+                    >
+                      <Text style={{
+                        fontSize: 12.5,
+                        fontWeight: '600',
+                        color: isSelected ? Colors.white : theme.textSecondary,
+                      }}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Status Section */}
+              <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Status</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
+                {[
+                  { id: '', label: 'All Statuses' },
+                  { id: 'Pending', label: 'Pending' },
+                  { id: 'Completed', label: 'Completed' },
+                ].map((opt) => {
+                  const isSelected = statusFilter === opt.id;
+                  return (
+                    <TouchableOpacity
+                      key={opt.id}
+                      onPress={() => {
+                        if (Platform.OS !== 'web') {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }
+                        setStatusFilter(opt.id);
                       }}
                       activeOpacity={0.7}
                       style={{
@@ -1799,6 +3018,66 @@ export default function PurchaseOrdersScreen() {
           </RNAnimated.View>
         </View>
       </Modal>
+
+      {/* Restored Draggable FAB */}
+      {isMaster && (
+        (isLoading || (isFetching && !isRefetching)) && page === 1 ? (
+          <RNAnimated.View
+            style={{
+              left: fabPan.x,
+              top: fabPan.y,
+              position: 'absolute',
+              zIndex: 9999,
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: isDarkMode ? '#334155' : '#e2e8f0',
+              opacity: 0.5,
+            }}
+          />
+        ) : (
+          <RNAnimated.View
+            {...fabPanResponder.panHandlers}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              transform: [{ translateX: fabPan.x }, { translateY: fabPan.y }],
+              zIndex: 9999,
+            }}
+          >
+          <TouchableOpacity
+            onPress={() => {
+              if (Platform.OS !== 'web') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              }
+              openModal();
+            }}
+            activeOpacity={0.8}
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: Colors.primary[600],
+              shadowColor: Colors.primary[600],
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+          >
+            <View style={{ position: 'relative', width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+              <ClipboardList size={24} color="#ffffff" />
+              <View style={{ position: 'absolute', top: -5, right: -5, backgroundColor: Colors.primary[600], borderRadius: 7, width: 14, height: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#ffffff' }}>
+                <Plus size={9} color="#ffffff" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </RNAnimated.View>
+        )
+      )}
     </SafeAreaView>
   );
 }

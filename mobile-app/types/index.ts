@@ -191,7 +191,7 @@ export interface Fabric {
   greighWidth?: number;
   finishWidth?: number;
   weight?: number;
-  gsm?: number;
+  gsm?: string | number;
   content?: string;
   danier?: string;
   count?: string;
@@ -223,7 +223,7 @@ export interface Sample {
   greighWidth?: number;
   finishWidth?: number;
   weight?: number;
-  gsm?: number;
+  gsm?: string | number;
   content?: string;
   danier?: string;
   count?: string;
@@ -302,7 +302,7 @@ export interface GreyMaterial {
   meter?: number;
   challanNumber?: string;
   images?: string[];
-  gsm?: number;
+  gsm?: string | number;
   weight?: number;
   greighWidth?: number;
   finishWidth?: number;
@@ -315,10 +315,16 @@ export interface GreyMaterial {
 
 export interface FinishLotStock {
   _id: string;
+  sequence?: string | number;
   qualityName: string;
   images: string[];
   meter: number;
   piece: number;
+  lotType?: string;
+  weaverName?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -327,6 +333,10 @@ export interface SamplingItem {
   _id: string;
   qualityName: string;
   whereToPut?: string;
+  weaverName?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
   images: string[];
   notes: string;
   meter: number;
@@ -371,10 +381,14 @@ export interface PurchaseOrder {
   supplierName: string;
   supplierAddress: string;
   supplierGstin: string;
+  supplierPhone?: string;
   quality: string;
   pcsMtr: string;
   delivery: string;
   rate: string;
+  greighMtr?: string;
+  greighLeadTime?: string;
+  images?: string[];
   paymentTerms: string;
   specs: {
     finishGsm: string;
@@ -385,6 +399,7 @@ export interface PurchaseOrder {
   notes: string;
   financialYear: string;
   softDeleted?: boolean;
+  status?: 'Pending' | 'Completed';
   createdBy?: { _id?: string; name: string; username: string };
   createdAt: string;
   updatedAt?: string;
@@ -401,4 +416,5 @@ export interface POSupplier {
   name: string;
   address?: string;
   gstin?: string;
+  phone?: string;
 }

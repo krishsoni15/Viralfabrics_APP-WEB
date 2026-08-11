@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   ActivityIndicator, Modal, KeyboardAvoidingView, Platform,
   Animated, PanResponder, Dimensions, StatusBar, TouchableWithoutFeedback,
-  Alert,
+  Alert, useWindowDimensions
 } from 'react-native';
 import { Trash2, Plus, Calendar, ChevronDown, X, Package, FileText } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
@@ -12,8 +12,9 @@ import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import api from '../../services/api';
 import { getDisplayOrderId } from '../../utils/helpers';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 
 const toDisplay = (dateStr: string) => {
   if (!dateStr) return '';
@@ -151,6 +152,7 @@ interface GreyInformationModalProps {
 }
 
 function ModalProgressBar({ isDarkMode }: { isDarkMode: boolean }) {
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const translateX = useRef(new Animated.Value(-150)).current;
 
   useEffect(() => {
@@ -163,7 +165,7 @@ function ModalProgressBar({ isDarkMode }: { isDarkMode: boolean }) {
     );
     anim.start();
     return () => anim.stop();
-  }, [translateX]);
+  }, [translateX, SCREEN_WIDTH]);
 
   return (
     <View style={{
@@ -190,7 +192,9 @@ export default function GreyInformationModal({
   isDarkMode, theme, onSave, isSaving, isLoading = false, isMaster = false,
   onDelete, isDeleting = false, isReadOnly = false
 }: GreyInformationModalProps) {
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { isLargeScreen, modalMaxWidth } = useResponsiveLayout();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [datePickerFor, setDatePickerFor] = useState<string | null>(null);
@@ -212,6 +216,9 @@ export default function GreyInformationModal({
   const lastDataSignatureRef = useRef<string>('');
   const touchStartPageY = useRef(0);
 
+  const dimensionsRef = useRef({ SCREEN_WIDTH, SCREEN_HEIGHT });
+  dimensionsRef.current = { SCREEN_WIDTH, SCREEN_HEIGHT };
+
   // Swipe-down-to-close gesture on the whole sheet
   const translateY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
@@ -220,26 +227,28 @@ export default function GreyInformationModal({
       onStartShouldSetPanResponder: (evt) => {
         const pageY = evt.nativeEvent.pageY;
         touchStartPageY.current = pageY;
-        return pageY < SCREEN_HEIGHT * 0.08 + 60;
+        const currentScreenHeight = dimensionsRef.current.SCREEN_HEIGHT;
+        return pageY < currentScreenHeight * 0.08 + 60;
       },
       onStartShouldSetPanResponderCapture: () => false,
       // Only intercept if: scrolled to top AND swipe is downward
       onMoveShouldSetPanResponder: (_, g) =>
-        scrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
+        scrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
       onMoveShouldSetPanResponderCapture: (_, g) =>
-        scrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
+        scrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
       onPanResponderMove: (_, g) => {
         if (g.dy > 0) translateY.setValue(g.dy);
       },
       onPanResponderRelease: (evt, g) => {
-        const isBackdropTouch = touchStartPageY.current < SCREEN_HEIGHT * 0.08;
+        const currentScreenHeight = dimensionsRef.current.SCREEN_HEIGHT;
+        const isBackdropTouch = touchStartPageY.current < currentScreenHeight * 0.08;
         if (isBackdropTouch && Math.abs(g.dy) < 10 && Math.abs(g.dx) < 10) {
           onCloseRef.current();
           return;
         }
 
-        if (g.dy > 80 || g.vy > 0.4) {
-          Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: true })
+        if (g.dy > 50 || g.vy > 0.2) {
+          Animated.timing(translateY, { toValue: currentScreenHeight, duration: 220, useNativeDriver: true })
             .start(() => onCloseRef.current());
         } else {
           Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
@@ -247,7 +256,6 @@ export default function GreyInformationModal({
       },
     })
   ).current;
-
   // Get qualities that belong to this order only
   const getOrderQualities = useCallback((): any[] => {
     if (!order?.items) return [];
@@ -333,16 +341,17 @@ export default function GreyInformationModal({
 
       if (hasData) {
         const init: Entry[] = greyInfo.map((g: any) => {
-          const qId = typeof g.quality === 'object' ? g.quality?._id : g.quality || '';
+          const qObj = g.quality;
+          const qId = typeof qObj === 'object' ? (qObj?._id || qObj?.id || qObj?.name || '') : (qObj || '');
           return {
-            id: g._id,
+            id: g._id || `grey-${Date.now()}-${Math.random()}`,
             date: g.date ? g.date.split('T')[0] : '',
             quality: String(qId),
-            quantity: g.quantity ? String(g.quantity) : '',
-            numberOfPieces: g.numberOfPieces ? String(g.numberOfPieces) : '',
+            quantity: g.quantity !== undefined && g.quantity !== null ? String(g.quantity) : '',
+            numberOfPieces: g.numberOfPieces !== undefined && g.numberOfPieces !== null ? String(g.numberOfPieces) : '',
             chalanNo: g.chalanNo || '',
-            weaverName: '',
-            weaverLoaded: false,
+            weaverName: g.weaverName || '',
+            weaverLoaded: !!g.weaverName,
           };
         });
         setEntries(init);
@@ -421,7 +430,7 @@ export default function GreyInformationModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0)', justifyContent: 'flex-end' }}>
         {/* Backdrop — tap anywhere outside sheet to close */}
         <TouchableWithoutFeedback onPress={onClose}>
           <View 
@@ -437,18 +446,21 @@ export default function GreyInformationModal({
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,
             height: '92%',
+            maxWidth: isLargeScreen ? modalMaxWidth : '100%',
+            width: '100%',
+            alignSelf: 'center',
             transform: [{ translateY }],
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -4 },
             shadowOpacity: 0.2,
             shadowRadius: 16,
             elevation: 20,
-            paddingBottom: 24 + insets.bottom,
+            paddingBottom: isLargeScreen ? 24 : 0,
           }}
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 120}
             style={{ width: '100%', flex: 1 }}
           >
             {/* Drag Handle (visual only) */}
@@ -498,7 +510,7 @@ export default function GreyInformationModal({
 
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 250 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 220 }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
@@ -822,7 +834,7 @@ export default function GreyInformationModal({
               )}
 
               {/* Bottom Buttons */}
-              <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingBottom: insets.bottom > 0 ? insets.bottom + 4 : 12 }}>
                 {isReadOnly ? (
                   <TouchableOpacity
                     onPress={onClose}
@@ -877,7 +889,7 @@ export default function GreyInformationModal({
                       {isSaving ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
-                        <Text style={{ fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: -0.2 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '800', color: isDarkMode ? Colors.neutral[900] : '#fff', letterSpacing: -0.2 }}>
                           Save {entries.length > 1 ? `(${entries.length})` : ''}
                         </Text>
                       )}
@@ -901,7 +913,7 @@ export default function GreyInformationModal({
                     {isSaving ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: -0.2 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: isDarkMode ? Colors.neutral[900] : '#fff', letterSpacing: -0.2 }}>
                         Save {entries.length > 1 ? `(${entries.length})` : ''}
                       </Text>
                     )}

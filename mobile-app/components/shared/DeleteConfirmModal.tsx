@@ -8,7 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Trash2, X } from 'lucide-react-native';
+import { Trash2, X, AlertTriangle } from 'lucide-react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { Colors } from '../../constants/colors';
 
@@ -20,6 +20,8 @@ interface DeleteConfirmModalProps {
   message?: string;
   confirmText?: string;
   isDeleting?: boolean;
+  isAlert?: boolean;
+  alertBtnText?: string;
 }
 
 export default function DeleteConfirmModal({
@@ -30,6 +32,8 @@ export default function DeleteConfirmModal({
   message = 'Are you sure you want to delete this item? This action cannot be undone.',
   confirmText = 'Delete',
   isDeleting = false,
+  isAlert = false,
+  alertBtnText = 'OK',
 }: DeleteConfirmModalProps) {
   const { theme, isDarkMode } = useTheme();
   const [localDeleting, setLocalDeleting] = React.useState(false);
@@ -82,11 +86,17 @@ export default function DeleteConfirmModal({
                 style={[
                   styles.iconContainer,
                   {
-                    backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : '#fef2f2',
+                    backgroundColor: isAlert
+                      ? (isDarkMode ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb')
+                      : (isDarkMode ? 'rgba(239, 68, 68, 0.15)' : '#fef2f2'),
                   }
                 ]}
               >
-                <Trash2 size={24} color={Colors.error[500]} />
+                {isAlert ? (
+                  <AlertTriangle size={24} color={isDarkMode ? '#fbbf24' : '#d97706'} />
+                ) : (
+                  <Trash2 size={24} color={Colors.error[500]} />
+                )}
               </View>
               <Text style={[styles.headerTitle, { color: theme.text }]}>
                 {title}
@@ -100,48 +110,66 @@ export default function DeleteConfirmModal({
 
             {/* Actions */}
             <View style={styles.footer}>
-              <TouchableOpacity
-                style={[
-                  styles.footerBtn,
-                  {
-                    backgroundColor: isDarkMode ? '#2a2a38' : '#f3f4f6',
-                    opacity: isLoading ? 0.5 : 1,
-                  }
-                ]}
-                onPress={onClose}
-                disabled={isLoading}
-              >
-                <Text style={[styles.footerBtnText, { color: theme.textSecondary }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.footerBtn,
-                  {
-                    backgroundColor: Colors.error[600],
-                    opacity: isLoading ? 0.7 : 1,
-                  }
-                ]}
-                onPress={() => {
-                  setLocalDeleting(true);
-                  onConfirm();
-                }}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <ActivityIndicator size="small" color="#ffffff" />
-                    <Text style={[styles.footerBtnText, { color: '#ffffff', fontWeight: '700' }]}>
-                      Deleting...
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={[styles.footerBtnText, { color: '#ffffff', fontWeight: '700' }]}>
-                    {confirmText}
+              {isAlert ? (
+                <TouchableOpacity
+                  style={[
+                    styles.footerBtn,
+                    {
+                      backgroundColor: isDarkMode ? '#2a2a38' : '#f3f4f6',
+                    }
+                  ]}
+                  onPress={onClose}
+                >
+                  <Text style={[styles.footerBtnText, { color: theme.text, fontWeight: '700' }]}>
+                    {alertBtnText}
                   </Text>
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[
+                      styles.footerBtn,
+                      {
+                        backgroundColor: isDarkMode ? '#2a2a38' : '#f3f4f6',
+                        opacity: isLoading ? 0.5 : 1,
+                      }
+                    ]}
+                    onPress={onClose}
+                    disabled={isLoading}
+                  >
+                    <Text style={[styles.footerBtnText, { color: theme.textSecondary }]}>
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.footerBtn,
+                      {
+                        backgroundColor: Colors.error[600],
+                        opacity: isLoading ? 0.7 : 1,
+                      }
+                    ]}
+                    onPress={() => {
+                      setLocalDeleting(true);
+                      onConfirm();
+                    }}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <ActivityIndicator size="small" color="#ffffff" />
+                        <Text style={[styles.footerBtnText, { color: '#ffffff', fontWeight: '700' }]}>
+                          Deleting...
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.footerBtnText, { color: '#ffffff', fontWeight: '700' }]}>
+                        {confirmText}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </Pressable>
         </View>

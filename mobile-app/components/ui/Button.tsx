@@ -61,10 +61,18 @@ export default function Button({
     scale.value = withSpring(1, { damping: 15, stiffness: 300 });
   }, []);
 
+  const lastPressedRef = React.useRef(0);
+
   const handlePress = useCallback(() => {
     if (loading || disabled) return;
+    const now = Date.now();
+    if (now - lastPressedRef.current < 600) return;
+    lastPressedRef.current = now;
+
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      requestAnimationFrame(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      });
     }
     onPress();
   }, [loading, disabled, onPress]);

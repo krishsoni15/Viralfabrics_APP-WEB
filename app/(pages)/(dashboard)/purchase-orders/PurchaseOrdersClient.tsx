@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -13,6 +14,7 @@ import {
   ChevronRightIcon,
   CalendarDaysIcon,
   CheckIcon,
+  CheckCircleIcon,
   ExclamationTriangleIcon,
   EyeIcon,
   ListBulletIcon,
@@ -32,6 +34,8 @@ import { useDarkMode } from '../hooks/useDarkMode';
 import { useAppStore } from '@/app/store/useAppStore';
 import { generatePurchaseOrderPDF, getPurchaseOrderPDFFileName } from '@/lib/poPdfGenerator';
 import { getDisplayOrderId } from '@/utils/orders';
+import ImagePreviewModal from '../components/ImagePreviewModal';
+import CameraModal from '../components/CameraModal';
 
 // Company header configs
 const COMPANY_HEADERS: Record<string, {
@@ -74,10 +78,14 @@ interface PurchaseOrder {
   supplierName: string;
   supplierAddress: string;
   supplierGstin: string;
+  supplierPhone?: string;
   quality: string;
   pcsMtr: string;
   delivery: string;
   rate: string;
+  greighMtr?: string;
+  greighLeadTime?: string;
+  images?: string[];
   paymentTerms: string;
   specs: {
     finishGsm: string;
@@ -87,13 +95,14 @@ interface PurchaseOrder {
   };
   notes: string;
   financialYear: string;
+  status?: 'Pending' | 'Completed';
   createdBy?: { name: string; username: string };
   createdAt: string;
   updatedAt?: string;
 }
 
 interface Broker { _id: string; name: string; phone?: string; }
-interface Supplier { _id: string; name: string; address?: string; gstin?: string; }
+interface Supplier { _id: string; name: string; address?: string; gstin?: string; phone?: string; }
 
 // Dynamic FY option calculator (Stops at FY 25-26 minimum, no FY 24-25)
 function getCalculatedFYOptions() {
@@ -861,6 +870,46 @@ export default function PurchaseOrdersClient() {
   // Entry Audit Info Modal
   const [selectedAuditPO, setSelectedAuditPO] = useState<PurchaseOrder | null>(null);
 
+  // Image Preview Modal state
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  const handleOpenImagePreview = useCallback((images: string[], index: number) => {
+    setPreviewImages(images);
+    setPreviewIndex(index);
+    setIsPreviewOpen(true);
+  }, []);
+
+  // Camera capture and drag-drop modal state
+  const [showCamera, setShowCamera] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const filesArray = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+      setPendingImageFiles(prev => [...prev, ...filesArray]);
+    }
+  }, []);
+
+  const handleCameraCapture = useCallback((file: File) => {
+    setPendingImageFiles(prev => [...prev, file]);
+    setShowCamera(false);
+  }, []);
+
   // Expanded Notes Tracking (ID -> boolean)
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
 
@@ -891,6 +940,9 @@ export default function PurchaseOrdersClient() {
   const [companyFilter, setCompanyFilter] = useState('');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
 
+  const [statusFilter, setStatusFilter] = useState('');
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+
   const [fyFilter, setFyFilter] = useState('');
   const [showFYDropdown, setShowFYDropdown] = useState(false);
 
@@ -919,6 +971,11 @@ export default function PurchaseOrdersClient() {
   // Delete Confirmation Modal
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+
+  // Status menu popover state
+  const [activeStatusMenuPo, setActiveStatusMenuPo] = useState<PurchaseOrder | null>(null);
+  const [activeStatusMenuRect, setActiveStatusMenuRect] = useState<DOMRect | null>(null);
 
   // Toast
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -926,6 +983,7 @@ export default function PurchaseOrdersClient() {
   // Next PO Number (only relevant in Create mode)
   const [nextPONumber, setNextPONumber] = useState<string>('');
   const [loadingNextPONumber, setLoadingNextPONumber] = useState(false);
+  const [pendingImageFiles, setPendingImageFiles] = useState<File[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -936,13 +994,18 @@ export default function PurchaseOrdersClient() {
     supplierName: '',
     supplierAddress: '',
     supplierGstin: '',
+    supplierPhone: '',
     quality: '',
     pcsMtr: '',
     delivery: '',
     rate: '',
+    greighMtr: '',
+    greighLeadTime: '',
+    images: [] as string[],
     paymentTerms: '',
     specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
-    notes: ''
+    notes: '',
+    status: 'Pending' as 'Pending' | 'Completed'
   });
 
   // Suggestions state & keyboard navigation
@@ -1016,6 +1079,7 @@ export default function PurchaseOrdersClient() {
       params.set('limit', String(limit));
       if (search) params.set('search', search);
       if (companyFilter) params.set('companyHeader', companyFilter);
+      if (statusFilter) params.set('status', statusFilter);
       if (fyFilter) params.set('fy', fyFilter);
       if (startDate) params.set('startDate', startDate);
       if (endDate) params.set('endDate', endDate);
@@ -1036,7 +1100,7 @@ export default function PurchaseOrdersClient() {
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [search, companyFilter, fyFilter, startDate, endDate, sortOrder, limit, page, getHeaders]);
+  }, [search, companyFilter, statusFilter, fyFilter, startDate, endDate, sortOrder, limit, page, getHeaders]);
 
   useEffect(() => {
     fetchPOs(page);
@@ -1068,6 +1132,7 @@ export default function PurchaseOrdersClient() {
   // Open create modal
   const handleCreate = useCallback(() => {
     setEditingPO(null);
+    setPendingImageFiles([]);
     setFormData({
       companyHeader: 'Viral Fabrics',
       poDate: new Date().toISOString().split('T')[0],
@@ -1076,13 +1141,18 @@ export default function PurchaseOrdersClient() {
       supplierName: '',
       supplierAddress: '',
       supplierGstin: '',
+      supplierPhone: '',
       quality: '',
       pcsMtr: '',
       delivery: '',
       rate: '',
+      greighMtr: '',
+      greighLeadTime: '',
+      images: [],
       paymentTerms: '',
       specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
-      notes: ''
+      notes: '',
+      status: 'Pending'
     });
     setBrokerHighlightIndex(-1);
     setSupplierHighlightIndex(-1);
@@ -1093,6 +1163,7 @@ export default function PurchaseOrdersClient() {
   // Open edit modal
   const handleEdit = useCallback((po: PurchaseOrder) => {
     setEditingPO(po);
+    setPendingImageFiles([]);
     setFormData({
       companyHeader: po.companyHeader,
       poDate: po.poDate ? po.poDate.split('T')[0] : '',
@@ -1101,19 +1172,42 @@ export default function PurchaseOrdersClient() {
       supplierName: po.supplierName || '',
       supplierAddress: po.supplierAddress || '',
       supplierGstin: po.supplierGstin || '',
+      supplierPhone: po.supplierPhone || '',
       quality: po.quality || '',
       pcsMtr: po.pcsMtr || '',
       delivery: po.delivery || '',
       rate: po.rate || '',
+      greighMtr: po.greighMtr || '',
+      greighLeadTime: po.greighLeadTime || '',
+      images: po.images || [],
       paymentTerms: po.paymentTerms || '',
       specs: po.specs || { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
-      notes: po.notes || ''
+      notes: po.notes || '',
+      status: po.status || 'Pending'
     });
     setBrokerHighlightIndex(-1);
     setSupplierHighlightIndex(-1);
     fetchSuggestions();
     setShowModal(true);
   }, [fetchSuggestions]);
+
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      setPendingImageFiles(prev => [...prev, ...filesArray]);
+    }
+  }, []);
+
+  const handleRemovePendingImage = useCallback((index: number) => {
+    setPendingImageFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleRemoveExistingImage = useCallback((index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: (prev.images || []).filter((_, i) => i !== index)
+    }));
+  }, []);
 
   // Save (create or update) with Optimistic UI updates & Silent Background Refresh
   const handleSave = useCallback(async () => {
@@ -1124,6 +1218,38 @@ export default function PurchaseOrdersClient() {
 
     setSaving(true);
     try {
+      // 1. Upload pending images to S3 first
+      const uploadedUrls: string[] = [];
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+
+      if (pendingImageFiles.length > 0) {
+        for (const file of pendingImageFiles) {
+          const uploadData = new FormData();
+          uploadData.append('file', file);
+          uploadData.append('folder', 'purchase-orders');
+
+          const uploadRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            body: uploadData
+          });
+          const uploadResult = await uploadRes.json();
+          if (uploadResult.success && uploadResult.url) {
+            uploadedUrls.push(uploadResult.url);
+          } else {
+            throw new Error(uploadResult.message || 'Image upload failed');
+          }
+        }
+      }
+
+      const finalImages = [...(formData.images || []), ...uploadedUrls];
+      const poPayload = {
+        ...formData,
+        images: finalImages
+      };
+
       const url = editingPO
         ? `/api/purchase-orders/${editingPO._id}`
         : '/api/purchase-orders';
@@ -1132,7 +1258,7 @@ export default function PurchaseOrdersClient() {
       const res = await fetch(url, {
         method,
         headers: getHeaders(),
-        body: JSON.stringify(formData)
+        body: JSON.stringify(poPayload)
       });
       const data = await res.json();
 
@@ -1189,7 +1315,7 @@ export default function PurchaseOrdersClient() {
     } finally {
       setSaving(false);
     }
-  }, [formData, editingPO, getHeaders, fetchPOs, fetchSuggestions, page, limit]);
+  }, [formData, editingPO, getHeaders, fetchPOs, fetchSuggestions, page, limit, pendingImageFiles]);
 
   // Delete with Optimistic UI update & Silent Background Refresh
   const handleDelete = useCallback(async (id: string) => {
@@ -1218,11 +1344,53 @@ export default function PurchaseOrdersClient() {
     }
   }, [getHeaders, fetchPOs, page]);
 
+  // Update status instantly with optimistic state update
+  const handleUpdateStatus = useCallback(async (po: PurchaseOrder, newStatus: 'Pending' | 'Completed') => {
+    if (po.status === newStatus) return;
+
+    setUpdatingStatusId(po._id);
+    
+    // Optimistic local state update
+    setPurchaseOrders(prev =>
+      prev.map(item => (item._id === po._id ? { ...item, status: newStatus } : item))
+    );
+
+    try {
+      const res = await fetch(`/api/purchase-orders/${po._id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          status: newStatus
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToast({
+          message: `PO #${getDisplayOrderId(po.poNumber)} status updated to ${newStatus}`,
+          type: 'success'
+        });
+      } else {
+        throw new Error(data.message || 'Failed to update status');
+      }
+    } catch (error: any) {
+      // Revert local state if request fails
+      setPurchaseOrders(prev =>
+        prev.map(item => (item._id === po._id ? { ...item, status: po.status || 'Pending' } : item))
+      );
+      setToast({
+        message: error.message || 'Failed to update status',
+        type: 'error'
+      });
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  }, [getHeaders, setToast]);
+
   // Open PDF Preview Modal
-  const handleOpenPdfPreview = useCallback((po: PurchaseOrder) => {
+  const handleOpenPdfPreview = useCallback(async (po: PurchaseOrder) => {
     setPdfPreviewPO(po);
     try {
-      const doc = generatePurchaseOrderPDF(po);
+      const doc = await generatePurchaseOrderPDF(po);
       const blob = doc.output('blob');
       const url = URL.createObjectURL(blob);
       setPdfBlobUrl(url);
@@ -1241,10 +1409,29 @@ export default function PurchaseOrdersClient() {
     setPdfPreviewPO(null);
   }, [pdfBlobUrl]);
 
-  // Download PDF file directly
-  const handleDownloadPdf = useCallback((po: PurchaseOrder) => {
+  // Refresh PDF Preview
+  const handleRefreshPdf = useCallback(async () => {
+    if (!pdfPreviewPO) return;
+    if (pdfBlobUrl) {
+      URL.revokeObjectURL(pdfBlobUrl);
+    }
+    setPdfBlobUrl(null);
     try {
-      const doc = generatePurchaseOrderPDF(po);
+      const doc = await generatePurchaseOrderPDF(pdfPreviewPO);
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      setPdfBlobUrl(url);
+      setToast({ message: 'PDF refreshed successfully', type: 'success' });
+    } catch (error) {
+      console.error('Error refreshing PDF preview:', error);
+      setToast({ message: 'Failed to refresh PDF', type: 'error' });
+    }
+  }, [pdfPreviewPO, pdfBlobUrl]);
+
+  // Download PDF file directly
+  const handleDownloadPdf = useCallback(async (po: PurchaseOrder) => {
+    try {
+      const doc = await generatePurchaseOrderPDF(po);
       const filename = getPurchaseOrderPDFFileName(po);
       doc.save(filename);
       setToast({ message: 'PDF downloaded successfully!', type: 'success' });
@@ -1309,7 +1496,8 @@ export default function PurchaseOrdersClient() {
       ...prev,
       supplierName: s.name,
       supplierAddress: s.address || '',
-      supplierGstin: s.gstin || ''
+      supplierGstin: s.gstin || '',
+      supplierPhone: s.phone || ''
     }));
     setShowSupplierSuggestions(false);
     setSupplierHighlightIndex(-1);
@@ -1444,9 +1632,9 @@ export default function PurchaseOrdersClient() {
         </div>
 
         {/* ROW 2: FILTER DROPDOWNS + VIEW SWITCHER (SINGLE ROW ON ALL SCREENS) */}
-        <div className="flex flex-row items-center justify-between gap-1.5 sm:gap-3 overflow-x-auto no-scrollbar py-0.5 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-1 w-full">
           {/* Left: Filter dropdown pills */}
-          <div className="flex flex-row items-center gap-1 sm:gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Sort Dropdown Pill */}
             <div className="relative">
               <button
@@ -1517,6 +1705,43 @@ export default function PurchaseOrdersClient() {
               )}
             </div>
 
+            {/* Status Dropdown Pill */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className={`px-2 sm:px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all ${
+                  statusFilter
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : isDarkMode ? 'bg-slate-700/80 border-slate-600 text-gray-200' : 'bg-gray-100 border-gray-300 text-gray-800'
+                }`}
+              >
+                <span>{statusFilter || 'All Statuses'}</span>
+                <ChevronDownIcon className="w-3 h-3 opacity-60" />
+              </button>
+              {showStatusDropdown && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowStatusDropdown(false)} />
+                  <div className={`absolute left-0 top-full mt-1 w-40 rounded-xl border shadow-xl z-40 py-1 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+                    {[
+                      { value: '', label: 'All Statuses' },
+                      { value: 'Pending', label: 'Pending' },
+                      { value: 'Completed', label: 'Completed' }
+                    ].map(st => (
+                      <button
+                        key={st.value}
+                        type="button"
+                        onClick={() => { setStatusFilter(st.value); setShowStatusDropdown(false); setPage(1); }}
+                        className={`w-full text-left px-3 py-2 text-xs font-medium ${hoverBg} ${statusFilter === st.value ? 'text-blue-500 font-bold bg-blue-500/10' : textPrimary}`}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Financial Year Dropdown Pill */}
             <div className="relative">
               <button
@@ -1558,10 +1783,11 @@ export default function PurchaseOrdersClient() {
             </div>
 
             {/* Clear Filters (if active) */}
-            {(companyFilter || fyFilter || searchInput || sortOrder !== 'latest_first') && (
+            {(companyFilter || statusFilter || fyFilter || searchInput || sortOrder !== 'latest_first') && (
               <button
                 onClick={() => {
                   setCompanyFilter('');
+                  setStatusFilter('');
                   setFyFilter('');
                   setSearchInput('');
                   setSortOrder('latest_first');
@@ -1629,13 +1855,13 @@ export default function PurchaseOrdersClient() {
               <thead>
                 <tr className={`border-b ${isDarkMode ? 'bg-slate-800/90 border-slate-700 text-slate-200' : 'bg-gray-50 border-gray-200/90 text-slate-800 font-bold'}`}>
                   <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">PO & Company</th>
-                  <th className="px-3.5 py-3.5 font-bold uppercase tracking-wider text-xs">Date</th>
+                  <th className="px-3.5 py-3.5 font-bold uppercase tracking-wider text-xs">Date & Status</th>
                   <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">Broker</th>
                   <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">Supplier</th>
                   <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">Quality & Delivery</th>
                   <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">Rate & Terms</th>
                   <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">Specifications</th>
-                  <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">Notes</th>
+                  <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-xs">Notes & Images</th>
                   <th className="px-3.5 py-3.5 text-center font-bold uppercase tracking-wider text-xs">Actions</th>
                 </tr>
               </thead>
@@ -1677,7 +1903,7 @@ export default function PurchaseOrdersClient() {
                         <tr key={po._id} className={`${hoverBg} transition-colors`}>
                           {/* 1. PO No & Company Header */}
                           <td className="px-4 py-4">
-                            <div className="font-bold text-blue-600 dark:text-blue-400 text-base">#{getDisplayOrderId(po.poNumber)}</div>
+                            <div className="font-extrabold text-blue-600 dark:text-blue-400 text-lg">#{getDisplayOrderId(po.poNumber)}</div>
                             <button
                               onClick={() => setSelectedCompanyInfo(companyInfo)}
                               title="Click to view full company details"
@@ -1695,19 +1921,52 @@ export default function PurchaseOrdersClient() {
                             </button>
                           </td>
 
-                          {/* 2. Date + Timestamps */}
-                          <td className="px-3.5 py-4 whitespace-nowrap">
-                            <div className={`font-bold text-sm ${textPrimary}`}>{formatDate(po.poDate)}</div>
-                            {po.createdAt && (
-                              <div className={`text-[11px] font-medium mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                Created: {formatDateTime(po.createdAt)}
+                          {/* 2. Date & Status (Combined) */}
+                          <td className="px-3.5 py-4 whitespace-nowrap relative">
+                            <div className="flex flex-col items-start gap-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className={`font-bold text-sm ${textPrimary}`}>{formatDate(po.poDate)}</div>
+                                <div className="relative">
+                                  {updatingStatusId === po._id ? (
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold rounded-lg border bg-gray-500/10 text-gray-500 border-gray-500/20">
+                                      <ArrowPathIcon className="w-3 h-3 animate-spin" />
+                                      <span>Updating...</span>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        setActiveStatusMenuRect(rect);
+                                        setActiveStatusMenuPo(po);
+                                      }}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-bold rounded-lg border hover:scale-105 active:scale-95 transition-all shadow-sm duration-150 cursor-pointer ${
+                                        po.status === 'Completed'
+                                          ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 hover:bg-emerald-500/20'
+                                          : 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 hover:bg-amber-500/20'
+                                      }`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full ${
+                                        (po.status || 'Pending') === 'Completed' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                                      }`} />
+                                      <span className="ml-1">{po.status || 'Pending'}</span>
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                            {po.updatedAt && po.updatedAt !== po.createdAt && (
-                              <div className={`text-[11px] font-medium ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
-                                Updated: {formatDateTime(po.updatedAt)}
-                              </div>
-                            )}
+
+                              {po.createdAt && (
+                                <div className="text-[10px] font-medium opacity-65 text-slate-500 dark:text-slate-400 mt-0.5">
+                                  Created: {formatDateTime(po.createdAt)}
+                                </div>
+                              )}
+                              {po.updatedAt && po.updatedAt !== po.createdAt && (
+                                <div className="text-[10px] font-semibold text-amber-600 dark:text-amber-400/80">
+                                  Updated: {formatDateTime(po.updatedAt)}
+                                </div>
+                              )}
+                            </div>
                           </td>
 
                           {/* 3. Broker */}
@@ -1741,6 +2000,9 @@ export default function PurchaseOrdersClient() {
                             {po.supplierGstin && (
                               <div className={`text-[11px] ${textMuted} font-mono font-semibold mt-0.5`}>GSTIN: {po.supplierGstin}</div>
                             )}
+                            {po.supplierPhone && (
+                              <div className={`text-[11px] ${textMuted} font-semibold mt-0.5`}>Phone: {po.supplierPhone}</div>
+                            )}
                           </td>
 
                           {/* 5. Quality & Delivery */}
@@ -1748,7 +2010,8 @@ export default function PurchaseOrdersClient() {
                             <div className={`font-bold text-sm ${textPrimary} truncate`}>{po.quality || '-'}</div>
                             <div className={`text-xs ${textSecondary} font-medium mt-0.5`}>
                               {po.pcsMtr ? <span className="font-bold text-emerald-600 dark:text-emerald-400">{po.pcsMtr} Pcs/Mtr</span> : null}
-                              {po.pcsMtr && po.delivery ? ' • ' : null}
+                              {po.greighMtr ? <span className="text-blue-500 dark:text-blue-400 ml-1">(Greigh: {po.greighMtr} Mtr)</span> : null}
+                              {(po.pcsMtr || po.greighMtr) && po.delivery ? ' • ' : null}
                               {po.delivery ? <span>{po.delivery}</span> : null}
                             </div>
                           </td>
@@ -1759,7 +2022,7 @@ export default function PurchaseOrdersClient() {
                             {po.paymentTerms && (
                               <div
                                 onClick={() => hasLongPaymentTerms && togglePaymentTermsExpand(po._id)}
-                                className={`text-xs ${hasLongPaymentTerms ? 'cursor-pointer' : ''} ${
+                                className={`text-xs rich-text-content ${hasLongPaymentTerms ? 'cursor-pointer' : ''} ${
                                   isPaymentTermsExpanded
                                     ? isDarkMode
                                       ? 'break-words whitespace-pre-line text-blue-300 bg-slate-800/90 p-2.5 rounded-xl border border-slate-700 shadow-inner mt-1 font-medium'
@@ -1768,11 +2031,7 @@ export default function PurchaseOrdersClient() {
                                 }`}
                                 title={hasLongPaymentTerms ? (isPaymentTermsExpanded ? 'Click to collapse' : 'Click to expand payment terms') : cleanPaymentTermsText}
                               >
-                                {isPaymentTermsExpanded ? (
-                                  <span dangerouslySetInnerHTML={{ __html: po.paymentTerms.replace(/\n/g, '<br/>') }} />
-                                ) : (
-                                  cleanPaymentTermsText
-                                )}
+                                <span dangerouslySetInnerHTML={{ __html: po.paymentTerms.replace(/\n/g, '<br/>') }} />
                               </div>
                             )}
                           </td>
@@ -1806,29 +2065,47 @@ export default function PurchaseOrdersClient() {
                             </div>
                           </td>
 
-                          {/* 8. Notes */}
-                          <td className="px-4 py-4 max-w-[210px]">
-                            {po.notes ? (
-                              <div
-                                onClick={() => hasLongNotes && toggleNotesExpand(po._id)}
-                                className={`text-xs ${hasLongNotes ? 'cursor-pointer' : ''} ${
-                                  isNotesExpanded
-                                    ? isDarkMode
-                                      ? 'break-words whitespace-pre-line text-blue-300 bg-slate-800/90 p-2.5 rounded-xl border border-slate-700 shadow-inner'
-                                      : 'break-words whitespace-pre-line text-slate-900 bg-slate-100 p-2.5 rounded-xl border border-slate-300 shadow-sm font-semibold'
-                                    : `line-clamp-2 break-words ${textSecondary} hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium`
-                                }`}
-                                title={hasLongNotes ? (isNotesExpanded ? 'Click text to collapse' : 'Click text to expand full note') : cleanNotesText}
-                              >
-                                {isNotesExpanded ? (
-                                  <span dangerouslySetInnerHTML={{ __html: po.notes.replace(/\n/g, '<br/>') }} />
+                          {/* 8. Notes & Images */}
+                          <td className="px-4 py-4 max-w-[250px]">
+                            <div className="flex items-start gap-2">
+                              {/* Notes Text */}
+                              <div className="flex-1 min-w-0">
+                                {po.notes ? (
+                                  <div
+                                    onClick={() => hasLongNotes && toggleNotesExpand(po._id)}
+                                    className={`text-xs break-words ${textSecondary} leading-relaxed rich-text-content ${hasLongNotes ? 'cursor-pointer' : ''} ${
+                                      isNotesExpanded ? '' : 'line-clamp-2'
+                                    }`}
+                                    title={hasLongNotes ? (isNotesExpanded ? 'Click to collapse' : 'Click to expand full note') : undefined}
+                                  >
+                                    <span dangerouslySetInnerHTML={{ __html: po.notes.replace(/\n/g, '<br/>') }} />
+                                  </div>
                                 ) : (
-                                  cleanNotesText
+                                  <span className={textMuted}>-</span>
                                 )}
                               </div>
-                            ) : (
-                              <span className={textMuted}>-</span>
-                            )}
+
+                              {/* Image Thumbnail */}
+                              {po.images && po.images.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenImagePreview(po.images!, 0)}
+                                  className="relative flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden border border-gray-200 dark:border-slate-700 hover:scale-105 active:scale-95 transition-all group"
+                                  title="Click to view image gallery"
+                                >
+                                  <img
+                                    src={po.images[0]}
+                                    alt="PO image"
+                                    className="w-full h-full object-cover"
+                                  />
+                                  {po.images.length > 1 && (
+                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-[9px] font-black text-white group-hover:bg-black/45 transition-colors tracking-tight">
+                                      +{po.images.length - 1}
+                                    </div>
+                                  )}
+                                </button>
+                              )}
+                            </div>
                           </td>
 
                           {/* 9. Actions */}
@@ -1920,7 +2197,7 @@ export default function PurchaseOrdersClient() {
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-base font-bold text-blue-600 dark:text-blue-400">#{getDisplayOrderId(po.poNumber)}</span>
+                          <span className="text-lg font-extrabold text-blue-600 dark:text-blue-400">#{getDisplayOrderId(po.poNumber)}</span>
                           <button
                             onClick={() => setSelectedCompanyInfo(companyInfo)}
                             className={`inline-flex px-2.5 py-0.5 text-xs font-bold rounded-full cursor-pointer hover:scale-105 transition-all ${
@@ -1936,10 +2213,40 @@ export default function PurchaseOrdersClient() {
                             {po.companyHeader}
                           </button>
                         </div>
-                        <p className={`text-xs ${textSecondary} flex items-center gap-1 mt-1`}>
-                          <CalendarDaysIcon className="w-3.5 h-3.5" />
-                          {formatDate(po.poDate)}
-                        </p>
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <p className={`text-xs ${textSecondary} flex items-center gap-1`}>
+                            <CalendarDaysIcon className="w-3.5 h-3.5" />
+                            {formatDate(po.poDate)}
+                          </p>
+                          <div className="relative">
+                            {updatingStatusId === po._id ? (
+                              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold rounded-lg border bg-gray-500/10 text-gray-500 border-gray-500/20">
+                                <ArrowPathIcon className="w-3 h-3 animate-spin" />
+                                <span>Updating...</span>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setActiveStatusMenuRect(rect);
+                                  setActiveStatusMenuPo(po);
+                                }}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-bold rounded-lg border hover:scale-105 active:scale-95 transition-all shadow-sm duration-150 cursor-pointer ${
+                                  po.status === 'Completed'
+                                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30 hover:bg-emerald-500/20'
+                                    : 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30 hover:bg-amber-500/20'
+                                }`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                  (po.status || 'Pending') === 'Completed' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                                }`} />
+                                <span className="ml-1">{po.status || 'Pending'}</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-1">
@@ -1994,13 +2301,18 @@ export default function PurchaseOrdersClient() {
                           {po.supplierGstin && (
                             <div className={`text-[10px] ${textMuted} font-mono mt-0.5`}>GSTIN: {po.supplierGstin}</div>
                           )}
+                          {po.supplierPhone && (
+                            <div className={`text-[10px] ${textMuted} mt-0.5`}>Phone: {po.supplierPhone}</div>
+                          )}
                         </div>
                       )}
 
                       {po.quality && (
                         <div className="flex items-center justify-between">
                           <span className={textSecondary}>Quality & Delivery:</span>
-                          <span className={`font-semibold ${textPrimary} truncate max-w-[180px]`}>{po.quality} {po.pcsMtr ? `(${po.pcsMtr} Pcs/Mtr)` : ''}</span>
+                          <span className={`font-semibold ${textPrimary} truncate max-w-[180px]`}>
+                            {po.quality} {po.pcsMtr || po.greighMtr ? `(${po.pcsMtr ? `${po.pcsMtr} Pcs/Mtr` : ''}${po.pcsMtr && po.greighMtr ? ', ' : ''}${po.greighMtr ? `Greigh: ${po.greighMtr} Mtr` : ''})` : ''}
+                          </span>
                         </div>
                       )}
                       {po.rate && (
@@ -2012,7 +2324,7 @@ export default function PurchaseOrdersClient() {
                           {po.paymentTerms && (
                             <div
                               onClick={() => hasLongPaymentTerms && togglePaymentTermsExpand(po._id)}
-                              className={`text-xs ${hasLongPaymentTerms ? 'cursor-pointer' : ''} ${
+                              className={`text-xs rich-text-content ${hasLongPaymentTerms ? 'cursor-pointer' : ''} ${
                                 isPaymentTermsExpanded
                                   ? isDarkMode
                                     ? 'break-words whitespace-pre-line text-blue-300 bg-slate-800/80 p-2 rounded-lg border border-slate-700 mt-1 font-medium'
@@ -2023,11 +2335,7 @@ export default function PurchaseOrdersClient() {
                               }`}
                               title={hasLongPaymentTerms ? (isPaymentTermsExpanded ? 'Click to collapse' : 'Click to expand payment terms') : po.paymentTerms}
                             >
-                              {isPaymentTermsExpanded ? (
-                                <span dangerouslySetInnerHTML={{ __html: po.paymentTerms.replace(/\n/g, '<br/>') }} />
-                              ) : (
-                                hasLongPaymentTerms ? `${cleanPaymentTermsText.slice(0, 20)}...` : cleanPaymentTermsText
-                              )}
+                              <span dangerouslySetInnerHTML={{ __html: po.paymentTerms.replace(/\n/g, '<br/>') }} />
                             </div>
                           )}
                         </div>
@@ -2046,27 +2354,44 @@ export default function PurchaseOrdersClient() {
                         </div>
                       )}
 
-                      {/* Direct Click on Note Text to Expand/Collapse */}
-                      {po.notes && (
+                      {/* Notes & Images in Mobile Card */}
+                      {(po.notes || (po.images && po.images.length > 0)) && (
                         <div className="pt-2 border-t border-gray-100 dark:border-slate-700/60">
-                          <span className={`text-[10px] font-bold block ${textMuted} mb-0.5`}>Notes:</span>
-                          <div
-                            onClick={() => hasLongNotes && toggleNotesExpand(po._id)}
-                            className={`text-xs ${hasLongNotes ? 'cursor-pointer' : ''} ${
-                              isNotesExpanded
-                                ? isDarkMode
-                                  ? 'break-words whitespace-pre-line text-blue-300 bg-slate-800/80 p-2 rounded-lg border border-slate-700 font-medium'
-                                  : 'break-words whitespace-pre-line text-slate-900 bg-slate-100 p-2 rounded-lg border border-slate-300 font-semibold shadow-sm'
-                                : hasLongNotes
-                                  ? `truncate ${textSecondary} hover:text-blue-600 dark:hover:text-blue-400 transition-colors`
-                                  : textSecondary
-                            }`}
-                            title={hasLongNotes ? (isNotesExpanded ? 'Click to collapse' : 'Click to expand note') : cleanNotesText}
-                          >
-                            {isNotesExpanded ? (
-                              <span dangerouslySetInnerHTML={{ __html: po.notes.replace(/\n/g, '<br/>') }} />
-                            ) : (
-                              hasLongNotes ? `${cleanNotesText.slice(0, 25)}...` : cleanNotesText
+                          <span className={`text-[10px] font-bold block ${textMuted} mb-0.5`}>Notes & Images:</span>
+                          <div className="flex items-start gap-2">
+                            <div className="flex-1 min-w-0">
+                              {po.notes ? (
+                                <div
+                                  onClick={() => hasLongNotes && toggleNotesExpand(po._id)}
+                                  className={`text-xs break-words ${textSecondary} leading-relaxed ${hasLongNotes ? 'cursor-pointer' : ''} ${
+                                    isNotesExpanded ? '' : 'line-clamp-2'
+                                  }`}
+                                  title={hasLongNotes ? (isNotesExpanded ? 'Click to collapse' : 'Click to expand note') : undefined}
+                                >
+                                  <span dangerouslySetInnerHTML={{ __html: po.notes.replace(/\n/g, '<br/>') }} />
+                                </div>
+                              ) : (
+                                <span className={textMuted}>-</span>
+                              )}
+                            </div>
+
+                            {po.images && po.images.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenImagePreview(po.images!, 0)}
+                                className="relative flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden border border-gray-200 dark:border-slate-700 active:scale-95 transition-all group"
+                              >
+                                <img
+                                  src={po.images[0]}
+                                  alt="PO image"
+                                  className="w-full h-full object-cover"
+                                />
+                                {po.images.length > 1 && (
+                                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-[9px] font-black text-white tracking-tight">
+                                    +{po.images.length - 1}
+                                  </div>
+                                )}
+                              </button>
                             )}
                           </div>
                         </div>
@@ -2221,6 +2546,19 @@ export default function PurchaseOrdersClient() {
 
               <div className="flex items-center gap-3">
                 <button
+                  type="button"
+                  onClick={handleRefreshPdf}
+                  title="Refresh PDF Preview"
+                  className={`flex items-center justify-center p-2 rounded-xl border transition-all active:scale-95 outline-none focus:outline-none ${
+                    isDarkMode 
+                      ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300' 
+                      : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-700 shadow-sm'
+                  }`}
+                >
+                  <ArrowPathIcon className="w-4.5 h-4.5" />
+                </button>
+
+                <button
                   onClick={() => handleDownloadPdf(pdfPreviewPO)}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
                 >
@@ -2282,6 +2620,8 @@ export default function PurchaseOrdersClient() {
         </div>
       )}
 
+
+
       {/* Create / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => !saving && setShowModal(false)}>
@@ -2339,8 +2679,8 @@ export default function PurchaseOrdersClient() {
                 </div>
               </div>
 
-              {/* PO Date with Custom Calendar DatePicker */}
-              <div>
+              {/* PO Date Selector */}
+              <div className="mb-3">
                 <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>PO Date</label>
                 <CustomDatePicker
                   value={formData.poDate}
@@ -2454,15 +2794,27 @@ export default function PurchaseOrdersClient() {
                   className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none resize-none`}
                 />
               </div>
-              <div>
-                <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Supplier GSTIN</label>
-                <input
-                  type="text"
-                  value={formData.supplierGstin}
-                  onChange={(e) => setFormData({ ...formData, supplierGstin: e.target.value.toUpperCase() })}
-                  placeholder="e.g. 09AACFW3350K1ZY"
-                  className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none font-mono`}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Supplier GSTIN</label>
+                  <input
+                    type="text"
+                    value={formData.supplierGstin}
+                    onChange={(e) => setFormData({ ...formData, supplierGstin: e.target.value.toUpperCase() })}
+                    placeholder="e.g. 09AACFW3350K1ZY"
+                    className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none font-mono`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Supplier Phone / Mobile</label>
+                  <input
+                    type="text"
+                    value={formData.supplierPhone || ''}
+                    onChange={(e) => setFormData({ ...formData, supplierPhone: e.target.value })}
+                    placeholder="e.g. +91 9988776655"
+                    className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
+                  />
+                </div>
               </div>
 
               {/* Quality */}
@@ -2502,17 +2854,39 @@ export default function PurchaseOrdersClient() {
                 </div>
               </div>
 
-              {/* Rate */}
-              <div>
-                <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Rate</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={formData.rate}
-                  onChange={(e) => setFormData({ ...formData, rate: e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1') })}
-                  placeholder="e.g. 79.50"
-                  className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none font-semibold`}
-                />
+              {/* Rate & Greigh Lead Time & Greigh Mtr */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Rate</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={formData.rate}
+                    onChange={(e) => setFormData({ ...formData, rate: e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1') })}
+                    placeholder="e.g. 79.50"
+                    className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none font-semibold`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Lead Time</label>
+                  <input
+                    type="text"
+                    value={formData.greighLeadTime || ''}
+                    onChange={(e) => setFormData({ ...formData, greighLeadTime: e.target.value })}
+                    placeholder="e.g. 10 Days"
+                    className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
+                  />
+                </div>
+                <div>
+                  <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Greigh Mtr</label>
+                  <input
+                    type="text"
+                    value={formData.greighMtr || ''}
+                    onChange={(e) => setFormData({ ...formData, greighMtr: e.target.value })}
+                    placeholder="e.g. 5000"
+                    className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
+                  />
+                </div>
               </div>
 
               {/* Payment Terms */}
@@ -2554,6 +2928,113 @@ export default function PurchaseOrdersClient() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Images Upload / Grid */}
+              <div>
+                <label className={`text-xs font-semibold ${textSecondary} block mb-2`}>Images (Multiple)</label>
+                
+                {/* Drag & Drop File Container (Simple, borderless) */}
+                <div 
+                  className={`flex flex-col sm:flex-row items-center gap-4 py-2 px-1 rounded-xl transition-all ${
+                    dragActive 
+                      ? 'bg-blue-500/5 ring-1 ring-blue-500/30' 
+                      : ''
+                  }`}
+                  onDragEnter={handleDrag}
+                  onDragOver={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDrop={handleDrop}
+                >
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <label 
+                      className={`relative px-4 py-2.5 rounded-xl border-2 border-dashed text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 flex-1 sm:flex-none outline-none focus:outline-none ${
+                        isDarkMode 
+                          ? 'border-slate-600 bg-slate-800/40 text-slate-300 hover:border-slate-500 hover:bg-slate-800' 
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50 shadow-sm'
+                      }`}
+                    >
+                      <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Choose Files
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCamera(true)}
+                      className={`px-4 py-2.5 rounded-xl border-2 border-dashed text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 flex-1 sm:flex-none outline-none focus:outline-none ${
+                        isDarkMode 
+                          ? 'border-slate-600 bg-slate-800/40 text-slate-300 hover:border-slate-500 hover:bg-slate-800' 
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50 shadow-sm'
+                      }`}
+                    >
+                      <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Camera
+                    </button>
+                  </div>
+
+                  <span className={`text-xs ml-auto hidden sm:inline ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                    Drag & drop images here or browse
+                  </span>
+                  
+                  <span className={`text-xs font-bold text-blue-500 sm:ml-2`}>
+                    {pendingImageFiles.length + (formData.images || []).length} selected
+                  </span>
+                </div>
+
+                {/* Image Previews / Grid */}
+                {((formData.images || []).length > 0 || pendingImageFiles.length > 0) && (
+                  <div className="grid grid-cols-4 gap-2 border p-2.5 rounded-xl border-dashed mt-3">
+                    {/* Existing saved images */}
+                    {(formData.images || []).map((url, index) => (
+                      <div key={`existing-${index}`} className="relative group aspect-square rounded-lg overflow-hidden border">
+                        <img src={url} alt="PO Existing" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveExistingImage(index)}
+                          className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow transition-all"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* Newly selected pending images */}
+                    {pendingImageFiles.map((file, index) => {
+                      const localUrl = URL.createObjectURL(file);
+                      return (
+                        <div key={`pending-${index}`} className="relative group aspect-square rounded-lg overflow-hidden border border-blue-400">
+                          <img src={localUrl} alt="PO Pending" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-blue-900/40 flex items-center justify-center">
+                            <span className="text-[10px] text-white font-bold bg-blue-600 px-1.5 py-0.5 rounded">NEW</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePendingImage(index)}
+                            className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow transition-all"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Notes */}
@@ -2661,6 +3142,101 @@ export default function PurchaseOrdersClient() {
           </div>
         </div>
       )}
+
+      {activeStatusMenuPo && activeStatusMenuRect && createPortal(
+        <>
+          {/* Backdrop to close menu */}
+          <div 
+            className="fixed inset-0 z-[9999998]" 
+            onClick={() => {
+              setActiveStatusMenuPo(null);
+              setActiveStatusMenuRect(null);
+            }} 
+          />
+          {/* Menu box */}
+          <div
+            className={`fixed z-[9999999] min-w-[130px] py-1.5 px-1 rounded-xl border shadow-2xl ${
+              isDarkMode 
+                ? 'bg-slate-800 border-slate-700 text-slate-100' 
+                : 'bg-white border-gray-200 text-gray-800'
+            }`}
+            style={{
+              top: (() => {
+                const spaceBelow = window.innerHeight - activeStatusMenuRect.bottom;
+                return spaceBelow < 120 ? activeStatusMenuRect.top - 85 : activeStatusMenuRect.bottom + 4;
+              })(),
+              left: activeStatusMenuRect.left,
+            }}
+          >
+            <div className="flex flex-col gap-1">
+              {activeStatusMenuPo.status === 'Completed' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleUpdateStatus(activeStatusMenuPo, 'Pending');
+                    setActiveStatusMenuPo(null);
+                    setActiveStatusMenuRect(null);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer transition-colors ${
+                    isDarkMode ? 'hover:bg-slate-700/50 text-amber-400' : 'hover:bg-gray-100 text-amber-600'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <span>Pending</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleUpdateStatus(activeStatusMenuPo, 'Completed');
+                    setActiveStatusMenuPo(null);
+                    setActiveStatusMenuRect(null);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer transition-colors ${
+                    isDarkMode ? 'hover:bg-slate-700/50 text-emerald-400' : 'hover:bg-gray-100 text-emerald-600'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span>Completed</span>
+                </button>
+              )}
+              
+              {/* Divider */}
+              <div className={`h-[1px] my-0.5 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-100'}`} />
+              
+              {/* Cancel Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveStatusMenuPo(null);
+                  setActiveStatusMenuRect(null);
+                }}
+                className={`w-full text-center px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition-colors ${
+                  isDarkMode ? 'hover:bg-slate-700/50 text-slate-400' : 'hover:bg-gray-100 text-slate-500'
+                }`}
+              >
+                <span>Cancel</span>
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
+      <ImagePreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        images={previewImages}
+        initialIndex={previewIndex}
+        isDarkMode={isDarkMode}
+      />
+
+      <CameraModal
+        isOpen={showCamera}
+        onClose={() => setShowCamera(false)}
+        onCapture={handleCameraCapture}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Slide in animation style */}
       <style jsx>{`

@@ -120,18 +120,20 @@ export async function GET(
     // Fetch lab data and mill input process data for this order and attach to items
     if (order.items && order.items.length > 0) {
       try {
-        const [Lab, { MillInput }, { MillOutput }, DispatchModule] = await Promise.all([
+        const [Lab, { MillInput }, { MillOutput }, DispatchModule, GreyInfoModule] = await Promise.all([
           import('@/models/Lab'),
           import('@/models/Mill'),
           import('@/models/MillOutput'),
-          import('@/models/Dispatch')
+          import('@/models/Dispatch'),
+          import('@/models/GreyInfo')
         ]);
 
         const Dispatch = DispatchModule.default;
+        const GreyInfo = GreyInfoModule.default;
 
         const itemIds = order.items.map((item: any) => item._id);
 
-        let [labs, millInputs, millOutputs, dispatches] = await Promise.all([
+        let [labs, millInputs, millOutputs, dispatches, greyInformation] = await Promise.all([
           Lab.default.find({
             order: id,
             orderItemId: { $in: itemIds },
@@ -159,6 +161,13 @@ export async function GET(
             order: id
           })
             .select('dispatchDate billNo transportNo lrNo finishMtr saleRate totalValue quality')
+            .lean()
+            .maxTimeMS(3000),
+
+          GreyInfo.find({
+            $or: [{ order: id }, { orderId: order.orderId }]
+          })
+            .select('orderId order quality quantity chalanNo numberOfPieces date weaverName')
             .lean()
             .maxTimeMS(3000)
         ]);
@@ -329,7 +338,8 @@ export async function GET(
           }
         });
 
-        // Add mill inputs, mill outputs, and dispatches to the order object for PDF generation
+        // Add grey info, mill inputs, mill outputs, and dispatches to the order object
+        (order as any).greyInformation = greyInformation;
         (order as any).millInputs = millInputs;
         (order as any).millOutputs = millOutputs;
         (order as any).dispatches = dispatches;

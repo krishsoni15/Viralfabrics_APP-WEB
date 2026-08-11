@@ -157,8 +157,16 @@ export async function GET(req: NextRequest) {
       query.weight = weightParam;
     }
 
-    if (Number.isFinite(gsmParam)) {
-      query.gsm = gsmParam;
+    if (gsmStr) {
+      const gsmNum = Number(gsmStr);
+      const gsmConditions: any[] = [{ gsm: { $regex: gsmStr.trim(), $options: 'i' } }];
+      if (!isNaN(gsmNum)) {
+        gsmConditions.push({ gsm: gsmNum });
+      }
+      if (!query.$and) {
+        query.$and = [];
+      }
+      query.$and.push({ $or: gsmConditions });
     }
 
     if (Number.isFinite(greighRateParam)) {
@@ -401,13 +409,8 @@ export async function POST(req: NextRequest) {
         }
       }
       
-      if (gsm) {
-        const val = parseFloat(gsm);
-        if (!Number.isFinite(val)) {
-          fabricErrors.push("GSM must be a valid number");
-        } else if (val <= 0) {
-          fabricErrors.push("GSM must be a positive number");
-        }
+      if (gsm && String(gsm).trim().length > 100) {
+        fabricErrors.push("GSM must be under 100 characters");
       }
       
       if (reed) {
@@ -453,7 +456,7 @@ export async function POST(req: NextRequest) {
         greighWidth: greighWidth ? parseFloat(greighWidth) : 0,
         finishWidth: finishWidth ? parseFloat(finishWidth) : 0,
         weight: weight ? parseFloat(weight) : 0,
-        gsm: gsm ? parseFloat(gsm) : 0,
+        gsm: gsm !== undefined && gsm !== null ? String(gsm).trim() : '',
         content: content?.trim() || '',
         danier: danier?.trim() || '',
         count: count ? parseFloat(count) : 0,

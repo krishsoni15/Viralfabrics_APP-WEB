@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate') || '';
     const endDate = searchParams.get('endDate') || '';
     const sort = searchParams.get('sort') || 'latest_first';
+    const status = searchParams.get('status') || '';
 
     // Build query
     const query: any = {
@@ -46,6 +47,21 @@ export async function GET(request: NextRequest) {
         }
       ]
     };
+
+    // Status filter
+    if (status) {
+      if (status === 'Pending') {
+        query.$and.push({
+          $or: [
+            { status: 'Pending' },
+            { status: { $exists: false } },
+            { status: null }
+          ]
+        });
+      } else {
+        query.$and.push({ status });
+      }
+    }
 
     // Company header filter
     if (companyHeader) {
@@ -203,13 +219,18 @@ export async function POST(request: NextRequest) {
       supplierName,
       supplierAddress,
       supplierGstin,
+      supplierPhone,
       quality,
       pcsMtr,
       delivery,
       rate,
+      greighMtr,
+      greighLeadTime,
+      images,
       paymentTerms,
       specs,
-      notes
+      notes,
+      status
     } = body;
 
     if (!companyHeader || !['Viral Fabrics', 'Viral Enterprise'].includes(companyHeader)) {
@@ -255,12 +276,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save/Update supplier to master DB (upsert with latest address, GSTIN and timestamp)
+    // Save/Update supplier to master DB (upsert with latest address, GSTIN, phone and timestamp)
     if (supplierName && supplierName.trim()) {
       try {
         const trimmedName = supplierName.trim();
         const trimmedAddress = supplierAddress ? supplierAddress.trim() : '';
         const trimmedGstin = supplierGstin ? supplierGstin.trim().toUpperCase() : '';
+        const trimmedPhone = supplierPhone ? supplierPhone.trim() : '';
 
         let supplierDoc = await Supplier.findOne({
           name: trimmedName,
@@ -268,13 +290,15 @@ export async function POST(request: NextRequest) {
           gstin: trimmedGstin
         }).collation(collation);
         if (supplierDoc) {
+          supplierDoc.phone = trimmedPhone;
           supplierDoc.updatedAt = new Date();
           await supplierDoc.save();
         } else {
           await Supplier.create({
             name: trimmedName,
             address: trimmedAddress,
-            gstin: trimmedGstin
+            gstin: trimmedGstin,
+            phone: trimmedPhone
           });
         }
       } catch (e: any) {
@@ -292,10 +316,14 @@ export async function POST(request: NextRequest) {
       supplierName: supplierName?.trim() || '',
       supplierAddress: supplierAddress?.trim() || '',
       supplierGstin: supplierGstin?.trim().toUpperCase() || '',
+      supplierPhone: supplierPhone?.trim() || '',
       quality: quality?.trim() || '',
       pcsMtr: pcsMtr?.trim() || '',
       delivery: delivery?.trim() || '',
       rate: rate?.trim() || '',
+      greighMtr: greighMtr?.trim() || '',
+      greighLeadTime: greighLeadTime?.trim() || '',
+      images: images || [],
       paymentTerms: paymentTerms?.trim() || '',
       specs: {
         finishGsm: specs?.finishGsm?.trim() || '',
@@ -306,7 +334,8 @@ export async function POST(request: NextRequest) {
       notes: notes?.trim() || '',
       financialYear: fyCode,
       createdBy: session.id,
-      softDeleted: false
+      softDeleted: false,
+      status: status || 'Pending'
     });
 
     return Response.json(

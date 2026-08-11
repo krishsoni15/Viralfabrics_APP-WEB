@@ -47,6 +47,9 @@ Features:
 To view setup, local running commands, APK building scripts, and Apple TestFlight deployment procedures:
 👉 **Go to the [Mobile README Guide](./mobile-app/README.md)**
 
+To view mobile iOS compatibility details, gesture interactions, offline caching architecture, real-time sync, and manual testing procedures:
+👉 **Go to the [iOS Device & Testing Guide](./mobile-app/IOS_DEVICE_AND_TESTING_GUIDE.md)**
+
 ```bash
 cd mobile-app
 # Read README.md for complete platform-specific instructions!

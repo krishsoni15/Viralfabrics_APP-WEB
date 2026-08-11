@@ -65,6 +65,17 @@ export default function DashboardLayoutClient({
     }
   }, [sessionUser, setUser]);
 
+  // Redirect party user if they try to access non-order pages
+  useEffect(() => {
+    if (!sessionLoading && sessionUser && sessionUser.role === 'party') {
+      const allowedPaths = ['/orders', '/orders/orderdetails', '/access-denied'];
+      const isAllowed = allowedPaths.some(path => pathname === path || pathname.startsWith(path + '/'));
+      if (!isAllowed) {
+        router.replace('/orders');
+      }
+    }
+  }, [sessionUser, sessionLoading, pathname, router]);
+
   // Track screen size and set sidebar state (only if no persisted preference)
   useEffect(() => {
     let timeoutId: any;

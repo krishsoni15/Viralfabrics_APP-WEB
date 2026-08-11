@@ -125,7 +125,14 @@ If you want to bypass the TestFlight review queue and install the app directly o
 
 ---
 
-## 🛠️ 4. Mobile MVP Roadmap & Architecture
+## 📖 4. iOS Display, Real-Time Architecture & Manual Testing Guide
+
+For detailed technical specifications and step-by-step manual test cases regarding iOS compatibility (phones/tablets, orientations, 120Hz ProMotion), background execution, modal swipe-dismiss gestures, offline caching, and Socket.IO real-time features:
+👉 **Go to the [iOS Device & Testing Guide](./IOS_DEVICE_AND_TESTING_GUIDE.md)**
+
+---
+
+## 🛠️ 5. Mobile MVP Roadmap & Architecture
 
 The app is preconfigured as a 3-page MVP implementing core workflows:
 
@@ -163,3 +170,9 @@ graph TD
 | `eas build -p ios --profile preview` | Build iOS Ad-hoc IPA (Requires registered device UDIDs) |
 | `eas build -p ios --profile production` | Build iOS App Store/TestFlight IPA |
 | `eas submit -p ios` | Submit built iOS app to App Store Connect / TestFlight |
+| `./run-ios.sh` | Run EAS build for iOS in the cloud, download the IPA, and rename it |
+| `./run-ios.sh --simulator` | Build for iOS Simulator (Free, no Apple Developer account required) |
+| `./run-ios.sh --channel staging --upload` | Build iOS staging IPA and automatically upload it to BrowserStack App Live |
+| `npm run build:ios` | Shortcut to run the `./run-ios.sh` script |
+
+

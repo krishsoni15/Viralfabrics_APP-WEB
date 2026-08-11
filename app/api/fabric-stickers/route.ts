@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     const qualityName = searchParams.get("qualityName") || "";
     const weaverName = searchParams.get("weaverName") || "";
     const width = searchParams.get("width") ? Number(searchParams.get("width")) : undefined;
-    const gsm = searchParams.get("gsm") ? Number(searchParams.get("gsm")) : undefined;
+    const gsm = searchParams.get("gsm") || undefined;
     const content = searchParams.get("content") || "";
     const count = searchParams.get("count") ? Number(searchParams.get("count")) : undefined;
     const rxP = searchParams.get("rxP") || "";

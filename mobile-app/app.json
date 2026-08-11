@@ -7,6 +7,11 @@
     "icon": "./assets/icon.png",
     "scheme": "viralfabrics",
     "userInterfaceStyle": "automatic",
+    "statusBar": {
+      "barStyle": "dark-content",
+      "translucent": true,
+      "backgroundColor": "#00000000"
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -16,6 +21,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.viralfabrics.crm",
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true,
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
+      },
       "config": {
         "usesNonExemptEncryption": false
       }
@@ -35,11 +45,12 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router",
-      "expo-font",
-      "expo-status-bar",
-      "expo-camera",
-      "expo-media-library",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": true
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -51,7 +62,8 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "reactCompiler": true
     },
     "extra": {
       "router": {},
@@ -65,7 +77,7 @@
     "updates": {
       "url": "https://u.expo.dev/c637df92-20f4-4a8b-aab2-06063139fbe8",
       "requestHeaders": {
-        "expo-channel-name": "staging"
+        "expo-channel-name": "production"
       }
     }
   }

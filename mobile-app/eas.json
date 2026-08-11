@@ -10,11 +10,23 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://viralfabrics-app-web.vercel.app"
+      },
       "android": {
         "buildType": "apk"
       }
     },
-    "production": {}
+    "simulator": {
+      "ios": {
+        "simulator": true
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://viralfabrics-app-web.vercel.app"
+      }
+    }
   },
   "submit": {
     "production": {}

@@ -2841,3 +2841,16 @@ html.light-to-dark .theme-switch-circle-animation::before {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* Styling for Rich Text elements within the app */
+.rich-text-content b, 
+.rich-text-content strong {
+  font-weight: 800 !important;
+}
+.rich-text-content i, 
+.rich-text-content em {
+  font-style: italic !important;
+}
+.rich-text-content u {
+  text-decoration: underline !important;
+}

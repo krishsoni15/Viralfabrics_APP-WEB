@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, ScrollView, RefreshControl, Platform, TouchableOpacity, TextInput, StyleSheet, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, RefreshControl, Platform, TouchableOpacity, TextInput, StyleSheet, Pressable, StatusBar } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShoppingBag, Clock, CheckCircle, Filter, Download, Calendar, Truck, X, ChevronDown, ArrowUp, PieChart, Droplet, Palette, ChevronRight } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -18,6 +18,7 @@ import { router } from 'expo-router';
 import StatusBadge from '../../components/shared/StatusBadge';
 import DatePickerModal from '../../components/shared/DatePickerModal';
 import { SkeletonCard, SkeletonStats, SkeletonList, SkeletonStatCard, SkeletonChartBlock, SkeletonDeliveredSoon } from '../../components/ui/Skeleton';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 // Parse DD/MM/YYYY to YYYY-MM-DD
 const parseDateFromInput = (input: string): string => {
@@ -37,6 +38,7 @@ const parseDateFromInput = (input: string): string => {
 
 const PressableScale = ({ children, onPress, style, disabled }: any) => {
   const scale = useSharedValue(1);
+  const lastPressedRef = React.useRef(0);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -53,8 +55,14 @@ const PressableScale = ({ children, onPress, style, disabled }: any) => {
   };
 
   const handlePress = () => {
+    const now = Date.now();
+    if (now - lastPressedRef.current < 600) return;
+    lastPressedRef.current = now;
+
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      requestAnimationFrame(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      });
     }
     if (onPress) {
       onPress();
@@ -81,7 +89,7 @@ const PressableScale = ({ children, onPress, style, disabled }: any) => {
 
 const StatCard = ({ title, subtitle, value, icon, colors, delay, isDarkMode, onPress }: any) => {
   return (
-    <Animated.View entering={FadeInDown.duration(400).delay(delay).springify()} style={{ marginBottom: 16 }}>
+    <View style={{ marginBottom: 16 }}>
       <PressableScale onPress={onPress} disabled={!onPress}>
         <View style={{
           borderRadius: 16,
@@ -98,7 +106,7 @@ const StatCard = ({ title, subtitle, value, icon, colors, delay, isDarkMode, onP
         }}>
           {/* SVG Gradient Background */}
           <View style={StyleSheet.absoluteFill}>
-            <Svg height="100%" width="100%">
+            <Svg key={isDarkMode ? 'dark' : 'light'} height="100%" width="100%">
               <Defs>
                 <LinearGradient id={`grad-${title.replace(/\s+/g, '')}`} x1="0%" y1="0%" x2="100%" y2="100%">
                   <Stop offset="0%" stopColor={colors.bgStart} />
@@ -131,7 +139,7 @@ const StatCard = ({ title, subtitle, value, icon, colors, delay, isDarkMode, onP
           </View>
         </View>
       </PressableScale>
-    </Animated.View>
+    </View>
   );
 };
 
@@ -196,7 +204,7 @@ const ChartBlock = ({ title, status, typeStats, delay, isDarkMode, theme }: any)
   };
 
   return (
-    <Animated.View entering={FadeInDown.duration(400).delay(delay).springify()} style={{ marginBottom: 24 }}>
+    <View style={{ marginBottom: 24 }}>
       <View style={{
         backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
         borderColor: isDarkMode ? '#334155' : theme.border,
@@ -261,7 +269,7 @@ const ChartBlock = ({ title, status, typeStats, delay, isDarkMode, theme }: any)
           </View>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 };
 
@@ -269,8 +277,14 @@ export default function DashboardScreen() {
   const { theme, isDarkMode } = useTheme();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
+  const { isLargeScreen, containerMaxWidth, numColumns } = useResponsiveLayout();
   const { setIsBackupModalOpen, isBackupDownloading } = useAppStore();
   const isMaster = user?.role === 'master';
+  const insets = useSafeAreaInsets();
+  const statusBarHeight = Platform.OS === 'ios' ? (insets.top > 0 ? insets.top : 20) : (insets.top > 0 ? insets.top : StatusBar.currentHeight || 24);
+
+
+
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     startDate: '',
@@ -345,7 +359,7 @@ export default function DashboardScreen() {
         };
       }
     },
-    staleTime: 10000,
+    staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: false,
     enabled: isAuthenticated,
@@ -551,8 +565,19 @@ export default function DashboardScreen() {
   const borderColor = isDarkMode ? '#334155' : theme.border;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: bgColor }} edges={['top']}>
-      <ScrollView
+    <View style={{ flex: 1, backgroundColor: bgColor }}>
+      {/* Top Status Bar Guard (prevents content overlap in all modes, including Reachability) */}
+      <View style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: statusBarHeight,
+        backgroundColor: bgColor,
+        zIndex: 9999,
+      }} />
+      <View style={{ flex: 1, paddingTop: statusBarHeight }}>
+        <ScrollView
         ref={scrollViewRef}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
@@ -560,10 +585,12 @@ export default function DashboardScreen() {
         scrollEventThrottle={16}
         onScroll={handleScroll}
       >
+        <View style={{ flex: 1, width: '100%', maxWidth: containerMaxWidth, alignSelf: 'center' }}>
+
     
 
         {/* Filters Card */}
-        <Animated.View entering={FadeInDown.duration(400).delay(50)} style={{ marginBottom: 16 }}>
+        <View style={{ marginBottom: 16 }}>
           <View style={{ backgroundColor: cardBg, borderColor: borderColor, borderWidth: 1, borderRadius: 12, padding: 16 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: showFilters ? 16 : 0 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -789,11 +816,11 @@ export default function DashboardScreen() {
               </Animated.View>
             )}
           </View>
-        </Animated.View>
+        </View>
 
         {/* Download Backup Button */}
         {isMaster && (
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={{ marginBottom: 24 }}>
+          <View style={{ marginBottom: 24 }}>
             <TouchableOpacity 
               onPress={() => setIsBackupModalOpen(true)}
               disabled={isBackupDownloading}
@@ -814,85 +841,103 @@ export default function DashboardScreen() {
                 {isBackupDownloading ? 'Backup In Progress...' : 'Download Backup'}
               </Text>
             </TouchableOpacity>
-          </Animated.View>
+          </View>
         )}
 
         {statsQuery.isLoading ? (
           <View>
-            <SkeletonStatCard />
-            <SkeletonStatCard />
-            <SkeletonStatCard />
-            <SkeletonChartBlock />
-            <SkeletonChartBlock />
+            <View style={{ flexDirection: isLargeScreen ? 'row' : 'column', gap: isLargeScreen ? 16 : 0 }}>
+              <View style={{ flex: 1 }}><SkeletonStatCard /></View>
+              <View style={{ flex: 1 }}><SkeletonStatCard /></View>
+              <View style={{ flex: 1 }}><SkeletonStatCard /></View>
+            </View>
+            <View style={{ flexDirection: isLargeScreen ? 'row' : 'column', gap: isLargeScreen ? 16 : 0 }}>
+              <View style={{ flex: 1 }}><SkeletonChartBlock /></View>
+              <View style={{ flex: 1 }}><SkeletonChartBlock /></View>
+            </View>
             <SkeletonDeliveredSoon />
           </View>
         ) : (
           <>
             {/* Stat Blocks */}
-             <StatCard
-              title="Total Orders"
-              subtitle="All time orders"
-              value={stats?.totalOrders}
-              icon={<ShoppingBag size={20} color={isDarkMode ? '#e9d5ff' : '#6b21a8'} />}
-              colors={{
-                bgStart: isDarkMode ? '#1e1b4b' : '#f3e8ff',
-                bgEnd: isDarkMode ? '#3b0764' : '#e0e7ff',
-                text: isDarkMode ? '#ffffff' : '#5b21b6',
-                subText: isDarkMode ? '#cbd5e1' : '#4f46e5',
-                iconBg: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(139, 92, 246, 0.12)'
-              }}
-              delay={200}
-              isDarkMode={isDarkMode}
-              onPress={() => {
-                if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({ pathname: '/(tabs)/orders', params: { status: 'All' } });
-              }}
-            />
-            <StatCard
-              title="Pending Orders"
-              subtitle="Awaiting processing"
-              value={stats?.statusStats?.pending}
-              icon={<Clock size={20} color={isDarkMode ? '#fef3c7' : '#92400e'} />}
-              colors={{
-                bgStart: isDarkMode ? '#451a03' : '#fffbeb',
-                bgEnd: isDarkMode ? '#78350f' : '#ffedd5',
-                text: isDarkMode ? '#ffffff' : '#78350f',
-                subText: isDarkMode ? '#fed7aa' : '#b45309',
-                iconBg: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(217, 119, 6, 0.12)'
-              }}
-              delay={300}
-              isDarkMode={isDarkMode}
-              onPress={() => {
-                if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({ pathname: '/(tabs)/orders', params: { status: 'pending' } });
-              }}
-            />
-            <StatCard
-              title="Delivered Orders"
-              subtitle="Successfully delivered"
-              value={stats?.statusStats?.delivered}
-              icon={<CheckCircle size={20} color={isDarkMode ? '#d1fae5' : '#065f46'} />}
-              colors={{
-                bgStart: isDarkMode ? '#022c22' : '#ecfdf5',
-                bgEnd: isDarkMode ? '#064e3b' : '#ccfbf1',
-                text: isDarkMode ? '#ffffff' : '#065f46',
-                subText: isDarkMode ? '#a7f3d0' : '#047857',
-                iconBg: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(5, 150, 105, 0.12)'
-              }}
-              delay={400}
-              isDarkMode={isDarkMode}
-              onPress={() => {
-                if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({ pathname: '/(tabs)/orders', params: { status: 'delivered' } });
-              }}
-            />
+            <View style={{ flexDirection: isLargeScreen ? 'row' : 'column', gap: isLargeScreen ? 16 : 0 }}>
+              <View style={{ flex: 1 }}>
+                <StatCard
+                  title="Total Orders"
+                  subtitle="All time orders"
+                  value={stats?.totalOrders}
+                  icon={<ShoppingBag size={20} color={isDarkMode ? '#e9d5ff' : '#6b21a8'} />}
+                  colors={{
+                    bgStart: isDarkMode ? '#1e1b4b' : '#f3e8ff',
+                    bgEnd: isDarkMode ? '#3b0764' : '#e0e7ff',
+                    text: isDarkMode ? '#ffffff' : '#5b21b6',
+                    subText: isDarkMode ? '#cbd5e1' : '#4f46e5',
+                    iconBg: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(139, 92, 246, 0.12)'
+                  }}
+                  delay={200}
+                  isDarkMode={isDarkMode}
+                  onPress={() => {
+                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({ pathname: '/(tabs)/orders', params: { status: 'All' } });
+                  }}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <StatCard
+                  title="Pending Orders"
+                  subtitle="Awaiting processing"
+                  value={stats?.statusStats?.pending}
+                  icon={<Clock size={20} color={isDarkMode ? '#fef3c7' : '#92400e'} />}
+                  colors={{
+                    bgStart: isDarkMode ? '#451a03' : '#fffbeb',
+                    bgEnd: isDarkMode ? '#78350f' : '#ffedd5',
+                    text: isDarkMode ? '#ffffff' : '#78350f',
+                    subText: isDarkMode ? '#fed7aa' : '#b45309',
+                    iconBg: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(217, 119, 6, 0.12)'
+                  }}
+                  delay={300}
+                  isDarkMode={isDarkMode}
+                  onPress={() => {
+                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({ pathname: '/(tabs)/orders', params: { status: 'pending' } });
+                  }}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <StatCard
+                  title="Delivered Orders"
+                  subtitle="Successfully delivered"
+                  value={stats?.statusStats?.delivered}
+                  icon={<CheckCircle size={20} color={isDarkMode ? '#d1fae5' : '#065f46'} />}
+                  colors={{
+                    bgStart: isDarkMode ? '#022c22' : '#ecfdf5',
+                    bgEnd: isDarkMode ? '#064e3b' : '#ccfbf1',
+                    text: isDarkMode ? '#ffffff' : '#065f46',
+                    subText: isDarkMode ? '#a7f3d0' : '#047857',
+                    iconBg: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(5, 150, 105, 0.12)'
+                  }}
+                  delay={400}
+                  isDarkMode={isDarkMode}
+                  onPress={() => {
+                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({ pathname: '/(tabs)/orders', params: { status: 'delivered' } });
+                  }}
+                />
+              </View>
+            </View>
 
             {/* Charts */}
-            <ChartBlock title="Pending Orders by Type" status="pending" typeStats={stats?.pendingTypeStats} delay={500} isDarkMode={isDarkMode} theme={theme} />
-            <ChartBlock title="Delivered Orders by Type" status="delivered" typeStats={stats?.deliveredTypeStats} delay={600} isDarkMode={isDarkMode} theme={theme} />
+            <View style={{ flexDirection: isLargeScreen ? 'row' : 'column', gap: isLargeScreen ? 16 : 0 }}>
+              <View style={{ flex: 1 }}>
+                <ChartBlock title="Pending Orders by Type" status="pending" typeStats={stats?.pendingTypeStats} delay={500} isDarkMode={isDarkMode} theme={theme} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ChartBlock title="Delivered Orders by Type" status="delivered" typeStats={stats?.deliveredTypeStats} delay={600} isDarkMode={isDarkMode} theme={theme} />
+              </View>
+            </View>
 
             {/* Delivered Soon Block */}
-            <Animated.View entering={FadeInDown.duration(400).delay(700).springify()} style={{ marginBottom: 24 }}>
+            <View style={{ marginBottom: 24 }}>
               <View style={{ backgroundColor: cardBg, borderColor: borderColor, borderWidth: 1, borderRadius: 12, overflow: 'hidden' }}>
                 <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: borderColor }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
@@ -1044,9 +1089,10 @@ export default function DashboardScreen() {
                   </View>
                 )}
               </View>
-            </Animated.View>
+            </View>
           </>
         )}
+        </View>
       </ScrollView>
 
       <DatePickerModal
@@ -1077,12 +1123,12 @@ export default function DashboardScreen() {
         title="Select End Date"
       />
 
-      <DatePickerModal
-        visible={showDeliverySoonDatePicker}
-        onClose={() => setShowDeliverySoonDatePicker(false)}
-        value={deliverySoonDate}
-        onSelectDate={setDeliverySoonDate}
-        title="Select Delivery Date"
+      <DatePickerModal 
+        visible={showDeliverySoonDatePicker} 
+        onClose={() => setShowDeliverySoonDatePicker(false)} 
+        value={deliverySoonDate} 
+        onSelectDate={setDeliverySoonDate} 
+        title="Select Delivery Date" 
       />
 
       {showScrollToTop && (
@@ -1110,6 +1156,7 @@ export default function DashboardScreen() {
           <ArrowUp size={22} color="#ffffff" />
         </TouchableOpacity>
       )}
-    </SafeAreaView>
+      </View>
+    </View>
   );
 }

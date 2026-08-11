@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, ActivityIndicator, Alert, Platform, KeyboardAvoidingView, Image, Modal, Share, Dimensions, Animated as RNAnimated, PanResponder, TouchableWithoutFeedback } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, ActivityIndicator, Alert, Platform, KeyboardAvoidingView, Image, Modal, Share, Dimensions, Animated as RNAnimated, PanResponder, TouchableWithoutFeedback, useWindowDimensions, Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -22,11 +22,13 @@ import { useTheme } from '../../hooks/useTheme';
 import { Colors } from '../../constants/colors';
 import { useAppStore } from '../../store/useAppStore';
 import DatePickerModal from '../../components/shared/DatePickerModal';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { CONFIG } from '../../constants/config';
 import { getDisplayOrderId, resolveImageUrl, uploadSingleImage } from '../../utils/helpers';
 import ImagePreviewModal from '../../components/shared/ImagePreviewModal';
 import CustomCameraModal from '../../components/shared/CustomCameraModal';
 import { PulsingContainer, Skeleton } from '../../components/ui/Skeleton';
+import DeleteConfirmModal from '../../components/shared/DeleteConfirmModal';
 
 const getFullImageUrl = (url: string | null | undefined) => {
   return resolveImageUrl(url) || null;
@@ -164,14 +166,19 @@ const parseDdMmYyyyToIso = (dateStr: string | null | undefined): string | undefi
 const ORDER_TYPES: ('Dying' | 'Printing')[] = ['Dying', 'Printing'];
 
 export default function CreateOrderScreen() {
+  const { width: screenWidth, height: SCREEN_HEIGHT } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { theme, isDarkMode } = useTheme();
   const queryClient = useQueryClient();
   const addToast = useAppStore((s) => s.addToast);
+  const user = useAppStore((s) => s.user);
+  const isMasterUser = user?.role === 'master' || user?.role === 'superadmin';
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [orderIdToUpdate, setOrderIdToUpdate] = useState<string | undefined>(id);
   const [isEditMode, setIsEditMode] = useState(!!id);
   const isEdit = isEditMode;
+  const [deleteWarning, setDeleteWarning] = useState<{ title: string; message: string } | null>(null);
+  const { isLargeScreen, modalMaxWidth } = useResponsiveLayout();
 
   // Load parties and qualities for dropdowns
   const partiesQuery = useQuery({
@@ -236,96 +243,40 @@ export default function CreateOrderScreen() {
   const [showCustomCamera, setShowCustomCamera] = useState(false);
   const [cameraActiveItemIndex, setCameraActiveItemIndex] = useState<number | null>(null);
 
-  // Searches
-  const [partySearch, setPartySearch] = useState('');
-  const [qualitySearch, setQualitySearch] = useState('');
+  // Memoized Selector Callbacks
+  const handleCloseOrderTypeModal = useCallback(() => setShowOrderTypeModal(false), []);
+  const handleSelectOrderType = useCallback((type: 'Dying' | 'Printing') => {
+    setOrderType(type);
+    setShowOrderTypeModal(false);
+  }, []);
 
-  // Screen Height for swipe gestures
-  const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+  const handleClosePartyModal = useCallback(() => setShowPartyModal(false), []);
+  const handleSelectParty = useCallback((p: any) => {
+    setPartyId(p._id);
+    if (p.contactName) setContactName(p.contactName);
+    if (p.contactPhone) setContactPhone(p.contactPhone);
+    setShowPartyModal(false);
+  }, []);
+  const handleCreateNewPartyAction = useCallback(() => {
+    setShowPartyModal(false);
+    setShowCreatePartyModal(true);
+  }, []);
 
-  // Party Select Modal Swipe to close
-  const partyTranslateY = useRef(new RNAnimated.Value(0)).current;
-  const partyTouchStartPageY = useRef(0);
-  const partyScrollY = useRef(0);
-  const partyPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: (evt) => {
-        const pageY = evt.nativeEvent.pageY;
-        partyTouchStartPageY.current = pageY;
-        return pageY < SCREEN_HEIGHT * 0.3 + 60;
-      },
-      onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, g) =>
-        partyScrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
-      onMoveShouldSetPanResponderCapture: (_, g) =>
-        partyScrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) partyTranslateY.setValue(g.dy);
-      },
-      onPanResponderRelease: (evt, g) => {
-        const isBackdropTouch = partyTouchStartPageY.current < SCREEN_HEIGHT * 0.3;
-        if (isBackdropTouch && Math.abs(g.dy) < 10 && Math.abs(g.dx) < 10) {
-          setShowPartyModal(false);
-          return;
-        }
-
-        if (g.dy > 80 || g.vy > 0.4) {
-          RNAnimated.timing(partyTranslateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: true })
-            .start(() => setShowPartyModal(false));
-        } else {
-          RNAnimated.spring(partyTranslateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
-        }
-      },
-    })
-  ).current;
-
-  useEffect(() => {
-    if (showPartyModal) {
-      partyTranslateY.setValue(0);
-    }
-  }, [showPartyModal]);
-
-  // Quality Select Modal Swipe to close
-  const qualityTranslateY = useRef(new RNAnimated.Value(0)).current;
-  const qualityTouchStartPageY = useRef(0);
-  const qualityScrollY = useRef(0);
-  const qualityPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: (evt) => {
-        const pageY = evt.nativeEvent.pageY;
-        qualityTouchStartPageY.current = pageY;
-        return pageY < SCREEN_HEIGHT * 0.3 + 60;
-      },
-      onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, g) =>
-        qualityScrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
-      onMoveShouldSetPanResponderCapture: (_, g) =>
-        qualityScrollY.current <= 5 && g.dy > 5 && g.dy > Math.abs(g.dx),
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) qualityTranslateY.setValue(g.dy);
-      },
-      onPanResponderRelease: (evt, g) => {
-        const isBackdropTouch = qualityTouchStartPageY.current < SCREEN_HEIGHT * 0.3;
-        if (isBackdropTouch && Math.abs(g.dy) < 10 && Math.abs(g.dx) < 10) {
-          setActiveQualityItemIndex(null);
-          return;
-        }
-
-        if (g.dy > 80 || g.vy > 0.4) {
-          RNAnimated.timing(qualityTranslateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: true })
-            .start(() => setActiveQualityItemIndex(null));
-        } else {
-          RNAnimated.spring(qualityTranslateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
-        }
-      },
-    })
-  ).current;
-
-  useEffect(() => {
+  const handleCloseQualityModal = useCallback(() => setActiveQualityItemIndex(null), []);
+  const handleSelectQuality = useCallback((q: any) => {
     if (activeQualityItemIndex !== null) {
-      qualityTranslateY.setValue(0);
+      setItems((prev) => {
+        const updated = [...prev];
+        updated[activeQualityItemIndex].quality = q._id;
+        return updated;
+      });
     }
+    setActiveQualityItemIndex(null);
   }, [activeQualityItemIndex]);
+  const handleCreateNewQualityAction = useCallback(() => {
+    setActiveQualityItemIndex(null);
+    setShowCreateQualityModal(true);
+  }, []);
 
   // Items State (supports multiple items!)
   const [items, setItems] = useState<Array<{
@@ -385,7 +336,7 @@ export default function CreateOrderScreen() {
   }, [isEdit, orderQuery.data]);
 
   const galleryRef = React.useRef<ScrollView>(null);
-  const screenWidth = Dimensions.get('window').width;
+
 
   useEffect(() => {
     if (previewImages.length > 0 && galleryRef.current) {
@@ -416,11 +367,15 @@ export default function CreateOrderScreen() {
     setItems(items.filter((_, i) => i !== index));
   };
 
-  const handleItemChange = (index: number, key: string, value: any) => {
-    const updated = [...items];
-    updated[index] = { ...updated[index], [key]: value };
-    setItems(updated);
-  };
+  const handleItemChange = useCallback((index: number, key: string, value: any) => {
+    setItems((prevItems) => {
+      const updated = [...prevItems];
+      if (updated[index]) {
+        updated[index] = { ...updated[index], [key]: value };
+      }
+      return updated;
+    });
+  }, []);
 
   const [uploadingItemIndex, setUploadingItemIndex] = useState<number | null>(null);
 
@@ -598,6 +553,56 @@ export default function CreateOrderScreen() {
     }
     createQualityMutation.mutate(newQualityName.trim());
   };
+
+  const [deletePartyTarget, setDeletePartyTarget] = useState<any>(null);
+  const deletePartyMutation = useMutation({
+    mutationFn: async (partyId: string) => {
+      const { data } = await api.delete(`/api/parties/${partyId}`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parties'] });
+      setDeletePartyTarget(null);
+      addToast({
+        type: 'success',
+        title: 'Party Deleted',
+        message: 'Party has been successfully deleted.',
+      });
+    },
+    onError: (err: any) => {
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to delete party';
+      setDeleteWarning({
+        title: 'Cannot Delete Party',
+        message: errMsg,
+      });
+      setDeletePartyTarget(null);
+    }
+  });
+
+  const [deleteQualityTarget, setDeleteQualityTarget] = useState<any>(null);
+  const deleteQualityMutation = useMutation({
+    mutationFn: async (qualityId: string) => {
+      const { data } = await api.delete(`/api/qualities/${qualityId}`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['qualities'] });
+      setDeleteQualityTarget(null);
+      addToast({
+        type: 'success',
+        title: 'Quality Deleted',
+        message: 'Quality has been successfully deleted.',
+      });
+    },
+    onError: (err: any) => {
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to delete quality';
+      setDeleteWarning({
+        title: 'Cannot Delete Quality',
+        message: errMsg,
+      });
+      setDeleteQualityTarget(null);
+    }
+  });
 
   // Create Submit Mutation
   const createOrderMutation = useMutation({
@@ -870,7 +875,6 @@ export default function CreateOrderScreen() {
                     activeOpacity={0.7}
                     onPress={() => {
                       setShowPartyModal(true);
-                      setPartySearch('');
                     }}
                     style={{
                       flex: 1,
@@ -1141,7 +1145,6 @@ export default function CreateOrderScreen() {
                         activeOpacity={0.7}
                         onPress={() => {
                           setActiveQualityItemIndex(index);
-                          setQualitySearch('');
                         }}
                         style={{
                           flex: 1,
@@ -1505,172 +1508,49 @@ export default function CreateOrderScreen() {
       />
 
       {/* Order Type Modal */}
-      <Modal
+      <SelectOrderTypeModal
         visible={showOrderTypeModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowOrderTypeModal(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <TouchableWithoutFeedback onPress={() => setShowOrderTypeModal(false)}>
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-          </TouchableWithoutFeedback>
-          <View style={{
-            backgroundColor: theme.card,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingHorizontal: 24,
-            paddingTop: 24,
-            paddingBottom: 24 + insets.bottom,
-            maxHeight: '50%',
-            borderWidth: 1,
-            borderColor: theme.border,
-          }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>Select Order Type</Text>
-              <TouchableOpacity onPress={() => setShowOrderTypeModal(false)} style={{ padding: 4 }}>
-                <X size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            <View style={{ gap: 12 }}>
-              {ORDER_TYPES.map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  onPress={() => {
-                    setOrderType(type);
-                    setShowOrderTypeModal(false);
-                  }}
-                  style={{
-                    height: 54,
-                    borderRadius: 14,
-                    backgroundColor: orderType === type ? Colors.primary[600] : (isDarkMode ? Colors.neutral[800] : Colors.neutral[50]),
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: orderType === type ? Colors.primary[700] : 'transparent',
-                  }}
-                >
-                  <Text style={{ fontSize: 16, fontWeight: '700', color: orderType === type ? Colors.white : theme.text }}>
-                    {type}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={handleCloseOrderTypeModal}
+        selectedType={orderType}
+        onSelect={handleSelectOrderType}
+        theme={theme}
+        isLargeScreen={isLargeScreen}
+        modalMaxWidth={modalMaxWidth}
+      />
 
       {/* Party Select Modal */}
-      <Modal
+      <SelectPartyModal
         visible={showPartyModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowPartyModal(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <TouchableWithoutFeedback onPress={() => setShowPartyModal(false)}>
-            <View 
-              {...partyPanResponder.panHandlers}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} 
-            />
-          </TouchableWithoutFeedback>
-
-          <RNAnimated.View
-            {...partyPanResponder.panHandlers}
-            style={{
-              backgroundColor: theme.card,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              paddingHorizontal: 24,
-              paddingTop: 16,
-              paddingBottom: 24 + insets.bottom,
-              height: '70%',
-              borderWidth: 1,
-              borderColor: theme.border,
-              transform: [{ translateY: partyTranslateY }]
-            }}
-          >
-            {/* Visual Drag Handle */}
-            <View style={{ alignItems: 'center', marginBottom: 12 }}>
-              <View style={{ width: 44, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#3a3a4a' : '#e2e8f0' }} />
-            </View>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>Select Party</Text>
-              <TouchableOpacity onPress={() => setShowPartyModal(false)} style={{ padding: 4 }}>
-                <X size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <TextInput
-              placeholder="Search parties..."
-              placeholderTextColor={theme.textTertiary}
-              value={partySearch}
-              onChangeText={setPartySearch}
-              style={{
-                height: 48,
-                borderRadius: 12,
-                backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.neutral[50],
-                borderWidth: 1,
-                borderColor: theme.borderLight,
-                paddingHorizontal: 14,
-                fontSize: 14,
-                color: theme.text,
-                marginBottom: 16,
-              }}
-            />
-
-            <ScrollView 
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              onScroll={(e) => { partyScrollY.current = e.nativeEvent.contentOffset.y; }}
-              scrollEventThrottle={16}
-            >
-              {parties
-                .filter((p: any) => p && p.name && p.name.toLowerCase().includes(partySearch.toLowerCase()))
-                .map((p: any) => (
-                  <TouchableOpacity
-                    key={p._id}
-                    onPress={() => {
-                      setPartyId(p._id);
-                      if (p.contactName) setContactName(p.contactName);
-                      if (p.contactPhone) setContactPhone(p.contactPhone);
-                      setShowPartyModal(false);
-                    }}
-                    style={{
-                      paddingVertical: 14,
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.borderLight,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <Text style={{ fontSize: 16, color: theme.text, fontWeight: p && partyId === p._id ? '700' : '400' }}>
-                      {p && p.name}
-                    </Text>
-                    {p && partyId === p._id && (
-                      <Check size={20} color={Colors.primary[600]} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-            </ScrollView>
-          </RNAnimated.View>
-        </View>
-      </Modal>
+        onClose={handleClosePartyModal}
+        parties={partiesQuery.data || []}
+        partyId={partyId}
+        onSelect={handleSelectParty}
+        isMasterUser={isMasterUser}
+        onDeletePartyTarget={setDeletePartyTarget}
+        onCreateNewParty={handleCreateNewPartyAction}
+        theme={theme}
+        isLargeScreen={isLargeScreen}
+        modalMaxWidth={modalMaxWidth}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Create Party Modal */}
       <Modal
         visible={showCreatePartyModal}
-        animationType="slide"
+        animationType={isLargeScreen ? 'fade' : 'fade'}
         transparent
         onRequestClose={() => setShowCreatePartyModal(false)}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.15)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
+          <TouchableWithoutFeedback onPress={() => setShowCreatePartyModal(false)}>
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+          </TouchableWithoutFeedback>
           <View style={{
             backgroundColor: theme.card,
             borderRadius: 20,
             padding: 24,
+            width: isLargeScreen ? '100%' : '100%',
+            maxWidth: isLargeScreen ? (modalMaxWidth as any) : '100%',
             borderWidth: 1,
             borderColor: theme.border,
           }}>
@@ -1741,15 +1621,20 @@ export default function CreateOrderScreen() {
       {/* Create Quality Modal */}
       <Modal
         visible={showCreateQualityModal}
-        animationType="slide"
+        animationType={isLargeScreen ? 'fade' : 'fade'}
         transparent
         onRequestClose={() => setShowCreateQualityModal(false)}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.15)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
+          <TouchableWithoutFeedback onPress={() => setShowCreateQualityModal(false)}>
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+          </TouchableWithoutFeedback>
           <View style={{
             backgroundColor: theme.card,
             borderRadius: 20,
             padding: 24,
+            width: isLargeScreen ? '100%' : '100%',
+            maxWidth: isLargeScreen ? (modalMaxWidth as any) : '100%',
             borderWidth: 1,
             borderColor: theme.border,
           }}>
@@ -1802,106 +1687,20 @@ export default function CreateOrderScreen() {
       </Modal>
 
       {/* Quality Search Modal */}
-      <Modal
+      <SelectQualityModal
         visible={activeQualityItemIndex !== null}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setActiveQualityItemIndex(null)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <TouchableWithoutFeedback onPress={() => setActiveQualityItemIndex(null)}>
-            <View 
-              {...qualityPanResponder.panHandlers}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} 
-            />
-          </TouchableWithoutFeedback>
-
-          <RNAnimated.View
-            {...qualityPanResponder.panHandlers}
-            style={{
-              backgroundColor: theme.card,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              paddingHorizontal: 24,
-              paddingTop: 16,
-              paddingBottom: 24 + insets.bottom,
-              height: '70%',
-              borderWidth: 1,
-              borderColor: theme.border,
-              transform: [{ translateY: qualityTranslateY }]
-            }}
-          >
-            {/* Visual Drag Handle */}
-            <View style={{ alignItems: 'center', marginBottom: 12 }}>
-              <View style={{ width: 44, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#3a3a4a' : '#e2e8f0' }} />
-            </View>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>Select Quality</Text>
-              <TouchableOpacity onPress={() => setActiveQualityItemIndex(null)} style={{ padding: 4 }}>
-                <X size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <TextInput
-              placeholder="Search quality..."
-              placeholderTextColor={theme.textTertiary}
-              value={qualitySearch}
-              onChangeText={setQualitySearch}
-              style={{
-                height: 48,
-                borderRadius: 12,
-                backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.neutral[50],
-                borderWidth: 1,
-                borderColor: theme.borderLight,
-                paddingHorizontal: 14,
-                fontSize: 14,
-                color: theme.text,
-                marginBottom: 16,
-              }}
-            />
-
-            <ScrollView 
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              onScroll={(e) => { qualityScrollY.current = e.nativeEvent.contentOffset.y; }}
-              scrollEventThrottle={16}
-            >
-              {qualities
-                .filter((q: any) => q && q.name && q.name.toLowerCase().includes(qualitySearch.toLowerCase()))
-                .map((q: any) => {
-                  const currentQualityId = activeQualityItemIndex !== null ? items[activeQualityItemIndex]?.quality : null;
-                  return (
-                    <TouchableOpacity
-                      key={q._id}
-                      onPress={() => {
-                        if (activeQualityItemIndex !== null) {
-                          handleItemChange(activeQualityItemIndex, 'quality', q._id);
-                        }
-                        setActiveQualityItemIndex(null);
-                      }}
-                      style={{
-                        paddingVertical: 14,
-                        borderBottomWidth: 1,
-                        borderBottomColor: theme.borderLight,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <Text style={{ fontSize: 16, color: theme.text, fontWeight: q && currentQualityId === q._id ? '700' : '400' }}>
-                        {q && q.name}
-                      </Text>
-                      {q && currentQualityId === q._id && (
-                        <Check size={20} color={Colors.primary[600]} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-            </ScrollView>
-          </RNAnimated.View>
-        </View>
-      </Modal>
+        onClose={handleCloseQualityModal}
+        qualities={qualitiesQuery.data || []}
+        selectedQualityId={activeQualityItemIndex !== null ? items[activeQualityItemIndex]?.quality : null}
+        onSelect={handleSelectQuality}
+        isMasterUser={isMasterUser}
+        onDeleteQualityTarget={setDeleteQualityTarget}
+        onCreateNewQuality={handleCreateNewQualityAction}
+        theme={theme}
+        isLargeScreen={isLargeScreen}
+        modalMaxWidth={modalMaxWidth}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Image Preview Modal */}
       <ImagePreviewModal
@@ -1931,6 +1730,626 @@ export default function CreateOrderScreen() {
         singlePhoto={false}
       />
 
+      <DeleteConfirmModal
+        visible={deletePartyTarget !== null}
+        onClose={() => setDeletePartyTarget(null)}
+        onConfirm={() => {
+          if (deletePartyTarget?._id) {
+            deletePartyMutation.mutate(deletePartyTarget._id);
+          }
+        }}
+        title="Delete Party"
+        message={`Are you sure you want to delete "${deletePartyTarget?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        isDeleting={deletePartyMutation.isPending}
+      />
+
+      <DeleteConfirmModal
+        visible={deleteQualityTarget !== null}
+        onClose={() => setDeleteQualityTarget(null)}
+        onConfirm={() => {
+          if (deleteQualityTarget?._id) {
+            deleteQualityMutation.mutate(deleteQualityTarget._id);
+          }
+        }}
+        title="Delete Quality"
+        message={`Are you sure you want to delete "${deleteQualityTarget?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        isDeleting={deleteQualityMutation.isPending}
+      />
+
+      <DeleteConfirmModal
+        visible={deleteWarning !== null}
+        onClose={() => setDeleteWarning(null)}
+        onConfirm={() => setDeleteWarning(null)}
+        title={deleteWarning?.title || 'Cannot Delete'}
+        message={deleteWarning?.message || ''}
+        isAlert={true}
+        alertBtnText="Close"
+      />
+
     </SafeAreaView>
   );
 }
+
+// ── Rendering Optimization Sub-components for Create Form ──
+
+interface SelectOrderTypeModalProps {
+  visible: boolean;
+  onClose: () => void;
+  selectedType: 'Dying' | 'Printing' | '';
+  onSelect: (type: 'Dying' | 'Printing') => void;
+  theme: any;
+  isLargeScreen: boolean;
+  modalMaxWidth: number | string;
+}
+
+const SelectOrderTypeModal = React.memo(({
+  visible,
+  onClose,
+  selectedType,
+  onSelect,
+  theme,
+  isLargeScreen,
+  modalMaxWidth
+}: SelectOrderTypeModalProps) => {
+  const insets = useSafeAreaInsets();
+  const { height: SCREEN_HEIGHT } = useWindowDimensions();
+  const orderTypeTranslateY = useRef(new RNAnimated.Value(0)).current;
+  const orderTypeTouchStartPageY = useRef(0);
+  const orderTypeSheetY = useRef(0);
+
+  useEffect(() => {
+    if (visible) {
+      orderTypeTranslateY.setValue(0);
+    }
+  }, [visible]);
+
+  const orderTypePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        orderTypeTouchStartPageY.current = pageY;
+        return pageY < orderTypeSheetY.current + 85;
+      },
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, g) =>
+        g.dy > 8 && g.dy > Math.abs(g.dx),
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        g.dy > 8 && g.dy > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) orderTypeTranslateY.setValue(g.dy);
+      },
+      onPanResponderRelease: (evt, g) => {
+        const isBackdropTouch = orderTypeTouchStartPageY.current < orderTypeSheetY.current;
+        if (isBackdropTouch && Math.abs(g.dy) < 10 && Math.abs(g.dx) < 10) {
+          onClose();
+          return;
+        }
+
+        if (g.dy > 50 || g.vy > 0.2) {
+          RNAnimated.timing(orderTypeTranslateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: true })
+            .start(() => onClose());
+        } else {
+          RNAnimated.spring(orderTypeTranslateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+        }
+      },
+    })
+  ).current;
+
+  if (!visible) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType={isLargeScreen ? 'fade' : 'slide'}
+      transparent
+      statusBarTranslucent={true}
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, justifyContent: isLargeScreen ? 'center' : 'flex-end', alignItems: 'center' }}>
+        <Pressable
+          onPress={onClose}
+          style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.15)',
+          }}
+        />
+
+        <RNAnimated.View
+          onLayout={(e) => {
+            orderTypeSheetY.current = e.nativeEvent.layout.y;
+          }}
+          {...orderTypePanResponder.panHandlers}
+          style={{
+            backgroundColor: theme.card,
+            borderRadius: isLargeScreen ? 24 : undefined,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            paddingHorizontal: 24,
+            paddingTop: 16,
+            paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 16),
+            maxHeight: '50%',
+            width: '100%',
+            maxWidth: isLargeScreen ? (modalMaxWidth as any) : '100%',
+            borderWidth: 1,
+            borderColor: theme.border,
+            transform: isLargeScreen ? undefined : [{ translateY: orderTypeTranslateY }]
+          }}
+        >
+          {!isLargeScreen && (
+            <View style={{ alignItems: 'center', marginBottom: 12 }}>
+              <View style={{ width: 44, height: 4, borderRadius: 2, backgroundColor: theme.borderLight }} />
+            </View>
+          )}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>Select Order Type</Text>
+            <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+              <X size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+          <View style={{ gap: 12 }}>
+            {ORDER_TYPES.map((type) => (
+              <TouchableOpacity
+                key={type}
+                onPress={() => {
+                  onSelect(type);
+                }}
+                style={{
+                  height: 54,
+                  borderRadius: 14,
+                  backgroundColor: selectedType === type ? Colors.primary[600] : (theme.card === '#fff' ? Colors.neutral[50] : Colors.neutral[800]),
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: selectedType === type ? Colors.primary[700] : 'transparent',
+                }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '700', color: selectedType === type ? Colors.white : theme.text }}>
+                  {type}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </RNAnimated.View>
+      </View>
+    </Modal>
+  );
+});
+
+interface SelectPartyModalProps {
+  visible: boolean;
+  onClose: () => void;
+  parties: any[];
+  partyId: string;
+  onSelect: (p: any) => void;
+  isMasterUser: boolean;
+  onDeletePartyTarget: (p: any) => void;
+  onCreateNewParty: () => void;
+  theme: any;
+  isLargeScreen: boolean;
+  modalMaxWidth: number | string;
+  isDarkMode: boolean;
+}
+
+const SelectPartyModal = React.memo(({
+  visible,
+  onClose,
+  parties,
+  partyId,
+  onSelect,
+  isMasterUser,
+  onDeletePartyTarget,
+  onCreateNewParty,
+  theme,
+  isLargeScreen,
+  modalMaxWidth,
+  isDarkMode
+}: SelectPartyModalProps) => {
+  const insets = useSafeAreaInsets();
+  const { height: SCREEN_HEIGHT } = useWindowDimensions();
+  const [partySearch, setPartySearch] = useState('');
+
+  const partyTranslateY = useRef(new RNAnimated.Value(0)).current;
+  const partyTouchStartPageY = useRef(0);
+  const partySheetY = useRef(0);
+  const partyScrollY = useRef(0);
+
+  useEffect(() => {
+    if (visible) {
+      partyTranslateY.setValue(0);
+      setPartySearch('');
+    }
+  }, [visible]);
+
+  const partyPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        partyTouchStartPageY.current = pageY;
+        return pageY < partySheetY.current + 85;
+      },
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, g) =>
+        partyScrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        partyScrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) partyTranslateY.setValue(g.dy);
+      },
+      onPanResponderRelease: (evt, g) => {
+        const isBackdropTouch = partyTouchStartPageY.current < partySheetY.current;
+        if (isBackdropTouch && Math.abs(g.dy) < 10 && Math.abs(g.dx) < 10) {
+          onClose();
+          return;
+        }
+
+        if (g.dy > 50 || g.vy > 0.2) {
+          RNAnimated.timing(partyTranslateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: true })
+            .start(() => onClose());
+        } else {
+          RNAnimated.spring(partyTranslateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+        }
+      },
+    })
+  ).current;
+
+  if (!visible) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType={isLargeScreen ? 'fade' : 'slide'}
+      transparent
+      statusBarTranslucent={true}
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, justifyContent: isLargeScreen ? 'center' : 'flex-end', alignItems: 'center' }}>
+        <Pressable
+          onPress={onClose}
+          style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.15)',
+          }}
+        />
+
+        <RNAnimated.View
+          onLayout={(e) => {
+            partySheetY.current = e.nativeEvent.layout.y;
+          }}
+          {...partyPanResponder.panHandlers}
+          style={{
+            backgroundColor: theme.card,
+            borderRadius: isLargeScreen ? 24 : undefined,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            paddingHorizontal: 24,
+            paddingTop: 16,
+            paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 16),
+            height: '70%',
+            width: '100%',
+            maxWidth: isLargeScreen ? (modalMaxWidth as any) : '100%',
+            borderWidth: 1,
+            borderColor: theme.border,
+            transform: isLargeScreen ? undefined : [{ translateY: partyTranslateY }]
+          }}
+        >
+          <View style={{ alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ width: 44, height: 4, borderRadius: 2, backgroundColor: theme.borderLight }} />
+          </View>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>Select Party</Text>
+            <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+              <X size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+          
+          <TextInput
+            placeholder="Search parties..."
+            placeholderTextColor={theme.textTertiary}
+            value={partySearch}
+            onChangeText={setPartySearch}
+            style={{
+              height: 48,
+              borderRadius: 12,
+              backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.neutral[50],
+              borderWidth: 1,
+              borderColor: theme.borderLight,
+              paddingHorizontal: 14,
+              fontSize: 14,
+              color: theme.text,
+              marginBottom: 16,
+            }}
+          />
+
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            onScroll={(e) => { partyScrollY.current = e.nativeEvent.contentOffset.y; }}
+            scrollEventThrottle={16}
+          >
+            {parties
+              .filter((p: any) => p && p.name && p.name.toLowerCase().includes(partySearch.toLowerCase()))
+              .map((p: any) => (
+                <View
+                  key={p._id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.borderLight,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      onSelect(p);
+                    }}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Text style={{ fontSize: 16, color: theme.text, fontWeight: p && partyId === p._id ? '700' : '400' }}>
+                      {p && p.name}
+                    </Text>
+                    {p && partyId === p._id && (
+                      <Check size={20} color={Colors.primary[600]} />
+                    )}
+                  </TouchableOpacity>
+
+                  {isMasterUser && (
+                    <TouchableOpacity
+                      onPress={() => onDeletePartyTarget(p)}
+                      style={{ padding: 10, marginLeft: 8 }}
+                    >
+                      <Trash2 size={18} color={Colors.error[600]} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+          </ScrollView>
+
+          <TouchableOpacity
+            onPress={onCreateNewParty}
+            style={{
+              height: 52,
+              borderRadius: 14,
+              backgroundColor: Colors.primary[600],
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 16,
+              marginBottom: insets.bottom > 0 ? 0 : 8,
+            }}
+          >
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>+ Create New Party</Text>
+          </TouchableOpacity>
+        </RNAnimated.View>
+      </View>
+    </Modal>
+  );
+});
+
+interface SelectQualityModalProps {
+  visible: boolean;
+  onClose: () => void;
+  qualities: any[];
+  selectedQualityId: string | null;
+  onSelect: (quality: any) => void;
+  isMasterUser: boolean;
+  onDeleteQualityTarget: (q: any) => void;
+  onCreateNewQuality: () => void;
+  theme: any;
+  isLargeScreen: boolean;
+  modalMaxWidth: number | string;
+  isDarkMode: boolean;
+}
+
+const SelectQualityModal = React.memo(({
+  visible,
+  onClose,
+  qualities,
+  selectedQualityId,
+  onSelect,
+  isMasterUser,
+  onDeleteQualityTarget,
+  onCreateNewQuality,
+  theme,
+  isLargeScreen,
+  modalMaxWidth,
+  isDarkMode
+}: SelectQualityModalProps) => {
+  const insets = useSafeAreaInsets();
+  const { height: SCREEN_HEIGHT } = useWindowDimensions();
+  const [qualitySearch, setQualitySearch] = useState('');
+
+  const qualityTranslateY = useRef(new RNAnimated.Value(0)).current;
+  const qualityTouchStartPageY = useRef(0);
+  const qualitySheetY = useRef(0);
+  const qualityScrollY = useRef(0);
+
+  useEffect(() => {
+    if (visible) {
+      qualityTranslateY.setValue(0);
+      setQualitySearch('');
+    }
+  }, [visible]);
+
+  const qualityPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        qualityTouchStartPageY.current = pageY;
+        return pageY < qualitySheetY.current + 85;
+      },
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, g) =>
+        qualityScrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        qualityScrollY.current <= 5 && g.dy > 8 && g.dy > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) qualityTranslateY.setValue(g.dy);
+      },
+      onPanResponderRelease: (evt, g) => {
+        const isBackdropTouch = qualityTouchStartPageY.current < qualitySheetY.current;
+        if (isBackdropTouch && Math.abs(g.dy) < 10 && Math.abs(g.dx) < 10) {
+          onClose();
+          return;
+        }
+
+        if (g.dy > 50 || g.vy > 0.2) {
+          RNAnimated.timing(qualityTranslateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: true })
+            .start(() => onClose());
+        } else {
+          RNAnimated.spring(qualityTranslateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+        }
+      },
+    })
+  ).current;
+
+  if (!visible) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType={isLargeScreen ? 'fade' : 'slide'}
+      transparent
+      statusBarTranslucent={true}
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, justifyContent: isLargeScreen ? 'center' : 'flex-end', alignItems: 'center' }}>
+        <Pressable
+          onPress={onClose}
+          style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.15)',
+          }}
+        />
+
+        <RNAnimated.View
+          onLayout={(e) => {
+            qualitySheetY.current = e.nativeEvent.layout.y;
+          }}
+          {...qualityPanResponder.panHandlers}
+          style={{
+            backgroundColor: theme.card,
+            borderRadius: isLargeScreen ? 24 : undefined,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            paddingHorizontal: 24,
+            paddingTop: 16,
+            paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 16),
+            height: '70%',
+            width: '100%',
+            maxWidth: isLargeScreen ? (modalMaxWidth as any) : '100%',
+            borderWidth: 1,
+            borderColor: theme.border,
+            transform: isLargeScreen ? undefined : [{ translateY: qualityTranslateY }]
+          }}
+        >
+          <View style={{ alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ width: 44, height: 4, borderRadius: 2, backgroundColor: theme.borderLight }} />
+          </View>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>Select Quality</Text>
+            <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+              <X size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+          
+          <TextInput
+            placeholder="Search quality..."
+            placeholderTextColor={theme.textTertiary}
+            value={qualitySearch}
+            onChangeText={setQualitySearch}
+            style={{
+              height: 48,
+              borderRadius: 12,
+              backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.neutral[50],
+              borderWidth: 1,
+              borderColor: theme.borderLight,
+              paddingHorizontal: 14,
+              fontSize: 14,
+              color: theme.text,
+              marginBottom: 16,
+            }}
+          />
+
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            onScroll={(e) => { qualityScrollY.current = e.nativeEvent.contentOffset.y; }}
+            scrollEventThrottle={16}
+          >
+            {qualities
+              .filter((q: any) => q && q.name && q.name.toLowerCase().includes(qualitySearch.toLowerCase()))
+              .map((q: any) => (
+                <View
+                  key={q._id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.borderLight,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      onSelect(q);
+                    }}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Text style={{ fontSize: 16, color: theme.text, fontWeight: q && selectedQualityId === q._id ? '700' : '400' }}>
+                      {q && q.name}
+                    </Text>
+                    {q && selectedQualityId === q._id && (
+                      <Check size={20} color={Colors.primary[600]} />
+                    )}
+                  </TouchableOpacity>
+
+                  {isMasterUser && (
+                    <TouchableOpacity
+                      onPress={() => onDeleteQualityTarget(q)}
+                      style={{ padding: 10, marginLeft: 8 }}
+                    >
+                      <Trash2 size={18} color={Colors.error[600]} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+          </ScrollView>
+
+          <TouchableOpacity
+            onPress={onCreateNewQuality}
+            style={{
+              height: 52,
+              borderRadius: 14,
+              backgroundColor: Colors.primary[600],
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 16,
+              marginBottom: insets.bottom > 0 ? 0 : 8,
+            }}
+          >
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>+ Create New Quality</Text>
+          </TouchableOpacity>
+        </RNAnimated.View>
+      </View>
+    </Modal>
+  );
+});

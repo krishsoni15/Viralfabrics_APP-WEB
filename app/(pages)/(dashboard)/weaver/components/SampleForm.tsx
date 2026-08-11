@@ -219,6 +219,8 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
       }
     } else if (field === 'rack' && value && value.length > 100) {
       newErrors.rack = 'Rack must be 100 characters or less';
+    } else if (field === 'gsm' && value && value.length > 100) {
+      newErrors.gsm = 'GSM must be 100 characters or less';
     } else if (field === 'content' && value && value.length > 100) {
       newErrors.content = 'Content must be 100 characters or less';
     } else if (field === 'danier' && value && value.length > 50) {
@@ -227,7 +229,7 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
       newErrors.note = 'Note must be 1000 characters or less';
     } else {
       // Numeric field validation
-      const numericFields = ['greighWidth', 'finishWidth', 'weight', 'gsm', 'reed', 'pick', 'greighRate'];
+      const numericFields = ['greighWidth', 'finishWidth', 'weight', 'reed', 'pick', 'greighRate'];
       if (numericFields.includes(field) && value && value.trim()) {
         const numValue = parseFloat(value);
         if (isNaN(numValue)) {
@@ -296,7 +298,6 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
       { key: 'greighWidth', max: 10000 },
       { key: 'finishWidth', max: 10000 },
       { key: 'weight', max: 100000 },
-      { key: 'gsm', max: 10000 },
       { key: 'reed', max: 10000 },
       { key: 'pick', max: 10000 },
       { key: 'greighRate', max: 1000000 }
@@ -345,6 +346,10 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
       newErrors.content = 'Content must be 100 characters or less';
     }
     
+    if (formData.gsm && formData.gsm.length > 100) {
+      newErrors.gsm = 'GSM must be 100 characters or less';
+    }
+    
     // Danier validation (optional but if provided, check length)
     if (formData.danier && formData.danier.length > 50) {
       newErrors.danier = 'Danier must be 50 characters or less';
@@ -355,7 +360,6 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
       { key: 'greighWidth', label: 'Greigh Width', max: 10000 },
       { key: 'finishWidth', label: 'Finish Width', max: 10000 },
       { key: 'weight', label: 'Weight', max: 100000 },
-      { key: 'gsm', label: 'GSM', max: 10000 },
       { key: 'reed', label: 'Reed', max: 10000 },
       { key: 'pick', label: 'Pick', max: 10000 },
       { key: 'greighRate', label: 'Greigh Rate', max: 1000000 }
@@ -545,7 +549,7 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
         greighWidth: formData.greighWidth ? parseFloat(formData.greighWidth) : 0,
         finishWidth: formData.finishWidth ? parseFloat(formData.finishWidth) : 0,
         weight: formData.weight ? parseFloat(formData.weight) : 0,
-        gsm: formData.gsm ? parseFloat(formData.gsm) : 0,
+        gsm: formData.gsm ? formData.gsm.trim() : '',
         content: formData.content || '',
         danier: formData.danier || '',
         reed: formData.reed ? parseFloat(formData.reed) : 0,
@@ -605,7 +609,7 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
         greighWidth: formData.greighWidth ? parseFloat(formData.greighWidth) : 0,
         finishWidth: formData.finishWidth ? parseFloat(formData.finishWidth) : 0,
         weight: formData.weight ? parseFloat(formData.weight) : 0,
-        gsm: formData.gsm ? parseFloat(formData.gsm) : 0,
+        gsm: formData.gsm ? formData.gsm.trim() : '',
         content: formData.content || '',
         danier: formData.danier || '',
         reed: formData.reed ? parseFloat(formData.reed) : 0,
@@ -1071,7 +1075,7 @@ export default function SampleForm({ weaver, sample, onClose, onSave, onDelete, 
                         ? 'bg-gray-700 border-gray-600 text-white'
                         : 'bg-white border-gray-300 text-gray-900'
                   }`}
-                  placeholder="e.g., 72.5"
+                  placeholder="e.g., 72.5 or 100-150"
                 />
                 {errors.gsm && (
                   <p className={`text-sm mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-500'}`}>{errors.gsm}</p>

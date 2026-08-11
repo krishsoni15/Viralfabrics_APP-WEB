@@ -33,7 +33,11 @@ export async function GET(req: NextRequest) {
       const or: any[] = [
         { qualityName: { $regex: search, $options: 'i' } },
         { notes: { $regex: search, $options: 'i' } },
-        { whereToPut: { $regex: search, $options: 'i' } }
+        { whereToPut: { $regex: search, $options: 'i' } },
+        { weaverName: { $regex: search, $options: 'i' } },
+        { weaverQuality: { $regex: search, $options: 'i' } },
+        { millName: { $regex: search, $options: 'i' } },
+        { processInMill: { $regex: search, $options: 'i' } }
       ];
       if (mongoose.Types.ObjectId.isValid(search)) {
         or.push({ _id: new mongoose.Types.ObjectId(search) });
@@ -121,6 +125,10 @@ export async function POST(req: NextRequest) {
     const {
       qualityName,
       whereToPut,
+      weaverName,
+      weaverQuality,
+      millName,
+      processInMill,
       images,
       notes,
       meter,
@@ -137,6 +145,10 @@ export async function POST(req: NextRequest) {
     const sampling = new Sampling({
       qualityName: qualityName.trim(),
       whereToPut: whereToPut?.trim() || '',
+      weaverName: weaverName?.trim() || '',
+      weaverQuality: weaverQuality?.trim() || '',
+      millName: millName?.trim() || '',
+      processInMill: processInMill?.trim() || '',
       images: images || [],
       notes: notes || '',
       piece: piece ? Number(piece) : 0,

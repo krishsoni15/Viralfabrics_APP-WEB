@@ -10,7 +10,7 @@ export interface IFabric extends Document {
   greighWidth: number;
   finishWidth: number;
   weight: number;
-  gsm: number;
+  gsm: string;
   content: string;
   danier: string;
   count: number;
@@ -88,9 +88,9 @@ const FabricSchema = new Schema<IFabric>({
     default: 0
   },
   gsm: {
-    type: Number,
+    type: String,
     required: false,
-    default: 0
+    default: ''
   },
   content: {
     type: String,

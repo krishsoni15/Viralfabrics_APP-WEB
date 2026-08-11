@@ -19,6 +19,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ArrowUpIcon,
+  ArrowDownTrayIcon,
   ListBulletIcon,
   CloudArrowUpIcon,
   EyeIcon,
@@ -33,11 +34,16 @@ import { useSession } from '../hooks/useSession';
 import CameraModal from '../components/CameraModal';
 import ImagePreviewModal from '../components/ImagePreviewModal';
 import { useRealtimeSync } from '@/app/hooks/useRealtimeSync';
+import { generateSampleStickerPDF, downloadSampleStickerPDFDirect } from '@/lib/pdfGenerator';
 
 interface Sampling {
   _id: string;
   qualityName: string;
   whereToPut?: string;
+  weaverName?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
   images: string[];
   notes: string;
   meter: number;
@@ -76,6 +82,10 @@ export default function SamplingPage() {
   const [formData, setFormData] = useState({
     qualityName: '',
     whereToPut: '',
+    weaverName: '',
+    weaverQuality: '',
+    millName: '',
+    processInMill: '',
     images: [] as string[],
     notes: '',
     meter: '' as string | number,
@@ -102,6 +112,13 @@ export default function SamplingPage() {
   const [showCamera, setShowCamera] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [pendingImages, setPendingImages] = useState<{ file?: File; url: string }[]>([]);
+
+  // Sticker Preview State
+  const [showStickerPreview, setShowStickerPreview] = useState(false);
+  const [stickerPreviewUrl, setStickerPreviewUrl] = useState<string | null>(null);
+  const [currentStickerItem, setCurrentStickerItem] = useState<Sampling | null>(null);
+  const [isLoadingStickerPreview, setIsLoadingStickerPreview] = useState(false);
+  const stickerBlobUrlRef = useRef<string | null>(null);
 
   // Animation Triggers
   const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
@@ -374,6 +391,10 @@ export default function SamplingPage() {
       setFormData({
         qualityName: item.qualityName,
         whereToPut: item.whereToPut || '',
+        weaverName: item.weaverName || '',
+        weaverQuality: item.weaverQuality || '',
+        millName: item.millName || '',
+        processInMill: item.processInMill || '',
         images: item.images || [],
         notes: item.notes || '',
         meter: item.meter,
@@ -385,6 +406,10 @@ export default function SamplingPage() {
       setFormData({
         qualityName: '',
         whereToPut: '',
+        weaverName: '',
+        weaverQuality: '',
+        millName: '',
+        processInMill: '',
         images: [],
         notes: '',
         meter: '',
@@ -445,6 +470,10 @@ export default function SamplingPage() {
       const payload = {
         qualityName: formData.qualityName.trim(),
         whereToPut: formData.whereToPut.trim(),
+        weaverName: formData.weaverName.trim(),
+        weaverQuality: formData.weaverQuality.trim(),
+        millName: formData.millName.trim(),
+        processInMill: formData.processInMill.trim(),
         images: uploadedUrls,
         notes: formData.notes.trim(),
         meter: formData.meter === '' ? 0 : Number(formData.meter),
@@ -606,6 +635,112 @@ export default function SamplingPage() {
       setIsDeleting(false);
     }
   };
+
+  // Handle sticker download - show preview first (or direct download on mobile)
+  const isMobileDevice = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  const handleStickerDownload = async (item: Sampling) => {
+    try {
+      const stickerData = {
+        qualityName: item.qualityName || '-',
+        whereToPut: item.whereToPut || undefined,
+        weaverName: item.weaverName || undefined,
+        weaverQuality: item.weaverQuality || undefined,
+        millName: item.millName || undefined,
+        processInMill: item.processInMill || undefined,
+        notes: item.notes || undefined,
+        meter: item.meter || undefined,
+        piece: item.piece || undefined,
+      };
+
+      // On mobile devices, download directly without preview
+      if (isMobileDevice) {
+        try {
+          downloadSampleStickerPDFDirect(stickerData);
+          showToast('success', 'Sticker PDF downloading...');
+        } catch {
+          showToast('error', 'Failed to download sticker. Please try again.');
+        }
+        return;
+      }
+
+      // Desktop: Show preview first
+      setIsLoadingStickerPreview(true);
+
+      const pdfDataUrl = generateSampleStickerPDF(stickerData);
+
+      try {
+        const base64Data = pdfDataUrl.split(',')[1] || pdfDataUrl.split('base64,')[1];
+        if (base64Data) {
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/pdf' });
+
+          if (stickerBlobUrlRef.current) {
+            URL.revokeObjectURL(stickerBlobUrlRef.current);
+            stickerBlobUrlRef.current = null;
+          }
+
+          const blobUrl = URL.createObjectURL(blob);
+          stickerBlobUrlRef.current = blobUrl;
+
+          setStickerPreviewUrl(blobUrl);
+          setCurrentStickerItem(item);
+          setShowStickerPreview(true);
+          setTimeout(() => setIsLoadingStickerPreview(false), 500);
+        } else {
+          setStickerPreviewUrl(pdfDataUrl);
+          setCurrentStickerItem(item);
+          setShowStickerPreview(true);
+          setTimeout(() => setIsLoadingStickerPreview(false), 500);
+        }
+      } catch {
+        setStickerPreviewUrl(pdfDataUrl);
+        setCurrentStickerItem(item);
+        setShowStickerPreview(true);
+        setTimeout(() => setIsLoadingStickerPreview(false), 500);
+      }
+    } catch {
+      setIsLoadingStickerPreview(false);
+      showToast('error', 'Failed to generate sticker preview. Please try again.');
+    }
+  };
+
+  const handleFinalStickerDownload = useCallback(() => {
+    if (!currentStickerItem) {
+      showToast('error', 'No item selected for download');
+      return;
+    }
+    try {
+      const stickerData = {
+        qualityName: currentStickerItem.qualityName || '-',
+        whereToPut: currentStickerItem.whereToPut || undefined,
+        weaverName: currentStickerItem.weaverName || undefined,
+        weaverQuality: currentStickerItem.weaverQuality || undefined,
+        millName: currentStickerItem.millName || undefined,
+        processInMill: currentStickerItem.processInMill || undefined,
+        notes: currentStickerItem.notes || undefined,
+        meter: currentStickerItem.meter || undefined,
+        piece: currentStickerItem.piece || undefined,
+      };
+      downloadSampleStickerPDFDirect(stickerData);
+
+      if (stickerBlobUrlRef.current) {
+        URL.revokeObjectURL(stickerBlobUrlRef.current);
+        stickerBlobUrlRef.current = null;
+      }
+      setShowStickerPreview(false);
+      setStickerPreviewUrl(null);
+      setCurrentStickerItem(null);
+      showToast('success', 'Sticker PDF downloaded successfully!');
+    } catch {
+      showToast('error', 'Failed to download sticker PDF. Please try again.');
+    }
+  }, [currentStickerItem]);
 
   const handleSortChange = (field: string) => {
     let order = 'desc';
@@ -978,6 +1113,26 @@ export default function SamplingPage() {
                         </th>
                         <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                           <div className="flex items-center space-x-2">
+                            <span>Weaver Name</span>
+                          </div>
+                        </th>
+                        <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="flex items-center space-x-2">
+                            <span>Weaver Quality</span>
+                          </div>
+                        </th>
+                        <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="flex items-center space-x-2">
+                            <span>Mill Name</span>
+                          </div>
+                        </th>
+                        <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="flex items-center space-x-2">
+                            <span>Process in Mill</span>
+                          </div>
+                        </th>
+                        <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="flex items-center space-x-2">
                             <DocumentTextIcon className="h-4 w-4" />
                             <span>Notes</span>
                           </div>
@@ -1093,6 +1248,14 @@ export default function SamplingPage() {
                             <span className="truncate max-w-[150px]" title={item.whereToPut}>{item.whereToPut}</span>
                           </div>
                         )}
+                        {(item.weaverName || item.weaverQuality || item.millName) && (
+                          <div className="flex flex-wrap gap-1.5 mt-1.5">
+                            {item.weaverName && <span className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md">W: {item.weaverName}</span>}
+                            {item.weaverQuality && <span className="text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md">WQ: {item.weaverQuality}</span>}
+                            {item.millName && <span className="text-[10px] font-semibold bg-violet-500/10 text-violet-600 dark:text-violet-400 px-2 py-0.5 rounded-md">Mill: {item.millName}</span>}
+                          </div>
+                        )}
+                        {item.processInMill && <p className="text-xs mt-1.5 line-clamp-2 text-cyan-600 dark:text-cyan-400 italic" title={item.processInMill}>Process: {item.processInMill}</p>}
                         {item.notes && <p className="text-sm mt-2 line-clamp-2 text-gray-500 dark:text-gray-400" title={item.notes}>{item.notes}</p>}
                         <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-dashed dark:border-slate-700/80 border-slate-200">
                           <div className="text-left">
@@ -1107,6 +1270,9 @@ export default function SamplingPage() {
                         <div className="mt-4 flex items-center gap-2">
                           <button onClick={() => handleOpenForm('edit', item)} className={`flex-1 flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-semibold border transition-all ${isDarkMode ? 'border-gray-700 hover:bg-slate-750 text-gray-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'}`}>
                             <PencilIcon className="h-3.5 w-3.5" /><span>Edit</span>
+                          </button>
+                          <button onClick={() => handleStickerDownload(item)} className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'border-blue-500/20 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/40' : 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'}`} title="Download Sticker">
+                            <ArrowDownTrayIcon className="h-4 w-4" />
                           </button>
                           {isMaster && (
                             <button onClick={() => { setSelectedItem(item); setShowDeleteModal(true); }} className="p-2 rounded-xl border border-red-500/20 text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-all cursor-pointer">
@@ -1141,6 +1307,18 @@ export default function SamplingPage() {
                           <MapPinIcon className="h-4 w-4" />
                           <span>Where to Put</span>
                         </div>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span>Weaver Name</span>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span>Weaver Quality</span>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span>Mill Name</span>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span>Process in Mill</span>
                       </th>
                       <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                         <div className="flex items-center space-x-2">
@@ -1195,6 +1373,10 @@ export default function SamplingPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap font-semibold">{item.qualityName}</td>
                           <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.whereToPut || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.weaverName || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.weaverQuality || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.millName || '-'}</td>
+                          <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={item.processInMill}>{item.processInMill || '-'}</td>
                           <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={item.notes}>{item.notes || '-'}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-blue-500">{item.meter} M</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-purple-500">{item.piece}</td>
@@ -1202,6 +1384,9 @@ export default function SamplingPage() {
                             <div className="flex items-center justify-center space-x-2">
                               <button onClick={() => handleOpenForm('edit', item)} className="p-1.5 rounded-lg hover:bg-slate-700/10 dark:hover:bg-slate-200/10 text-blue-500 transition-colors" title="Edit Item">
                                 <PencilIcon className="h-4.5 w-4.5" />
+                              </button>
+                              <button onClick={() => handleStickerDownload(item)} className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-blue-400 hover:bg-blue-500/20' : 'text-blue-600 hover:bg-blue-50'}`} title="Download Sticker">
+                                <ArrowDownTrayIcon className="h-4.5 w-4.5" />
                               </button>
                               {isMaster && (
                                 <button onClick={() => { setSelectedItem(item); setShowDeleteModal(true); }} className="p-1.5 rounded-lg hover:bg-slate-700/10 dark:hover:bg-slate-200/10 text-red-500 transition-colors" title="Delete Item">
@@ -1267,105 +1452,255 @@ export default function SamplingPage() {
       )}
 
       {showFormModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border transform transition-all animate-scale-up ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-gray-900'}`}>
-            <div className={`px-6 py-4 flex items-center justify-between border-b ${isDarkMode ? 'border-slate-700 bg-slate-800/60' : 'border-slate-100 bg-slate-50'}`}>
-              <h2 className="text-xl font-bold">{formMode === 'edit' ? 'Edit Sampling' : 'Add Sampling'}</h2>
-              <button onClick={() => setShowFormModal(false)} className={`p-1.5 rounded-xl transition-all ${isDarkMode ? 'hover:bg-slate-700 text-gray-400' : 'hover:bg-slate-200 text-gray-500'}`}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden border my-auto transform transition-all animate-scale-up flex flex-col ${
+            isDarkMode ? 'bg-slate-900 border-slate-700/80 text-white' : 'bg-white border-slate-200 text-gray-900'
+          }`}>
+            {/* Modal Header */}
+            <div className={`px-6 py-4 flex items-center justify-between border-b ${
+              isDarkMode ? 'border-slate-800 bg-slate-900/90' : 'border-slate-100 bg-slate-50/80'
+            }`}>
+              <div className="flex items-center space-x-3">
+                <div className={`p-2 rounded-xl ${
+                  isDarkMode ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-blue-50 text-blue-600 border border-blue-100'
+                }`}>
+                  {formMode === 'edit' ? <PencilIcon className="h-5 w-5" /> : <PlusIcon className="h-5 w-5" />}
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold tracking-tight">
+                    {formMode === 'edit' ? 'Edit Sampling' : 'Add Sampling'}
+                  </h2>
+                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Enter sampling details, location, weaver & mill processes.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFormModal(false)}
+                className={`p-2 rounded-xl transition-all ${
+                  isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
+                }`}
+              >
                 <XMarkIcon className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Quality Name <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  placeholder="Enter quality name..."
-                  value={formData.qualityName}
-                  onChange={(e) => {
-                    setFormData(prev => ({ ...prev, qualityName: e.target.value }));
-                    setFormErrors(prev => ({ ...prev, qualityName: false }));
-                  }}
-                  className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.qualityName ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30' : isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Where to put</label>
-                <input
-                  type="text"
-                  placeholder="Enter storage location..."
-                  value={formData.whereToPut}
-                  onChange={(e) => setFormData(prev => ({ ...prev, whereToPut: e.target.value }))}
-                  className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Notes</label>
-                <textarea
-                  placeholder="Enter notes..."
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all resize-none h-24 ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            {/* Modal Form Content */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto max-h-[calc(85vh-80px)]">
+              {/* Row 1: Quality Name & Where to put */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Meter (Length)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={formData.meter}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, meter: e.target.value }));
-                      setFormErrors(prev => ({ ...prev, meter: false }));
-                    }}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.meter ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30' : isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
-                  />
-                  {formErrors.meter && <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be positive</span>}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Piece (Qty)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={formData.piece}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, piece: e.target.value }));
-                      setFormErrors(prev => ({ ...prev, piece: false }));
-                    }}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.piece ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30' : isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
-                  />
-                  {formErrors.piece && <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be positive integer</span>}
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <label className={`block text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                    }`}>
-                    Images
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Quality Name <span className="text-red-500">*</span>
                   </label>
-                  <span className={`text-xs px-2 py-1 rounded ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-                    }`}>
+                  <input
+                    type="text"
+                    placeholder="Enter quality name..."
+                    value={formData.qualityName}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, qualityName: e.target.value }));
+                      setFormErrors(prev => ({ ...prev, qualityName: false }));
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium ${
+                      formErrors.qualityName
+                        ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
+                        : isDarkMode
+                          ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                  {formErrors.qualityName && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-1 block">Quality Name is required</span>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Where to Put
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter storage location..."
+                    value={formData.whereToPut}
+                    onChange={(e) => setFormData(prev => ({ ...prev, whereToPut: e.target.value }))}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Weaver Name & Weaver Quality */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Weaver Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter weaver name..."
+                    value={formData.weaverName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, weaverName: e.target.value }))}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Weaver Quality
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter weaver quality..."
+                    value={formData.weaverQuality}
+                    onChange={(e) => setFormData(prev => ({ ...prev, weaverQuality: e.target.value }))}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Mill Name & Process in Mill */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Mill Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter mill name..."
+                    value={formData.millName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, millName: e.target.value }))}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Process in Mill
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter process details..."
+                    value={formData.processInMill}
+                    onChange={(e) => setFormData(prev => ({ ...prev, processInMill: e.target.value }))}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: Notes & Quantity / Meter Specs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Notes
+                  </label>
+                  <textarea
+                    placeholder="Enter notes..."
+                    rows={2}
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    className={`w-full px-4 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all resize-none ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Meter (Length)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.meter}
+                        onChange={(e) => {
+                          setFormData(prev => ({ ...prev, meter: e.target.value }));
+                          setFormErrors(prev => ({ ...prev, meter: false }));
+                        }}
+                        className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm ${
+                          formErrors.meter
+                            ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
+                            : isDarkMode
+                              ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                              : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                        }`}
+                      />
+                      <span className="absolute right-2.5 top-2 text-xs text-slate-400 font-semibold pointer-events-none">Mtr</span>
+                    </div>
+                    {formErrors.meter && <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be positive</span>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Piece (Qty)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={formData.piece}
+                        onChange={(e) => {
+                          setFormData(prev => ({ ...prev, piece: e.target.value }));
+                          setFormErrors(prev => ({ ...prev, piece: false }));
+                        }}
+                        className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm ${
+                          formErrors.piece
+                            ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
+                            : isDarkMode
+                              ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                              : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                        }`}
+                      />
+                      <span className="absolute right-2.5 top-2 text-xs text-slate-400 font-semibold pointer-events-none">Pcs</span>
+                    </div>
+                    {formErrors.piece && <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be integer</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Images Section */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Images & Attachments
+                  </label>
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold ${
+                    isDarkMode ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                  }`}>
                     {pendingImages.length} image(s)
                   </span>
                 </div>
 
-                {/* Image Upload Area - Compact with Drag & Drop */}
+                {/* Drag & Drop File Container */}
                 <div
-                  className={`flex items-center space-x-3 mb-3 p-4 rounded-lg border-2 border-dashed transition-all duration-200 ${dragActive
-                      ? isDarkMode
-                        ? 'border-blue-500 bg-blue-500/10'
-                        : 'border-blue-400 bg-blue-50'
+                  className={`border-2 border-dashed rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all ${
+                    dragActive
+                      ? 'border-blue-500 bg-blue-500/10'
                       : isDarkMode
-                        ? 'border-slate-700 bg-slate-900/50'
-                        : 'border-slate-200 bg-slate-50'
-                    }`}
+                        ? 'border-slate-700 bg-slate-800/30 hover:border-slate-600 hover:bg-slate-800/50'
+                        : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-100/50'
+                  }`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
@@ -1380,89 +1715,69 @@ export default function SamplingPage() {
                     id="sampling-image-upload"
                     disabled={submitting}
                   />
-                  <label
-                    htmlFor="sampling-image-upload"
-                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg border-2 border-dashed cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${isDarkMode
-                        ? 'border-gray-600 hover:border-blue-500 text-gray-300 hover:text-blue-400'
-                        : 'border-gray-300 hover:border-blue-400 text-gray-600 hover:text-blue-600'
-                      }`}
-                  >
-                    <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-                    Upload Image
-                  </label>
 
-                  {/* Camera Button */}
-                  <button
-                    type="button"
-                    onClick={() => setShowCamera(true)}
-                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg border-2 border-dashed transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${isDarkMode
-                        ? 'border-gray-600 hover:border-green-500 text-gray-300 hover:text-green-400'
-                        : 'border-gray-300 hover:border-green-400 text-gray-600 hover:text-green-600'
+                  <div className="flex items-center gap-3">
+                    <label
+                      htmlFor="sampling-image-upload"
+                      className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all active:scale-95 ${
+                        isDarkMode
+                          ? 'border-slate-700 hover:border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 shadow-sm'
+                          : 'border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 shadow-sm'
                       }`}
-                  >
-                    <PhotoIcon className="h-5 w-5 mr-2" />
-                    Camera
-                  </button>
+                    >
+                      <CloudArrowUpIcon className="h-4 w-4 text-blue-500 animate-bounce" />
+                      <span>Upload Image</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCamera(true)}
+                      className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all active:scale-95 ${
+                        isDarkMode
+                          ? 'border-slate-700 hover:border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 shadow-sm'
+                          : 'border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 shadow-sm'
+                      }`}
+                    >
+                      <PhotoIcon className="h-4 w-4 text-emerald-500" />
+                      <span>Camera</span>
+                    </button>
+                  </div>
 
                   {submitting && (
                     <div className="flex items-center space-x-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                      <span className={`text-sm hidden sm:inline ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                        }`}>Processing...</span>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
+                      <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Uploading...</span>
                     </div>
                   )}
 
-                  {/* Drag & Drop Hint */}
-                  {!submitting && !dragActive && (
-                    <span className={`text-xs ml-auto hidden md:inline ${isDarkMode ? 'text-gray-500' : 'text-gray-400'
-                      }`}>
-                      Drag & drop images here
-                    </span>
-                  )}
-                  {dragActive && (
-                    <span className={`text-xs ml-auto hidden md:inline font-semibold animate-pulse ${isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                      }`}>
-                      Drop images here
+                  {!submitting && (
+                    <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {dragActive ? 'Drop images here' : 'Drag & drop images here'}
                     </span>
                   )}
                 </div>
 
                 {pendingImages.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mt-4">
                     {pendingImages.map((img, idx) => (
-                      <div key={idx} className="relative group">
-                        <div className={`aspect-square rounded-xl overflow-hidden border-2 shadow-sm hover:shadow-lg transition-all duration-200 hover:scale-105 animate-fade-in-scale ${isDarkMode
-                            ? 'border-gray-600 bg-gray-700'
-                            : 'border-gray-200 bg-gray-100'
-                          }`}>
-                          <img
-                            src={img.url}
-                            alt=""
-                            className="object-cover h-full w-full cursor-pointer"
-                            onClick={() => setShowImagePreview({ urls: pendingImages.map(p => p.url), index: idx })}
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                            }}
-                          />
-                          {/* Preview Button */}
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200">
-                            <button
-                              type="button"
-                              onClick={() => setShowImagePreview({ urls: pendingImages.map(p => p.url), index: idx })}
-                              className="bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 shadow-lg hover:scale-110 transition-all duration-200"
-                              title="Preview Image"
-                            >
-                              <EyeIcon className="h-5 w-5" />
-                            </button>
-                          </div>
-                        </div>
+                      <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-700/60 bg-slate-950 group">
+                        <img
+                          src={img.url}
+                          alt=""
+                          className="w-full h-full object-cover cursor-pointer"
+                          onClick={() => setShowImagePreview({ urls: pendingImages.map(p => p.url), index: idx })}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
                         <button
                           type="button"
                           onClick={() => handleRemoveImage(idx)}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-all duration-200 z-10 hover:scale-110 active:scale-95 shadow-md"
+                          className="absolute top-1 right-1 bg-black/70 hover:bg-red-600 text-white rounded-lg p-1 shadow-md transition-all active:scale-90 hover:scale-110 cursor-pointer"
+                          title="Remove image"
                         >
-                          <XMarkIcon className="h-3 w-3" />
+                          <XMarkIcon className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
@@ -1470,10 +1785,28 @@ export default function SamplingPage() {
                 )}
               </div>
 
-              <div className="flex items-center space-x-3 pt-4 border-t dark:border-slate-700/80 border-slate-100">
-                <button type="button" onClick={() => setShowFormModal(false)} disabled={submitting} className={`flex-1 py-2.5 text-sm font-semibold rounded-lg border transition-all ${isDarkMode ? 'border-gray-700 hover:bg-slate-750 text-gray-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                <button type="submit" disabled={submitting} className="flex-1 py-2.5 text-sm font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center space-x-2">
-                  {submitting && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t dark:border-slate-800 border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowFormModal(false)}
+                  disabled={submitting}
+                  className={`px-6 py-2.5 text-sm font-semibold rounded-xl border transition-all ${
+                    isDarkMode
+                      ? 'border-slate-700 hover:bg-slate-800 text-slate-300'
+                      : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-6 py-2.5 text-sm font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 transition-all active:scale-95 flex items-center justify-center space-x-2"
+                >
+                  {submitting && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  )}
                   <span>{formMode === 'edit' ? 'Save Changes' : 'Create Sampling'}</span>
                 </button>
               </div>
@@ -1527,6 +1860,79 @@ export default function SamplingPage() {
         initialIndex={showImagePreview ? showImagePreview.index : 0}
         isDarkMode={isDarkMode}
       />
+
+      {/* Sticker Preview Modal */}
+      {showStickerPreview && currentStickerItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fade-in backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              if (stickerBlobUrlRef.current) {
+                URL.revokeObjectURL(stickerBlobUrlRef.current);
+                stickerBlobUrlRef.current = null;
+              }
+              setShowStickerPreview(false);
+              setStickerPreviewUrl(null);
+              setCurrentStickerItem(null);
+            }
+          }}
+        >
+          <div
+            className={`relative w-full max-w-4xl h-[90vh] rounded-xl overflow-hidden shadow-2xl ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={`flex items-center justify-between p-4 border-b ${isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'}`}>
+              <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                Sample Sticker Preview
+              </h3>
+              <div className="flex items-center space-x-2">
+                {stickerPreviewUrl && !isLoadingStickerPreview && (
+                  <button
+                    onClick={handleFinalStickerDownload}
+                    className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center space-x-2 ${isDarkMode
+                      ? 'text-green-400 hover:bg-green-500/20 border border-green-500/30 bg-green-500/10'
+                      : 'text-green-600 hover:bg-green-100 border border-green-200 bg-green-50'
+                    }`}
+                  >
+                    <ArrowDownTrayIcon className="h-5 w-5" />
+                    <span>Download</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (stickerBlobUrlRef.current) {
+                      URL.revokeObjectURL(stickerBlobUrlRef.current);
+                      stickerBlobUrlRef.current = null;
+                    }
+                    setShowStickerPreview(false);
+                    setStickerPreviewUrl(null);
+                    setCurrentStickerItem(null);
+                  }}
+                  className={`p-2 rounded-lg transition-all duration-200 hover:rotate-90 hover:scale-110 active:scale-95 ${isDarkMode
+                    ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                  }`}
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+            <div className="h-[calc(100%-4rem)] overflow-auto">
+              {isLoadingStickerPreview ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${isDarkMode ? 'border-blue-400' : 'border-blue-600'}`}></div>
+                </div>
+              ) : stickerPreviewUrl ? (
+                <iframe
+                  src={stickerPreviewUrl}
+                  className="w-full h-full"
+                  title="Sticker Preview"
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

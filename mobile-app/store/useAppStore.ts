@@ -28,6 +28,7 @@ interface AppState {
   setDarkMode: (enabled: boolean) => void;
   toggleDarkMode: () => void;
   setSyncSystemTheme: (enabled: boolean) => void;
+  setThemePreference: (sync: boolean, dark: boolean) => void;
 
   // Toast actions
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
@@ -48,6 +49,9 @@ interface AppState {
   backupStatusText: string;
   setBackupStatusText: (text: string) => void;
 }
+
+// Track active toast auto-remove timers to prevent memory leaks
+const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export const useAppStore = create<AppState>((set, get) => ({
   // Auth state
@@ -82,25 +86,40 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSyncSystemTheme: (enabled) =>
     set({ syncSystemTheme: enabled }),
 
+  setThemePreference: (sync, dark) =>
+    set({ syncSystemTheme: sync, isDarkMode: dark }),
+
   // Toast actions
   addToast: (toast) => {
     const id = Date.now().toString() + Math.random().toString(36).slice(2);
     set((state) => ({
       toasts: [...state.toasts, { ...toast, id }],
     }));
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
+    // Auto-remove after 3 seconds — tracked so we can cancel if removed early
+    const timer = setTimeout(() => {
+      toastTimers.delete(id);
       get().removeToast(id);
     }, 3000);
+    toastTimers.set(id, timer);
   },
 
-  removeToast: (id) =>
+  removeToast: (id) => {
+    // Clear auto-remove timer if toast is removed early (prevents orphaned callbacks)
+    const timer = toastTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      toastTimers.delete(id);
+    }
     set((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
-    })),
+    }));
+  },
 
-  clearToasts: () =>
-    set({ toasts: [] }),
+  clearToasts: () => {
+    toastTimers.forEach((timer) => clearTimeout(timer));
+    toastTimers.clear();
+    set({ toasts: [] });
+  },
 
   // Offline state
   isOffline: false,

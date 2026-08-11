@@ -11,9 +11,9 @@ import {
   StyleSheet,
   Image,
   TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
 import Animated, {
   FadeInDown,
   FadeInUp,
@@ -34,9 +34,8 @@ import { storage } from '../../utils/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '../../store/useAppStore';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
 export default function LoginScreen() {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { theme, isDarkMode } = useTheme();
   const { login } = useAuth();
   const addToast = useAppStore((state) => state.addToast);
@@ -182,7 +181,6 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: neutralBg }} edges={['bottom']}>
-      <StatusBar style="light" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}

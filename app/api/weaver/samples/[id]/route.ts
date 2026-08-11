@@ -184,7 +184,7 @@ export async function PUT(
       greighWidth: greighWidth ? parseFloat(greighWidth) : 0,
       finishWidth: finishWidth ? parseFloat(finishWidth) : 0,
       weight: weight ? parseFloat(weight) : 0,
-      gsm: gsm ? parseFloat(gsm) : 0,
+      gsm: gsm !== undefined && gsm !== null ? String(gsm).trim() : '',
       content: content ? sanitizeString(content.trim(), { maxLength: 100 }) : '',
       danier: danier ? sanitizeString(danier.trim(), { maxLength: 50 }) : '',
       count: count ? parseFloat(count) : 0,

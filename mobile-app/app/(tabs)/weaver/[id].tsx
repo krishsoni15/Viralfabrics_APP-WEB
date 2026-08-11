@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, RefreshControl, Platform, TouchableOpacity, ActivityIndicator, Image, TextInput, Modal, KeyboardAvoidingView, ScrollView, Alert, PanResponder, Animated as RNAnimated, Pressable, Dimensions } from 'react-native';
+import { View, Text, RefreshControl, Platform, TouchableOpacity, ActivityIndicator, Image, TextInput, Modal, KeyboardAvoidingView, ScrollView, Alert, PanResponder, Animated as RNAnimated, Pressable, Dimensions, useWindowDimensions, Keyboard } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,6 +26,7 @@ import PdfViewerModal from '../../../components/shared/PdfViewerModal';
 import { generateStickerPdf } from '../../../utils/stickerPdf';
 import { useTheme } from '../../../hooks/useTheme';
 import { useAuth } from '../../../hooks/useAuth';
+import { useResponsiveLayout } from '../../../hooks/useResponsiveLayout';
 import { Colors } from '../../../constants/colors';
 import { Sample, Weaver } from '../../../types';
 import { useAppStore } from '../../../store/useAppStore';
@@ -93,7 +95,7 @@ const SampleCard = React.memo(function SampleCard({
   const hasWeight = item.weight !== undefined && item.weight !== null && Number(item.weight) > 0;
   const hasGreighWidth = item.greighWidth !== undefined && item.greighWidth !== null && Number(item.greighWidth) > 0;
   const hasFinishWidth = item.finishWidth !== undefined && item.finishWidth !== null && Number(item.finishWidth) > 0;
-  const hasGsm = item.gsm !== undefined && item.gsm !== null && Number(item.gsm) > 0;
+  const hasGsm = item.gsm !== undefined && item.gsm !== null && String(item.gsm).trim() !== '';
 
   const gridCell = (label: string, value: string, color: string, hasDivider?: boolean) => (
     <View style={{ 
@@ -301,6 +303,7 @@ const TYPE_OPTIONS = ['Polyester', 'Blend', 'Viscose', 'Cotton', 'Rayon', 'Other
 export default function WeaverDetailScreen() {
   const { id, addSample } = useLocalSearchParams<{ id: string; addSample?: string }>();
   const insets = useSafeAreaInsets();
+  const { isLargeScreen, modalMaxWidth } = useResponsiveLayout();
   const { theme, isDarkMode } = useTheme();
   const { isSuperAdmin, isMaster } = useAuth();
   const queryClient = useQueryClient();
@@ -330,6 +333,7 @@ export default function WeaverDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
 
   // Modals visibility
   const [cameraVisible, setCameraVisible] = useState(false);
@@ -348,21 +352,57 @@ export default function WeaverDetailScreen() {
   const [pdfViewerTitle, setPdfViewerTitle] = useState('');
   const [pdfViewerFilename, setPdfViewerFilename] = useState('');
 
-  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const modalTranslateY = React.useRef(new RNAnimated.Value(800)).current;
+  const formScrollOffset = React.useRef(0);
+  const formTouchStartPageY = React.useRef(0);
+  const formSheetY = React.useRef(0);
 
-  const pan = React.useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 200 })).current;
+  const filterScrollOffset = React.useRef(0);
+  const filterTouchStartPageY = React.useRef(0);
+  const filterSheetY = React.useRef(0);
+
+  const FAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 220 : 170;
+  const pan = React.useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - FAB_BOTTOM_OFFSET })).current;
+  const fabX = React.useRef(screenWidth - 68);
+  const fabY = React.useRef(screenHeight - FAB_BOTTOM_OFFSET);
+
+  const dimensionsRef = React.useRef({ screenWidth, screenHeight });
+  dimensionsRef.current = { screenWidth, screenHeight };
+
+  React.useEffect(() => {
+    const isSnappedLeft = fabX.current < screenWidth / 2;
+    const targetX = isSnappedLeft ? 16 : screenWidth - 68;
+    const targetY = Math.min(Math.max(fabY.current, 120), screenHeight - FAB_BOTTOM_OFFSET);
+    
+    fabX.current = targetX;
+    fabY.current = targetY;
+    
+    RNAnimated.spring(pan, {
+      toValue: { x: targetX, y: targetY },
+      useNativeDriver: false,
+      tension: 40,
+      friction: 12,
+    }).start();
+  }, [screenWidth, screenHeight]);
 
   const fabPanResponder = React.useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
-    onPanResponderGrant: () => { pan.setOffset({ x: (pan.x as any)._value || 0, y: (pan.y as any)._value || 0 }); pan.setValue({ x: 0, y: 0 }); },
+    onPanResponderGrant: () => { pan.setOffset({ x: fabX.current, y: fabY.current }); pan.setValue({ x: 0, y: 0 }); },
     onPanResponderMove: RNAnimated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-    onPanResponderRelease: () => {
+    onPanResponderRelease: (e, gestureState) => {
       pan.flattenOffset();
-      const snapX = (pan.x as any)._value < screenWidth / 2 ? 16 : screenWidth - 68;
-      const snapY = Math.min(Math.max((pan.y as any)._value, 120), screenHeight - 200);
+      const currentScreenWidth = dimensionsRef.current.screenWidth;
+      const currentScreenHeight = dimensionsRef.current.screenHeight;
+
+      const currentX = fabX.current + gestureState.dx;
+      const currentY = fabY.current + gestureState.dy;
+      const snapX = currentX < currentScreenWidth / 2 ? 16 : currentScreenWidth - 68;
+      const snapY = Math.min(Math.max(currentY, 120), currentScreenHeight - FAB_BOTTOM_OFFSET);
+      fabX.current = snapX;
+      fabY.current = snapY;
       RNAnimated.spring(pan, { toValue: { x: snapX, y: snapY }, useNativeDriver: false, tension: 40, friction: 12 }).start();
     },
   })).current;
@@ -396,89 +436,97 @@ export default function WeaverDetailScreen() {
 
   const modalPanResponder = React.useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - formSheetY.current;
+        return touchY > 0 && touchY <= 85;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: () => false,
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          modalTranslateY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return formScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: () => {
+        Keyboard.dismiss();
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          modalTranslateY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
-          if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          closeFormModalRef.current();
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          closeFormModal();
         } else {
-          RNAnimated.timing(modalTranslateY, {
+          RNAnimated.spring(modalTranslateY, {
             toValue: 0,
-            duration: 200,
-            useNativeDriver: Platform.OS !== 'web',
+            useNativeDriver: false,
+            tension: 65,
+            friction: 11,
           }).start();
         }
-      }
+      },
     })
   ).current;
 
   const forceCloseForm = useCallback(() => {
-    RNAnimated.timing(modalTranslateY, {
-      toValue: 800,
-      duration: 180,
-      useNativeDriver: Platform.OS !== 'web',
-    }).start(() => {
-      setShowForm(false);
-    });
-  }, [modalTranslateY]);
+    setShowForm(false);
+  }, []);
 
   const closeFormModal = useCallback(() => {
-    forceCloseForm();
-  }, [forceCloseForm]);
+    setShowForm(false);
+  }, []);
 
   closeFormModalRef.current = closeFormModal;
 
-  const filterModalTranslateY = React.useRef(new RNAnimated.Value(800)).current;
+  const filterModalTranslateY = React.useRef(new RNAnimated.Value(0)).current;
 
   const filterPanResponder = React.useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (e, gs) => {
+        const touchY = e.nativeEvent.pageY - filterSheetY.current;
+        return touchY > 0 && touchY <= 85;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: () => false,
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          filterModalTranslateY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return filterScrollOffset.current <= 0 && gs.dy > 0 && Math.abs(gs.dy) > Math.abs(gs.dx);
+      },
+      onPanResponderGrant: () => {
+        Keyboard.dismiss();
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          filterModalTranslateY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
-          if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          RNAnimated.timing(filterModalTranslateY, {
-            toValue: 800,
-            duration: 180,
-            useNativeDriver: Platform.OS !== 'web',
-          }).start(() => {
-            setShowFilterModal(false);
-          });
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          closeFilterModal();
         } else {
-          RNAnimated.timing(filterModalTranslateY, {
+          RNAnimated.spring(filterModalTranslateY, {
             toValue: 0,
-            duration: 200,
-            useNativeDriver: Platform.OS !== 'web',
+            useNativeDriver: false,
+            tension: 65,
+            friction: 11,
           }).start();
         }
-      }
+      },
     })
   ).current;
 
   const closeFilterModal = useCallback(() => {
-    RNAnimated.timing(filterModalTranslateY, {
-      toValue: 800,
-      duration: 180,
-      useNativeDriver: Platform.OS !== 'web',
-    }).start(() => {
-      setShowFilterModal(false);
-    });
-  }, [filterModalTranslateY]);
+    setShowFilterModal(false);
+  }, []);
 
   React.useEffect(() => {
     if (addSample === 'true') {
@@ -489,23 +537,23 @@ export default function WeaverDetailScreen() {
 
   React.useEffect(() => {
     if (showForm) {
-      modalTranslateY.setValue(800);
-      RNAnimated.timing(modalTranslateY, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: Platform.OS !== 'web',
-      }).start();
+      modalTranslateY.setValue(0);
+    } else {
+      const timer = setTimeout(() => {
+        modalTranslateY.setValue(0);
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [showForm]);
 
   React.useEffect(() => {
     if (showFilterModal) {
-      filterModalTranslateY.setValue(800);
-      RNAnimated.timing(filterModalTranslateY, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: Platform.OS !== 'web',
-      }).start();
+      filterModalTranslateY.setValue(0);
+    } else {
+      const timer = setTimeout(() => {
+        filterModalTranslateY.setValue(0);
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [showFilterModal]);
 
@@ -675,7 +723,7 @@ export default function WeaverDetailScreen() {
         greighWidth: formData.greighWidth ? Number(formData.greighWidth) : undefined,
         finishWidth: formData.finishWidth ? Number(formData.finishWidth) : undefined,
         weight: formData.weight ? Number(formData.weight) : undefined,
-        gsm: formData.gsm ? Number(formData.gsm) : undefined,
+        gsm: formData.gsm ? formData.gsm.trim() : undefined,
         content: formData.content.trim(), danier: formData.danier.trim(), count: formData.count.trim(),
         reed: formData.reed.trim(), pick: formData.pick.trim(),
         greighRate: formData.greighRate ? Number(formData.greighRate) : undefined,
@@ -763,10 +811,11 @@ export default function WeaverDetailScreen() {
 
     try {
       const { uri, base64 } = await generateStickerPdf({
+        type: 'sample',
         qualityName: (sample as any).qualityName || '',
         weaverName: weaver?.name || '',
         width: (sample as any).finishWidth ? Number((sample as any).finishWidth) : undefined,
-        gsm: (sample as any).gsm ? Number((sample as any).gsm) : undefined,
+        gsm: (sample as any).gsm ? String((sample as any).gsm).trim() : undefined,
         content: (sample as any).content || '',
         count: countVal || undefined,
         rxP: rxPVal || undefined,
@@ -776,7 +825,7 @@ export default function WeaverDetailScreen() {
       setPdfViewerLocalUri(uri);
       setPdfViewerLocalBase64(base64);
       setPdfViewerUrl('');
-      setPdfViewerTitle(`Fabric Sticker — ${(sample as any).qualityName || 'Sticker'}`);
+      setPdfViewerTitle(`Sample Sticker — ${(sample as any).qualityName || 'Sticker'}`);
       setPdfViewerFilename(filename);
       setReopenFormOnStickerClose(true);
       setShowForm(false);
@@ -799,10 +848,11 @@ export default function WeaverDetailScreen() {
 
     try {
       const { uri, base64 } = await generateStickerPdf({
+        type: 'sample',
         qualityName: sample.qualityName || '',
         weaverName: weaver?.name || '',
         width: sample.finishWidth ? Number(sample.finishWidth) : undefined,
-        gsm: sample.gsm ? Number(sample.gsm) : undefined,
+        gsm: sample.gsm ? String(sample.gsm).trim() : undefined,
         content: sample.content || '',
         count: countVal || undefined,
         rxP: rxPVal || undefined,
@@ -812,7 +862,7 @@ export default function WeaverDetailScreen() {
       setPdfViewerLocalUri(uri);
       setPdfViewerLocalBase64(base64);
       setPdfViewerUrl('');
-      setPdfViewerTitle(`Fabric Sticker — ${sample.qualityName || 'Sticker'}`);
+      setPdfViewerTitle(`Sample Sticker — ${sample.qualityName || 'Sticker'}`);
       setPdfViewerFilename(filename);
       setReopenFormOnStickerClose(false);
       setPdfViewerVisible(true);
@@ -822,8 +872,8 @@ export default function WeaverDetailScreen() {
   }, [weaver]);
 
   const renderFormField = (label: string, value: string, keyName: string, placeholder?: string, keyboard?: 'default' | 'numeric') => (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 6 }}>{label}</Text>
+    <View style={{ marginBottom: 10 }}>
+      <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={(t) => setFormData(p => ({ ...p, [keyName]: t }))}
@@ -833,8 +883,9 @@ export default function WeaverDetailScreen() {
         style={{
           backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc',
           borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0',
-          borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13,
-          fontSize: 15, color: theme.text
+          borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9,
+          fontSize: 14.5, color: theme.text,
+          height: 42,
         }}
       />
     </View>
@@ -903,59 +954,6 @@ export default function WeaverDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Count indicator & Delete All */}
-      <View style={{ 
-        paddingHorizontal: 20, 
-        paddingBottom: 8, 
-        flexDirection: 'row', 
-        justifyContent: 'space-between', 
-        alignItems: 'center' 
-      }}>
-        <Text style={{ fontSize: 13, color: theme.textSecondary, fontWeight: '600' }}>
-          {search.trim() || totalActiveFiltersCount > 0 ? (
-            <Text>
-              Showing <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{filteredSamples.length}</Text> of <Text style={{ fontWeight: '800', color: theme.text }}>{samples.length}</Text>
-            </Text>
-          ) : (
-            <Text>
-              Total Samples: <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{samples.length}</Text>
-            </Text>
-          )}
-        </Text>
-        {isMaster && samples.length > 0 && (
-          <TouchableOpacity
-            onPress={() => {
-              if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setShowDeleteAllConfirm(true);
-            }}
-            activeOpacity={0.7}
-            disabled={deletingAll}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2',
-              borderColor: isDarkMode ? '#991b1b' : '#fca5a5',
-              borderWidth: 1,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 10,
-              gap: 4
-            }}
-          >
-            {deletingAll ? (
-              <ActivityIndicator size="small" color={Colors.error[500]} />
-            ) : (
-              <>
-                <Trash2 size={12} color={isDarkMode ? '#fca5a5' : '#c53030'} />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#fca5a5' : '#c53030' }}>
-                  Delete All
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
-      </View>
-
       {/* Samples List */}
       {samplesQuery.isLoading ? (
         <View style={{ flex: 1, paddingTop: 10 }}>
@@ -968,21 +966,79 @@ export default function WeaverDetailScreen() {
           subtitle={search ? 'No samples match your search.' : 'Tap the + button to add a sample.'}
         />
       ) : (
-        <FlatList
+        <FlashList
           data={paginatedSamples}
           keyExtractor={(item: Sample) => item._id}
+          drawDistance={800}
+          ListHeaderComponent={() => (
+            <View style={{ 
+              paddingHorizontal: 20, 
+              paddingVertical: 8,
+              flexDirection: 'row', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              backgroundColor: theme.background
+            }}>
+              <Text style={{ fontSize: 13, color: theme.textSecondary, fontWeight: '600' }}>
+                {search.trim() || totalActiveFiltersCount > 0 ? (
+                  <Text>
+                    Showing <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{filteredSamples.length}</Text> of <Text style={{ fontWeight: '800', color: theme.text }}>{samples.length}</Text>
+                  </Text>
+                ) : (
+                  <Text>
+                    Total Samples: <Text style={{ fontWeight: '800', color: isDarkMode ? Colors.primary[400] : Colors.primary[600] }}>{samples.length}</Text>
+                  </Text>
+                )}
+              </Text>
+              {isMaster && samples.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setShowDeleteAllConfirm(true);
+                  }}
+                  activeOpacity={0.7}
+                  disabled={deletingAll}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2',
+                    borderColor: isDarkMode ? '#991b1b' : '#fca5a5',
+                    borderWidth: 1,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 10,
+                    gap: 4
+                  }}
+                >
+                  {deletingAll ? (
+                    <ActivityIndicator size="small" color={Colors.error[500]} />
+                  ) : (
+                    <>
+                      <Trash2 size={12} color={isDarkMode ? '#fca5a5' : '#c53030'} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#fca5a5' : '#c53030' }}>
+                        Delete All
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
           renderItem={({ item, index }) => <SampleCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} onPreviewImages={handleOpenPreview} onOpenSticker={openStickerPreview} />}
           contentContainerStyle={{ paddingTop: 4, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.2}
-          initialNumToRender={5}
-          maxToRenderPerBatch={5}
-          windowSize={5}
           ListFooterComponent={
             loadingMore ? (
               <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
                 <ActivityIndicator size="small" color={Colors.primary[500]} />
+              </View>
+            ) : (visibleCount >= filteredSamples.length && filteredSamples.length > 0) ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 11, color: theme.textTertiary, fontStyle: 'italic' }}>
+                  No more samples to load
+                </Text>
               </View>
             ) : null
           }
@@ -1004,9 +1060,10 @@ export default function WeaverDetailScreen() {
         <RNAnimated.View
           {...fabPanResponder.panHandlers}
           style={{
-            left: pan.x,
-            top: pan.y,
             position: 'absolute',
+            left: 0,
+            top: 0,
+            transform: [{ translateX: pan.x }, { translateY: pan.y }],
             zIndex: 9999,
           }}
         >
@@ -1037,36 +1094,56 @@ export default function WeaverDetailScreen() {
         </RNAnimated.View>
       )}
 
-      {/* Create/Edit Modal */}
-      <Modal visible={showForm} transparent={true} animationType="none" statusBarTranslucent={true} onRequestClose={closeFormModal}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <Modal visible={showForm} transparent={true} animationType={isLargeScreen ? 'fade' : 'slide'} statusBarTranslucent={true} navigationBarTranslucent={true} onRequestClose={closeFormModal}>
+
+        <View style={{
+          flex: 1,
+          justifyContent: isLargeScreen ? 'center' : 'flex-end',
+          alignItems: isLargeScreen ? 'center' : 'stretch',
+        }}>
           {/* Clickable Backdrop */}
-          <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={closeFormModal} />
+          <RNAnimated.View
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'transparent',
+            }}
+          >
+            <Pressable onPress={closeFormModal} style={{ flex: 1 }} />
+          </RNAnimated.View>
           
-          <RNAnimated.View style={{
-            backgroundColor: isDarkMode ? '#1e293b' : '#fff',
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingTop: 12,
-            paddingHorizontal: 24,
-            paddingBottom: 24 + insets.bottom,
-            height: '92%',
-            width: '100%',
-            transform: [{ translateY: modalTranslateY }],
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 12,
-            elevation: 20,
-          }}>
+          <RNAnimated.View
+            onLayout={(e) => {
+              formSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...modalPanResponder.panHandlers}
+            style={{
+              backgroundColor: isDarkMode ? '#1e293b' : '#fff',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+              borderBottomRightRadius: isLargeScreen ? 24 : 0,
+              paddingTop: 12,
+              paddingHorizontal: 24,
+              paddingBottom: isLargeScreen ? 24 : 0,
+              height: isLargeScreen ? '92%' : '92%',
+              width: '100%',
+              maxWidth: isLargeScreen ? 850 : '100%',
+              transform: [{ translateY: modalTranslateY }],
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              elevation: 20,
+            }}
+          >
             <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 130}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 120}
               style={{ flex: 1 }}
             >
               {/* Swipe Drag Handle Bar */}
               <View 
-                {...modalPanResponder.panHandlers} 
                 style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}
               >
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#d1d5db' }} />
@@ -1097,10 +1174,13 @@ export default function WeaverDetailScreen() {
               </View>
 
               <ScrollView
+                ref={scrollViewRef}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 180 + insets.bottom }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 220 : 220 }}
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
+                keyboardDismissMode="none"
+                onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                scrollEventThrottle={16}
               >
                 {/* ─── Quality Information ─── */}
                 <View style={{ borderBottomWidth: 1, borderBottomColor: theme.borderLight, paddingBottom: 6, marginBottom: 12 }}>
@@ -1109,15 +1189,14 @@ export default function WeaverDetailScreen() {
                 {renderFormField('Quality Name *', formData.qualityName, 'qualityName', 'Quality name')}
                 
                 {/* Type Selector Dropdown */}
-                <View style={{ marginBottom: 14, zIndex: 100 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 6 }}>Type</Text>
+                <View style={{ marginBottom: 10, zIndex: 100 }}>
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>Type</Text>
                   <View
                     style={{
-                      height: 50,
+                      height: 42,
                       flexDirection: 'row',
                       alignItems: 'center',
-                      paddingHorizontal: 14,
-                      borderRadius: 14,
+                      borderRadius: 12,
                       borderWidth: 1,
                       borderColor: showTypeDropdown ? (isDarkMode ? Colors.primary[400] : Colors.primary[600]) : (isDarkMode ? '#334155' : '#e2e8f0'),
                       backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc',
@@ -1358,7 +1437,7 @@ export default function WeaverDetailScreen() {
                     {renderFormField('Weight (KG)', formData.weight, 'weight', 'e.g., 8.0', 'numeric')}
                   </View>
                   <View style={{ flex: 1 }}>
-                    {renderFormField('GSM', formData.gsm, 'gsm', 'e.g., 72.5', 'numeric')}
+                    {renderFormField('GSM', formData.gsm, 'gsm', 'e.g., 72.5 or 100-150', 'default')}
                   </View>
                 </View>
 
@@ -1430,7 +1509,7 @@ export default function WeaverDetailScreen() {
 
       {/* Delete Modal */}
       <Modal visible={!!deleteTarget} animationType="fade" transparent onRequestClose={() => setDeleteTarget(null)}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 24 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)', padding: 24 }}>
           <View style={{
             backgroundColor: isDarkMode ? '#1e293b' : '#fff',
             borderRadius: 24,
@@ -1462,7 +1541,7 @@ export default function WeaverDetailScreen() {
 
       {/* Delete All Samples Modal */}
       <Modal visible={showDeleteAllConfirm} animationType="fade" transparent onRequestClose={() => setShowDeleteAllConfirm(false)}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 24 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)', padding: 24 }}>
           <View style={{
             backgroundColor: isDarkMode ? '#1e293b' : '#fff',
             borderRadius: 24,
@@ -1506,27 +1585,51 @@ export default function WeaverDetailScreen() {
       />
 
       {/* Filter Modal */}
-      <Modal visible={showFilterModal} animationType="none" transparent statusBarTranslucent={true} onRequestClose={closeFilterModal}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={closeFilterModal} />
-          <RNAnimated.View style={{
-            backgroundColor: isDarkMode ? '#1e293b' : '#fff',
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingTop: 12,
-            paddingHorizontal: 24,
-            paddingBottom: 24 + insets.bottom,
-            maxHeight: screenHeight * 0.8,
-            width: '100%',
-            transform: [{ translateY: filterModalTranslateY }],
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 12,
-            elevation: 20,
-          }}>
+      <Modal visible={showFilterModal} animationType={isLargeScreen ? 'fade' : 'slide'} transparent statusBarTranslucent={true} navigationBarTranslucent={true} onRequestClose={closeFilterModal}>
+
+        <View style={{
+          flex: 1,
+          justifyContent: isLargeScreen ? 'center' : 'flex-end',
+          alignItems: isLargeScreen ? 'center' : 'stretch',
+        }}>
+          {/* Clickable Backdrop */}
+          <RNAnimated.View
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'transparent',
+            }}
+          >
+            <Pressable onPress={closeFilterModal} style={{ flex: 1 }} />
+          </RNAnimated.View>
+          
+          <RNAnimated.View
+            onLayout={(e) => {
+              filterSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...filterPanResponder.panHandlers}
+            style={{
+              backgroundColor: isDarkMode ? '#1e293b' : '#fff',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+              borderBottomRightRadius: isLargeScreen ? 24 : 0,
+              paddingTop: 12,
+              paddingHorizontal: 24,
+              paddingBottom: isLargeScreen ? 24 : 0,
+              height: isLargeScreen ? 550 : 520,
+              width: '100%',
+              maxWidth: isLargeScreen ? 800 : '100%',
+              transform: [{ translateY: filterModalTranslateY }],
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              elevation: 20,
+            }}
+          >
             {/* Drag Handle Indicator */}
-            <View {...filterPanResponder.panHandlers} style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}>
+            <View style={{ width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 4, backgroundColor: 'transparent' }}>
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#d1d5db' }} />
             </View>
 
@@ -1560,6 +1663,8 @@ export default function WeaverDetailScreen() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 24 + insets.bottom }}
               keyboardShouldPersistTaps="handled"
+              onScroll={(e) => { filterScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+              scrollEventThrottle={16}
             >
               {/* Sort Order Section */}
               <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Sort By</Text>
@@ -1684,6 +1789,7 @@ export default function WeaverDetailScreen() {
         filename={pdfViewerFilename}
         localUri={pdfViewerLocalUri}
         localBase64={pdfViewerLocalBase64}
+        addToast={addToast}
         onClose={() => {
           setPdfViewerVisible(false);
           setPdfViewerLocalUri(undefined);

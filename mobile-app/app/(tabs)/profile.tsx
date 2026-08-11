@@ -1,8 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, Switch, Alert, Platform, Dimensions, useColorScheme, TextInput, Modal, KeyboardAvoidingView, Pressable, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, ZoomIn, ZoomOut, FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, Easing } from 'react-native-reanimated';
 import { User, Shield, Phone, MapPin, Moon, Sun, Smartphone, LogOut, Users, FileText, ChevronRight, Lock, Clock, Activity, Trash2, Edit2, X, Camera, Image as ImageIcon } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Card from '../../components/ui/Card';
@@ -13,6 +13,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAppStore } from '../../store/useAppStore';
 import { storage } from '../../utils/storage';
 import { Colors } from '../../constants/colors';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { getInitials, isSuperAdmin, formatDateTime, getProfilePhotoUrl, uploadSingleImage } from '../../utils/helpers';
 import api from '../../services/api';
 
@@ -24,7 +25,7 @@ try {
 }
 import CustomCameraModal from '../../components/shared/CustomCameraModal';
 
-const { width } = Dimensions.get('window');
+
 
 function MenuItem({ icon, label, onPress, danger, isLast }: { icon: React.ReactNode; label: string; onPress: () => void; danger?: boolean; isLast?: boolean }) {
   const { theme, isDarkMode } = useTheme();
@@ -51,9 +52,10 @@ export default function ProfileScreen() {
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const { user, logout, logoutAll, isSuperAdmin: isAdmin } = useAuth();
-  const { setDarkMode, syncSystemTheme, setSyncSystemTheme, setUser, addToast } = useAppStore();
+  const { setDarkMode, syncSystemTheme, setSyncSystemTheme, setThemePreference, setUser, addToast, isOffline } = useAppStore();
   const isMaster = user?.role === 'master';
   const systemColorScheme = useColorScheme();
+  const { isLargeScreen, modalMaxWidth, containerMaxWidth } = useResponsiveLayout();
 
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [editName, setEditName] = useState('');
@@ -66,6 +68,7 @@ export default function ProfileScreen() {
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [isPhotoSheetVisible, setIsPhotoSheetVisible] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [isThemeChanging, setIsThemeChanging] = useState(false);
   const [logoutAllModalVisible, setLogoutAllModalVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
@@ -77,6 +80,16 @@ export default function ProfileScreen() {
       width: `${countdownProgress.value * 100}%`,
     };
   });
+
+  const logoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (logoutIntervalRef.current) {
+        clearInterval(logoutIntervalRef.current);
+      }
+    };
+  }, []);
 
   const handleRemoveProfilePhoto = async () => {
     Alert.alert(
@@ -232,20 +245,19 @@ export default function ProfileScreen() {
   };
 
 
-  const handleSyncSystemToggle = useCallback(async (val: boolean) => {
+  const handleThemePreferenceChange = useCallback(async (sync: boolean, dark: boolean) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSyncSystemTheme(val);
-    await storage.setSyncSystemTheme(val);
-    if (val) {
-      setDarkMode(systemColorScheme === 'dark');
-    }
-  }, [systemColorScheme]);
-
-  const handleDarkModeToggle = useCallback(async (val: boolean) => {
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDarkMode(val);
-    await storage.setDarkMode(val);
-  }, []);
+    setIsThemeChanging(true);
+    setTimeout(async () => {
+      const resolvedDark = sync ? (systemColorScheme === 'dark') : dark;
+      setThemePreference(sync, resolvedDark);
+      await storage.setSyncSystemTheme(sync);
+      if (!sync) {
+        await storage.setDarkMode(dark);
+      }
+      setIsThemeChanging(false);
+    }, 400);
+  }, [systemColorScheme, setThemePreference]);
 
   const handleLogout = useCallback(() => {
     setLogoutModalVisible(true);
@@ -256,8 +268,9 @@ export default function ProfileScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        <View style={{ flex: 1, width: '100%', maxWidth: containerMaxWidth, alignSelf: 'center' }}>
         {/* Banner header */}
         <View style={{ 
           height: 120, 
@@ -444,7 +457,7 @@ export default function ProfileScreen() {
                     width: 6,
                     height: 6,
                     borderRadius: 3,
-                    backgroundColor: '#10b981', 
+                    backgroundColor: isOffline ? '#eab308' : '#10b981', 
                     marginRight: 6,
                   }} />
                   <Text style={{
@@ -576,8 +589,7 @@ export default function ProfileScreen() {
               {/* Light Option */}
               <Pressable
                 onPress={() => {
-                  handleSyncSystemToggle(false);
-                  handleDarkModeToggle(false);
+                  handleThemePreferenceChange(false, false);
                 }}
                 style={({ pressed }) => ({
                   flex: 1,
@@ -607,8 +619,7 @@ export default function ProfileScreen() {
               {/* Dark Option */}
               <Pressable
                 onPress={() => {
-                  handleSyncSystemToggle(false);
-                  handleDarkModeToggle(true);
+                  handleThemePreferenceChange(false, true);
                 }}
                 style={({ pressed }) => ({
                   flex: 1,
@@ -638,7 +649,7 @@ export default function ProfileScreen() {
               {/* System Option */}
               <Pressable
                 onPress={() => {
-                  handleSyncSystemToggle(true);
+                  handleThemePreferenceChange(true, systemColorScheme === 'dark');
                 }}
                 style={({ pressed }) => ({
                   flex: 1,
@@ -696,32 +707,33 @@ export default function ProfileScreen() {
             <Text style={{ fontSize: 16, fontWeight: '800', color: isDarkMode ? '#f87171' : '#b91c1c' }}>Sign Out</Text>
           </Pressable>
 
-          <Pressable 
-            onPress={handleLogoutAll} 
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'transparent',
-              borderColor: theme.border,
-              borderWidth: 1.5,
-              height: 56,
-              borderRadius: 20,
-              gap: 10,
-              marginTop: 12,
-              width: '100%',
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Lock size={18} color={theme.textSecondary} />
-            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textSecondary }}>Sign Out All Devices</Text>
-          </Pressable>
+          {(isMaster || user?.role === 'superadmin') && (
+            <Pressable 
+              onPress={handleLogoutAll} 
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'transparent',
+                borderColor: theme.border,
+                borderWidth: 1.5,
+                height: 56,
+                borderRadius: 20,
+                gap: 10,
+                marginTop: 12,
+                width: '100%',
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Lock size={18} color={theme.textSecondary} />
+              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textSecondary }}>Sign Out All Devices</Text>
+            </Pressable>
+          )}
           
           <Text style={{ textAlign: 'center', marginTop: 28, fontSize: 12, color: theme.textTertiary, fontWeight: '600', letterSpacing: 0.5 }}>VIRAL FABRICS CRM v1.0.0</Text>
         </Animated.View>
+        </View>
       </ScrollView>
-
-      {/* Edit Profile Modal */}
       <Modal
         visible={isEditModalVisible}
         transparent={true}
@@ -730,14 +742,14 @@ export default function ProfileScreen() {
       >
         <View style={{
           flex: 1,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          backgroundColor: 'rgba(0,0,0,0.15)',
           justifyContent: 'center',
           alignItems: 'center',
           padding: 20
         }}>
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={{ width: '100%', maxWidth: 440 }}
+            style={{ width: '100%', maxWidth: modalMaxWidth }}
           >
             <Card 
               style={{
@@ -1071,8 +1083,9 @@ export default function ProfileScreen() {
         <Pressable 
           style={{
             flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
+            backgroundColor: 'rgba(0,0,0,0.15)',
+            justifyContent: isLargeScreen ? 'center' : 'flex-end',
+            alignItems: isLargeScreen ? 'center' : 'stretch',
           }}
           onPress={() => setIsPhotoSheetVisible(false)}
         >
@@ -1081,9 +1094,12 @@ export default function ProfileScreen() {
               backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
+              borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+              borderBottomRightRadius: isLargeScreen ? 24 : 0,
               padding: 20,
-              paddingBottom: (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
+              paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
               width: '100%',
+              maxWidth: modalMaxWidth,
               borderWidth: 1,
               borderColor: theme.border,
             }}
@@ -1484,11 +1500,15 @@ export default function ProfileScreen() {
                       countdownProgress.value = withTiming(0, { duration: 3000 });
                       
                       let timeLeft = 3;
-                      const interval = setInterval(async () => {
+                      if (logoutIntervalRef.current) clearInterval(logoutIntervalRef.current);
+                      logoutIntervalRef.current = setInterval(async () => {
                         timeLeft -= 1;
                         setLogoutCountdown(timeLeft);
                         if (timeLeft <= 0) {
-                          clearInterval(interval);
+                          if (logoutIntervalRef.current) {
+                            clearInterval(logoutIntervalRef.current);
+                            logoutIntervalRef.current = null;
+                          }
                           try {
                             await logoutAll();
                           } catch (err) {
@@ -1524,6 +1544,38 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Theme switching loading indicator */}
+      {isThemeChanging && (
+        <Modal transparent animationType="fade" visible={isThemeChanging}>
+          <View style={{
+            flex: 1,
+            backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+            <View style={{
+              padding: 24,
+              borderRadius: 16,
+              backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+              borderWidth: 1,
+              borderColor: theme.border,
+              alignItems: 'center',
+              gap: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 10,
+              elevation: 5,
+            }}>
+              <ActivityIndicator size="small" color={Colors.primary[600]} />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textSecondary }}>
+                Updating Theme...
+              </Text>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }

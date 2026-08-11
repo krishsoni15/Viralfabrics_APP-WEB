@@ -50,6 +50,13 @@ export async function GET(
       );
     }
 
+    if (sessionUser.role !== "master") {
+      return new Response(
+        JSON.stringify({ success: false, message: "Access Denied. Only master can access this PDF." }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     await dbConnect();
 
     // Fetch the order

@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
+import "./User";
 
 export interface IPurchaseOrderSpecs {
   finishGsm?: string;
@@ -16,16 +17,21 @@ export interface IPurchaseOrder extends Document {
   supplierName?: string;
   supplierAddress?: string;
   supplierGstin?: string;
+  supplierPhone?: string;
   quality?: string;
   pcsMtr?: string;
   delivery?: string;
   rate?: string;
+  greighMtr?: string;
+  greighLeadTime?: string;
+  images?: string[];
   paymentTerms?: string;
   specs: IPurchaseOrderSpecs;
   notes?: string;
   financialYear: string;
   createdBy: mongoose.Types.ObjectId;
   softDeleted: boolean;
+  status: 'Pending' | 'Completed';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -81,6 +87,11 @@ const PurchaseOrderSchema = new Schema<IPurchaseOrder>({
     uppercase: true,
     maxlength: [20, "Supplier GSTIN cannot exceed 20 characters"]
   },
+  supplierPhone: {
+    type: String,
+    trim: true,
+    maxlength: [20, "Supplier phone cannot exceed 20 characters"]
+  },
   quality: {
     type: String,
     trim: true,
@@ -100,6 +111,20 @@ const PurchaseOrderSchema = new Schema<IPurchaseOrder>({
     type: String,
     trim: true,
     maxlength: [100, "Rate cannot exceed 100 characters"]
+  },
+  greighMtr: {
+    type: String,
+    trim: true,
+    maxlength: [50, "Greigh meters cannot exceed 50 characters"]
+  },
+  greighLeadTime: {
+    type: String,
+    trim: true,
+    maxlength: [100, "Greigh lead time cannot exceed 100 characters"]
+  },
+  images: {
+    type: [String],
+    default: []
   },
   paymentTerms: {
     type: String,
@@ -131,6 +156,12 @@ const PurchaseOrderSchema = new Schema<IPurchaseOrder>({
   softDeleted: {
     type: Boolean,
     default: false,
+    index: true
+  },
+  status: {
+    type: String,
+    enum: ['Pending', 'Completed'],
+    default: 'Pending',
     index: true
   }
 }, {

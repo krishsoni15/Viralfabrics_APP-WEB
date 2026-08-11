@@ -2929,7 +2929,7 @@ export default function WeaverPage() {
                       </p>
                     </div>
                   )}
-                  {viewingSample.gsm > 0 && (
+                  {!!viewingSample.gsm && (
                     <div>
                       <h3 className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'
                         }`}>GSM</h3>

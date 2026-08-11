@@ -19,11 +19,13 @@ export default function Home() {
         const tokenExpiry = parsedUser.exp || 0;
         const now = Math.floor(Date.now() / 1000);
 
+        const destination = parsedUser.role === 'party' ? '/orders' : '/dashboard';
+
         // If we have expiration time, check it
         if (tokenExpiry > 0) {
-          // If token is not expired, redirect to dashboard immediately
+          // If token is not expired, redirect to destination immediately
           if (tokenExpiry > now) {
-            router.push('/dashboard');
+            router.push(destination);
             setIsChecking(false);
             return;
           } else {
@@ -34,7 +36,7 @@ export default function Home() {
         } else {
           // No expiration time stored (old session), assume valid and redirect
           // Will be validated by dashboard layout
-          router.push('/dashboard');
+          router.push(destination);
           setIsChecking(false);
           return;
         }

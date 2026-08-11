@@ -2,7 +2,6 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
   View,
   Text,
-  FlatList,
   RefreshControl,
   TouchableOpacity,
   ScrollView,
@@ -11,7 +10,6 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
-  Image,
   TextInput,
   PanResponder,
   Animated as RNAnimated,
@@ -19,9 +17,13 @@ import {
   KeyboardAvoidingView,
   Share,
   Linking,
+  Keyboard,
   TouchableWithoutFeedback,
   useWindowDimensions,
+  BackHandler,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { FlashList } from '@shopify/flash-list';
 import * as FileSystem from 'expo-file-system/legacy';
 let Sharing: any = null;
 try {
@@ -30,9 +32,9 @@ try {
   // Safe fallback for builds missing native sharing modules
 }
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate } from 'react-native-reanimated';
 import {
@@ -69,6 +71,10 @@ import {
   Package,
   RefreshCw,
   WifiOff,
+  Zap,
+  PlusCircle,
+  Tag,
+  Layers,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -81,6 +87,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import DatePickerModal from '../../components/shared/DatePickerModal';
 import { useTheme } from '../../hooks/useTheme';
 import { Colors } from '../../constants/colors';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { formatDate, formatDateTime, formatShortDateTime, getDisplayOrderId, getProcessBadgeStyles, resolveImageUrl } from '../../utils/helpers';
 import { Order } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
@@ -95,6 +102,8 @@ import DeleteConfirmModal from '../../components/shared/DeleteConfirmModal';
 import PdfViewer from '../../components/orders/PdfViewer';
 import PdfViewerModal from '../../components/shared/PdfViewerModal';
 import { savePdfToDevice } from '../../utils/pdfUtils';
+import { generateOrderHtml } from '../../utils/orderPdfTemplate';
+import * as Print from 'expo-print';
 
 const getFullImageUrl = (url: string | null | undefined) => {
   return resolveImageUrl(url) || null;
@@ -116,31 +125,9 @@ const AutoRatioImage = ({
   totalCount?: number;
 }) => {
   const { isDarkMode } = useTheme();
-  const [aspectRatio, setAspectRatio] = useState<number>(1);
-  const [loading, setLoading] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
-
-  React.useEffect(() => {
-    let active = true;
-    Image.getSize(
-      uri,
-      (width, height) => {
-        if (active && width && height) {
-          setAspectRatio(width / height);
-          setLoading(false);
-        }
-      },
-      (error) => {
-        console.log('Failed to get image size:', error);
-        if (active) setLoading(false);
-      }
-    );
-    return () => {
-      active = false;
-    };
-  }, [uri]);
-
-  const isImageVisible = !loading && imageLoaded;
+  const aspectRatio = 1.33; // Clean, uniform 4:3 ratio for perfect grid alignment
+  const isImageVisible = imageLoaded;
 
   return (
     <TouchableOpacity
@@ -167,12 +154,11 @@ const AutoRatioImage = ({
       <Image
         source={{ uri }}
         style={{ width: '100%', height: '100%', opacity: imageLoaded ? 1 : 0 }}
-        resizeMode="cover"
+        contentFit="cover"
         onLoadEnd={() => setImageLoaded(true)}
-        resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-        fadeDuration={100}
+        transition={100}
       />
-      {(!imageLoaded || loading) && (
+      {!imageLoaded && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
           <PulsingContainer style={{ width: '100%', height: '100%' }}>
             <Skeleton width="100%" height="100%" borderRadius={12} style={{ backgroundColor: isDarkMode ? '#334155' : '#cbd5e1' }} />
@@ -203,9 +189,11 @@ const AutoRatioImage = ({
 
 const OrdersProgressBar = () => {
   const { isDarkMode } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const translateX = useSharedValue(-150);
 
   React.useEffect(() => {
+    translateX.value = -150;
     translateX.value = withRepeat(
       withTiming(screenWidth, {
         duration: 1000,
@@ -214,7 +202,7 @@ const OrdersProgressBar = () => {
       -1,
       false
     );
-  }, []);
+  }, [screenWidth]);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -459,6 +447,7 @@ const OrderCard = React.memo(function OrderCard({
   onDownloadPDF,
   loadingPill,
   qualities = [],
+  numColumns = 1,
 }: {
   item: Order;
   index: number;
@@ -475,6 +464,7 @@ const OrderCard = React.memo(function OrderCard({
   onDownloadPDF: (orderId: string, itemIndex: number) => void;
   loadingPill?: { orderId: string; type: string } | null;
   qualities?: any[];
+  numColumns?: number;
 }) {
   const { theme, isDarkMode } = useTheme();
   const [showAllItems, setShowAllItems] = useState(false);
@@ -497,8 +487,8 @@ const OrderCard = React.memo(function OrderCard({
   const borderColor = isDarkMode ? '#334155' : '#e2e8f0';
 
   return (
-    <Animated.View entering={FadeInDown.duration(300).delay((index % 5) * 60)}>
-      <Card style={{ marginHorizontal: 16, marginBottom: 12, padding: 14, borderRadius: 16 }}>
+    <View style={{ flex: 1 }}>
+      <Card style={{ marginHorizontal: numColumns > 1 ? 6 : 16, marginBottom: 12, padding: 14, borderRadius: 16, flex: 1 }}>
 
         {/* Top Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -520,19 +510,19 @@ const OrderCard = React.memo(function OrderCard({
         {/* Order Info & Party Grid */}
         <View style={{ borderTopWidth: 1, borderTopColor: theme.borderLight, paddingTop: 10, marginBottom: 8 }}>
           {/* PO, Style, Priority */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 12 }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>PO:</Text>
               <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.poNumber || '—'}</Text>
             </View>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 12 }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>Style:</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.styleNo || '—'}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text, flex: 1 }} numberOfLines={1} ellipsizeMode="tail">{item.styleNo || '—'}</Text>
             </View>
             {!!item.priority && (
-              <View style={{ flex: 0.8, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>Prio:</Text>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.priority}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.priority}</Text>
               </View>
             )}
           </View>
@@ -645,22 +635,24 @@ const OrderCard = React.memo(function OrderCard({
 
                     {/* Icon Actions */}
                     <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <TouchableOpacity
-                        onPress={() => onDownloadPDF(item._id!, idx)}
-                        activeOpacity={0.7}
-                        style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: 14,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: isDarkMode ? 'rgba(59,130,246,0.15)' : '#eff6ff',
-                          borderWidth: 1,
-                          borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
-                        }}
-                      >
-                        <FileText size={12} color={Colors.primary[600]} />
-                      </TouchableOpacity>
+                      {isMaster && (
+                        <TouchableOpacity
+                          onPress={() => onDownloadPDF(item._id!, idx)}
+                          activeOpacity={0.7}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 14,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: isDarkMode ? 'rgba(59,130,246,0.15)' : '#eff6ff',
+                            borderWidth: 1,
+                            borderColor: isDarkMode ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
+                          }}
+                        >
+                          <FileText size={12} color={Colors.primary[600]} />
+                        </TouchableOpacity>
+                      )}
 
                       {isMaster && (
                         <TouchableOpacity
@@ -883,10 +875,12 @@ const OrderCard = React.memo(function OrderCard({
                   <Text style={{ color: Colors.primary[600], fontSize: 12, fontWeight: '700' }}>Details</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => onViewLogs(item)} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : '#f1f5f9', borderWidth: 1, borderColor: borderColor, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 4 }}>
-                  <History size={13} color={theme.textSecondary} />
-                  <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}>Logs</Text>
-                </TouchableOpacity>
+                {!isParty && (
+                  <TouchableOpacity onPress={() => onViewLogs(item)} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : '#f1f5f9', borderWidth: 1, borderColor: borderColor, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 4 }}>
+                    <History size={13} color={theme.textSecondary} />
+                    <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}>Logs</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -929,7 +923,7 @@ const OrderCard = React.memo(function OrderCard({
         )}
 
       </Card>
-    </Animated.View>
+    </View>
   );
 }, (prevProps, nextProps) => {
   const prevItem = prevProps.item;
@@ -970,7 +964,8 @@ const OrderCard = React.memo(function OrderCard({
     prevItem.arrivalDate === nextItem.arrivalDate &&
     prevItem.poDate === nextItem.poDate &&
     prevItem.deliveryDate === nextItem.deliveryDate &&
-    prevProps.loadingPill === nextProps.loadingPill &&
+    ((prevProps.loadingPill === nextProps.loadingPill) || 
+     (prevProps.loadingPill?.orderId === nextProps.loadingPill?.orderId && prevProps.loadingPill?.type === nextProps.loadingPill?.type)) &&
     JSON.stringify(prevItem.greyInformation) === JSON.stringify(nextItem.greyInformation) &&
     JSON.stringify(prevItem.millInputs) === JSON.stringify(nextItem.millInputs) &&
     JSON.stringify(prevItem.millOutputs) === JSON.stringify(nextItem.millOutputs) &&
@@ -1000,7 +995,10 @@ const toApiDate = (dateStr: string) => {
 
 // ─── Main Orders Screen ───
 export default function OrdersScreen() {
-  const { width: winWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { numColumns, isLargeScreen, containerMaxWidth } = useResponsiveLayout();
+  const winWidth = screenWidth;
+  const winHeight = screenHeight;
   const insets = useSafeAreaInsets();
   const { theme, isDarkMode } = useTheme();
   const queryClient = useQueryClient();
@@ -1011,6 +1009,17 @@ export default function OrdersScreen() {
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const isOffline = useAppStore((s) => s.isOffline);
   const params = useLocalSearchParams<{ status?: string; type?: string; search?: string; searchType?: string }>();
+  
+  const [transitionsFinished, setTransitionsFinished] = useState(false);
+
+  useEffect(() => {
+    const run = typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : (cb: any) => setTimeout(cb, 1);
+    const cancel = typeof cancelIdleCallback !== 'undefined' ? cancelIdleCallback : (id: any) => clearTimeout(id);
+    const handle = run(() => {
+      setTransitionsFinished(true);
+    });
+    return () => cancel(handle as any);
+  }, []);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -1031,9 +1040,28 @@ export default function OrdersScreen() {
   const [searchVal, setSearchVal] = useState('');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
+
   const [showFyModal, setShowFyModal] = useState(false);
   const [showMillModal, setShowMillModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [statusModalOrder, setStatusModalOrder] = useState<Order | null>(null);
   const [millSearchText, setMillSearchText] = useState('');
+
+  // Quick Action States
+  const [showQuickActionModal, setShowQuickActionModal] = useState(false);
+  const [showCreatePartyModal, setShowCreatePartyModal] = useState(false);
+  const [showCreateQualityModal, setShowCreateQualityModal] = useState(false);
+  const [showCreateMillModal, setShowCreateMillModal] = useState(false);
+  const [newPartyName, setNewPartyName] = useState('');
+  const [newQualityName, setNewQualityName] = useState('');
+  const [newMillName, setNewMillName] = useState('');
+
+  const [deleteWarning, setDeleteWarning] = useState<{ title: string; message: string } | null>(null);
 
   const processedParamsRef = useRef<string>('');
 
@@ -1104,32 +1132,47 @@ export default function OrdersScreen() {
 
   // Swipe down to close Filter Modal
   const filterScrollOffset = useRef(0);
-  const filterPanY = useRef(new RNAnimated.Value(600)).current;
+  const filterSheetY = useRef(0);
+  const filterTouchStartPageY = useRef(0);
+  const filterPanY = useRef(new RNAnimated.Value(0)).current;
 
   const closeFilterModal = useCallback(() => {
     RNAnimated.timing(filterPanY, {
-      toValue: 600,
-      duration: 160,
-      useNativeDriver: Platform.OS !== 'web',
+      toValue: winHeight,
+      duration: 220,
+      useNativeDriver: false,
     }).start(() => {
       setShowFilterModal(false);
     });
-  }, [filterPanY]);
+  }, [filterPanY, winHeight]);
 
   const filterPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        filterTouchStartPageY.current = pageY;
+        return pageY < filterSheetY.current + 80;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          filterPanY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return filterScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return filterScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          filterPanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        // Lower threshold (40px drag or 0.2 velocity) makes it close instantly and smoothly
-        if (gestureState.dy > 40 || gestureState.vy > 0.2) {
+      onPanResponderRelease: (evt, gs) => {
+        const isBackdropTouch = filterTouchStartPageY.current < filterSheetY.current;
+        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
+          closeFilterModal();
+          return;
+        }
+
+        if (gs.dy > 50 || gs.vy > 0.2) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -1137,8 +1180,8 @@ export default function OrdersScreen() {
         } else {
           RNAnimated.spring(filterPanY, {
             toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
-            friction: 7,
+            useNativeDriver: false,
+            bounciness: 4,
           }).start();
         }
       },
@@ -1147,43 +1190,53 @@ export default function OrdersScreen() {
 
   React.useEffect(() => {
     if (showFilterModal) {
-      filterPanY.setValue(600);
-      RNAnimated.spring(filterPanY, {
-        toValue: 0,
-        useNativeDriver: Platform.OS !== 'web',
-        damping: 15,
-        stiffness: 120,
-      }).start();
+      filterPanY.setValue(0);
     }
   }, [showFilterModal]);
 
   // Swipe down to close Search Type Selection Modal
   const searchTypeScrollOffset = useRef(0);
-  const searchTypePanY = useRef(new RNAnimated.Value(600)).current;
+  const searchTypeSheetY = useRef(0);
+  const searchTypeTouchStartPageY = useRef(0);
+  const searchTypePanY = useRef(new RNAnimated.Value(0)).current;
 
   const closeSearchTypeModal = useCallback(() => {
     RNAnimated.timing(searchTypePanY, {
-      toValue: 600,
-      duration: 160,
-      useNativeDriver: Platform.OS !== 'web',
+      toValue: winHeight,
+      duration: 220,
+      useNativeDriver: false,
     }).start(() => {
       setShowSearchTypeModal(false);
     });
-  }, [searchTypePanY]);
+  }, [searchTypePanY, winHeight]);
 
   const searchTypePanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        searchTypeTouchStartPageY.current = pageY;
+        return pageY < searchTypeSheetY.current + 80;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          searchTypePanY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return searchTypeScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return searchTypeScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          searchTypePanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dy > 40 || gestureState.vy > 0.2) {
+      onPanResponderRelease: (evt, gs) => {
+        const isBackdropTouch = searchTypeTouchStartPageY.current < searchTypeSheetY.current;
+        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
+          closeSearchTypeModal();
+          return;
+        }
+
+        if (gs.dy > 50 || gs.vy > 0.2) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -1191,8 +1244,8 @@ export default function OrdersScreen() {
         } else {
           RNAnimated.spring(searchTypePanY, {
             toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
-            friction: 7,
+            useNativeDriver: false,
+            bounciness: 4,
           }).start();
         }
       },
@@ -1201,43 +1254,53 @@ export default function OrdersScreen() {
 
   React.useEffect(() => {
     if (showSearchTypeModal) {
-      searchTypePanY.setValue(600);
-      RNAnimated.spring(searchTypePanY, {
-        toValue: 0,
-        useNativeDriver: Platform.OS !== 'web',
-        damping: 15,
-        stiffness: 120,
-      }).start();
+      searchTypePanY.setValue(0);
     }
   }, [showSearchTypeModal]);
 
   // Swipe down to close Financial Year Selection Modal
   const fyScrollOffset = useRef(0);
-  const fyPanY = useRef(new RNAnimated.Value(600)).current;
+  const fySheetY = useRef(0);
+  const fyTouchStartPageY = useRef(0);
+  const fyPanY = useRef(new RNAnimated.Value(0)).current;
 
   const closeFyModal = useCallback(() => {
     RNAnimated.timing(fyPanY, {
-      toValue: 600,
-      duration: 160,
-      useNativeDriver: Platform.OS !== 'web',
+      toValue: winHeight,
+      duration: 220,
+      useNativeDriver: false,
     }).start(() => {
       setShowFyModal(false);
     });
-  }, [fyPanY]);
+  }, [fyPanY, winHeight]);
 
   const fyPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        fyTouchStartPageY.current = pageY;
+        return pageY < fySheetY.current + 80;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          fyPanY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return fyScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return fyScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          fyPanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dy > 40 || gestureState.vy > 0.2) {
+      onPanResponderRelease: (evt, gs) => {
+        const isBackdropTouch = fyTouchStartPageY.current < fySheetY.current;
+        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
+          closeFyModal();
+          return;
+        }
+
+        if (gs.dy > 50 || gs.vy > 0.2) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -1245,8 +1308,8 @@ export default function OrdersScreen() {
         } else {
           RNAnimated.spring(fyPanY, {
             toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
-            friction: 7,
+            useNativeDriver: false,
+            bounciness: 4,
           }).start();
         }
       },
@@ -1255,44 +1318,54 @@ export default function OrdersScreen() {
 
   React.useEffect(() => {
     if (showFyModal) {
-      fyPanY.setValue(600);
-      RNAnimated.spring(fyPanY, {
-        toValue: 0,
-        useNativeDriver: Platform.OS !== 'web',
-        damping: 15,
-        stiffness: 120,
-      }).start();
+      fyPanY.setValue(0);
     }
   }, [showFyModal]);
 
   // Swipe down to close Mill Selection Modal
   const millScrollOffset = useRef(0);
-  const millPanY = useRef(new RNAnimated.Value(600)).current;
+  const millSheetY = useRef(0);
+  const millTouchStartPageY = useRef(0);
+  const millPanY = useRef(new RNAnimated.Value(0)).current;
 
   const closeMillModal = useCallback(() => {
     RNAnimated.timing(millPanY, {
-      toValue: 600,
-      duration: 160,
-      useNativeDriver: Platform.OS !== 'web',
+      toValue: winHeight,
+      duration: 220,
+      useNativeDriver: false,
     }).start(() => {
       setShowMillModal(false);
       setMillSearchText('');
     });
-  }, [millPanY]);
+  }, [millPanY, winHeight]);
 
   const millPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        millTouchStartPageY.current = pageY;
+        return pageY < millSheetY.current + 80;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          millPanY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return millScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return millScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          millPanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dy > 40 || gestureState.vy > 0.2) {
+      onPanResponderRelease: (evt, gs) => {
+        const isBackdropTouch = millTouchStartPageY.current < millSheetY.current;
+        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
+          closeMillModal();
+          return;
+        }
+
+        if (gs.dy > 50 || gs.vy > 0.2) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -1300,8 +1373,8 @@ export default function OrdersScreen() {
         } else {
           RNAnimated.spring(millPanY, {
             toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
-            friction: 7,
+            useNativeDriver: false,
+            bounciness: 4,
           }).start();
         }
       },
@@ -1310,15 +1383,69 @@ export default function OrdersScreen() {
 
   React.useEffect(() => {
     if (showMillModal) {
-      millPanY.setValue(600);
-      RNAnimated.spring(millPanY, {
-        toValue: 0,
-        useNativeDriver: Platform.OS !== 'web',
-        damping: 15,
-        stiffness: 120,
-      }).start();
+      millPanY.setValue(0);
     }
   }, [showMillModal]);
+
+  // Status Modal Swipe to close
+  const statusSheetY = useRef(0);
+  const statusTouchStartPageY = useRef(0);
+  const statusPanY = useRef(new RNAnimated.Value(0)).current;
+
+  const closeStatusModal = useCallback(() => {
+    RNAnimated.timing(statusPanY, {
+      toValue: winHeight,
+      duration: 220,
+      useNativeDriver: false,
+    }).start(() => {
+      setShowStatusModal(false);
+      setStatusModalOrder(null);
+    });
+  }, [statusPanY, winHeight]);
+
+  const statusPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        statusTouchStartPageY.current = pageY;
+        return pageY < statusSheetY.current + 85;
+      },
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, g) =>
+        g.dy > 8 && g.dy > Math.abs(g.dx),
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        g.dy > 8 && g.dy > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) statusPanY.setValue(g.dy);
+      },
+      onPanResponderRelease: (evt, g) => {
+        const isBackdropTouch = statusTouchStartPageY.current < statusSheetY.current;
+        if (isBackdropTouch && Math.abs(g.dy) < 10 && Math.abs(g.dx) < 10) {
+          closeStatusModal();
+          return;
+        }
+
+        if (g.dy > 50 || g.vy > 0.2) {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          closeStatusModal();
+        } else {
+          RNAnimated.spring(statusPanY, {
+            toValue: 0,
+            useNativeDriver: false,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  React.useEffect(() => {
+    if (showStatusModal) {
+      statusPanY.setValue(0);
+    }
+  }, [showStatusModal]);
 
 
 
@@ -1370,31 +1497,48 @@ export default function OrdersScreen() {
   }, [pdfPreviewData]);
 
   // Swipe down to close Lab Item Selector Modal
-  const labSelectorPanY = useRef(new RNAnimated.Value(600)).current;
+  const labSelectorScrollOffset = useRef(0);
+  const labSelectorSheetY = useRef(0);
+  const labSelectorTouchStartPageY = useRef(0);
+  const labSelectorPanY = useRef(new RNAnimated.Value(0)).current;
 
   const closeLabSelectorModal = useCallback(() => {
     RNAnimated.timing(labSelectorPanY, {
-      toValue: 600,
-      duration: 160,
-      useNativeDriver: Platform.OS !== 'web',
+      toValue: winHeight,
+      duration: 220,
+      useNativeDriver: false,
     }).start(() => {
       setShowLabItemSelector(false);
     });
-  }, [labSelectorPanY]);
+  }, [labSelectorPanY, winHeight]);
 
   const labSelectorPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        labSelectorTouchStartPageY.current = pageY;
+        return pageY < labSelectorSheetY.current + 80;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          labSelectorPanY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return labSelectorScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return labSelectorScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          labSelectorPanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dy > 40 || gestureState.vy > 0.2) {
+      onPanResponderRelease: (evt, gs) => {
+        const isBackdropTouch = labSelectorTouchStartPageY.current < labSelectorSheetY.current;
+        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
+          closeLabSelectorModal();
+          return;
+        }
+
+        if (gs.dy > 50 || gs.vy > 0.2) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -1402,8 +1546,8 @@ export default function OrdersScreen() {
         } else {
           RNAnimated.spring(labSelectorPanY, {
             toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
-            friction: 7,
+            useNativeDriver: false,
+            bounciness: 4,
           }).start();
         }
       },
@@ -1412,42 +1556,53 @@ export default function OrdersScreen() {
 
   React.useEffect(() => {
     if (showLabItemSelector) {
-      labSelectorPanY.setValue(600);
-      RNAnimated.spring(labSelectorPanY, {
-        toValue: 0,
-        useNativeDriver: Platform.OS !== 'web',
-        damping: 15,
-        stiffness: 120,
-      }).start();
+      labSelectorPanY.setValue(0);
     }
   }, [showLabItemSelector]);
 
   // Swipe down to close Logs Modal
-  const logsPanY = useRef(new RNAnimated.Value(600)).current;
+  const logsScrollOffset = useRef(0);
+  const logsSheetY = useRef(0);
+  const logsTouchStartPageY = useRef(0);
+  const logsPanY = useRef(new RNAnimated.Value(0)).current;
 
   const closeLogsModal = useCallback(() => {
     RNAnimated.timing(logsPanY, {
-      toValue: 600,
-      duration: 160,
-      useNativeDriver: Platform.OS !== 'web',
+      toValue: winHeight,
+      duration: 220,
+      useNativeDriver: false,
     }).start(() => {
       setShowLogsModal(false);
     });
-  }, [logsPanY]);
+  }, [logsPanY, winHeight]);
 
   const logsPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder: (evt) => {
+        const pageY = evt.nativeEvent.pageY;
+        logsTouchStartPageY.current = pageY;
+        return pageY < logsSheetY.current + 80;
+      },
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (evt, gestureState) => {
-        if (gestureState.dy > 0) {
-          logsPanY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, gs) => {
+        return logsScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gs) => {
+        return logsScrollOffset.current <= 0 && gs.dy > 8 && gs.dy > Math.abs(gs.dx);
+      },
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          logsPanY.setValue(gs.dy);
         }
       },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dy > 40 || gestureState.vy > 0.2) {
+      onPanResponderRelease: (evt, gs) => {
+        const isBackdropTouch = logsTouchStartPageY.current < logsSheetY.current;
+        if (isBackdropTouch && Math.abs(gs.dy) < 10 && Math.abs(gs.dx) < 10) {
+          closeLogsModal();
+          return;
+        }
+
+        if (gs.dy > 50 || gs.vy > 0.2) {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
@@ -1455,8 +1610,8 @@ export default function OrdersScreen() {
         } else {
           RNAnimated.spring(logsPanY, {
             toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
-            friction: 7,
+            useNativeDriver: false,
+            bounciness: 4,
           }).start();
         }
       },
@@ -1465,15 +1620,20 @@ export default function OrdersScreen() {
 
   React.useEffect(() => {
     if (showLogsModal) {
-      logsPanY.setValue(600);
-      RNAnimated.spring(logsPanY, {
-        toValue: 0,
-        useNativeDriver: Platform.OS !== 'web',
-        damping: 15,
-        stiffness: 120,
-      }).start();
+      logsPanY.setValue(0);
     }
   }, [showLogsModal]);
+
+  const partiesQuery = useQuery({
+    queryKey: ['parties'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/parties');
+      return Array.isArray(data) ? data : data?.data || [];
+    },
+    enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000, // 10 min — parties rarely change
+  });
+  const parties = useMemo(() => partiesQuery.data || [], [partiesQuery.data]);
 
   const qualitiesQuery = useQuery({
     queryKey: ['qualities'],
@@ -1481,7 +1641,8 @@ export default function OrdersScreen() {
       const { data } = await api.get('/api/qualities');
       return Array.isArray(data) ? data : data?.data || [];
     },
-    enabled: isAuthenticated
+    enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000,
   });
 
   const millsQuery = useQuery({
@@ -1490,11 +1651,12 @@ export default function OrdersScreen() {
       const { data } = await api.get('/api/mills');
       return Array.isArray(data) ? data : data?.data || [];
     },
-    enabled: isAuthenticated
+    enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000,
   });
 
-  const qualities = qualitiesQuery.data || [];
-  const mills = millsQuery.data || [];
+  const qualities = useMemo(() => qualitiesQuery.data || [], [qualitiesQuery.data]);
+  const mills = useMemo(() => millsQuery.data || [], [millsQuery.data]);
 
   const fyQuery = useQuery({
     queryKey: ['financialYears'],
@@ -1502,7 +1664,8 @@ export default function OrdersScreen() {
       const { data } = await api.get('/api/orders/financial-years');
       return data?.data?.options || [];
     },
-    enabled: isAuthenticated
+    enabled: isAuthenticated,
+    staleTime: 10 * 60 * 1000,
   });
   const fyOptions = fyQuery.data || [];
 
@@ -1530,17 +1693,39 @@ export default function OrdersScreen() {
   }, [millsList, millSearchText]);
 
   // Draggable FAB state & handlers matching User Page
-  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - 110 })).current;
+  const FAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 220 : 170;
+  const pan = useRef(new RNAnimated.ValueXY({ x: screenWidth - 68, y: screenHeight - FAB_BOTTOM_OFFSET })).current;
+  const fabX = useRef(screenWidth - 68);
+  const fabY = useRef(screenHeight - FAB_BOTTOM_OFFSET);
+
+  const dimensionsRef = useRef({ screenWidth, screenHeight });
+  dimensionsRef.current = { screenWidth, screenHeight };
+
+  useEffect(() => {
+    const isSnappedLeft = fabX.current < screenWidth / 2;
+    const targetX = isSnappedLeft ? 20 : screenWidth - 68;
+    const targetY = Math.min(Math.max(fabY.current, 100), screenHeight - FAB_BOTTOM_OFFSET);
+    
+    fabX.current = targetX;
+    fabY.current = targetY;
+    
+    RNAnimated.spring(pan, {
+      toValue: { x: targetX, y: targetY },
+      useNativeDriver: false,
+      friction: 6,
+    }).start();
+  }, [screenWidth, screenHeight]);
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+        return Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10;
       },
       onPanResponderGrant: () => {
         pan.setOffset({
-          x: (pan.x as any)._value || 0,
-          y: (pan.y as any)._value || 0,
+          x: fabX.current,
+          y: fabY.current,
         });
         pan.setValue({ x: 0, y: 0 });
       },
@@ -1551,16 +1736,35 @@ export default function OrdersScreen() {
       onPanResponderRelease: (e, gestureState) => {
         pan.flattenOffset();
 
-        const currentX = (pan.x as any)._value;
-        const currentY = (pan.y as any)._value;
+        if (Math.abs(gestureState.dx) < 10 && Math.abs(gestureState.dy) < 10) {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          }
+          router.push('/orders/create');
+          RNAnimated.spring(pan, {
+            toValue: { x: fabX.current, y: fabY.current },
+            useNativeDriver: false,
+            friction: 6,
+          }).start();
+          return;
+        }
+
+        const currentScreenWidth = dimensionsRef.current.screenWidth;
+        const currentScreenHeight = dimensionsRef.current.screenHeight;
+
+        const currentX = fabX.current + gestureState.dx;
+        const currentY = fabY.current + gestureState.dy;
 
         const snapLeftX = 20;
-        const snapRightX = screenWidth - 68;
-        const targetX = currentX < screenWidth / 2 ? snapLeftX : snapRightX;
+        const snapRightX = currentScreenWidth - 68;
+        const targetX = currentX < currentScreenWidth / 2 ? snapLeftX : snapRightX;
 
         const minY = 100;
-        const maxY = screenHeight - 110;
+        const maxY = currentScreenHeight - FAB_BOTTOM_OFFSET;
         const targetY = Math.min(Math.max(currentY, minY), maxY);
+
+        fabX.current = targetX;
+        fabY.current = targetY;
 
         RNAnimated.spring(pan, {
           toValue: { x: targetX, y: targetY },
@@ -1884,6 +2088,193 @@ export default function OrdersScreen() {
       });
     }
   });
+
+  // Quick Action Mutations (Party, Quality, Mill Name)
+  const createPartyMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { data } = await api.post('/api/parties', { name });
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['parties'] });
+      const newParty = data?.data || data?.party || data;
+      addToast({
+        type: 'success',
+        title: 'Party Created',
+        message: `Party "${newParty.name || 'New Party'}" has been added.`,
+      });
+      setShowCreatePartyModal(false);
+      setNewPartyName('');
+    },
+    onError: (err: any) => {
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to create party';
+      Alert.alert('Error', errMsg);
+    }
+  });
+
+  const createQualityMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { data } = await api.post('/api/qualities', { name });
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['qualities'] });
+      const newQual = data?.data || data?.quality || data;
+      addToast({
+        type: 'success',
+        title: 'Quality Created',
+        message: `Quality "${newQual.name || 'New Quality'}" has been added.`,
+      });
+      setShowCreateQualityModal(false);
+      setNewQualityName('');
+    },
+    onError: (err: any) => {
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to create quality';
+      Alert.alert('Error', errMsg);
+    }
+  });
+
+  const createMillMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { data } = await api.post('/api/mills', { name });
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['mills'] });
+      const newMill = data?.data || data?.mill || data;
+      addToast({
+        type: 'success',
+        title: 'Mill Created',
+        message: `Mill "${newMill.name || 'New Mill'}" has been added.`,
+      });
+      setShowCreateMillModal(false);
+      setNewMillName('');
+    },
+    onError: (err: any) => {
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to create mill';
+      Alert.alert('Error', errMsg);
+    }
+  });
+
+  const [deleteMillTarget, setDeleteMillTarget] = useState<any>(null);
+  const deleteMillMutation = useMutation({
+    mutationFn: async (millId: string) => {
+      const { data } = await api.delete(`/api/mills/${millId}`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mills'] });
+      setDeleteMillTarget(null);
+      addToast({
+        type: 'success',
+        title: 'Mill Deleted',
+        message: 'Mill has been successfully deleted.',
+      });
+    },
+    onError: (err: any) => {
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to delete mill';
+      setDeleteWarning({
+        title: 'Cannot Delete Mill',
+        message: errMsg,
+      });
+      setDeleteMillTarget(null);
+    }
+  });
+
+  // Intercept physical Back button on Android to close active modals/sheets
+  useEffect(() => {
+    const handleBackButton = () => {
+      // 1. Creation Modals
+      if (showCreatePartyModal) {
+        if (!createPartyMutation.isPending) {
+          setShowCreatePartyModal(false);
+        }
+        return true;
+      }
+      if (showCreateQualityModal) {
+        if (!createQualityMutation.isPending) {
+          setShowCreateQualityModal(false);
+        }
+        return true;
+      }
+      if (showCreateMillModal) {
+        if (!createMillMutation.isPending) {
+          setShowCreateMillModal(false);
+        }
+        return true;
+      }
+
+      // 2. PDF Preview
+      if (pdfPreviewData !== null) {
+        setPdfPreviewData(null);
+        return true;
+      }
+
+      // 3. Process Modals (Grey, Mill Input/Output, Dispatch, Lab)
+      if (activeModal !== null) {
+        setActiveModal(null);
+        setEditItem(null);
+        return true;
+      }
+
+      // 4. Filters & Sheet Modals
+      if (showFilterModal) {
+        closeFilterModal();
+        return true;
+      }
+      if (showSearchTypeModal) {
+        closeSearchTypeModal();
+        return true;
+      }
+      if (showFyModal) {
+        closeFyModal();
+        return true;
+      }
+      if (showMillModal) {
+        closeMillModal();
+        return true;
+      }
+      if (showStatusModal) {
+        closeStatusModal();
+        return true;
+      }
+      if (showLabItemSelector) {
+        closeLabSelectorModal();
+        return true;
+      }
+      if (showLogsModal) {
+        closeLogsModal();
+        return true;
+      }
+
+      // 5. Delete warning / confirmations
+      if (deleteWarning !== null) {
+        setDeleteWarning(null);
+        return true;
+      }
+      if (deleteOrderTarget !== null) {
+        setDeleteOrderTarget(null);
+        return true;
+      }
+      if (deleteItemTarget !== null) {
+        setDeleteItemTarget(null);
+        return true;
+      }
+
+      return false; // Let default system navigation handle it
+    };
+
+    if (Platform.OS === 'android') {
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackButton);
+      return () => backHandler.remove();
+    }
+  }, [
+    showCreatePartyModal, showCreateQualityModal, showCreateMillModal,
+    createPartyMutation.isPending, createQualityMutation.isPending, createMillMutation.isPending,
+    pdfPreviewData, activeModal, showFilterModal, showSearchTypeModal, showFyModal,
+    showMillModal, showStatusModal, showLabItemSelector, showLogsModal,
+    deleteWarning, deleteOrderTarget, deleteItemTarget
+  ]);
 
   // Save mutations (linked to query invalidation)
   const saveGreyMutation = useMutation({
@@ -2280,17 +2671,11 @@ export default function OrdersScreen() {
 
   // Status Change Dialog Handler
   const handleStatusBadgePress = useCallback((order: Order) => {
+    if (isParty) return;
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const statuses = ['pending', 'delivered'];
-    Alert.alert(
-      `Update Status - ${getDisplayOrderId(order.orderId)}`,
-      'Select new status',
-      statuses.map((s: string) => ({
-        text: s.replace('_', ' ').toUpperCase(),
-        onPress: () => statusMutation.mutate({ orderId: order._id!, status: s })
-      })).concat([{ text: 'Cancel', style: 'cancel' } as any])
-    );
-  }, [statusMutation]);
+    setStatusModalOrder(order);
+    setShowStatusModal(true);
+  }, [isParty]);
 
   // Pill Handlers (Edit first if exists, else Add)
   const handleGreyPill = useCallback(async (order: Order) => {
@@ -2303,18 +2688,20 @@ export default function OrdersScreen() {
     setGreyInfo(cached);
     setActiveModal('grey');
 
-    // ⚡ OPTIMIZATION: If there is no existing data, do NOT trigger any API call or show loading spinner
+    // If no existing data, do NOT trigger API call or show loading line
     if (cached.length === 0) {
       return;
     }
 
-    // ⚡ OPTIMIZATION: If data exists, fetch fresh updates silently in the background (no loading indicator)
     try {
+      setLoadingPill({ orderId: order._id, type: 'grey' });
       const { data } = await api.get('/api/grey-info', { params: { orderId: order.orderId, t: Date.now() } });
       const records = data?.data?.greyInfo || (Array.isArray(data?.data) ? data.data : data?.data || []);
       setGreyInfo(records);
     } catch (err) {
       console.log('Error fetching fresh grey info:', err);
+    } finally {
+      setLoadingPill(null);
     }
   }, []);
 
@@ -2328,18 +2715,20 @@ export default function OrdersScreen() {
     setMillInputsList(localMillInputs);
     setActiveModal('mill-input');
 
-    // ⚡ OPTIMIZATION: If there is no existing data, do NOT trigger any API call or show loading spinner
+    // If no existing data, do NOT trigger API call or show loading line
     if (localMillInputs.length === 0) {
       return;
     }
 
-    // ⚡ OPTIMIZATION: If data exists, fetch fresh updates silently in the background (no loading indicator)
     try {
+      setLoadingPill({ orderId: order._id, type: 'mill-input' });
       const { data } = await api.get('/api/mill-inputs', { params: { orderId: order.orderId, t: Date.now() } });
       const records = data?.data?.millInputs || (Array.isArray(data?.data) ? data.data : data?.data || []);
       setMillInputsList(records);
     } catch (err) {
       console.log('Error fetching fresh mill inputs:', err);
+    } finally {
+      setLoadingPill(null);
     }
   }, []);
 
@@ -2353,18 +2742,20 @@ export default function OrdersScreen() {
     setMillOutputsList(localMillOutputs);
     setActiveModal('mill-output');
 
-    // ⚡ OPTIMIZATION: If there is no existing data, do NOT trigger any API call or show loading spinner
+    // If no existing data, do NOT trigger API call or show loading line
     if (localMillOutputs.length === 0) {
       return;
     }
 
-    // ⚡ OPTIMIZATION: If data exists, fetch fresh updates silently in the background (no loading indicator)
     try {
+      setLoadingPill({ orderId: order._id, type: 'mill-output' });
       const { data } = await api.get('/api/mill-outputs', { params: { orderId: order.orderId, t: Date.now() } });
       const records = data?.data?.millOutputs || (Array.isArray(data?.data) ? data.data : data?.data || []);
       setMillOutputsList(records);
     } catch (err) {
       console.log('Error fetching fresh mill outputs:', err);
+    } finally {
+      setLoadingPill(null);
     }
   }, []);
 
@@ -2373,7 +2764,7 @@ export default function OrdersScreen() {
     setSelectedOrderId(order.orderId);
     setSelectedDbOrderId(order._id);
     
-    // Initialize with local cached data immediately
+    // Initialize with local cached data immediately for instant UI feedback
     const localDispatches = order.dispatches || [];
     setDispatchesList(localDispatches);
     
@@ -2385,13 +2776,13 @@ export default function OrdersScreen() {
     }
     setActiveModal('dispatch');
 
-    // ⚡ OPTIMIZATION: If there is no existing data, do NOT trigger any API call or show loading spinner
+    // If no existing data, do NOT trigger API call or show loading line
     if (localDispatches.length === 0) {
       return;
     }
 
-    // ⚡ OPTIMIZATION: If data exists, fetch fresh updates silently in the background (no loading indicator)
     try {
+      setLoadingPill({ orderId: order._id, type: 'dispatch' });
       const { data } = await api.get('/api/dispatch', { params: { orderId: order.orderId, t: Date.now() } });
       const records = data?.data?.dispatches || (Array.isArray(data?.data) ? data.data : data?.data || []);
       setDispatchesList(records);
@@ -2402,6 +2793,8 @@ export default function OrdersScreen() {
       }
     } catch (err) {
       console.log('Error fetching fresh dispatches:', err);
+    } finally {
+      setLoadingPill(null);
     }
   }, []);
 
@@ -2504,21 +2897,15 @@ export default function OrdersScreen() {
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
 
-      params.t = Date.now();
+
 
       const { data } = await api.get('/api/orders', { params });
       return data;
     },
     placeholderData: keepPreviousData,
     enabled: isAuthenticated,
+    staleTime: 30000, // Cache for 30s to allow instant back-navigation
   });
-
-  useFocusEffect(
-    useCallback(() => {
-      ordersQuery.refetch();
-      unfilteredQuery.refetch();
-    }, [])
-  );
 
   React.useEffect(() => {
     if (!ordersQuery?.isFetching) {
@@ -2624,7 +3011,11 @@ export default function OrdersScreen() {
     setDeleteItemTarget({ orderId, itemIndex });
   }, []);
 
-  const handleDownloadPDF = useCallback((orderId: string, itemIndex: number) => {
+  const handleDownloadPDF = useCallback(async (orderId: string, itemIndex: number) => {
+    if (!isMaster) {
+      addToast({ type: 'error', title: 'Access Denied', message: 'Only master can download this PDF.' });
+      return;
+    }
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -2635,20 +3026,32 @@ export default function OrdersScreen() {
       // Web: show the old preview modal with iframe
       setPdfPreviewData({ order, itemIndex });
     } else {
-      // Native: directly open PdfViewerModal with Save & Share
-      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
-      storage.getToken().then(token => {
-        const pdfUrl = `${baseUrl}/api/orders/${order._id}/pdf?itemIndex=${itemIndex}${token ? `&token=${token}` : ''}`;
-        const sanitizedOrderId = order.orderId.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const filename = `Purchase_Order_${sanitizedOrderId}_Item_${itemIndex + 1}.pdf`;
+      // Native: generate local HTML PDF for instant offline high-fidelity preview
+      const sanitizedOrderId = (order.orderId || 'Order').replace(/[^a-zA-Z0-9-_]/g, '_');
+      const filename = `Order_Sheet_${sanitizedOrderId}_Item_${itemIndex + 1}.pdf`;
+      const title = `Order Sheet — ${getDisplayOrderId(order.orderId)} • Item ${itemIndex + 1}`;
 
-        setOrderPdfViewerUrl(pdfUrl);
-        setOrderPdfViewerTitle(`Purchase Order — ${getDisplayOrderId(order.orderId)} • Item ${itemIndex + 1}`);
+      try {
+        const html = generateOrderHtml(order, itemIndex);
+        const { uri } = await Print.printToFileAsync({ html });
+
+        setOrderPdfViewerUrl(uri);
+        setOrderPdfViewerTitle(title);
         setOrderPdfViewerFilename(filename);
         setOrderPdfViewerVisible(true);
-      });
+      } catch (err) {
+        console.warn('[Orders] Local Order HTML generation failed, falling back to API URL:', err);
+        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+        const token = await storage.getToken();
+        const pdfUrl = `${baseUrl}/api/orders/${order._id}/pdf?itemIndex=${itemIndex}${token ? `&token=${token}` : ''}`;
+
+        setOrderPdfViewerUrl(pdfUrl);
+        setOrderPdfViewerTitle(title);
+        setOrderPdfViewerFilename(filename);
+        setOrderPdfViewerVisible(true);
+      }
     }
-  }, [orders]);
+  }, [orders, isMaster, addToast]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: Order; index: number }) => (
@@ -2668,9 +3071,10 @@ export default function OrdersScreen() {
         onDownloadPDF={handleDownloadPDF}
         loadingPill={loadingPill}
         qualities={qualities}
+        numColumns={numColumns}
       />
     ),
-    [handleDeleteOrder, handleStatusBadgePress, handleGreyPill, handleLabPill, handleMillInputPill, handleMillOutputPill, handleDispatchPill, handleViewLogs, handleImagePreview, handleDeleteItem, handleDownloadPDF, loadingPill, qualities]
+    [handleDeleteOrder, handleStatusBadgePress, handleGreyPill, handleLabPill, handleMillInputPill, handleMillOutputPill, handleDispatchPill, handleViewLogs, handleImagePreview, handleDeleteItem, handleDownloadPDF, loadingPill, qualities, numColumns]
   );
 
   const keyExtractor = useCallback(
@@ -2772,6 +3176,7 @@ export default function OrdersScreen() {
       style={{ flex: 1, backgroundColor: theme.background }}
       edges={['top']}
     >
+      <View style={{ flex: 1, width: '100%', maxWidth: containerMaxWidth, alignSelf: 'center' }}>
       {/* Unified Search & Filters Row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingHorizontal: 16 }}>
         {/* Custom Search Bar with Search Type Dropdown */}
@@ -2836,6 +3241,7 @@ export default function OrdersScreen() {
             <Search size={16} color={theme.textSecondary} style={{ marginLeft: 4 }} />
           )}
         </View>
+
 
         {/* Filter Button */}
         <TouchableOpacity
@@ -2902,14 +3308,14 @@ export default function OrdersScreen() {
       )}
 
       {/* Orders List */}
-      {(ordersQuery.isLoading || (ordersQuery.isFetching && orders.length === 0)) ? (
+      {(!transitionsFinished || ordersQuery.isLoading || (ordersQuery.isFetching && orders.length === 0)) ? (
         <View style={{ flex: 1, backgroundColor: theme.background }}>
           <OrdersProgressBar />
           <ScrollView showsVerticalScrollIndicator={false}>
             <OrderSkeletonList count={4} />
           </ScrollView>
         </View>
-      ) : ordersQuery.isError ? (
+      ) : (ordersQuery.isError && orders.length === 0) ? (
         <EmptyState
           icon={<ClipboardList size={36} color={Colors.error[500]} />}
           title="Failed to Load Orders"
@@ -2966,22 +3372,21 @@ export default function OrdersScreen() {
               ]} />
             </View>
           )}
-          <FlatList
+          <FlashList
+            key={numColumns}
+            numColumns={numColumns}
             data={orders}
             extraData={ordersQuery.dataUpdatedAt}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
+            drawDistance={800}
             ListHeaderComponent={() => renderPagination('top')}
             ListFooterComponent={() => renderPagination('bottom')}
-            contentContainerStyle={{ paddingTop: 4, paddingBottom: 65 + insets.bottom }}
+            contentContainerStyle={{ paddingTop: 4, paddingBottom: 65 + insets.bottom, paddingHorizontal: numColumns > 1 ? 6 : 0 }}
             showsVerticalScrollIndicator={false}
             onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.8} // Pre-fetch aggressively when user scrolls 80% down
-            initialNumToRender={5}
-            maxToRenderPerBatch={5}
-            windowSize={11}
-            updateCellsBatchingPeriod={30}
-            removeClippedSubviews={Platform.OS !== 'web'}
+            onEndReachedThreshold={0.8}
+            removeClippedSubviews={false}
             refreshControl={
               Platform.OS !== 'web' ? (
                 <RefreshControl
@@ -3043,8 +3448,9 @@ export default function OrdersScreen() {
       {/* Advanced Filter Bottom Sheet Modal */}
       <Modal
         visible={showFilterModal}
-        animationType="none"
+        animationType="slide"
         transparent={true}
+        statusBarTranslucent={true}
         onRequestClose={closeFilterModal}
       >
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -3057,24 +3463,28 @@ export default function OrdersScreen() {
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.5)',
+              backgroundColor: 'rgba(0,0,0,0.15)',
             }}
           />
 
           <RNAnimated.View
+            onLayout={(e) => {
+              filterSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...filterPanResponder.panHandlers}
             style={{
               backgroundColor: theme.background,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               paddingHorizontal: 24,
-              paddingBottom: 24 + insets.bottom,
+              paddingBottom: isLargeScreen ? 24 : 0,
               paddingTop: 12,
               maxHeight: '90%',
               transform: [{ translateY: filterPanY }],
             }}
           >
             {/* Header Drag Zone */}
-            <View {...filterPanResponder.panHandlers} style={{ width: '100%' }}>
+            <View style={{ width: '100%' }}>
               {/* Swipe Drag Handle Bar */}
               <View
                 style={{
@@ -3302,6 +3712,112 @@ export default function OrdersScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Inline Quick Adds (Premium Card layout at bottom) */}
+              {user?.role !== 'party' && (
+                <View
+                  style={{
+                    marginTop: 16,
+                    marginBottom: 8,
+                    padding: 12,
+                    borderRadius: 16,
+                    backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.5)' : 'rgba(241, 245, 249, 0.8)',
+                    borderWidth: 1,
+                    borderColor: theme.borderLight,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary[500] }} />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Quick Creation</Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        closeFilterModal();
+                        setTimeout(() => setShowCreatePartyModal(true), 300);
+                      }}
+                      activeOpacity={0.7}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                        backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+                        borderWidth: 1,
+                        borderColor: isDarkMode ? 'rgba(96, 165, 250, 0.2)' : 'rgba(37, 99, 235, 0.15)',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 2,
+                        elevation: 1,
+                      }}
+                    >
+                      <User size={13} color={isDarkMode ? '#60a5fa' : '#2563eb'} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? '#60a5fa' : '#2563eb' }}>+ Party</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        closeFilterModal();
+                        setTimeout(() => setShowCreateQualityModal(true), 300);
+                      }}
+                      activeOpacity={0.7}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                        backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+                        borderWidth: 1,
+                        borderColor: isDarkMode ? 'rgba(52, 211, 153, 0.2)' : 'rgba(5, 150, 105, 0.15)',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 2,
+                        elevation: 1,
+                      }}
+                    >
+                      <Tag size={13} color={isDarkMode ? '#34d399' : '#059669'} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? '#34d399' : '#059669' }}>+ Quality</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        closeFilterModal();
+                        setTimeout(() => setShowCreateMillModal(true), 300);
+                      }}
+                      activeOpacity={0.7}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                        backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+                        borderWidth: 1,
+                        borderColor: isDarkMode ? 'rgba(251, 191, 36, 0.2)' : 'rgba(217, 119, 6, 0.15)',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 2,
+                        elevation: 1,
+                      }}
+                    >
+                      <Layers size={13} color={isDarkMode ? '#fbbf24' : '#d97706'} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? '#fbbf24' : '#d97706' }}>+ Mill</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </ScrollView>
 
             {/* Apply Button */}
@@ -3317,6 +3833,7 @@ export default function OrdersScreen() {
                 paddingVertical: 14,
                 alignItems: 'center',
                 marginTop: 16,
+                marginBottom: insets.bottom > 0 ? insets.bottom + 8 : 16,
               }}
             >
               <Text style={{ color: Colors.white, fontSize: 16, fontWeight: '700' }}>Apply Filters</Text>
@@ -3329,25 +3846,30 @@ export default function OrdersScreen() {
       <Modal
         visible={showSearchTypeModal}
         transparent
-        animationType="none"
+        animationType="slide"
+        statusBarTranslucent={true}
         onRequestClose={closeSearchTypeModal}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={closeSearchTypeModal}
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
-          }}
-        >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={closeSearchTypeModal}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: isDarkMode ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.15)',
+            }}
+          />
           <RNAnimated.View
+            onLayout={(e) => {
+              searchTypeSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...searchTypePanResponder.panHandlers}
             style={{
               backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               paddingTop: 16,
-              paddingBottom: (Platform.OS === 'ios' ? 16 : 12) + insets.bottom,
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 16 : 16),
               borderTopWidth: 1,
               borderTopColor: theme.borderLight,
               maxHeight: '60%',
@@ -3355,7 +3877,7 @@ export default function OrdersScreen() {
             }}
           >
             {/* Header Drag Zone */}
-            <View {...searchTypePanResponder.panHandlers} style={{ width: '100%' }}>
+            <View style={{ width: '100%' }}>
               {/* Header indicator bar */}
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
 
@@ -3425,32 +3947,37 @@ export default function OrdersScreen() {
               })}
             </ScrollView>
           </RNAnimated.View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Financial Year Selection Modal */}
       <Modal
         visible={showFyModal}
         transparent
-        animationType="none"
+        animationType="slide"
+        statusBarTranslucent={true}
         onRequestClose={closeFyModal}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={closeFyModal}
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
-          }}
-        >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={closeFyModal}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.15)',
+            }}
+          />
           <RNAnimated.View
+            onLayout={(e) => {
+              fySheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...fyPanResponder.panHandlers}
             style={{
               backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               paddingTop: 16,
-              paddingBottom: (Platform.OS === 'ios' ? 16 : 12) + insets.bottom,
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 12),
               borderTopWidth: 1,
               borderTopColor: theme.borderLight,
               maxHeight: '50%',
@@ -3458,7 +3985,7 @@ export default function OrdersScreen() {
             }}
           >
             {/* Header Drag Zone */}
-            <View {...fyPanResponder.panHandlers} style={{ width: '100%' }}>
+            <View style={{ width: '100%' }}>
               {/* Header indicator bar */}
               <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
 
@@ -3550,36 +4077,41 @@ export default function OrdersScreen() {
               })}
             </ScrollView>
           </RNAnimated.View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Mill Selection Modal */}
       <Modal
         visible={showMillModal}
         transparent
-        animationType="none"
+        animationType="slide"
+        statusBarTranslucent={true}
         onRequestClose={closeMillModal}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={closeMillModal}
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
-          }}
-        >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={closeMillModal}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.15)',
+            }}
+          />
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={{ width: '100%' }}
           >
             <RNAnimated.View
+              onLayout={(e) => {
+                millSheetY.current = e.nativeEvent.layout.y;
+              }}
+              {...millPanResponder.panHandlers}
               style={{
                 backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
                 borderTopLeftRadius: 24,
                 borderTopRightRadius: 24,
                 paddingTop: 16,
-                paddingBottom: (Platform.OS === 'ios' ? 24 : 16) + insets.bottom,
+                paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 16),
                 borderTopWidth: 1,
                 borderTopColor: theme.borderLight,
                 maxHeight: 500,
@@ -3587,7 +4119,7 @@ export default function OrdersScreen() {
               }}
             >
               {/* Header Drag Zone */}
-              <View {...millPanResponder.panHandlers} style={{ width: '100%' }}>
+              <View style={{ width: '100%' }}>
                 {/* Header indicator bar */}
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
 
@@ -3683,40 +4215,59 @@ export default function OrdersScreen() {
                 {filteredMillsForFilter.map((mill: any) => {
                   const isSelected = millFilter === mill._id;
                   return (
-                    <TouchableOpacity
+                    <View
                       key={mill._id}
-                      onPress={() => {
-                        if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setMillFilter(mill._id);
-                        setMillSearchText('');
-                        closeMillModal();
-                      }}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        paddingVertical: 14,
-                        paddingHorizontal: 16,
                         borderRadius: 12,
                         backgroundColor: isSelected ? (isDarkMode ? 'rgba(59, 130, 246, 0.12)' : 'rgba(37, 99, 235, 0.08)') : 'transparent',
                         marginBottom: 4,
+                        paddingRight: isMaster ? 8 : 0,
                       }}
                     >
-                      <Text style={{
-                        fontSize: 15,
-                        fontWeight: isSelected ? '700' : '500',
-                        color: isSelected ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.text,
-                      }}>
-                        {mill.name}
-                      </Text>
-                      {isSelected && <Check size={16} color={isDarkMode ? '#60a5fa' : '#2563eb'} />}
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setMillFilter(mill._id);
+                          setMillSearchText('');
+                          closeMillModal();
+                        }}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingVertical: 14,
+                          paddingHorizontal: 16,
+                        }}
+                      >
+                        <Text style={{
+                          fontSize: 15,
+                          fontWeight: isSelected ? '700' : '500',
+                          color: isSelected ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.text,
+                        }}>
+                          {mill.name}
+                        </Text>
+                        {isSelected && <Check size={16} color={isDarkMode ? '#60a5fa' : '#2563eb'} />}
+                      </TouchableOpacity>
+
+                      {isMaster && (
+                        <TouchableOpacity
+                          onPress={() => setDeleteMillTarget(mill)}
+                          style={{ padding: 10, marginLeft: 4 }}
+                        >
+                          <Trash2 size={18} color={Colors.error[600]} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   );
                 })}
               </ScrollView>
             </RNAnimated.View>
           </KeyboardAvoidingView>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       <DatePickerModal
@@ -3798,7 +4349,7 @@ export default function OrdersScreen() {
         visible={activeModal === 'dispatch'}
         onClose={() => { setActiveModal(null); setEditItem(null); }}
         order={currentSelectedOrder}
-        existingDispatches={currentSelectedOrder?.dispatches || []}
+        existingDispatches={dispatchesList}
         qualities={qualities}
         isDarkMode={isDarkMode}
         theme={theme}
@@ -3806,7 +4357,7 @@ export default function OrdersScreen() {
           saveDispatchMutation.mutate(payload);
         }}
         isSaving={saveDispatchMutation.isPending}
-        onDelete={currentSelectedOrder?.dispatches && currentSelectedOrder.dispatches.length > 0 ? () => deleteDispatchMutation.mutate(undefined) : undefined}
+        onDelete={dispatchesList && dispatchesList.length > 0 ? () => deleteDispatchMutation.mutate(undefined) : undefined}
         isMaster={isMaster}
         isLoading={loadingPill?.type === 'dispatch'}
         isDeleting={deleteDispatchMutation.isPending}
@@ -3844,32 +4395,36 @@ export default function OrdersScreen() {
       <Modal
         visible={showLabItemSelector}
         transparent
-        animationType="none"
+        animationType="slide"
+        statusBarTranslucent={true}
         onRequestClose={closeLabSelectorModal}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={closeLabSelectorModal}
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
-          }}
-        >
-          <TouchableWithoutFeedback>
-            <RNAnimated.View
-              style={{
-                backgroundColor: theme.background,
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-                padding: 24,
-                maxHeight: '75%',
-                paddingBottom: 40 + insets.bottom,
-                transform: [{ translateY: labSelectorPanY }]
-              }}
-            >
-              {/* Header Drag Zone */}
-              <View {...labSelectorPanResponder.panHandlers} style={{ width: '100%' }}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={closeLabSelectorModal}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.15)',
+            }}
+          />
+          <RNAnimated.View
+            onLayout={(e) => {
+              labSelectorSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...labSelectorPanResponder.panHandlers}
+            style={{
+              backgroundColor: theme.background,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 24,
+              maxHeight: '75%',
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 12 : 20),
+              transform: [{ translateY: labSelectorPanY }]
+            }}
+          >
+            {/* Header Drag Zone */}
+            <View style={{ width: '100%' }}>
                 {/* Visual Drag Handle */}
                 <View style={{ alignItems: 'center', paddingTop: 0, paddingBottom: 16 }}>
                   <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#3a3a4a' : '#d1d5db' }} />
@@ -3902,7 +4457,14 @@ export default function OrdersScreen() {
                 <X size={16} color={isDarkMode ? '#8b8fa8' : '#6b7280'} />
               </TouchableOpacity>
 
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                contentContainerStyle={{ paddingBottom: 24 }}
+                onScroll={(event) => {
+                  labSelectorScrollOffset.current = event.nativeEvent.contentOffset.y;
+                }}
+                scrollEventThrottle={16}
+              >
                 {currentSelectedOrder?.items?.map((item: any, index: number) => {
                   const qName = typeof item.quality === 'object' ? item.quality?.name : item.quality || 'N/A';
                   const hasLab = item.labData && item.labData.labSendDate;
@@ -4004,40 +4566,43 @@ export default function OrdersScreen() {
                 </TouchableOpacity>
               )}
             </RNAnimated.View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Logs Viewer Modal */}
       <Modal
         visible={showLogsModal}
         transparent
-        animationType="none"
+        animationType="slide"
+        statusBarTranslucent={true}
         onRequestClose={closeLogsModal}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={closeLogsModal}
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'flex-end',
-          }}
-        >
-          <TouchableWithoutFeedback>
-            <RNAnimated.View
-              style={{
-                backgroundColor: theme.background,
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-                padding: 24,
-                height: '70%',
-                paddingBottom: 40 + insets.bottom,
-                transform: [{ translateY: logsPanY }]
-              }}
-            >
-              {/* Header Drag Zone */}
-              <View {...logsPanResponder.panHandlers} style={{ width: '100%' }}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={closeLogsModal}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.15)',
+            }}
+          />
+          <RNAnimated.View
+            onLayout={(e) => {
+              logsSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...logsPanResponder.panHandlers}
+            style={{
+              backgroundColor: theme.background,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 24,
+              height: '70%',
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 12 : 20),
+              transform: [{ translateY: logsPanY }]
+            }}
+          >
+            {/* Header Drag Zone */}
+            <View style={{ width: '100%' }}>
                 {/* Visual Drag Handle */}
                 <View style={{ alignItems: 'center', paddingTop: 0, paddingBottom: 16 }}>
                   <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#3a3a4a' : '#d1d5db' }} />
@@ -4071,10 +4636,14 @@ export default function OrdersScreen() {
                   <Text style={{ fontSize: 14, color: theme.textSecondary }}>No logs recorded for this order</Text>
                 </View>
               ) : (
-                <FlatList
+                <FlashList
                   data={logsQuery.data}
                   keyExtractor={(log: any) => log._id || Math.random().toString()}
                   showsVerticalScrollIndicator={false}
+                  onScroll={(event) => {
+                    logsScrollOffset.current = event.nativeEvent.contentOffset.y;
+                  }}
+                  scrollEventThrottle={16}
                   renderItem={({ item: log }: any) => (
                     <View style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -4094,12 +4663,11 @@ export default function OrdersScreen() {
                 />
               )}
             </RNAnimated.View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* PDF Preview Modal */}
-      <Modal visible={pdfPreviewData !== null} animationType="fade" transparent onRequestClose={() => setPdfPreviewData(null)}>
+      <Modal visible={pdfPreviewData !== null} animationType="fade" transparent statusBarTranslucent={true} onRequestClose={() => setPdfPreviewData(null)}>
         <View style={{ 
           flex: 1, 
           backgroundColor: 'rgba(15, 23, 42, 0.75)', // Rich slate dark overlay
@@ -4300,6 +4868,157 @@ export default function OrdersScreen() {
         onClose={() => setPreviewImages([])}
       />
 
+      {/* Update Status Modal */}
+      <Modal
+        visible={showStatusModal}
+        transparent
+        animationType="slide"
+        statusBarTranslucent={true}
+        onRequestClose={closeStatusModal}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable
+            onPress={closeStatusModal}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.15)',
+            }}
+          />
+          <RNAnimated.View
+            onLayout={(e) => {
+              statusSheetY.current = e.nativeEvent.layout.y;
+            }}
+            {...statusPanResponder.panHandlers}
+            style={{
+              backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingTop: 16,
+              paddingBottom: isLargeScreen ? 24 : (insets.bottom > 0 ? insets.bottom + 8 : 16),
+              borderTopWidth: 1,
+              borderTopColor: theme.borderLight,
+              transform: [{ translateY: statusPanY }],
+            }}
+          >
+            {/* Header Drag Zone */}
+            <View style={{ width: '100%' }}>
+              {/* Header indicator bar */}
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
+
+              <View style={{ paddingHorizontal: 20, marginBottom: 12, paddingRight: 60 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>Update Status</Text>
+                {statusModalOrder && (
+                  <Text style={{ fontSize: 13, fontWeight: '500', color: theme.textSecondary, marginTop: 2 }}>
+                    Order {getDisplayOrderId(statusModalOrder.orderId)}
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {/* Close Button absolute */}
+            <TouchableOpacity
+              onPress={closeStatusModal}
+              style={{
+                position: 'absolute',
+                top: 32,
+                right: 20,
+                padding: 4,
+                zIndex: 10,
+              }}
+            >
+              <X size={20} color={theme.textSecondary} />
+            </TouchableOpacity>
+
+            {statusModalOrder && (
+              <View style={{ paddingHorizontal: 20, gap: 10, marginTop: 8 }}>
+                {/* Pending Option */}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    statusMutation.mutate({ orderId: statusModalOrder._id!, status: 'pending' });
+                    closeStatusModal();
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 16,
+                    borderRadius: 16,
+                    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.02)' : '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: statusModalOrder.status === 'pending'
+                      ? (isDarkMode ? '#3b82f6' : Colors.primary[600])
+                      : (isDarkMode ? '#334155' : '#e2e8f0'),
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: isDarkMode ? 'rgba(234, 179, 8, 0.15)' : '#fef9c3',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <Clock size={18} color="#ca8a04" />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>Pending</Text>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 1 }}>Order is in progress</Text>
+                    </View>
+                  </View>
+                  {statusModalOrder.status === 'pending' && (
+                    <Check size={20} color={isDarkMode ? '#60a5fa' : Colors.primary[600]} />
+                  )}
+                </TouchableOpacity>
+
+                {/* Delivered Option */}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    statusMutation.mutate({ orderId: statusModalOrder._id!, status: 'delivered' });
+                    closeStatusModal();
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 16,
+                    borderRadius: 16,
+                    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.02)' : '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: statusModalOrder.status === 'delivered'
+                      ? (isDarkMode ? '#10b981' : '#059669')
+                      : (isDarkMode ? '#334155' : '#e2e8f0'),
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <Check size={18} color="#059669" />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>Delivered</Text>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 1 }}>Order has been delivered</Text>
+                    </View>
+                  </View>
+                  {statusModalOrder.status === 'delivered' && (
+                    <Check size={20} color={isDarkMode ? '#34d399' : '#059669'} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </RNAnimated.View>
+        </View>
+      </Modal>
+
       {/* Global Mutation Loading Overlay */}
       {(statusMutation.isPending || deleteOrderMutation.isPending || deleteItemMutation.isPending || isDownloadingPdf) && (
         <View style={{
@@ -4308,7 +5027,7 @@ export default function OrdersScreen() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'rgba(0,0,0,0.15)',
           justifyContent: 'center',
           alignItems: 'center',
           zIndex: 10000,
@@ -4388,6 +5107,30 @@ export default function OrdersScreen() {
         isDeleting={deleteLabsAllForOrderMutation.isPending}
       />
 
+      <DeleteConfirmModal
+        visible={deleteMillTarget !== null}
+        onClose={() => setDeleteMillTarget(null)}
+        onConfirm={() => {
+          if (deleteMillTarget?._id) {
+            deleteMillMutation.mutate(deleteMillTarget._id);
+          }
+        }}
+        title="Delete Mill"
+        message={`Are you sure you want to delete "${deleteMillTarget?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        isDeleting={deleteMillMutation.isPending}
+      />
+
+      <DeleteConfirmModal
+        visible={deleteWarning !== null}
+        onClose={() => setDeleteWarning(null)}
+        onConfirm={() => setDeleteWarning(null)}
+        title={deleteWarning?.title || 'Cannot Delete'}
+        message={deleteWarning?.message || ''}
+        isAlert={true}
+        alertBtnText="Close"
+      />
+
       {/* PDF Viewer Modal with Save & Share */}
       <PdfViewerModal
         visible={orderPdfViewerVisible}
@@ -4397,6 +5140,425 @@ export default function OrdersScreen() {
         filename={orderPdfViewerFilename}
         addToast={addToast}
       />
+
+
+      {/* Create Party Modal */}
+      <Modal
+        visible={showCreatePartyModal}
+        transparent
+        statusBarTranslucent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!createPartyMutation.isPending) setShowCreatePartyModal(false);
+        }}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => {
+            if (!createPartyMutation.isPending) setShowCreatePartyModal(false);
+          }}
+        >
+          <Pressable
+            style={{
+              width: '90%',
+              maxWidth: 340,
+              borderRadius: 20,
+              borderWidth: 1,
+              padding: 24,
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <TouchableOpacity
+              onPress={() => setShowCreatePartyModal(false)}
+              disabled={createPartyMutation.isPending}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                padding: 4,
+                zIndex: 10,
+              }}
+            >
+              <X size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: 12,
+                  backgroundColor: isDarkMode ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff',
+                }}
+              >
+                <User size={24} color={isDarkMode ? '#60a5fa' : '#2563eb'} />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>
+                Add New Party
+              </Text>
+            </View>
+
+            <TextInput
+              placeholder="Enter party name..."
+              placeholderTextColor={theme.textTertiary}
+              value={newPartyName}
+              onChangeText={setNewPartyName}
+              style={{
+                height: 48,
+                borderRadius: 12,
+                backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.neutral[50],
+                borderWidth: 1.5,
+                borderColor: theme.borderLight,
+                paddingHorizontal: 14,
+                fontSize: 14,
+                color: theme.text,
+                marginBottom: 20,
+              }}
+              autoFocus
+              editable={!createPartyMutation.isPending}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isDarkMode ? '#2a2a38' : '#f3f4f6',
+                  opacity: createPartyMutation.isPending ? 0.5 : 1,
+                }}
+                onPress={() => {
+                  setShowCreatePartyModal(false);
+                  setNewPartyName('');
+                }}
+                disabled={createPartyMutation.isPending}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isDarkMode ? Colors.primary[700] : Colors.primary[600],
+                  opacity: createPartyMutation.isPending ? 0.7 : 1,
+                }}
+                onPress={() => {
+                  if (!newPartyName.trim()) {
+                    Alert.alert('Error', 'Please enter a party name.');
+                    return;
+                  }
+                  createPartyMutation.mutate(newPartyName.trim());
+                }}
+                disabled={createPartyMutation.isPending}
+              >
+                {createPartyMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>
+                    Save
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Create Quality Modal */}
+      <Modal
+        visible={showCreateQualityModal}
+        transparent
+        statusBarTranslucent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!createQualityMutation.isPending) setShowCreateQualityModal(false);
+        }}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => {
+            if (!createQualityMutation.isPending) setShowCreateQualityModal(false);
+          }}
+        >
+          <Pressable
+            style={{
+              width: '90%',
+              maxWidth: 340,
+              borderRadius: 20,
+              borderWidth: 1,
+              padding: 24,
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <TouchableOpacity
+              onPress={() => setShowCreateQualityModal(false)}
+              disabled={createQualityMutation.isPending}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                padding: 4,
+                zIndex: 10,
+              }}
+            >
+              <X size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: 12,
+                  backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.15)' : '#effaf3',
+                }}
+              >
+                <Tag size={24} color={isDarkMode ? '#34d399' : '#059669'} />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>
+                Add New Quality
+              </Text>
+            </View>
+
+            <TextInput
+              placeholder="Enter quality name..."
+              placeholderTextColor={theme.textTertiary}
+              value={newQualityName}
+              onChangeText={setNewQualityName}
+              style={{
+                height: 48,
+                borderRadius: 12,
+                backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.neutral[50],
+                borderWidth: 1.5,
+                borderColor: theme.borderLight,
+                paddingHorizontal: 14,
+                fontSize: 14,
+                color: theme.text,
+                marginBottom: 20,
+              }}
+              autoFocus
+              editable={!createQualityMutation.isPending}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isDarkMode ? '#2a2a38' : '#f3f4f6',
+                  opacity: createQualityMutation.isPending ? 0.5 : 1,
+                }}
+                onPress={() => {
+                  setShowCreateQualityModal(false);
+                  setNewQualityName('');
+                }}
+                disabled={createQualityMutation.isPending}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isDarkMode ? Colors.primary[700] : Colors.primary[600],
+                  opacity: createQualityMutation.isPending ? 0.7 : 1,
+                }}
+                onPress={() => {
+                  if (!newQualityName.trim()) {
+                    Alert.alert('Error', 'Please enter a quality name.');
+                    return;
+                  }
+                  createQualityMutation.mutate(newQualityName.trim());
+                }}
+                disabled={createQualityMutation.isPending}
+              >
+                {createQualityMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>
+                    Save
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Create Mill Modal */}
+      <Modal
+        visible={showCreateMillModal}
+        transparent
+        statusBarTranslucent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!createMillMutation.isPending) setShowCreateMillModal(false);
+        }}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => {
+            if (!createMillMutation.isPending) setShowCreateMillModal(false);
+          }}
+        >
+          <Pressable
+            style={{
+              width: '90%',
+              maxWidth: 340,
+              borderRadius: 20,
+              borderWidth: 1,
+              padding: 24,
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <TouchableOpacity
+              onPress={() => setShowCreateMillModal(false)}
+              disabled={createMillMutation.isPending}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                padding: 4,
+                zIndex: 10,
+              }}
+            >
+              <X size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: 12,
+                  backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb',
+                }}
+              >
+                <Layers size={24} color={isDarkMode ? '#fbbf24' : '#d97706'} />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>
+                Add New Mill Name
+              </Text>
+            </View>
+
+            <TextInput
+              placeholder="Enter mill name..."
+              placeholderTextColor={theme.textTertiary}
+              value={newMillName}
+              onChangeText={setNewMillName}
+              style={{
+                height: 48,
+                borderRadius: 12,
+                backgroundColor: isDarkMode ? Colors.neutral[900] : Colors.neutral[50],
+                borderWidth: 1.5,
+                borderColor: theme.borderLight,
+                paddingHorizontal: 14,
+                fontSize: 14,
+                color: theme.text,
+                marginBottom: 20,
+              }}
+              autoFocus
+              editable={!createMillMutation.isPending}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isDarkMode ? '#2a2a38' : '#f3f4f6',
+                  opacity: createMillMutation.isPending ? 0.5 : 1,
+                }}
+                onPress={() => {
+                  setShowCreateMillModal(false);
+                  setNewMillName('');
+                }}
+                disabled={createMillMutation.isPending}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isDarkMode ? Colors.primary[700] : Colors.primary[600],
+                  opacity: createMillMutation.isPending ? 0.7 : 1,
+                }}
+                onPress={() => {
+                  if (!newMillName.trim()) {
+                    Alert.alert('Error', 'Please enter a mill name.');
+                    return;
+                  }
+                  createMillMutation.mutate(newMillName.trim());
+                }}
+                disabled={createMillMutation.isPending}
+              >
+                {createMillMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>
+                    Save
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      </View>
     </SafeAreaView>
   );
 }

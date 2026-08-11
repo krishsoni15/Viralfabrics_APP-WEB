@@ -2,6 +2,12 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IFinishLotStock extends Document {
   qualityName: string;
+  lotType: 'RFD' | 'OTHER';
+  sequence: string;
+  weaverName?: string;
+  weaverQuality?: string;
+  millName?: string;
+  processInMill?: string;
   images?: string[];
   meter?: number;
   piece?: number;
@@ -15,6 +21,37 @@ const FinishLotStockSchema = new Schema<IFinishLotStock>({
     required: true,
     trim: true,
     maxlength: 100
+  },
+  lotType: {
+    type: String,
+    enum: ['RFD', 'OTHER'],
+    required: true,
+    default: 'OTHER'
+  },
+  sequence: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  weaverName: {
+    type: String,
+    required: false,
+    trim: true
+  },
+  weaverQuality: {
+    type: String,
+    required: false,
+    trim: true
+  },
+  millName: {
+    type: String,
+    required: false,
+    trim: true
+  },
+  processInMill: {
+    type: String,
+    required: false,
+    trim: true
   },
   images: {
     type: [String],
