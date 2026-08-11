@@ -1603,20 +1603,31 @@ export default function FinishLotStockPage() {
 
 
 
-      {/* Form Modal (Create/Edit Drawer with Validation Shake Animations) */}
+      {/* Form Modal (Create/Edit Drawer with Validation Shake Animations & Horizontal Layout) */}
       {showFormModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border transform transition-all animate-scale-up ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-gray-900'
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden border my-auto transform transition-all animate-scale-up flex flex-col ${isDarkMode ? 'bg-slate-900 border-slate-700/80 text-white' : 'bg-white border-slate-200 text-gray-900'
             }`}>
             {/* Modal Header */}
-            <div className={`px-6 py-4 flex items-center justify-between border-b ${isDarkMode ? 'border-slate-700 bg-slate-800/60' : 'border-slate-100 bg-slate-50'
+            <div className={`px-6 py-4 flex items-center justify-between border-b ${isDarkMode ? 'border-slate-800 bg-slate-900/90' : 'border-slate-100 bg-slate-50/80'
               }`}>
-              <h2 className="text-xl font-bold">
-                {formMode === 'edit' ? 'Edit Stock Item' : 'Add Finish Lot Stock'}
-              </h2>
+              <div className="flex items-center space-x-3">
+                <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-blue-50 text-blue-600 border border-blue-100'
+                  }`}>
+                  {formMode === 'edit' ? <PencilIcon className="h-5 w-5" /> : <PlusIcon className="h-5 w-5" />}
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold tracking-tight">
+                    {formMode === 'edit' ? 'Edit Stock Item' : 'Add Finish Lot Stock'}
+                  </h2>
+                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Enter stock details, mill processes, and upload images.
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => setShowFormModal(false)}
-                className={`p-1.5 rounded-xl transition-all ${isDarkMode ? 'hover:bg-slate-700 text-gray-400' : 'hover:bg-slate-200 text-gray-500'
+                className={`p-2 rounded-xl transition-all ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
                   }`}
               >
                 <XMarkIcon className="h-5 w-5" />
@@ -1624,186 +1635,255 @@ export default function FinishLotStockPage() {
             </div>
 
             {/* Modal Form Content */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
-              {/* Lot Type */}
-              <div className="relative">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                  Lot Type <span className="text-red-500">*</span>
-                </label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="lotType"
-                      value="RFD"
-                      checked={formData.lotType === 'RFD'}
-                      onChange={() => setFormData(prev => ({ ...prev, lotType: 'RFD' }))}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>RFD Fabric</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="lotType"
-                      value="OTHER"
-                      checked={formData.lotType === 'OTHER'}
-                      onChange={() => setFormData(prev => ({ ...prev, lotType: 'OTHER' }))}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className={`text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Other Finish Fabric</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Quality Name */}
-              <div className="relative">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                  Quality Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter quality name..."
-                  value={formData.qualityName}
-                  onChange={(e) => {
-                    setFormData(prev => ({ ...prev, qualityName: e.target.value }));
-                    setFormErrors(prev => ({ ...prev, qualityName: false }));
-                  }}
-                  className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.qualityName
-                    ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
-                    : isDarkMode
-                      ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
-                      : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
-                    }`}
-                />
-              </div>
-
-              {/* Weaver and Mill Fields */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                    Weaver Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Weaver name..."
-                    value={formData.weaverName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, weaverName: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode
-                        ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
-                        : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
-                      }`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                    Weaver Quality
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Weaver quality..."
-                    value={formData.weaverQuality}
-                    onChange={(e) => setFormData(prev => ({ ...prev, weaverQuality: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode
-                        ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
-                        : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
-                      }`}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                    Mill Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Mill name..."
-                    value={formData.millName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, millName: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode
-                        ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
-                        : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
-                      }`}
-                  />
-                </div>
-              </div>
-
-              <div className="relative">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                  Process in Mill
-                </label>
-                <textarea
-                  placeholder="Enter process details..."
-                  rows={2}
-                  value={formData.processInMill}
-                  onChange={(e) => setFormData(prev => ({ ...prev, processInMill: e.target.value }))}
-                  className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all resize-none ${isDarkMode
-                      ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
-                      : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
-                    }`}
-                />
-              </div>
-
-              {/* Meter and Piece inline layout */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                    Meter (Length)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={formData.meter}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, meter: e.target.value }));
-                      setFormErrors(prev => ({ ...prev, meter: false }));
-                    }}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.meter
-                      ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
-                      : isDarkMode
-                        ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
-                        : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
-                      }`}
-                  />
-                  {formErrors.meter && (
-                    <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be positive</span>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                    Piece (Qty)
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={formData.piece}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, piece: e.target.value }));
-                      setFormErrors(prev => ({ ...prev, piece: false }));
-                    }}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.piece
-                      ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
-                      : isDarkMode
-                        ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500'
-                        : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'
-                      }`}
-                  />
-                  {formErrors.piece && (
-                    <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be positive integer</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Image Upload Area */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-80px)]">
+              {/* Section 1: Lot Type Selection (Horizontal Interactive Cards) */}
               <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">
-                    Images
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center justify-between">
+                  <span>Lot Type <span className="text-red-500">*</span></span>
+                  <span className="text-[10px] font-normal normal-case text-slate-400">Select fabric categorization</span>
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* RFD Card */}
+                  <div
+                    onClick={() => setFormData(prev => ({ ...prev, lotType: 'RFD' }))}
+                    className={`group relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 flex items-center space-x-3.5 ${formData.lotType === 'RFD'
+                        ? isDarkMode
+                          ? 'border-blue-500 bg-blue-500/10 text-white shadow-lg shadow-blue-500/10 ring-2 ring-blue-500/20'
+                          : 'border-blue-600 bg-blue-50/80 text-blue-950 shadow-md ring-2 ring-blue-500/20'
+                        : isDarkMode
+                          ? 'border-slate-800 bg-slate-800/40 hover:border-slate-700 hover:bg-slate-800/80 text-slate-300'
+                          : 'border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-slate-100/80 text-slate-700'
+                      }`}
+                  >
+                    <div className={`p-2.5 rounded-xl transition-colors ${formData.lotType === 'RFD'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : isDarkMode ? 'bg-slate-800 text-slate-400 group-hover:text-blue-400' : 'bg-white text-slate-500 group-hover:text-blue-600'
+                      }`}>
+                      <TagIcon className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-sm">RFD Fabric</span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${formData.lotType === 'RFD'
+                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                            : isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                          Ready For Dyeing
+                        </span>
+                      </div>
+                      <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        Untreated or plain fabric lot
+                      </p>
+                    </div>
+                    {formData.lotType === 'RFD' && (
+                      <div className="absolute top-3 right-3 text-blue-500">
+                        <CheckCircleIcon className="h-5 w-5 fill-blue-500 text-white" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* OTHER Card */}
+                  <div
+                    onClick={() => setFormData(prev => ({ ...prev, lotType: 'OTHER' }))}
+                    className={`group relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 flex items-center space-x-3.5 ${formData.lotType === 'OTHER'
+                        ? isDarkMode
+                          ? 'border-purple-500 bg-purple-500/10 text-white shadow-lg shadow-purple-500/10 ring-2 ring-purple-500/20'
+                          : 'border-purple-600 bg-purple-50/80 text-purple-950 shadow-md ring-2 ring-purple-500/20'
+                        : isDarkMode
+                          ? 'border-slate-800 bg-slate-800/40 hover:border-slate-700 hover:bg-slate-800/80 text-slate-300'
+                          : 'border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-slate-100/80 text-slate-700'
+                      }`}
+                  >
+                    <div className={`p-2.5 rounded-xl transition-colors ${formData.lotType === 'OTHER'
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : isDarkMode ? 'bg-slate-800 text-slate-400 group-hover:text-purple-400' : 'bg-white text-slate-500 group-hover:text-purple-600'
+                      }`}>
+                      <Squares2X2Icon className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-sm">Other Finish Fabric</span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${formData.lotType === 'OTHER'
+                            ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                            : isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                          Finished Goods
+                        </span>
+                      </div>
+                      <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        Dyed, printed, or processed stock
+                      </p>
+                    </div>
+                    {formData.lotType === 'OTHER' && (
+                      <div className="absolute top-3 right-3 text-purple-500">
+                        <CheckCircleIcon className="h-5 w-5 fill-purple-500 text-white" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Core Details (Horizontal 2-Column Grid) */}
+              <div className="space-y-4 pt-2">
+                {/* Quality Name */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Quality Name <span className="text-red-500">*</span>
                   </label>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isDarkMode ? 'bg-slate-900 text-gray-400' : 'bg-slate-100 text-gray-600'
+                  <input
+                    type="text"
+                    placeholder="Enter quality name (e.g. Cotton Satin, Silk Chiffon)..."
+                    value={formData.qualityName}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, qualityName: e.target.value }));
+                      setFormErrors(prev => ({ ...prev, qualityName: false }));
+                    }}
+                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium ${formErrors.qualityName
+                        ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
+                        : isDarkMode
+                          ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                      }`}
+                  />
+                  {formErrors.qualityName && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-1 block">Quality Name is required</span>
+                  )}
+                </div>
+
+                {/* Weaver Name & Weaver Quality */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Weaver Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Weaver name..."
+                      value={formData.weaverName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, weaverName: e.target.value }))}
+                      className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode
+                          ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                        }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Weaver Quality
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Weaver quality..."
+                      value={formData.weaverQuality}
+                      onChange={(e) => setFormData(prev => ({ ...prev, weaverQuality: e.target.value }))}
+                      className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode
+                          ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                        }`}
+                    />
+                  </div>
+                </div>
+
+                {/* Mill Name & Process in Mill */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Mill Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Mill name..."
+                      value={formData.millName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, millName: e.target.value }))}
+                      className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode
+                          ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                        }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Process in Mill
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Process details..."
+                      value={formData.processInMill}
+                      onChange={(e) => setFormData(prev => ({ ...prev, processInMill: e.target.value }))}
+                      className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode
+                          ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                        }`}
+                    />
+                  </div>
+                </div>
+
+                {/* Meter and Piece */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Meter (Length)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.meter}
+                        onChange={(e) => {
+                          setFormData(prev => ({ ...prev, meter: e.target.value }));
+                          setFormErrors(prev => ({ ...prev, meter: false }));
+                        }}
+                        className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono ${formErrors.meter
+                            ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
+                            : isDarkMode
+                              ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                              : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                          }`}
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-semibold pointer-events-none">Mtr</span>
+                    </div>
+                    {formErrors.meter && (
+                      <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be positive</span>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Piece (Qty)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={formData.piece}
+                        onChange={(e) => {
+                          setFormData(prev => ({ ...prev, piece: e.target.value }));
+                          setFormErrors(prev => ({ ...prev, piece: false }));
+                        }}
+                        className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono ${formErrors.piece
+                            ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
+                            : isDarkMode
+                              ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                              : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                          }`}
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-semibold pointer-events-none">Pcs</span>
+                    </div>
+                    {formErrors.piece && (
+                      <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be positive integer</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Image Upload Area */}
+              <div className="pt-2">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Images & Attachments
+                  </label>
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold ${isDarkMode ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-100 text-slate-600 border border-slate-200'
                     }`}>
                     {formData.images.length + pendingImageFiles.length} image(s)
                   </span>
@@ -1811,24 +1891,26 @@ export default function FinishLotStockPage() {
 
                 {/* Drag & Drop File Container */}
                 <div
-                  className={`border-2 border-dashed rounded-xl p-4 flex flex-col md:flex-row items-center gap-4 transition-all ${dragActive
-                    ? 'border-blue-500 bg-blue-500/5'
-                    : isDarkMode ? 'border-slate-700 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-900' : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
+                  className={`border-2 border-dashed rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all ${dragActive
+                      ? 'border-blue-500 bg-blue-500/10'
+                      : isDarkMode
+                        ? 'border-slate-700 bg-slate-800/30 hover:border-slate-600 hover:bg-slate-800/50'
+                        : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-100/50'
                     }`}
                   onDragEnter={handleDrag}
                   onDragOver={handleDrag}
                   onDragLeave={handleDrag}
                   onDrop={handleDrop}
                 >
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-3">
                     <div
-                      className={`relative px-4 py-2.5 rounded-lg border text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all active:scale-95 ${isDarkMode
-                        ? 'border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-gray-300'
-                        : 'border-slate-300 hover:border-slate-400 hover:bg-slate-200 text-gray-700 shadow-sm'
+                      className={`relative px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all active:scale-95 ${isDarkMode
+                          ? 'border-slate-700 hover:border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 shadow-sm'
+                          : 'border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 shadow-sm'
                         }`}
                     >
                       <ArrowUpTrayIcon className="w-4 h-4 text-blue-500 animate-bounce" />
-                      Upload Image
+                      <span>Upload Image</span>
                       <input
                         type="file"
                         id="finish-image-upload"
@@ -1842,27 +1924,27 @@ export default function FinishLotStockPage() {
                     <button
                       type="button"
                       onClick={() => setShowCamera(true)}
-                      className={`px-4 py-2.5 rounded-lg border text-xs font-semibold flex items-center gap-2 transition-all active:scale-95 ${isDarkMode
-                        ? 'border-slate-700 hover:border-slate-600 hover:bg-slate-800 text-gray-300'
-                        : 'border-slate-300 hover:border-slate-400 hover:bg-slate-200 text-gray-700 shadow-sm'
+                      className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all active:scale-95 ${isDarkMode
+                          ? 'border-slate-700 hover:border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 shadow-sm'
+                          : 'border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 shadow-sm'
                         }`}
                     >
                       <PhotoIcon className="w-4 h-4 text-emerald-500" />
-                      Camera
+                      <span>Camera</span>
                     </button>
                   </div>
 
-                  <span className={`text-xs ml-auto hidden md:inline ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                  <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                     Drag & drop images here
                   </span>
                 </div>
 
-                {/* Previews */}
+                {/* Image Previews */}
                 {(formData.images.length > 0 || pendingImageFiles.length > 0) && (
-                  <div className="grid grid-cols-4 gap-3 mt-4">
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mt-4">
                     {/* Pending Local Previews */}
                     {pendingImageFiles.map((pImg, idx) => (
-                      <div key={`pending-${idx}`} className="relative aspect-square rounded-xl overflow-hidden border border-blue-500/30 shadow-md">
+                      <div key={`pending-${idx}`} className="relative aspect-square rounded-xl overflow-hidden border border-blue-500/40 shadow-md">
                         <img
                           src={pImg.previewUrl}
                           alt="Pending upload"
@@ -1906,15 +1988,15 @@ export default function FinishLotStockPage() {
                 )}
               </div>
 
-              {/* Form Actions */}
-              <div className="flex items-center space-x-3 pt-4 border-t dark:border-slate-700/80 border-slate-100">
+              {/* Form Actions Footer */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t dark:border-slate-800 border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowFormModal(false)}
                   disabled={submitting}
-                  className={`flex-1 py-2.5 text-sm font-semibold rounded-lg border transition-all ${isDarkMode
-                    ? 'border-gray-700 hover:bg-slate-750 text-gray-300'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                  className={`px-6 py-2.5 text-sm font-semibold rounded-xl border transition-all ${isDarkMode
+                      ? 'border-slate-700 hover:bg-slate-800 text-slate-300'
+                      : 'border-slate-200 hover:bg-slate-100 text-slate-700'
                     }`}
                 >
                   Cancel
@@ -1922,7 +2004,7 @@ export default function FinishLotStockPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-2.5 text-sm font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center space-x-2"
+                  className="px-6 py-2.5 text-sm font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 transition-all active:scale-95 flex items-center justify-center space-x-2"
                 >
                   {submitting && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />

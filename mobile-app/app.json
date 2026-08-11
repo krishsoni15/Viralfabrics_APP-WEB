@@ -77,7 +77,7 @@
     "updates": {
       "url": "https://u.expo.dev/c637df92-20f4-4a8b-aab2-06063139fbe8",
       "requestHeaders": {
-        "expo-channel-name": "preview"
+        "expo-channel-name": "production"
       }
     }
   }

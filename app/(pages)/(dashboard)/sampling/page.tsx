@@ -1452,150 +1452,255 @@ export default function SamplingPage() {
       )}
 
       {showFormModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border transform transition-all animate-scale-up ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-gray-900'}`}>
-            <div className={`px-6 py-4 flex items-center justify-between border-b ${isDarkMode ? 'border-slate-700 bg-slate-800/60' : 'border-slate-100 bg-slate-50'}`}>
-              <h2 className="text-xl font-bold">{formMode === 'edit' ? 'Edit Sampling' : 'Add Sampling'}</h2>
-              <button onClick={() => setShowFormModal(false)} className={`p-1.5 rounded-xl transition-all ${isDarkMode ? 'hover:bg-slate-700 text-gray-400' : 'hover:bg-slate-200 text-gray-500'}`}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden border my-auto transform transition-all animate-scale-up flex flex-col ${
+            isDarkMode ? 'bg-slate-900 border-slate-700/80 text-white' : 'bg-white border-slate-200 text-gray-900'
+          }`}>
+            {/* Modal Header */}
+            <div className={`px-6 py-4 flex items-center justify-between border-b ${
+              isDarkMode ? 'border-slate-800 bg-slate-900/90' : 'border-slate-100 bg-slate-50/80'
+            }`}>
+              <div className="flex items-center space-x-3">
+                <div className={`p-2 rounded-xl ${
+                  isDarkMode ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-blue-50 text-blue-600 border border-blue-100'
+                }`}>
+                  {formMode === 'edit' ? <PencilIcon className="h-5 w-5" /> : <PlusIcon className="h-5 w-5" />}
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold tracking-tight">
+                    {formMode === 'edit' ? 'Edit Sampling' : 'Add Sampling'}
+                  </h2>
+                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Enter sampling details, location, weaver & mill processes.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFormModal(false)}
+                className={`p-2 rounded-xl transition-all ${
+                  isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
+                }`}
+              >
                 <XMarkIcon className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Quality Name <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  placeholder="Enter quality name..."
-                  value={formData.qualityName}
-                  onChange={(e) => {
-                    setFormData(prev => ({ ...prev, qualityName: e.target.value }));
-                    setFormErrors(prev => ({ ...prev, qualityName: false }));
-                  }}
-                  className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.qualityName ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30' : isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Where to put</label>
-                <input
-                  type="text"
-                  placeholder="Enter storage location..."
-                  value={formData.whereToPut}
-                  onChange={(e) => setFormData(prev => ({ ...prev, whereToPut: e.target.value }))}
-                  className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            {/* Modal Form Content */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto max-h-[calc(85vh-80px)]">
+              {/* Row 1: Quality Name & Where to put */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Weaver Name</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Quality Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter quality name..."
+                    value={formData.qualityName}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, qualityName: e.target.value }));
+                      setFormErrors(prev => ({ ...prev, qualityName: false }));
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium ${
+                      formErrors.qualityName
+                        ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
+                        : isDarkMode
+                          ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                  {formErrors.qualityName && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-1 block">Quality Name is required</span>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Where to Put
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter storage location..."
+                    value={formData.whereToPut}
+                    onChange={(e) => setFormData(prev => ({ ...prev, whereToPut: e.target.value }))}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Weaver Name & Weaver Quality */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Weaver Name
+                  </label>
                   <input
                     type="text"
                     placeholder="Enter weaver name..."
                     value={formData.weaverName}
                     onChange={(e) => setFormData(prev => ({ ...prev, weaverName: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Weaver Quality</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Weaver Quality
+                  </label>
                   <input
                     type="text"
                     placeholder="Enter weaver quality..."
                     value={formData.weaverQuality}
                     onChange={(e) => setFormData(prev => ({ ...prev, weaverQuality: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Row 3: Mill Name & Process in Mill */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Mill Name</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Mill Name
+                  </label>
                   <input
                     type="text"
                     placeholder="Enter mill name..."
                     value={formData.millName}
                     onChange={(e) => setFormData(prev => ({ ...prev, millName: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Process in Mill</label>
-                  <textarea
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Process in Mill
+                  </label>
+                  <input
+                    type="text"
                     placeholder="Enter process details..."
                     value={formData.processInMill}
                     onChange={(e) => setFormData(prev => ({ ...prev, processInMill: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all resize-none h-20 ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Notes</label>
-                <textarea
-                  placeholder="Enter notes..."
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all resize-none h-24 ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              {/* Row 4: Notes & Quantity / Meter Specs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Meter (Length)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={formData.meter}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, meter: e.target.value }));
-                      setFormErrors(prev => ({ ...prev, meter: false }));
-                    }}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.meter ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30' : isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
-                  />
-                  {formErrors.meter && <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be positive</span>}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Piece (Qty)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={formData.piece}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, piece: e.target.value }));
-                      setFormErrors(prev => ({ ...prev, piece: false }));
-                    }}
-                    className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${formErrors.piece ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30' : isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-200 text-gray-900 placeholder-gray-400'}`}
-                  />
-                  {formErrors.piece && <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be positive integer</span>}
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <label className={`block text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                    }`}>
-                    Images
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Notes
                   </label>
-                  <span className={`text-xs px-2 py-1 rounded ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-                    }`}>
+                  <textarea
+                    placeholder="Enter notes..."
+                    rows={2}
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    className={`w-full px-4 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all resize-none ${
+                      isDarkMode
+                        ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Meter (Length)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.meter}
+                        onChange={(e) => {
+                          setFormData(prev => ({ ...prev, meter: e.target.value }));
+                          setFormErrors(prev => ({ ...prev, meter: false }));
+                        }}
+                        className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm ${
+                          formErrors.meter
+                            ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
+                            : isDarkMode
+                              ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                              : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                        }`}
+                      />
+                      <span className="absolute right-2.5 top-2 text-xs text-slate-400 font-semibold pointer-events-none">Mtr</span>
+                    </div>
+                    {formErrors.meter && <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be positive</span>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Piece (Qty)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={formData.piece}
+                        onChange={(e) => {
+                          setFormData(prev => ({ ...prev, piece: e.target.value }));
+                          setFormErrors(prev => ({ ...prev, piece: false }));
+                        }}
+                        className={`w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm ${
+                          formErrors.piece
+                            ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
+                            : isDarkMode
+                              ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                              : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                        }`}
+                      />
+                      <span className="absolute right-2.5 top-2 text-xs text-slate-400 font-semibold pointer-events-none">Pcs</span>
+                    </div>
+                    {formErrors.piece && <span className="text-[10px] text-red-500 font-semibold mt-1 block">Must be integer</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Images Section */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Images & Attachments
+                  </label>
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold ${
+                    isDarkMode ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                  }`}>
                     {pendingImages.length} image(s)
                   </span>
                 </div>
 
-                {/* Image Upload Area - Compact with Drag & Drop */}
+                {/* Drag & Drop File Container */}
                 <div
-                  className={`flex items-center space-x-3 mb-3 p-4 rounded-lg border-2 border-dashed transition-all duration-200 ${dragActive
-                      ? isDarkMode
-                        ? 'border-blue-500 bg-blue-500/10'
-                        : 'border-blue-400 bg-blue-50'
+                  className={`border-2 border-dashed rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all ${
+                    dragActive
+                      ? 'border-blue-500 bg-blue-500/10'
                       : isDarkMode
-                        ? 'border-slate-700 bg-slate-900/50'
-                        : 'border-slate-200 bg-slate-50'
-                    }`}
+                        ? 'border-slate-700 bg-slate-800/30 hover:border-slate-600 hover:bg-slate-800/50'
+                        : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-100/50'
+                  }`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
@@ -1610,89 +1715,69 @@ export default function SamplingPage() {
                     id="sampling-image-upload"
                     disabled={submitting}
                   />
-                  <label
-                    htmlFor="sampling-image-upload"
-                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg border-2 border-dashed cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${isDarkMode
-                        ? 'border-gray-600 hover:border-blue-500 text-gray-300 hover:text-blue-400'
-                        : 'border-gray-300 hover:border-blue-400 text-gray-600 hover:text-blue-600'
-                      }`}
-                  >
-                    <CloudArrowUpIcon className="h-5 w-5 mr-2" />
-                    Upload Image
-                  </label>
 
-                  {/* Camera Button */}
-                  <button
-                    type="button"
-                    onClick={() => setShowCamera(true)}
-                    className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg border-2 border-dashed transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center ${isDarkMode
-                        ? 'border-gray-600 hover:border-green-500 text-gray-300 hover:text-green-400'
-                        : 'border-gray-300 hover:border-green-400 text-gray-600 hover:text-green-600'
+                  <div className="flex items-center gap-3">
+                    <label
+                      htmlFor="sampling-image-upload"
+                      className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all active:scale-95 ${
+                        isDarkMode
+                          ? 'border-slate-700 hover:border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 shadow-sm'
+                          : 'border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 shadow-sm'
                       }`}
-                  >
-                    <PhotoIcon className="h-5 w-5 mr-2" />
-                    Camera
-                  </button>
+                    >
+                      <CloudArrowUpIcon className="h-4 w-4 text-blue-500 animate-bounce" />
+                      <span>Upload Image</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCamera(true)}
+                      className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all active:scale-95 ${
+                        isDarkMode
+                          ? 'border-slate-700 hover:border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 shadow-sm'
+                          : 'border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 shadow-sm'
+                      }`}
+                    >
+                      <PhotoIcon className="h-4 w-4 text-emerald-500" />
+                      <span>Camera</span>
+                    </button>
+                  </div>
 
                   {submitting && (
                     <div className="flex items-center space-x-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                      <span className={`text-sm hidden sm:inline ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                        }`}>Processing...</span>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
+                      <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Uploading...</span>
                     </div>
                   )}
 
-                  {/* Drag & Drop Hint */}
-                  {!submitting && !dragActive && (
-                    <span className={`text-xs ml-auto hidden md:inline ${isDarkMode ? 'text-gray-500' : 'text-gray-400'
-                      }`}>
-                      Drag & drop images here
-                    </span>
-                  )}
-                  {dragActive && (
-                    <span className={`text-xs ml-auto hidden md:inline font-semibold animate-pulse ${isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                      }`}>
-                      Drop images here
+                  {!submitting && (
+                    <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {dragActive ? 'Drop images here' : 'Drag & drop images here'}
                     </span>
                   )}
                 </div>
 
                 {pendingImages.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mt-4">
                     {pendingImages.map((img, idx) => (
-                      <div key={idx} className="relative group">
-                        <div className={`aspect-square rounded-xl overflow-hidden border-2 shadow-sm hover:shadow-lg transition-all duration-200 hover:scale-105 animate-fade-in-scale ${isDarkMode
-                            ? 'border-gray-600 bg-gray-700'
-                            : 'border-gray-200 bg-gray-100'
-                          }`}>
-                          <img
-                            src={img.url}
-                            alt=""
-                            className="object-cover h-full w-full cursor-pointer"
-                            onClick={() => setShowImagePreview({ urls: pendingImages.map(p => p.url), index: idx })}
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                            }}
-                          />
-                          {/* Preview Button */}
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200">
-                            <button
-                              type="button"
-                              onClick={() => setShowImagePreview({ urls: pendingImages.map(p => p.url), index: idx })}
-                              className="bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 shadow-lg hover:scale-110 transition-all duration-200"
-                              title="Preview Image"
-                            >
-                              <EyeIcon className="h-5 w-5" />
-                            </button>
-                          </div>
-                        </div>
+                      <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-700/60 bg-slate-950 group">
+                        <img
+                          src={img.url}
+                          alt=""
+                          className="w-full h-full object-cover cursor-pointer"
+                          onClick={() => setShowImagePreview({ urls: pendingImages.map(p => p.url), index: idx })}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
                         <button
                           type="button"
                           onClick={() => handleRemoveImage(idx)}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-all duration-200 z-10 hover:scale-110 active:scale-95 shadow-md"
+                          className="absolute top-1 right-1 bg-black/70 hover:bg-red-600 text-white rounded-lg p-1 shadow-md transition-all active:scale-90 hover:scale-110 cursor-pointer"
+                          title="Remove image"
                         >
-                          <XMarkIcon className="h-3 w-3" />
+                          <XMarkIcon className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
@@ -1700,10 +1785,28 @@ export default function SamplingPage() {
                 )}
               </div>
 
-              <div className="flex items-center space-x-3 pt-4 border-t dark:border-slate-700/80 border-slate-100">
-                <button type="button" onClick={() => setShowFormModal(false)} disabled={submitting} className={`flex-1 py-2.5 text-sm font-semibold rounded-lg border transition-all ${isDarkMode ? 'border-gray-700 hover:bg-slate-750 text-gray-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}>Cancel</button>
-                <button type="submit" disabled={submitting} className="flex-1 py-2.5 text-sm font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center space-x-2">
-                  {submitting && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t dark:border-slate-800 border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowFormModal(false)}
+                  disabled={submitting}
+                  className={`px-6 py-2.5 text-sm font-semibold rounded-xl border transition-all ${
+                    isDarkMode
+                      ? 'border-slate-700 hover:bg-slate-800 text-slate-300'
+                      : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-6 py-2.5 text-sm font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 transition-all active:scale-95 flex items-center justify-center space-x-2"
+                >
+                  {submitting && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  )}
                   <span>{formMode === 'edit' ? 'Save Changes' : 'Create Sampling'}</span>
                 </button>
               </div>
