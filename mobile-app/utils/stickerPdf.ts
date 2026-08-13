@@ -1,6 +1,7 @@
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+import { generateQrSvg } from './qrCode';
 
 interface StickerData {
   type: 'sample' | 'fabric' | 'grey' | 'finish-lot-stock';
@@ -199,7 +200,8 @@ function generateStickerHtml(data: StickerData): string {
     `;
   }
 
-  const isGrey = data.type === 'grey';
+  const hasQr = false;
+  const qrSvgHtml = hasQr ? generateQrSvg(qrPayload) : '';
 
   return `<!DOCTYPE html>
 <html>
@@ -279,7 +281,7 @@ function generateStickerHtml(data: StickerData): string {
     justify-content: center;
     border-left: 0.5mm solid #000;
   }
-  .qr-container img {
+  .qr-container svg, .qr-container img {
     width: 20mm;
     height: 20mm;
   }
@@ -324,21 +326,20 @@ function generateStickerHtml(data: StickerData): string {
     border-right: none;
   }
 
-
 </style>
 </head>
 <body>
 <div class="sticker">
   ${headerHtml}
   <div class="body-row">
-    <div class="table-container" style="${data.type === 'finish-lot-stock' ? 'width: 73mm;' : 'width: 100%;'}">
+    <div class="table-container" style="${hasQr ? 'width: 73mm;' : 'width: 100%;'}">
       <table>
         ${tableContent}
       </table>
     </div>
-    ${data.type === 'finish-lot-stock' ? `
+    ${hasQr ? `
     <div class="qr-container">
-      <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrPayload)}" />
+      ${qrSvgHtml}
     </div>
     ` : ''}
   </div>
@@ -347,37 +348,12 @@ function generateStickerHtml(data: StickerData): string {
 </html>`;
 }
 
+import { generatePdfFromHtml } from './pdfUtils';
+
 export async function generateStickerPdf(data: StickerData, filename: string): Promise<{ uri: string; base64?: string }> {
   const html = generateStickerHtml(data);
-  const result = await Print.printToFileAsync({
-    html,
-    base64: true,
+  return generatePdfFromHtml(html, filename, {
     width: 283.46,  // 100mm in points (72 points per inch)
     height: 141.73, // 50mm in points
   });
-
-  let finalUri = result.uri;
-  let base64 = result.base64;
-
-  if (Platform.OS !== 'web') {
-    try {
-      const dest = `${FileSystem.cacheDirectory}${filename}`;
-      if (Platform.OS === 'android' && base64) {
-        // Android print framework locks files in the temp spooler folder.
-        // Writing the returned base64 string directly to our cache folder bypasses the lock cleanly.
-        await FileSystem.writeAsStringAsync(dest, base64, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        finalUri = dest;
-      } else {
-        // iOS or fallback: copy the temporary print file to cache
-        await FileSystem.copyAsync({ from: result.uri, to: dest });
-        finalUri = dest;
-      }
-    } catch (err) {
-      console.warn('Failed to cache generated sticker PDF:', err);
-    }
-  }
-
-  return { uri: finalUri, base64 };
 }

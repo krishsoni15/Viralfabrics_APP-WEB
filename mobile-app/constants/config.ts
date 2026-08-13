@@ -21,6 +21,9 @@ const getDevApiUrl = () => {
 
 // Check if we should override the API URL with the Metro host IP in development
 const getApiUrl = () => {
+  if (process.env.EXPO_PUBLIC_USE_LOCAL_API === 'true' || process.env.EXPO_PUBLIC_API_URL === 'local') {
+    return getDevApiUrl();
+  }
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
@@ -30,8 +33,13 @@ const getApiUrl = () => {
   return DEFAULT_PROD_API_URL;
 };
 
+const activeApiUrl = getApiUrl();
+if (__DEV__) {
+  console.log(`[Config] Mobile App API URL: ${activeApiUrl}`);
+}
+
 export const CONFIG = {
-  API_URL: getApiUrl(),
+  API_URL: activeApiUrl,
   APP_NAME: process.env.EXPO_PUBLIC_APP_NAME || 'Viral Fabrics',
   TOKEN_KEY: 'vf_token',
   USER_KEY: 'vf_user',

@@ -62,7 +62,7 @@ interface QualityItem {
 export default function FinishLotStockPage() {
   const router = useRouter();
   const { isDarkMode, mounted } = useDarkMode();
-  const { isMaster } = useSession();
+  const { isMaster, isSuperAdmin } = useSession();
   const [isPending, startTransition] = useTransition();
 
   // Core Stock State
@@ -1306,13 +1306,22 @@ export default function FinishLotStockPage() {
                             <PencilIcon className="h-3.5 w-3.5" />
                             <span>Edit</span>
                           </button>
-                          {isMaster && (
+                          {(isMaster || isSuperAdmin) && (
                             <button
                               onClick={() => handleStickerDownload(stock)}
                               className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'border-blue-500/20 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/40' : 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'}`}
                               title="Download Sticker"
                             >
                               <ArrowDownTrayIcon className="h-4 w-4" />
+                            </button>
+                          )}
+                          {(isMaster || isSuperAdmin) && (
+                            <button
+                              onClick={() => handleOpenQrModal(stock)}
+                              className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/40' : 'border-indigo-300 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400'}`}
+                              title="View QR Code"
+                            >
+                              <QrCodeIcon className="h-4 w-4" />
                             </button>
                           )}
                           {isMaster && (
@@ -1511,7 +1520,7 @@ export default function FinishLotStockPage() {
                               >
                                 <PencilIcon className="h-4.5 w-4.5" />
                               </button>
-                              {isMaster && (
+                              {(isMaster || isSuperAdmin) && (
                                 <button
                                   onClick={() => handleStickerDownload(stock)}
                                   className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-blue-400 hover:bg-blue-500/20' : 'text-blue-600 hover:bg-blue-50'}`}
@@ -1520,7 +1529,7 @@ export default function FinishLotStockPage() {
                                   <ArrowDownTrayIcon className="h-4.5 w-4.5" />
                                 </button>
                               )}
-                              {isMaster && (
+                              {(isMaster || isSuperAdmin) && (
                                 <button
                                   onClick={() => handleOpenQrModal(stock)}
                                   className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-indigo-400 hover:bg-indigo-500/20' : 'text-indigo-600 hover:bg-indigo-50'}`}

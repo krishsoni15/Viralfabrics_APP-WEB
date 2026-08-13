@@ -98,6 +98,7 @@ export function useAuth() {
     isAuthenticated,
     isSuperAdmin: user?.role === 'superadmin' || user?.role === 'master',
     isMaster: user?.role === 'master',
+    canAccessStickers: user?.role === 'master' || user?.role === 'superadmin',
     login,
     logout,
     logoutAll,

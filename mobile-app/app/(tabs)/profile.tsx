@@ -53,7 +53,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, logoutAll, isSuperAdmin: isAdmin } = useAuth();
   const { setDarkMode, syncSystemTheme, setSyncSystemTheme, setThemePreference, setUser, addToast, isOffline } = useAppStore();
-  const isMaster = user?.role === 'master';
+  const isMaster = user?.role === 'master' || user?.role === 'superadmin';
   const systemColorScheme = useColorScheme();
   const { isLargeScreen, modalMaxWidth, containerMaxWidth } = useResponsiveLayout();
 
@@ -730,7 +730,7 @@ export default function ProfileScreen() {
             </Pressable>
           )}
           
-          <Text style={{ textAlign: 'center', marginTop: 28, fontSize: 12, color: theme.textTertiary, fontWeight: '600', letterSpacing: 0.5 }}>VIRAL FABRICS CRM v1.0.0</Text>
+          <Text style={{ textAlign: 'center', marginTop: 28, fontSize: 12, color: theme.textTertiary, fontWeight: '600', letterSpacing: 0.5 }}>VIRAL FABRICS ERP v1.0.0</Text>
         </Animated.View>
         </View>
       </ScrollView>

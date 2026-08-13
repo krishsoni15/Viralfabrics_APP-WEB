@@ -97,7 +97,7 @@ interface GroupedGreyMaterial {
 }
 
 const GreyMaterialCard = React.memo(function GreyMaterialCard({
-  group, index, onEdit, onDelete, isSuperAdmin, isMaster, onPreviewImages, onOpenSticker,
+  group, index, onEdit, onDelete, isSuperAdmin, isMaster, canAccessStickers, onPreviewImages, onOpenSticker,
   numColumns = 1,
 }: { 
   group: GroupedGreyMaterial; 
@@ -106,6 +106,7 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
   onDelete: (qualityCode: string, qualityName: string) => void; 
   isSuperAdmin: boolean; 
   isMaster: boolean;
+  canAccessStickers: boolean;
   onPreviewImages: (imgs: string[]) => void;
   onOpenSticker: (item: GreyMaterial, group: GroupedGreyMaterial) => void;
   numColumns?: number;
@@ -349,7 +350,7 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
             Added {formatDate(group.items[0]?.createdAt)}
           </Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
-            {isMaster && (
+            {canAccessStickers && (
               <TouchableOpacity
                 onPress={() => onOpenSticker(group.items[0], group)}
                 activeOpacity={0.75}
@@ -426,7 +427,7 @@ const WeaverFormField = ({ label, value, onChangeText, placeholder, keyboard, th
 export default function GreyMaterialsScreen() {
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
-  const { isSuperAdmin, isMaster, user } = useAuth();
+  const { isSuperAdmin, isMaster, canAccessStickers, user } = useAuth();
   const { isLargeScreen, modalMaxWidth, numColumns, containerMaxWidth } = useResponsiveLayout();
   const queryClient = useQueryClient();
   const addToast = useAppStore(s => s.addToast);
@@ -1076,6 +1077,7 @@ export default function GreyMaterialsScreen() {
               onDelete={(qc, qn) => setDeleteTarget({ qualityCode: qc, qualityName: qn })} 
               isSuperAdmin={isSuperAdmin} 
               isMaster={isMaster}
+              canAccessStickers={canAccessStickers}
               onPreviewImages={handleOpenPreview} 
               onOpenSticker={openStickerPreview}
               numColumns={numColumns}

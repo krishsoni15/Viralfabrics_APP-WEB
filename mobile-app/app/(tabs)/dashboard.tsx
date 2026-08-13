@@ -279,7 +279,7 @@ export default function DashboardScreen() {
   const { user, isAuthenticated } = useAuth();
   const { isLargeScreen, containerMaxWidth, numColumns } = useResponsiveLayout();
   const { setIsBackupModalOpen, isBackupDownloading } = useAppStore();
-  const isMaster = user?.role === 'master';
+  const isMaster = user?.role === 'master' || user?.role === 'superadmin';
   const insets = useSafeAreaInsets();
   const statusBarHeight = Platform.OS === 'ios' ? (insets.top > 0 ? insets.top : 20) : (insets.top > 0 ? insets.top : StatusBar.currentHeight || 24);
 

@@ -20,6 +20,7 @@ interface AuthSession {
   isSuperAdmin: boolean;
   isUser: boolean;
   isMaster: boolean;
+  canAccessStickers: boolean;
   refreshSession: () => Promise<void>;
   logout: () => void;
 }
@@ -497,6 +498,7 @@ export function useAuthSession(): AuthSession {
   const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'master';
   const isUser = user?.role === 'user';
   const isMaster = user?.role === 'master';
+  const canAccessStickers = user?.role === 'master' || user?.role === 'superadmin';
 
   return {
     user,
@@ -505,6 +507,7 @@ export function useAuthSession(): AuthSession {
     isSuperAdmin,
     isUser,
     isMaster,
+    canAccessStickers,
     refreshSession,
     logout,
   };

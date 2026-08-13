@@ -7,6 +7,7 @@
  */
 import { Platform, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Print from 'expo-print';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let Sharing: any = null;
@@ -14,6 +15,50 @@ try {
   Sharing = require('expo-sharing');
 } catch (e) {
   // expo-sharing not available
+}
+
+/**
+ * Generate a PDF file safely from HTML.
+ * On Android, Expo Print creates files in cache/Print/ that are locked by Android Print Spooler.
+ * Passing base64: true and writing base64 directly into FileSystem.cacheDirectory bypasses the lock cleanly.
+ */
+export async function generatePdfFromHtml(
+  html: string,
+  filename: string,
+  options?: { width?: number; height?: number }
+): Promise<{ uri: string; base64?: string }> {
+  const result = await Print.printToFileAsync({
+    html,
+    base64: true,
+    ...options,
+  });
+
+  let finalUri = result.uri;
+  let base64 = result.base64;
+
+  if (Platform.OS !== 'web') {
+    try {
+      const dest = `${FileSystem.cacheDirectory}${filename}`;
+      if (Platform.OS === 'android' && base64) {
+        await FileSystem.writeAsStringAsync(dest, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        finalUri = dest;
+      } else {
+        try {
+          await FileSystem.copyAsync({ from: result.uri, to: dest });
+          finalUri = dest;
+        } catch (copyErr) {
+          console.warn('[PDF Utils] copyAsync failed, using print URI directly:', copyErr);
+          finalUri = result.uri;
+        }
+      }
+    } catch (err) {
+      console.warn('[PDF Utils] Failed to cache generated PDF:', err);
+    }
+  }
+
+  return { uri: finalUri, base64 };
 }
 
 export interface SavePdfOptions {
@@ -57,11 +102,10 @@ export async function savePdfToDevice(options: SavePdfOptions): Promise<SavePdfR
   // ─── Native (Android / iOS) ────────────────────────────
   if (localUri) {
     try {
-      const decodedLocal = decodeURIComponent(localUri);
       if (Platform.OS === 'android') {
-        return await saveToAndroidDownloads(decodedLocal, filename);
+        return await saveToAndroidDownloads(localUri, filename);
       } else {
-        return await saveToIosFiles(decodedLocal, filename, dialogTitle);
+        return await saveToIosFiles(localUri, filename, dialogTitle);
       }
     } catch (err: any) {
       console.log('[PDF Save] savePdfToDevice localUri error:', err.message);
@@ -130,11 +174,10 @@ async function savePdfNative(
 
     // If the URL is a local file:// URI, treat it as a local file — don't download
     if (url.startsWith('file://') || !url.startsWith('http')) {
-      const decodedUrl = decodeURIComponent(url);
       if (Platform.OS === 'android') {
-        return await saveToAndroidDownloads(decodedUrl, filename);
+        return await saveToAndroidDownloads(url, filename);
       } else {
-        return await saveToIosFiles(decodedUrl, filename, dialogTitle);
+        return await saveToIosFiles(url, filename, dialogTitle);
       }
     }
 
@@ -180,128 +223,62 @@ async function saveToAndroidDownloads(
   cachedUri: string,
   filename: string,
 ): Promise<SavePdfResult> {
-  const decodedCached = decodeURIComponent(cachedUri);
+  const targetUri = cachedUri;
+  const mimeType = filename.endsWith('.zip')
+    ? 'application/zip'
+    : filename.endsWith('.png') || filename.endsWith('.jpg') || filename.endsWith('.jpeg')
+    ? 'image/png'
+    : 'application/pdf';
+
+  // 1. If stored SAF directory URI exists, attempt direct write
   try {
-    const mimeType = filename.endsWith('.zip') ? 'application/zip' : 'application/pdf';
     const storedDirectoryUri = await AsyncStorage.getItem('vf_saf_directory_uri');
-    
-    let newFileUri: string | null = null;
-    let directoryUriToUse: string | null = storedDirectoryUri;
-
-    if (directoryUriToUse) {
-      try {
-        newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-          directoryUriToUse,
-          filename,
-          mimeType
-        );
-      } catch (createErr: any) {
-        console.log('[PDF Save] Stored directory URI write failed, trying unique suffix:', createErr.message);
-        try {
-          const dotIndex = filename.lastIndexOf('.');
-          const nameWithoutExt = dotIndex !== -1 ? filename.slice(0, dotIndex) : filename;
-          const ext = dotIndex !== -1 ? filename.slice(dotIndex) : (filename.endsWith('.zip') ? '.zip' : '.pdf');
-          const timestamp = Math.floor(Date.now() / 1000);
-          const uniqueFilename = `${nameWithoutExt}_${timestamp}${ext}`;
-          
-          newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-            directoryUriToUse,
-            uniqueFilename,
-            mimeType
-          );
-        } catch (uniqueErr) {
-          console.log('[PDF Save] Stored directory URI is invalid or revoked. Clearing stored URI.');
-          directoryUriToUse = null;
-          await AsyncStorage.removeItem('vf_saf_directory_uri');
-        }
-      }
+    if (storedDirectoryUri) {
+      const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+        storedDirectoryUri,
+        filename,
+        mimeType
+      );
+      const base64Data = await FileSystem.readAsStringAsync(targetUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      await FileSystem.writeAsStringAsync(newFileUri, base64Data, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      return {
+        success: true,
+        localUri: newFileUri,
+        message: `${filename} saved to device successfully.`,
+      };
     }
-
-    if (!newFileUri || !directoryUriToUse) {
-      const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-      
-      if (!permissions.granted) {
-        console.log('[PDF Save] SAF Permission denied, falling back to share sheet...');
-        if (Sharing && (await Sharing.isAvailableAsync())) {
-          await Sharing.shareAsync(decodedCached, {
-            mimeType,
-            dialogTitle: `Save ${filename}`,
-            UTI: filename.endsWith('.zip') ? 'public.zip-archive' : 'com.adobe.pdf',
-          });
-          return {
-            success: true,
-            localUri: decodedCached,
-            message: 'Folder permission denied. Opened share/save menu instead.',
-          };
-        }
-        return {
-          success: false,
-          message: 'Permission to save file was denied, and sharing is unavailable.',
-        };
-      }
-
-      directoryUriToUse = permissions.directoryUri;
-      await AsyncStorage.setItem('vf_saf_directory_uri', directoryUriToUse);
-
-      try {
-        newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-          directoryUriToUse,
-          filename,
-          mimeType
-        );
-      } catch (createErr: any) {
-        console.log('[PDF Save] createFileAsync failed on new directory, trying unique suffix:', createErr.message);
-        const dotIndex = filename.lastIndexOf('.');
-        const nameWithoutExt = dotIndex !== -1 ? filename.slice(0, dotIndex) : filename;
-        const ext = dotIndex !== -1 ? filename.slice(dotIndex) : (filename.endsWith('.zip') ? '.zip' : '.pdf');
-        const timestamp = Math.floor(Date.now() / 1000);
-        const uniqueFilename = `${nameWithoutExt}_${timestamp}${ext}`;
-        
-        newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-          directoryUriToUse,
-          uniqueFilename,
-          mimeType
-        );
-      }
-    }
-
-    const base64Data = await FileSystem.readAsStringAsync(decodedCached, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    
-    await FileSystem.writeAsStringAsync(newFileUri, base64Data, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    
-    return {
-      success: true,
-      localUri: newFileUri,
-      message: 'Saved to device successfully.',
-    };
-  } catch (err: any) {
-    console.log('[PDF Save] Android SAF save failed, falling back to share sheet:', err.message);
-    try {
-      if (Sharing && (await Sharing.isAvailableAsync())) {
-        await Sharing.shareAsync(decodedCached, {
-          mimeType: 'application/pdf',
-          dialogTitle: `Save ${filename}`,
-          UTI: 'com.adobe.pdf',
-        });
-        return {
-          success: true,
-          localUri: decodedCached,
-          message: 'Direct save failed. Opened share/save menu instead.',
-        };
-      }
-    } catch (shareErr: any) {
-      console.error('[PDF Save] Sharing fallback also failed:', shareErr);
-    }
-    
-    return {
-      success: false,
-      message: `Failed to save: ${err.message}`,
-    };
+  } catch (safErr) {
+    console.log('[PDF Save] Direct SAF write failed/bypassed, using native system saver:', safErr);
   }
+
+  // 2. Standard Modern Android Approach: Use native system action sheet (shareAsync)
+  // This opens Android's native "Save to Files / Save to Downloads / Drive" dialog
+  // with ZERO SAF directory permission popups and 100% reliability on Android 11+.
+  try {
+    if (Sharing && (await Sharing.isAvailableAsync())) {
+      await Sharing.shareAsync(targetUri, {
+        mimeType,
+        dialogTitle: `Save ${filename}`,
+        UTI: mimeType === 'application/pdf' ? 'com.adobe.pdf' : 'public.item',
+      });
+      return {
+        success: true,
+        localUri: targetUri,
+        message: `${filename} ready to save / share.`,
+      };
+    }
+  } catch (shareErr: any) {
+    console.error('[PDF Save] Native system save failed:', shareErr);
+  }
+
+  return {
+    success: false,
+    message: `Failed to save ${filename}`,
+  };
 }
 
 async function saveToIosFiles(
