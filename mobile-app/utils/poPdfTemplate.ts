@@ -100,7 +100,7 @@ export const generatePoHtml = (po: PurchaseOrder) => {
       <style>
         @page {
           size: A4;
-          margin: 15mm;
+          margin: 10mm 15mm;
         }
         * {
           box-sizing: border-box;
@@ -119,21 +119,21 @@ export const generatePoHtml = (po: PurchaseOrder) => {
         }
         .header {
           text-align: center;
-          margin-top: 5mm;
-          margin-bottom: 7mm;
+          margin-top: 1mm;
+          margin-bottom: 3.5mm;
         }
         .company-name {
-          font-size: 17pt;
+          font-size: 16pt;
           font-weight: bold;
           text-transform: uppercase;
-          margin-bottom: 2mm;
+          margin-bottom: 1mm;
           letter-spacing: 0.5px;
         }
         .company-address {
           font-size: 8.5pt;
-          line-height: 1.4;
+          line-height: 1.3;
           max-width: 150mm;
-          margin: 0 auto 1.5mm auto;
+          margin: 0 auto 1mm auto;
         }
         .company-phone {
           font-size: 8.5pt;
@@ -142,9 +142,9 @@ export const generatePoHtml = (po: PurchaseOrder) => {
           display: flex;
           align-items: baseline;
           justify-content: space-between;
-          margin-bottom: 4mm;
+          margin-bottom: 2mm;
           position: relative;
-          height: 6mm;
+          height: 5.5mm;
           width: 100%;
         }
         .gstin-box {
@@ -166,13 +166,14 @@ export const generatePoHtml = (po: PurchaseOrder) => {
         }
         .section-divider-thick {
           border-top: 0.35mm solid #000;
-          margin-bottom: 7.5mm;
+          margin-top: 2.5mm;
+          margin-bottom: 3.5mm;
           width: 100%;
         }
         .row {
           display: flex;
           align-items: baseline;
-          margin-bottom: 8.5mm;
+          margin-bottom: 4.5mm;
           width: 100%;
         }
         .split-row {
@@ -205,34 +206,34 @@ export const generatePoHtml = (po: PurchaseOrder) => {
           padding-bottom: 0.5mm;
         }
         .lined-section {
-          margin-bottom: 4mm;
+          margin-bottom: 3mm;
           width: 100%;
         }
         .lined-label {
           font-size: 9.5pt;
           font-weight: normal;
-          margin-bottom: 1.5mm;
+          margin-bottom: 1mm;
         }
         .notebook-lines {
-          line-height: 8.5mm;
+          line-height: 6.5mm;
           font-weight: bold;
           background-image: linear-gradient(rgba(0,0,0,0.3) 1px, transparent 1px);
-          background-size: 100% 8.5mm;
-          background-position: 0 7.5mm;
+          background-size: 100% 6.5mm;
+          background-position: 0 5.5mm;
           padding-bottom: 1px;
         }
         .specs-table {
           width: 75mm;
           border-collapse: collapse;
           border: 0.35mm solid #000;
-          margin-bottom: 8mm;
+          margin-bottom: 4mm;
           font-size: 8.5pt;
         }
         .specs-table td {
           border: 0.35mm solid #000;
-          height: 7.5mm;
+          height: 6.5mm;
           vertical-align: middle;
-          padding: 0 2.5mm;
+          padding: 0 2mm;
           font-weight: bold;
         }
         .specs-label {
@@ -244,7 +245,7 @@ export const generatePoHtml = (po: PurchaseOrder) => {
         .signature-section {
           display: flex;
           justify-content: space-between;
-          margin-top: 15mm;
+          margin-top: 6mm;
           width: 100%;
         }
         .signature-box {
@@ -302,7 +303,7 @@ export const generatePoHtml = (po: PurchaseOrder) => {
           <span class="value underline-fill">${po.brokerPhone || ''}</span>
         </div>
 
-        <div class="section-divider-thick" style="margin-top: 4mm; margin-bottom: 7.5mm;"></div>
+        <div class="section-divider-thick"></div>
 
         <!-- Supplier Name -->
         <div class="row">
@@ -328,7 +329,7 @@ export const generatePoHtml = (po: PurchaseOrder) => {
           </div>
         </div>
 
-        <div class="section-divider-thick" style="margin-top: 4mm; margin-bottom: 7.5mm;"></div>
+        <div class="section-divider-thick"></div>
 
         <!-- Quality -->
         <div class="row">
@@ -337,7 +338,7 @@ export const generatePoHtml = (po: PurchaseOrder) => {
           <span class="value underline-fill">${po.quality || ''}</span>
         </div>
 
-        <div class="section-divider-thick" style="margin-top: 4mm; margin-bottom: 7.5mm;"></div>
+        <div class="section-divider-thick"></div>
 
         <!-- Pcs/Mtr & Delivery -->
         <div class="row split-row">
@@ -381,14 +382,14 @@ export const generatePoHtml = (po: PurchaseOrder) => {
         <!-- Payment Terms -->
         <div class="lined-section">
           <div class="lined-label">Payment Terms :</div>
-          <div class="notebook-lines" style="min-height: 8.5mm;">
+          <div class="notebook-lines" style="min-height: 6.5mm;">
             ${po.paymentTerms ? po.paymentTerms.replace(/\n/g, '<br/>') : ''}
           </div>
         </div>
 
-        <div class="section-divider-thick" style="margin-top: 4mm; margin-bottom: 6.5mm;"></div>
+        <div class="section-divider-thick"></div>
 
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8mm; width: 100%;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4mm; width: 100%;">
           <!-- Specs Table -->
           <table class="specs-table" style="margin-bottom: 0; margin-right: 5mm;">
             <tr>
@@ -411,12 +412,12 @@ export const generatePoHtml = (po: PurchaseOrder) => {
 
           ${(po.images || []).length === 1 ? `
             <div style="flex-grow: 1; display: flex; justify-content: center; align-items: center; max-width: 95mm;">
-              <img src="${po.images?.[0] || ''}" style="width: 48mm; height: 30mm; object-fit: contain; background-color: #f8fafc; border: 0.3mm solid #ccc; border-radius: 2mm;" />
+              <img src="${po.images?.[0] || ''}" style="width: 44mm; height: 26mm; object-fit: contain; background-color: #f8fafc; border: 0.3mm solid #ccc; border-radius: 1.5mm;" />
             </div>
           ` : `
-            <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 4mm; max-width: 95mm;">
+            <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 3mm; max-width: 95mm;">
               ${(po.images || []).map(img => `
-                <img src="${img}" style="width: 100%; height: 30mm; object-fit: contain; background-color: #f8fafc; border: 0.3mm solid #ccc; border-radius: 2mm;" />
+                <img src="${img}" style="width: 100%; height: 26mm; object-fit: contain; background-color: #f8fafc; border: 0.3mm solid #ccc; border-radius: 1.5mm;" />
               `).join('')}
             </div>
           `}
@@ -425,18 +426,8 @@ export const generatePoHtml = (po: PurchaseOrder) => {
         <!-- Notes -->
         <div class="lined-section">
           <div class="lined-label">Notes :</div>
-          <div class="notebook-lines" style="min-height: calc(8.5mm * 4);">
+          <div class="notebook-lines" style="min-height: calc(7.5mm * 4);">
             ${po.notes ? po.notes.replace(/\r?\n/g, '<br/>').replace(/\\n/g, '<br/>') : ''}
-          </div>
-        </div>
-
-        <!-- Signatures -->
-        <div class="signature-section">
-          <div class="signature-box">
-            <div class="signature-line">Receiver's Signature / Stamp</div>
-          </div>
-          <div class="signature-box">
-            <div class="signature-line">For ${companyConfig.name}</div>
           </div>
         </div>
       </div>

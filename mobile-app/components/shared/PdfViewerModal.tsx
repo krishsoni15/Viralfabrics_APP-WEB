@@ -295,17 +295,30 @@ export default function PdfViewerModal({
       const cacheUri = `${FileSystem.cacheDirectory}${filename}`;
       console.log('[PDF Preview] preCachePdf starting for URL:', pdfUrl);
 
-      // If pdfUrl is a local file URI, copy instead of download
+      // If pdfUrl is a local file URI, use it directly (do NOT decodeURIComponent as Expo cache path contains literal %2540)
       if (pdfUrl?.startsWith('file://') || (pdfUrl && !pdfUrl.startsWith('http'))) {
-        const decodedPdfUrl = decodeURIComponent(pdfUrl);
-        await FileSystem.copyAsync({ from: decodedPdfUrl, to: cacheUri });
-        if (Platform.OS === 'android') {
-          const base64 = await FileSystem.readAsStringAsync(cacheUri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          setPdfBase64(base64);
+        const localFileUri = pdfUrl;
+        let finalCacheUri = localFileUri;
+        if (localFileUri !== cacheUri) {
+          try {
+            await FileSystem.copyAsync({ from: localFileUri, to: cacheUri });
+            finalCacheUri = cacheUri;
+          } catch (copyErr) {
+            console.warn('[PDF Preview] FileSystem.copyAsync failed, using local URI directly:', copyErr);
+            finalCacheUri = localFileUri;
+          }
         }
-        setCachedUri(cacheUri);
+        if (Platform.OS === 'android') {
+          try {
+            const base64 = await FileSystem.readAsStringAsync(finalCacheUri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            setPdfBase64(base64);
+          } catch (readErr) {
+            console.warn('[PDF Preview] readAsStringAsync failed:', readErr);
+          }
+        }
+        setCachedUri(finalCacheUri);
         return;
       }
 
@@ -344,10 +357,10 @@ export default function PdfViewerModal({
 
     try {
       const token = await storage.getToken();
-      // Use cachedUri or the original pdfUrl as localUri when it's a file:// URI
-      const effectiveLocalUri = cachedUri || (isLocalFile ? decodeURIComponent(pdfUrl) : undefined);
+      // Use localUri prop, cachedUri, or original pdfUrl as localUri when it's a file:// URI (without decodeURIComponent)
+      const effectiveLocalUri = localUri || cachedUri || (isLocalFile ? pdfUrl : undefined);
       const result = await savePdfToDevice({
-        url: pdfUrl,
+        url: pdfUrl || localUri || '',
         filename,
         token,
         dialogTitle: title,
@@ -409,10 +422,19 @@ export default function PdfViewerModal({
 
         // If pdfUrl is a local file, copy it; otherwise download
         if (isLocalFile) {
-          const decodedPdfUrl = decodeURIComponent(pdfUrl);
-          await FileSystem.copyAsync({ from: decodedPdfUrl, to: cacheUri });
-          uriToShare = cacheUri;
-          setCachedUri(cacheUri);
+          const localFileUri = pdfUrl;
+          if (localFileUri !== cacheUri) {
+            try {
+              await FileSystem.copyAsync({ from: localFileUri, to: cacheUri });
+              uriToShare = cacheUri;
+            } catch (e) {
+              console.warn('[PDF Preview] Share copyAsync failed, using local URI directly:', e);
+              uriToShare = localFileUri;
+            }
+          } else {
+            uriToShare = localFileUri;
+          }
+          setCachedUri(uriToShare);
         } else {
           const token = await storage.getToken();
           const result = await FileSystem.downloadAsync(pdfUrl, cacheUri, {

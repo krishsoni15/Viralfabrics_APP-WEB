@@ -52,8 +52,8 @@ const searchTypePlaceholders: Record<string, string> = { all: 'Search finish lot
 
 // ─── Finish Lot Card ──────────────────────────────────────────────────────
 const FinishLotCard = React.memo(function FinishLotCard({
-  item, index, onEdit, onDelete, isSuperAdmin, isMaster, onPreviewImages, onOpenSticker, onOpenQrModal, numColumns = 1
-}: { item: FinishLotStock; index: number; onEdit: (f: FinishLotStock) => void; onDelete: (f: FinishLotStock) => void; isSuperAdmin: boolean; isMaster: boolean; onPreviewImages: (imgs: string[]) => void; onOpenSticker: (f: FinishLotStock) => void; onOpenQrModal: (f: FinishLotStock) => void; numColumns?: number }) {
+  item, index, onEdit, onDelete, isSuperAdmin, isMaster, canAccessStickers, onPreviewImages, onOpenSticker, onOpenQrModal, numColumns = 1
+}: { item: FinishLotStock; index: number; onEdit: (f: FinishLotStock) => void; onDelete: (f: FinishLotStock) => void; isSuperAdmin: boolean; isMaster: boolean; canAccessStickers: boolean; onPreviewImages: (imgs: string[]) => void; onOpenSticker: (f: FinishLotStock) => void; onOpenQrModal: (f: FinishLotStock) => void; numColumns?: number }) {
   const { theme, isDarkMode } = useTheme();
 
   return (
@@ -217,7 +217,7 @@ const FinishLotCard = React.memo(function FinishLotCard({
             {formatDate(item.createdAt)}
           </Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
-            {isMaster && (
+            {canAccessStickers && (
               <>
                 <TouchableOpacity
                   onPress={() => onOpenSticker(item)}
@@ -290,7 +290,7 @@ export default function FinishLotStockScreen() {
   const isInTabs = (segments as string[]).includes('(tabs)');
 
   const { theme, isDarkMode } = useTheme();
-  const { isSuperAdmin, isMaster } = useAuth();
+  const { isSuperAdmin, isMaster, canAccessStickers } = useAuth();
   const { isLargeScreen, modalMaxWidth, numColumns, containerMaxWidth } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -892,7 +892,7 @@ export default function FinishLotStockScreen() {
               </View>
             );
           }}
-          renderItem={({ item, index }) => <FinishLotCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} onPreviewImages={handleOpenPreview} onOpenSticker={handleOpenSticker} onOpenQrModal={handleOpenQrModal} numColumns={numColumns} />}
+          renderItem={({ item, index }) => <FinishLotCard item={item} index={index} onEdit={openEditForm} onDelete={setDeleteTarget} isSuperAdmin={isSuperAdmin} isMaster={isMaster} canAccessStickers={canAccessStickers} onPreviewImages={handleOpenPreview} onOpenSticker={handleOpenSticker} onOpenQrModal={handleOpenQrModal} numColumns={numColumns} />}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 120, paddingHorizontal: numColumns > 1 ? 8 : 0 }}
           showsVerticalScrollIndicator={false}
           onEndReached={() => { if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage(); }}
@@ -1139,6 +1139,25 @@ export default function FinishLotStockScreen() {
                 onScroll={(e) => { formScrollOffset.current = e.nativeEvent.contentOffset.y; }}
                 scrollEventThrottle={16}
               >
+                {/* Lot Type */}
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8 }}>Lot Type *</Text>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => setFormData(p => ({ ...p, lotType: 'RFD' }))}
+                      style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center', backgroundColor: formData.lotType === 'RFD' ? (isDarkMode ? 'rgba(59,130,246,0.15)' : '#eff6ff') : 'transparent', borderColor: formData.lotType === 'RFD' ? (isDarkMode ? '#3b82f6' : '#2563eb') : theme.borderLight }}
+                    >
+                      <Text style={{ fontWeight: '700', color: formData.lotType === 'RFD' ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textSecondary }}>RFD</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setFormData(p => ({ ...p, lotType: 'OTHER' }))}
+                      style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center', backgroundColor: formData.lotType === 'OTHER' ? (isDarkMode ? 'rgba(168,85,247,0.15)' : '#faf5ff') : 'transparent', borderColor: formData.lotType === 'OTHER' ? (isDarkMode ? '#a855f7' : '#9333ea') : theme.borderLight }}
+                    >
+                      <Text style={{ fontWeight: '700', color: formData.lotType === 'OTHER' ? (isDarkMode ? '#c084fc' : '#9333ea') : theme.textSecondary }}>OTHER</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
                 {renderInput('Quality Name *', formData.qualityName, t => setFormData(p => ({ ...p, qualityName: t })), 'Enter quality name')}
 
                 {/* Weaver & Mill Fields */}
@@ -1159,25 +1178,6 @@ export default function FinishLotStockScreen() {
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>{renderInput('Piece', formData.piece, t => setFormData(p => ({ ...p, piece: t })), '0', 'numeric')}</View>
                   <View style={{ flex: 1 }}>{renderInput('Meter', formData.meter, t => setFormData(p => ({ ...p, meter: t })), '0', 'numeric')}</View>
-                </View>
-
-                {/* Lot Type */}
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8 }}>Lot Type *</Text>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity
-                      onPress={() => setFormData(p => ({ ...p, lotType: 'RFD' }))}
-                      style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center', backgroundColor: formData.lotType === 'RFD' ? (isDarkMode ? 'rgba(59,130,246,0.15)' : '#eff6ff') : 'transparent', borderColor: formData.lotType === 'RFD' ? (isDarkMode ? '#3b82f6' : '#2563eb') : theme.borderLight }}
-                    >
-                      <Text style={{ fontWeight: '700', color: formData.lotType === 'RFD' ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.textSecondary }}>RFD</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setFormData(p => ({ ...p, lotType: 'OTHER' }))}
-                      style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center', backgroundColor: formData.lotType === 'OTHER' ? (isDarkMode ? 'rgba(168,85,247,0.15)' : '#faf5ff') : 'transparent', borderColor: formData.lotType === 'OTHER' ? (isDarkMode ? '#a855f7' : '#9333ea') : theme.borderLight }}
-                    >
-                      <Text style={{ fontWeight: '700', color: formData.lotType === 'OTHER' ? (isDarkMode ? '#c084fc' : '#9333ea') : theme.textSecondary }}>OTHER</Text>
-                    </TouchableOpacity>
-                  </View>
                 </View>
 
                 {/* Images */}

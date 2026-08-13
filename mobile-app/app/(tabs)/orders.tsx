@@ -101,7 +101,7 @@ import LabDataModal from '../../components/orders/LabDataModal';
 import DeleteConfirmModal from '../../components/shared/DeleteConfirmModal';
 import PdfViewer from '../../components/orders/PdfViewer';
 import PdfViewerModal from '../../components/shared/PdfViewerModal';
-import { savePdfToDevice } from '../../utils/pdfUtils';
+import { savePdfToDevice, generatePdfFromHtml } from '../../utils/pdfUtils';
 import { generateOrderHtml } from '../../utils/orderPdfTemplate';
 import * as Print from 'expo-print';
 
@@ -469,7 +469,7 @@ const OrderCard = React.memo(function OrderCard({
   const { theme, isDarkMode } = useTheme();
   const [showAllItems, setShowAllItems] = useState(false);
   const user = useAppStore((state) => state.user);
-  const isMaster = user?.role === 'master';
+  const isMaster = user?.role === 'master' || user?.role === 'superadmin';
   const isParty = user?.role === 'party';
   const partyName = typeof item.party === 'object' ? (item.party as any)?.name : item.party || 'Not selected';
   const partyContactRaw = typeof item.party === 'object' ? ((item.party as any)?.contactName || item.contactName) : item.contactName;
@@ -1004,7 +1004,7 @@ export default function OrdersScreen() {
   const queryClient = useQueryClient();
   const addToast = useAppStore((s) => s.addToast);
   const user = useAppStore((s) => s.user);
-  const isMaster = user?.role === 'master';
+  const isMaster = user?.role === 'master' || user?.role === 'superadmin';
   const isParty = user?.role === 'party';
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const isOffline = useAppStore((s) => s.isOffline);
@@ -3033,7 +3033,7 @@ export default function OrdersScreen() {
 
       try {
         const html = generateOrderHtml(order, itemIndex);
-        const { uri } = await Print.printToFileAsync({ html });
+        const { uri } = await generatePdfFromHtml(html, filename);
 
         setOrderPdfViewerUrl(uri);
         setOrderPdfViewerTitle(title);

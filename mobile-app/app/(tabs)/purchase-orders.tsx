@@ -56,6 +56,8 @@ import {
   MapPin,
   Mail,
   Globe,
+  Camera,
+  Image as ImageIcon,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -73,9 +75,10 @@ import { useAppStore } from '../../store/useAppStore';
 import { CONFIG } from '../../constants/config';
 import { storage } from '../../utils/storage';
 import PdfViewerModal from '../../components/shared/PdfViewerModal';
+import CustomCameraModal from '../../components/shared/CustomCameraModal';
 import { generatePoHtml } from '../../utils/poPdfTemplate';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
-import { savePdfToDevice } from '../../utils/pdfUtils';
+import { savePdfToDevice, generatePdfFromHtml } from '../../utils/pdfUtils';
 import ImagePreviewModal from '../../components/shared/ImagePreviewModal';
 
 // Dynamically import WebView to avoid crashes on web
@@ -1159,6 +1162,7 @@ export default function PurchaseOrdersScreen() {
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
 
   const handleOpenImagePreview = useCallback((images: string[], index: number) => {
     setPreviewImages(images);
@@ -1661,30 +1665,21 @@ export default function PurchaseOrdersScreen() {
   };
 
   const launchImagePicker = async (useCamera: boolean) => {
+    if (useCamera) {
+      setIsCameraModalOpen(true);
+      return;
+    }
     try {
-      let result;
-      if (useCamera) {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission Denied', 'Camera permission is required to take photos.');
-          return;
-        }
-        result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 0.8,
-        });
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission Denied', 'Gallery permission is required to select photos.');
-          return;
-        }
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsMultipleSelection: true,
-          quality: 0.8,
-        });
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Gallery permission is required to select photos.');
+        return;
       }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      });
 
       if (!result.canceled && result.assets) {
         const selected = result.assets.map(asset => asset.uri);
@@ -1825,7 +1820,7 @@ export default function PurchaseOrdersScreen() {
       if (Platform.OS === 'web') {
         await print.printAsync({ html });
       } else {
-        const { uri } = await print.printToFileAsync({ html });
+        const { uri } = await generatePdfFromHtml(html, filename);
         setPdfViewerUrl(uri);
         setPdfViewerTitle(`Purchase Order — #${displayId}`);
         setPdfViewerFilename(filename);
@@ -1850,34 +1845,25 @@ export default function PurchaseOrdersScreen() {
     
     try {
       const html = generatePoHtml(po);
-      const { uri } = await print.printToFileAsync({ html, base64: false });
+      const { uri } = await generatePdfFromHtml(html, filename);
       
       if (Platform.OS === 'web') {
         const a = document.createElement('a');
         a.href = uri;
         a.download = filename;
         a.click();
-        addToast({ type: 'success', title: 'Downloaded', message: 'Purchase Order PDF generated.' });
-      } else if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(decodeURIComponent(uri), {
-          mimeType: 'application/pdf',
-          dialogTitle: `Purchase Order #${displayId}`,
-          UTI: 'com.adobe.pdf'
-        });
+        addToast({ type: 'success', title: 'Downloaded ✅', message: 'Purchase Order PDF generated.' });
       } else {
-        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
-        const token = await storage.getToken();
-        const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
         const result = await savePdfToDevice({
-          url: pdfUrl,
+          url: uri,
           filename,
-          token,
-          dialogTitle: `Purchase Order — #${displayId}`
+          dialogTitle: `Purchase Order — #${displayId}`,
+          localUri: uri,
         });
         if (result.success) {
-          addToast({ type: 'success', title: 'Saved Successfully', message: result.message });
+          addToast({ type: 'success', title: 'Saved Successfully ✅', message: result.message });
         } else {
-          addToast({ type: 'error', title: 'Save Failed', message: result.message });
+          addToast({ type: 'error', title: 'Save Failed ❌', message: result.message });
         }
       }
     } catch (err: any) {
@@ -2561,51 +2547,95 @@ export default function PurchaseOrdersScreen() {
 
                 {/* Images Section */}
                 <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Images (Multiple)</Text>
-                  
-                  {/* Select button */}
-                  <TouchableOpacity 
-                    onPress={pickImages} 
-                    style={{ 
-                      flexDirection: 'row', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      padding: 14, 
-                      borderRadius: 12, 
-                      borderWidth: 1, 
-                      borderStyle: 'dashed', 
-                      borderColor: theme.inputBorder, 
-                      backgroundColor: theme.input,
-                      marginBottom: 12
-                    }}
-                  >
-                    <Plus size={16} color={theme.textSecondary} style={{ marginRight: 6 }} />
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary }}>Choose Images</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Images & Attachments
+                    </Text>
+                    {selectedImageUris.length > 0 && (
+                      <View style={{ backgroundColor: isDarkMode ? '#1e293b' : '#eff6ff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>
+                          {selectedImageUris.length} {selectedImageUris.length === 1 ? 'Image' : 'Images'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Dual Action Buttons: Camera & Gallery */}
+                  <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                    {/* Take Photo Button */}
+                    <TouchableOpacity
+                      onPress={() => launchImagePicker(true)}
+                      activeOpacity={0.7}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 12,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        borderColor: '#2563eb',
+                        backgroundColor: isDarkMode ? '#1e293b' : '#eff6ff',
+                      }}
+                    >
+                      <Camera size={18} color="#2563eb" style={{ marginRight: 8 }} />
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563eb' }}>Take Photo</Text>
+                        <Text style={{ fontSize: 10, color: theme.textSecondary }}>Camera</Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Choose from Gallery Button */}
+                    <TouchableOpacity
+                      onPress={() => launchImagePicker(false)}
+                      activeOpacity={0.7}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 12,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderStyle: 'dashed',
+                        borderColor: theme.inputBorder,
+                        backgroundColor: theme.input,
+                      }}
+                    >
+                      <ImageIcon size={18} color={theme.textSecondary} style={{ marginRight: 8 }} />
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>Gallery</Text>
+                        <Text style={{ fontSize: 10, color: theme.textSecondary }}>Pick Images</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
 
                   {/* Previews grid */}
                   {selectedImageUris.length > 0 && (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.surface }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.surface }}>
                       {selectedImageUris.map((uri, index) => (
-                        <View key={index} style={{ width: 75, height: 75, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: theme.borderLight, position: 'relative' }}>
+                        <View key={index} style={{ width: 80, height: 80, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: theme.borderLight, position: 'relative' }}>
                           <TouchableOpacity 
                             style={{ flex: 1 }} 
                             activeOpacity={0.8}
                             onPress={() => handleOpenImagePreview(selectedImageUris, index)}
                           >
-                            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} />
+                            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                           </TouchableOpacity>
                           {/* New tag if newly picked */}
                           {(uri.startsWith('file:') || uri.startsWith('content:') || uri.startsWith('/')) && (
-                            <View style={{ position: 'absolute', bottom: 4, left: 4, backgroundColor: '#2563eb', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                            <View style={{ position: 'absolute', bottom: 4, left: 4, backgroundColor: '#2563eb', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
                               <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#fff' }}>NEW</Text>
                             </View>
                           )}
                           <TouchableOpacity 
                             onPress={() => removeImage(uri)} 
-                            style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#ef4444', borderRadius: 12, width: 20, height: 20, justifyContent: 'center', alignItems: 'center' }}
+                            activeOpacity={0.7}
+                            style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#ef4444', borderRadius: 12, width: 22, height: 22, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 }}
                           >
-                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold', lineHeight: 12 }}>×</Text>
+                            <Trash2 size={12} color="#fff" />
                           </TouchableOpacity>
                         </View>
                       ))}
@@ -3078,6 +3108,16 @@ export default function PurchaseOrdersScreen() {
         </RNAnimated.View>
         )
       )}
+
+      {/* Custom Camera Modal */}
+      <CustomCameraModal
+        visible={isCameraModalOpen}
+        onClose={() => setIsCameraModalOpen(false)}
+        onPhotosCaptured={(photos) => {
+          setSelectedImageUris(prev => [...prev, ...photos]);
+          setIsCameraModalOpen(false);
+        }}
+      />
     </SafeAreaView>
   );
 }

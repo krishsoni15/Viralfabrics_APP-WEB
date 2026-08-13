@@ -32,6 +32,7 @@ export function useSession() {
   const isUser = user?.role === 'user';
   const isMaster = user?.role === 'master';
   const isParty = user?.role === 'party';
+  const canAccessStickers = user?.role === 'master' || user?.role === 'superadmin';
 
   return {
     user,
@@ -40,6 +41,7 @@ export function useSession() {
     isUser,
     isMaster,
     isParty,
+    canAccessStickers,
     isAuthenticated: !!user,
   };
 }
