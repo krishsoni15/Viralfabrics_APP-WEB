@@ -34,7 +34,7 @@ import ImagePreviewModal from '../../../components/ImagePreviewModal';
 import UnauthorizedMessage from '../../components/UnauthorizedMessage';
 import { SearchBar } from '../../components/SearchBar';
 import type { Weaver, Sample } from '../../types';
-import { TIMEOUTS } from '../../constants';
+import { TIMEOUTS } from '@/app/(pages)/(dashboard)/weaver/constants';
 
 export default function WeaverSamplesViewPage() {
   const router = useRouter();

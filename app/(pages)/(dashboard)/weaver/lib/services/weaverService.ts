@@ -10,7 +10,7 @@ import Sample from '@/models/Sample';
 import { sanitizeString } from '@/lib/sanitize';
 import type { FilterQuery } from 'mongoose';
 import mongoose from 'mongoose';
-import { VALIDATION, PAGINATION } from '../../constants';
+import { VALIDATION, PAGINATION } from '@/app/(pages)/(dashboard)/weaver/constants';
 
 export interface WeaverData {
   name: string;

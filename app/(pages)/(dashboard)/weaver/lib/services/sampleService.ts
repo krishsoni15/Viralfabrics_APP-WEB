@@ -9,39 +9,7 @@ import Sample from '@/models/Sample';
 import SamplingWeaver from '@/models/SamplingWeaver';
 import { sanitizeString } from '@/lib/sanitize';
 import type { FilterQuery } from 'mongoose';
-import { FABRIC_TYPES, VALIDATION } from '../../constants';
-
-export interface SampleData {
-  weaverId: string;
-  qualityName: string;
-  type?: string;
-  rack?: string;
-  greighWidth?: number;
-  finishWidth?: number;
-  weight?: number;
-  gsm?: string | number;
-  content?: string;
-  danier?: string;
-  count?: number;
-  reed?: number;
-  pick?: number;
-  greighRate?: number;
-  label?: string;
-  note?: string;
-  images?: string[];
-}
-
-export interface SampleQueryParams {
-  weaverId?: string;
-  page?: number;
-  limit?: number;
-  search?: string;
-}
-
-/**
- * Get samples with pagination
- */
-import { PAGINATION } from '../../constants';
+import { FABRIC_TYPES, VALIDATION, PAGINATION } from '@/app/(pages)/(dashboard)/weaver/constants';
 
 export async function getSamples(params: SampleQueryParams) {
   await dbConnect();
