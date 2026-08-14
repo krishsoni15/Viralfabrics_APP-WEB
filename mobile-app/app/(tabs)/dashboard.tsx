@@ -326,7 +326,7 @@ export default function DashboardScreen() {
   const [showDeliverySoonDatePicker, setShowDeliverySoonDatePicker] = useState(false);
 
   const statsQuery = useQuery({
-    queryKey: ['dashboard-stats', startDate, endDate, financialYear],
+    queryKey: ['dashboard-stats', user?._id || user?.partyId || 'global', startDate, endDate, financialYear],
     queryFn: async () => {
       try {
         const params = new URLSearchParams();
@@ -341,21 +341,12 @@ export default function DashboardScreen() {
         const { data } = await api.get(`/api/dashboard/stats-instant${params.toString() ? `?${params.toString()}` : ''}`);
         return data?.data || data;
       } catch (error) {
-        console.warn('Dashboard stats API error, loading premium mock dataset.', error);
+        console.warn('Dashboard stats API error:', error);
         return {
-          totalOrders: 142,
-          statusStats: {
-            pending: 48,
-            delivered: 94
-          },
-          pendingTypeStats: {
-            Dying: 28,
-            Printing: 20
-          },
-          deliveredTypeStats: {
-            Dying: 54,
-            Printing: 40
-          }
+          totalOrders: 0,
+          statusStats: { pending: 0, delivered: 0 },
+          pendingTypeStats: { Dying: 0, Printing: 0 },
+          deliveredTypeStats: { Dying: 0, Printing: 0 }
         };
       }
     },
@@ -366,7 +357,7 @@ export default function DashboardScreen() {
   });
 
   const upcomingDeliveriesQuery = useQuery({
-    queryKey: ['upcoming-deliveries'],
+    queryKey: ['upcoming-deliveries', user?._id || user?.partyId || 'global'],
     queryFn: async () => {
       let fetchError: any = null;
 

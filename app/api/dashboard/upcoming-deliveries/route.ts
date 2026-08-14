@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(unauthorizedResponse('Unauthorized'), { status: 401 });
     }
 
-    // Create cache key
-    const cacheKey = 'upcoming-deliveries';
+    const partyKey = (session && (session.role === 'party' || session.partyId) && session.role !== 'master' && session.role !== 'superadmin') ? (session.partyId || 'party') : 'global';
+    const cacheKey = `upcoming-deliveries-${partyKey}`;
     const cached = upcomingCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
       return NextResponse.json(successResponse(cached.data, 'Upcoming deliveries loaded from cache'), { 

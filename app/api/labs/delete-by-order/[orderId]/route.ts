@@ -15,9 +15,9 @@ export async function DELETE(
         { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
-    if (session.role !== 'master') {
+    if (session.role !== 'master' && session.role !== 'superadmin') {
       return new Response(
-        JSON.stringify({ success: false, message: 'Access denied - Only master can delete' }),
+        JSON.stringify({ success: false, message: 'Access denied - Only master and superadmin can delete' }),
         { status: 403, headers: { 'Content-Type': 'application/json' } }
       );
     }

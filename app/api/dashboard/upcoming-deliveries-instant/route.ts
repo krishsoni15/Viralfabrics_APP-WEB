@@ -12,15 +12,15 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
   
   try {
-    // Try to get session, but don't require it for now to allow data loading
+    let session: any = null;
     try {
-      await getSession(request);
+      session = await getSession(request);
     } catch (error) {
       console.log('Session error:', error);
     }
 
-    // Create cache key
-    const cacheKey = 'upcoming-deliveries-instant';
+    const partyKey = (session && (session.role === 'party' || session.partyId) && session.role !== 'master' && session.role !== 'superadmin') ? (session.partyId || 'party') : 'global';
+    const cacheKey = `upcoming-deliveries-instant-${partyKey}`;
     
     // ⚡ FIX: Respect no-cache header for real-time synchronization
     const skipCache = request.headers.get('cache-control')?.includes('no-cache') || 
@@ -71,10 +71,11 @@ export async function GET(request: NextRequest) {
     ];
 
     // Restrict to user's party if role is 'party'
-    let session: any = null;
-    try {
-      session = await getSession(request);
-    } catch (e) {}
+    if (!session) {
+      try {
+        session = await getSession(request);
+      } catch (e) {}
+    }
     if (session?.role === 'party' && session?.partyId) {
       const mongoose = await import('mongoose');
       queryConditions.push({

@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 
-const DEFAULT_PROD_API_URL = 'https://viralfabrics-app-web.vercel.app';
+const DEFAULT_PROD_API_URL = 'https://main.d2k666ii03c4ui.amplifyapp.com';
 
 // Dynamically extract the Metro host IP address to fallback if EXPO_PUBLIC_API_URL is missing or local
 const getDevApiUrl = () => {
@@ -21,14 +21,17 @@ const getDevApiUrl = () => {
 
 // Check if we should override the API URL with the Metro host IP in development
 const getApiUrl = () => {
+  if (process.env.EXPO_PUBLIC_USE_PROD_API === 'true') {
+    return process.env.EXPO_PUBLIC_API_URL || DEFAULT_PROD_API_URL;
+  }
   if (process.env.EXPO_PUBLIC_USE_LOCAL_API === 'true' || process.env.EXPO_PUBLIC_API_URL === 'local') {
+    return getDevApiUrl();
+  }
+  if (__DEV__) {
     return getDevApiUrl();
   }
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
-  }
-  if (__DEV__) {
-    return getDevApiUrl();
   }
   return DEFAULT_PROD_API_URL;
 };

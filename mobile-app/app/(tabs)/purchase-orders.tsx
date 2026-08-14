@@ -675,6 +675,7 @@ const PurchaseOrderCard = React.memo(({
   item, 
   index, 
   isMaster, 
+  isMasterOnly,
   theme, 
   isDarkMode, 
   openModal, 
@@ -689,6 +690,7 @@ const PurchaseOrderCard = React.memo(({
   item: PurchaseOrder; 
   index: number; 
   isMaster: boolean; 
+  isMasterOnly?: boolean;
   theme: any; 
   isDarkMode: boolean; 
   openModal: (po: PurchaseOrder) => void; 
@@ -758,7 +760,7 @@ const PurchaseOrderCard = React.memo(({
                 <Edit2 size={16} color="#fbbf24" />
               </TouchableOpacity>
             )}
-            {isMaster && (
+            {isMasterOnly && (
               <TouchableOpacity onPress={() => handleDelete(item._id)} style={{ padding: 4 }}>
                 <Trash2 size={16} color={Colors.error[600]} />
               </TouchableOpacity>
@@ -1142,6 +1144,7 @@ export default function PurchaseOrdersScreen() {
   const addToast = useAppStore((state) => state.addToast);
   
   const isMaster = user?.role === 'master' || user?.role === 'superadmin';
+  const isMasterOnly = user?.role === 'master';
   const isWeb = Platform.OS === 'web';
   const showWebViewEditor = !isWeb && WebView;
 
@@ -1802,6 +1805,10 @@ export default function PurchaseOrdersScreen() {
   };
 
   const handleDelete = (id: string) => {
+    if (user?.role !== 'master') {
+      addToast({ type: 'error', title: 'Access Denied', message: 'Only master role can delete purchase orders.' });
+      return;
+    }
     setDeleteId(id);
     setIsDeleteModalOpen(true);
   };
@@ -2098,6 +2105,7 @@ export default function PurchaseOrdersScreen() {
                 item={item}
                 index={index}
                 isMaster={isMaster}
+                isMasterOnly={isMasterOnly}
                 theme={theme}
                 isDarkMode={isDarkMode}
                 openModal={openModal}
