@@ -3013,8 +3013,8 @@ export default function OrdersScreen() {
   }, []);
 
   const handleDownloadPDF = useCallback(async (orderId: string, itemIndex: number) => {
-    if (user?.role !== 'master') {
-      addToast({ type: 'error', title: 'Access Denied', message: 'Only master role can download this PDF.' });
+    if (user?.role === 'party') {
+      addToast({ type: 'error', title: 'Access Denied', message: 'Party users cannot download this PDF.' });
       return;
     }
     if (Platform.OS !== 'web') {
@@ -3027,17 +3027,28 @@ export default function OrdersScreen() {
     const filename = `FABRIC_PURCHASE_ORDER_${sanitizedOrderId}_Item_${itemIndex + 1}.pdf`;
     const title = `Purchase Order — ${getDisplayOrderId(order.orderId)} • Item ${itemIndex + 1}`;
 
-    const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
-    const token = await storage.getToken();
-    const serverPdfUrl = `${baseUrl}/api/orders/${order._id}/pdf?itemIndex=${itemIndex}${token ? `&token=${token}` : ''}`;
-
     if (Platform.OS === 'web') {
       setPdfPreviewData({ order, itemIndex });
     } else {
-      setOrderPdfViewerUrl(serverPdfUrl);
-      setOrderPdfViewerTitle(title);
-      setOrderPdfViewerFilename(filename);
-      setOrderPdfViewerVisible(true);
+      try {
+        const html = generateOrderHtml(order, itemIndex);
+        const { uri } = await generatePdfFromHtml(html, filename);
+
+        setOrderPdfViewerUrl(uri);
+        setOrderPdfViewerTitle(title);
+        setOrderPdfViewerFilename(filename);
+        setOrderPdfViewerVisible(true);
+      } catch (err) {
+        console.warn('[Orders] Local Order HTML generation failed, falling back to API URL:', err);
+        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+        const token = await storage.getToken();
+        const serverPdfUrl = `${baseUrl}/api/orders/${order._id}/pdf?itemIndex=${itemIndex}${token ? `&token=${token}` : ''}`;
+
+        setOrderPdfViewerUrl(serverPdfUrl);
+        setOrderPdfViewerTitle(title);
+        setOrderPdfViewerFilename(filename);
+        setOrderPdfViewerVisible(true);
+      }
     }
   }, [orders, user, addToast]);
 
