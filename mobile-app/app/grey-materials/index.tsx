@@ -734,7 +734,17 @@ export default function GreyMaterialsScreen() {
         const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
         if (debouncedSearch) params.search = debouncedSearch;
         if (filterType && filterType !== 'All') params.type = filterType;
-        const { data } = await api.get('/api/grey-materials', { params });
+        let res = await api.get('/api/grey-materials', { params });
+        let data = res?.data;
+        if (!data || typeof data === 'string' || (Array.isArray(data?.data) && data.data.length === 0 && !debouncedSearch && !filterType)) {
+          try {
+            const fallbackRes = await api.get('/api/fabrics');
+            if (fallbackRes?.data) {
+              const fbItems = Array.isArray(fallbackRes.data) ? fallbackRes.data : (fallbackRes.data.data || fallbackRes.data.fabrics || []);
+              if (fbItems.length > 0) data = { data: fbItems, pagination: { totalCount: fbItems.length } };
+            }
+          } catch {}
+        }
         const items = data?.data || data?.greyMaterials || data?.items || (Array.isArray(data) ? data : []);
         const pagination = data?.pagination || {};
         const totalPages = pagination.totalPages || pagination.pages || 1;

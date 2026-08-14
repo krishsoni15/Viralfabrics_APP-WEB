@@ -1436,12 +1436,13 @@ export default function PurchaseOrdersScreen() {
   });
 
   useEffect(() => {
-    if (data?.data) {
+    const rawItems = data?.data || data?.purchaseOrders || data?.items || (Array.isArray(data) ? data : []);
+    if (rawItems) {
       if (page === 1) {
-        setAllOrders(data.data);
+        setAllOrders(rawItems);
       } else {
         setAllOrders((prev) => {
-          const newItems = data.data.filter((item: any) => !prev.some((p) => p._id === item._id));
+          const newItems = rawItems.filter((item: any) => !prev.some((p) => p._id === item._id));
           return [...prev, ...newItems];
         });
       }

@@ -624,7 +624,7 @@ export default function SamplingScreen() {
           const res = await api.get('/api/weaver/samples', { params });
           data = res.data;
         }
-        const items = data?.data || (Array.isArray(data) ? data : []);
+        const items = data?.data || data?.samples || data?.items || (Array.isArray(data) ? data : []);
         const pagination = data?.pagination || {};
         const summary = data?.summary || { totalPieces: 0, totalMeters: 0, uniqueQualities: 0 };
         return { 

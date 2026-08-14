@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import dbConnect from "@/lib/dbConnect";
 import User from "@/models/User";
 import { requireAuth } from "@/lib/session";

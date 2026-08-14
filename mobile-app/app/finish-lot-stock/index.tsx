@@ -602,7 +602,7 @@ export default function FinishLotStockScreen() {
         if (searchType !== 'all') { params.status = searchType; }
         if (filterLotType !== 'all') { params.lotType = filterLotType; }
         const { data } = await api.get('/api/finish-lot-stocks', { params });
-        const items = data?.data || (Array.isArray(data) ? data : []);
+        const items = data?.data || data?.stocks || data?.items || (Array.isArray(data) ? data : []);
         const pagination = data?.pagination || {};
         const totalPages = pagination.totalPages || pagination.pages || 1;
         return { items, hasNext: pageParam < totalPages, nextPage: pageParam + 1, totalCount: pagination.totalCount || pagination.total || items.length };

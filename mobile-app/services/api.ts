@@ -74,6 +74,12 @@ let isHandling401 = false;
 // Response interceptor — handle caching & 401
 api.interceptors.response.use(
   async (response) => {
+    // If response returned HTML instead of JSON (e.g. static 404 page from CloudFront CDN)
+    if (typeof response.data === 'string' && (response.data.includes('<!DOCTYPE') || response.data.includes('<html'))) {
+      const url = response.config.url || '';
+      return Promise.reject(new AxiosError(`Invalid JSON response (HTML received) for ${url}`, 'EINVALIDJSON', response.config, response.request, response));
+    }
+
     const method = response.config.method?.toLowerCase();
     
     // Cache successful GET requests

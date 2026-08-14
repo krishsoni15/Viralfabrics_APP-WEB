@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import dbConnect from "@/lib/dbConnect";
 import PurchaseOrder from "@/models/PurchaseOrder";
 import Broker from "@/models/Broker";

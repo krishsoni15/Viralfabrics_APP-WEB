@@ -21,17 +21,14 @@ const getDevApiUrl = () => {
 
 // Check if we should override the API URL with the Metro host IP in development
 const getApiUrl = () => {
-  if (process.env.EXPO_PUBLIC_USE_PROD_API === 'true') {
-    return process.env.EXPO_PUBLIC_API_URL || DEFAULT_PROD_API_URL;
+  if (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL !== 'local') {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
   if (process.env.EXPO_PUBLIC_USE_LOCAL_API === 'true' || process.env.EXPO_PUBLIC_API_URL === 'local') {
     return getDevApiUrl();
   }
   if (__DEV__) {
     return getDevApiUrl();
-  }
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
   }
   return DEFAULT_PROD_API_URL;
 };

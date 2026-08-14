@@ -437,7 +437,17 @@ export default function WeaverListScreen() {
       try {
         const params: any = { page: pageParam, limit: PAGE_SIZE, sort: sortOrder };
         if (debouncedSearch) params.search = debouncedSearch;
-        const { data } = await api.get('/api/weaver/weavers', { params });
+        let res = await api.get('/api/weaver/weavers', { params });
+        let data = res?.data;
+        if (!data || typeof data === 'string' || (Array.isArray(data?.data) && data.data.length === 0 && !debouncedSearch)) {
+          try {
+            const fallbackRes = await api.get('/api/fabrics/weavers');
+            if (fallbackRes?.data) {
+              const fbItems = Array.isArray(fallbackRes.data) ? fallbackRes.data : (fallbackRes.data.data || fallbackRes.data.weavers || []);
+              if (fbItems.length > 0) data = { data: fbItems, pagination: { total: fbItems.length } };
+            }
+          } catch {}
+        }
         const items = data?.data || data?.weavers || data?.items || (Array.isArray(data) ? data : []);
         const pagination = data?.pagination || {};
         const totalPages = pagination.pages || pagination.totalPages || 1;
