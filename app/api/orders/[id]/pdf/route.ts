@@ -1,9 +1,13 @@
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { NextRequest } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import { Order, Party, Quality, GreyInfo, MillInput, MillOutput, Dispatch, Mill } from "@/models";
 import { getSession } from "@/lib/session";
 import { jwtVerify } from "jose";
 import { generateOrderPDF } from "@/lib/pdfGenerator";
+import mongoose from "mongoose";
 
 export async function GET(
   req: NextRequest,
@@ -50,22 +54,23 @@ export async function GET(
       );
     }
 
-    if (sessionUser.role !== "master") {
+    if (sessionUser.role === "party") {
       return new Response(
-        JSON.stringify({ success: false, message: "Access Denied. Only master can access this PDF." }),
+        JSON.stringify({ success: false, message: "Access Denied. Party users cannot access this PDF." }),
         { status: 403, headers: { "Content-Type": "application/json" } }
       );
     }
 
     await dbConnect();
 
-    // Fetch the order
-    const orderQuery: any = { _id: id };
-    if (sessionUser.partyId && sessionUser.role !== "master" && sessionUser.role !== "superadmin") {
-      orderQuery.party = sessionUser.partyId;
+    // Fetch the order safely with ObjectId guard
+    let order: any = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      order = await Order.findById(id).lean();
     }
-
-    const order = await Order.findOne(orderQuery).lean();
+    if (!order) {
+      order = await Order.findOne({ orderId: id }).lean();
+    }
     if (!order) {
       return new Response(
         JSON.stringify({ success: false, message: "Order not found" }),

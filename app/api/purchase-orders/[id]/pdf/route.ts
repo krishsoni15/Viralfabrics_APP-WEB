@@ -1,9 +1,13 @@
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import dbConnect from "@/lib/dbConnect";
 import PurchaseOrder from "@/models/PurchaseOrder";
 import { getSession } from "@/lib/session";
 import { type NextRequest } from "next/server";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/response";
 import { generatePurchaseOrderPDF, getPurchaseOrderPDFFileName } from "@/lib/poPdfGenerator";
+import mongoose from "mongoose";
 
 export async function GET(
   request: NextRequest,
@@ -14,14 +18,20 @@ export async function GET(
     if (!session) {
       return Response.json(unauthorizedResponse('Unauthorized'), { status: 401 });
     }
-    if (session.role !== 'master' && session.role !== 'superadmin') {
+    if (session.role === 'party') {
       return Response.json(forbiddenResponse('Access denied'), { status: 403 });
     }
 
     await dbConnect();
     const { id } = await params;
 
-    const purchaseOrder = await PurchaseOrder.findById(id).lean();
+    let purchaseOrder: any = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      purchaseOrder = await PurchaseOrder.findById(id).lean();
+    }
+    if (!purchaseOrder) {
+      purchaseOrder = await PurchaseOrder.findOne({ $or: [{ poNumber: id }, { displayPoId: id }] }).lean();
+    }
 
     if (!purchaseOrder) {
       return Response.json(
