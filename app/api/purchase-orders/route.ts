@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
     if (!session) {
       return Response.json(unauthorizedResponse('Unauthorized'), { status: 401 });
     }
-    if (session.role !== 'master' && session.role !== 'superadmin') {
-      return Response.json(forbiddenResponse('Access denied'), { status: 403 });
+    if (session.role === 'party') {
+      return Response.json(forbiddenResponse('Access denied for party role'), { status: 403 });
     }
 
     await dbConnect();

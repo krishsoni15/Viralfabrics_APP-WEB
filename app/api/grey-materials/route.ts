@@ -88,13 +88,9 @@ export async function GET(req: NextRequest) {
         
         totalCount = qualityGroups.length;
         const paginatedGroups = qualityGroups.slice(skip, skip + limit);
-        const qualityCodes = paginatedGroups.map(group => group.qualityCode);
-        const qualityNames = paginatedGroups.map(group => group.qualityName);
+        const groupPairs = paginatedGroups.map(g => ({ qualityCode: g.qualityCode ?? '', qualityName: g.qualityName ?? '' }));
         
-        const gmQuery: any = {
-          qualityCode: { $in: qualityCodes },
-          qualityName: { $in: qualityNames }
-        };
+        const gmQuery: any = groupPairs.length > 0 ? { $or: groupPairs } : { _id: null };
         
         // Apply other filters from original query (except $or which might exclude other items in the group)
         Object.keys(query).forEach(key => {

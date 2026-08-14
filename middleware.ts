@@ -58,13 +58,6 @@ const SUPERADMIN_ROUTES = [
   '/api/orders/renumber-ids',
   '/api/orders/reset-counter',
   '/api/backup',
-  '/fabrics',
-  '/api/fabrics',
-  '/purchase-orders',
-  '/api/purchase-orders',
-  // Weaver is accessible to all authenticated users
-  // '/weaver',
-  // '/api/weaver',
 ];
 
 /**

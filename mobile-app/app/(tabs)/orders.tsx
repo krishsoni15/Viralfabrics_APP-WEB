@@ -470,6 +470,7 @@ const OrderCard = React.memo(function OrderCard({
   const [showAllItems, setShowAllItems] = useState(false);
   const user = useAppStore((state) => state.user);
   const isMaster = user?.role === 'master' || user?.role === 'superadmin' || user?.role === 'admin';
+  const isMasterOnly = user?.role === 'master';
   const isParty = user?.role === 'party';
   const partyName = typeof item.party === 'object' ? (item.party as any)?.name : item.party || 'Not selected';
   const partyContactRaw = typeof item.party === 'object' ? ((item.party as any)?.contactName || item.contactName) : item.contactName;
@@ -635,7 +636,7 @@ const OrderCard = React.memo(function OrderCard({
 
                     {/* Icon Actions */}
                     <View style={{ flexDirection: 'row', gap: 6 }}>
-                      {!isParty && (
+                      {isMasterOnly && (
                         <TouchableOpacity
                           onPress={() => onDownloadPDF(item._id!, idx)}
                           activeOpacity={0.7}
@@ -654,7 +655,7 @@ const OrderCard = React.memo(function OrderCard({
                         </TouchableOpacity>
                       )}
 
-                      {isMaster && (
+                      {isMasterOnly && (
                         <TouchableOpacity
                           onPress={() => onDeleteItem(item._id!, idx)}
                           activeOpacity={0.7}
@@ -902,7 +903,7 @@ const OrderCard = React.memo(function OrderCard({
                 )}
 
                 {/* Delete button */}
-                {isMaster && (
+                {isMasterOnly && (
                   <TouchableOpacity
                     onPress={() => onDeleteOrder(item)}
                     activeOpacity={0.7}
@@ -2873,7 +2874,7 @@ export default function OrdersScreen() {
   const lastLoadedLimitRef = React.useRef(5);
 
   const ordersQuery = useQuery({
-    queryKey: ['orders', 1, limit, search, searchType, statusFilter, typeFilter, sortFilter, fyFilter, millFilter, startDate, endDate],
+    queryKey: ['orders', user?._id || user?.partyId || 'global', 1, limit, search, searchType, statusFilter, typeFilter, sortFilter, fyFilter, millFilter, startDate, endDate],
     queryFn: async () => {
       const params: Record<string, any> = {
         page: 1,
@@ -3012,8 +3013,8 @@ export default function OrdersScreen() {
   }, []);
 
   const handleDownloadPDF = useCallback(async (orderId: string, itemIndex: number) => {
-    if (isParty) {
-      addToast({ type: 'error', title: 'Access Denied', message: 'Party users cannot download this PDF.' });
+    if (user?.role !== 'master') {
+      addToast({ type: 'error', title: 'Access Denied', message: 'Only master role can download this PDF.' });
       return;
     }
     if (Platform.OS !== 'web') {
@@ -3022,36 +3023,23 @@ export default function OrdersScreen() {
     const order = orders.find((o: any) => o._id === orderId);
     if (!order) return;
 
+    const sanitizedOrderId = (order.orderId || 'Order').replace(/[^a-zA-Z0-9-_]/g, '_');
+    const filename = `FABRIC_PURCHASE_ORDER_${sanitizedOrderId}_Item_${itemIndex + 1}.pdf`;
+    const title = `Purchase Order — ${getDisplayOrderId(order.orderId)} • Item ${itemIndex + 1}`;
+
+    const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+    const token = await storage.getToken();
+    const serverPdfUrl = `${baseUrl}/api/orders/${order._id}/pdf?itemIndex=${itemIndex}${token ? `&token=${token}` : ''}`;
+
     if (Platform.OS === 'web') {
-      // Web: show the old preview modal with iframe
       setPdfPreviewData({ order, itemIndex });
     } else {
-      // Native: generate local HTML PDF for instant offline high-fidelity preview
-      const sanitizedOrderId = (order.orderId || 'Order').replace(/[^a-zA-Z0-9-_]/g, '_');
-      const filename = `Order_Sheet_${sanitizedOrderId}_Item_${itemIndex + 1}.pdf`;
-      const title = `Order Sheet — ${getDisplayOrderId(order.orderId)} • Item ${itemIndex + 1}`;
-
-      try {
-        const html = generateOrderHtml(order, itemIndex);
-        const { uri } = await generatePdfFromHtml(html, filename);
-
-        setOrderPdfViewerUrl(uri);
-        setOrderPdfViewerTitle(title);
-        setOrderPdfViewerFilename(filename);
-        setOrderPdfViewerVisible(true);
-      } catch (err) {
-        console.warn('[Orders] Local Order HTML generation failed, falling back to API URL:', err);
-        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
-        const token = await storage.getToken();
-        const pdfUrl = `${baseUrl}/api/orders/${order._id}/pdf?itemIndex=${itemIndex}${token ? `&token=${token}` : ''}`;
-
-        setOrderPdfViewerUrl(pdfUrl);
-        setOrderPdfViewerTitle(title);
-        setOrderPdfViewerFilename(filename);
-        setOrderPdfViewerVisible(true);
-      }
+      setOrderPdfViewerUrl(serverPdfUrl);
+      setOrderPdfViewerTitle(title);
+      setOrderPdfViewerFilename(filename);
+      setOrderPdfViewerVisible(true);
     }
-  }, [orders, isMaster, addToast]);
+  }, [orders, user, addToast]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: Order; index: number }) => (

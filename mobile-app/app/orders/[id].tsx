@@ -288,6 +288,7 @@ export default function OrderDetailScreen() {
   const addToast = useAppStore(s => s.addToast);
   const user = useAppStore(s => s.user);
   const isMaster = user?.role === 'master' || user?.role === 'superadmin' || user?.role === 'admin';
+  const isMasterOnly = user?.role === 'master';
   const isParty = user?.role === 'party';
   const queryClient = useQueryClient();
 
@@ -1024,7 +1025,7 @@ export default function OrderDetailScreen() {
               <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.warning[600] }}>Edit</Text>
             </TouchableOpacity>
 
-            {isMaster && (
+            {isMasterOnly && (
               <TouchableOpacity
                 onPress={handleDeleteOrder}
                 style={{

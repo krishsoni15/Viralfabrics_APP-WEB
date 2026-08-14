@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
     const force = searchParams.get('force') === 'true';
     const timestamp = searchParams.get('t'); // Cache busting timestamp parameter
 
-    // Create cache key for this query (include millId and fy for proper caching with multiple filters)
-    const cacheKey = `orders_${JSON.stringify({ limit, page, search, orderType, status, startDate, endDate, sort, millId, fy })}`;
+    const partyKey = (session && (session.role === 'party' || session.partyId) && session.role !== 'master' && session.role !== 'superadmin') ? (session.partyId || 'party') : 'global';
+    const cacheKey = `orders_${partyKey}_${JSON.stringify({ limit, page, search, orderType, status, startDate, endDate, sort, millId, fy })}`;
 
     // ⚡ FIX: Respect no-cache header for real-time synchronization
     const skipCache = request.headers.get('cache-control')?.includes('no-cache') || 

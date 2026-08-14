@@ -33,8 +33,8 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const financialYear = searchParams.get('financialYear');
 
-    // Create cache key based on filters
-    const cacheKey = `dashboard-stats-${startDate || 'all'}-${endDate || 'all'}-${financialYear || 'all'}`;
+    const partyKey = (session && (session.role === 'party' || session.partyId) && session.role !== 'master' && session.role !== 'superadmin') ? (session.partyId || 'party') : 'global';
+    const cacheKey = `dashboard-stats-${partyKey}-${startDate || 'all'}-${endDate || 'all'}-${financialYear || 'all'}`;
     
     // Check cache first (using a Map for multiple filter combinations)
     // ⚡ FIX: Respect no-cache header for real-time synchronization

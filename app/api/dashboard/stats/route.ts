@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const financialYear = searchParams.get('financialYear');
 
-    // Create cache key based on filters
-    const cacheKey = `dashboard-stats-${startDate || 'all'}-${endDate || 'all'}-${financialYear || 'all'}`;
+    const partyKey = (session && (session.role === 'party' || session.partyId) && session.role !== 'master' && session.role !== 'superadmin') ? (session.partyId || 'party') : 'global';
+    const cacheKey = `dashboard-stats-${partyKey}-${startDate || 'all'}-${endDate || 'all'}-${financialYear || 'all'}`;
     const cached = statsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
       return NextResponse.json(successResponse(cached.data, 'Dashboard stats loaded from cache'), { 
@@ -106,11 +106,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Restrict to user's party if session has a partyId (applies to party users)
-    if (session && session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+    if (session && (session.role === 'party' || session.partyId) && session.role !== 'master' && session.role !== 'superadmin') {
       const mongoose = await import('mongoose');
-      matchConditions.party = mongoose.default.Types.ObjectId.isValid(session.partyId)
-        ? new mongoose.default.Types.ObjectId(session.partyId)
-        : session.partyId;
+      if (session.partyId) {
+        const partyVal = mongoose.default.Types.ObjectId.isValid(session.partyId)
+          ? new mongoose.default.Types.ObjectId(session.partyId)
+          : session.partyId;
+        matchConditions.$and.push({ party: partyVal });
+      }
     }
 
     // ⚡ Use $facet for a single aggregation instead of multiple queries

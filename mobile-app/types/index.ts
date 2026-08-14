@@ -9,6 +9,7 @@ export interface User {
   email?: string;
   phoneNumber?: string;
   address?: string;
+  partyId?: string;
   profilePhoto?: string;
   role: 'superadmin' | 'admin' | 'weaver' | 'party' | 'master' | 'user';
   isActive: boolean;
