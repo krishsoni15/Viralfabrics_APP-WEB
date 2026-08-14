@@ -489,10 +489,17 @@ export default function WeaverSamplesScreen() {
     queryKey: ['sampling-weaver', weaverId],
     queryFn: async () => {
       try {
-        const { data } = await api.get('/api/sampling/weavers', { params: { search: '' } });
-        const weavers = data?.data || [];
-        return weavers.find((w: SamplingWeaver) => w._id === weaverId) || { _id: weaverId, name: 'Weaver' };
-      } catch { return { _id: weaverId, name: 'Weaver' }; }
+        const { data } = await api.get(`/api/weaver/weavers/${weaverId}`);
+        return data?.data || data?.weaver || { _id: weaverId, name: 'Weaver' };
+      } catch {
+        try {
+          const { data } = await api.get('/api/weaver/weavers');
+          const weavers = data?.data || (Array.isArray(data) ? data : []);
+          return weavers.find((w: SamplingWeaver) => w._id === weaverId) || { _id: weaverId, name: 'Weaver' };
+        } catch {
+          return { _id: weaverId, name: 'Weaver' };
+        }
+      }
     },
   });
 
@@ -500,8 +507,17 @@ export default function WeaverSamplesScreen() {
   const samplesQuery = useQuery({
     queryKey: ['sampling-samples', weaverId],
     queryFn: async () => {
-      const { data } = await api.get('/api/sampling/samples', { params: { weaverId } });
-      return data?.data || [];
+      try {
+        const { data } = await api.get('/api/weaver/samples', { params: { weaverId } });
+        return data?.data || (Array.isArray(data) ? data : []);
+      } catch {
+        try {
+          const { data } = await api.get('/api/sampling', { params: { search: weaverId } });
+          return data?.data || (Array.isArray(data) ? data : []);
+        } catch {
+          return [];
+        }
+      }
     },
   });
 

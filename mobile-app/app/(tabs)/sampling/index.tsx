@@ -609,23 +609,34 @@ export default function SamplingScreen() {
     initialPageParam: 1,
     staleTime: 30000,
     queryFn: async ({ pageParam = 1 }) => {
-      const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy, sortOrder };
-      if (debouncedSearch) params.search = debouncedSearch;
-      if (debouncedMinMeter) params.minMeter = debouncedMinMeter;
-      if (debouncedMaxMeter) params.maxMeter = debouncedMaxMeter;
-      if (debouncedMinPiece) params.minPiece = debouncedMinPiece;
-      if (debouncedMaxPiece) params.maxPiece = debouncedMaxPiece;
-      const { data } = await api.get('/api/sampling', { params });
-      const items = data?.data || [];
-      const pagination = data?.pagination || {};
-      const summary = data?.summary || { totalPieces: 0, totalMeters: 0, uniqueQualities: 0 };
-      return { 
-        items, 
-        hasNext: pageParam < (pagination.totalPages || pagination.pages || 1), 
-        nextPage: pageParam + 1, 
-        totalCount: pagination.totalCount || items.length,
-        summary 
-      };
+      try {
+        const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy, sortOrder };
+        if (debouncedSearch) params.search = debouncedSearch;
+        if (debouncedMinMeter) params.minMeter = debouncedMinMeter;
+        if (debouncedMaxMeter) params.maxMeter = debouncedMaxMeter;
+        if (debouncedMinPiece) params.minPiece = debouncedMinPiece;
+        if (debouncedMaxPiece) params.maxPiece = debouncedMaxPiece;
+        let data: any = null;
+        try {
+          const res = await api.get('/api/sampling', { params });
+          data = res.data;
+        } catch {
+          const res = await api.get('/api/weaver/samples', { params });
+          data = res.data;
+        }
+        const items = data?.data || (Array.isArray(data) ? data : []);
+        const pagination = data?.pagination || {};
+        const summary = data?.summary || { totalPieces: 0, totalMeters: 0, uniqueQualities: 0 };
+        return { 
+          items, 
+          hasNext: pageParam < (pagination.totalPages || pagination.pages || 1), 
+          nextPage: pageParam + 1, 
+          totalCount: pagination.totalCount || pagination.total || items.length,
+          summary 
+        };
+      } catch (e) {
+        return { items: [], hasNext: false, nextPage: 1, totalCount: 0, summary: { totalPieces: 0, totalMeters: 0, uniqueQualities: 0 } };
+      }
     },
     getNextPageParam: (lastPage) => lastPage.hasNext ? lastPage.nextPage : undefined,
   });

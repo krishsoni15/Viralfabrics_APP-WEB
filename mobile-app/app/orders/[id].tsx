@@ -287,7 +287,7 @@ export default function OrderDetailScreen() {
   const { theme, isDarkMode } = useTheme();
   const addToast = useAppStore(s => s.addToast);
   const user = useAppStore(s => s.user);
-  const isMaster = user?.role === 'master';
+  const isMaster = user?.role === 'master' || user?.role === 'superadmin' || user?.role === 'admin';
   const isParty = user?.role === 'party';
   const queryClient = useQueryClient();
 
@@ -1082,7 +1082,7 @@ export default function OrderDetailScreen() {
                 {!!order.poNumber && (
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 11, color: theme.textSecondary }}>PO Number</Text>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>{order.poNumber}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.text }}>{getDisplayOrderId(order.poNumber)}</Text>
                   </View>
                 )}
                 {!!order.priority && (

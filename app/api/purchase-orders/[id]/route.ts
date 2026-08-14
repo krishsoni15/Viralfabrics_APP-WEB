@@ -1,4 +1,5 @@
 import dbConnect from "@/lib/dbConnect";
+import mongoose from "mongoose";
 import PurchaseOrder from "@/models/PurchaseOrder";
 import Broker from "@/models/Broker";
 import Supplier from "@/models/Supplier";
@@ -26,6 +27,10 @@ export async function GET(
 
     await dbConnect();
     const { id } = await params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return Response.json({ success: false, message: 'Invalid Purchase Order ID' }, { status: 400 });
+    }
 
     const purchaseOrder = await PurchaseOrder.findById(id)
       .populate('createdBy', 'name username')
@@ -66,6 +71,11 @@ export async function PUT(
 
     await dbConnect();
     const { id } = await params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return Response.json({ success: false, message: 'Invalid Purchase Order ID' }, { status: 400 });
+    }
+
     const body = await request.json();
 
     const existingPO = await PurchaseOrder.findById(id);
@@ -208,6 +218,10 @@ export async function DELETE(
 
     await dbConnect();
     const { id } = await params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return Response.json({ success: false, message: 'Invalid Purchase Order ID' }, { status: 400 });
+    }
 
     // Soft delete
     const purchaseOrder = await PurchaseOrder.findByIdAndUpdate(

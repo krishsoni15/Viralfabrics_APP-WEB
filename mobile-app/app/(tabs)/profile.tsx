@@ -189,13 +189,13 @@ export default function ProfileScreen() {
     const fetchLatestProfile = async () => {
       try {
         const response = await api.get('/api/profile');
-        const userData = response.data.user || response.data;
-        if (userData) {
+        const userData = response.data?.user || response.data;
+        if (userData && typeof userData === 'object') {
           setUser(userData);
           await storage.setUser(userData);
         }
       } catch (error) {
-        console.warn('Failed to fetch latest profile:', error);
+        // Silently fallback to locally stored session user
       }
     };
     fetchLatestProfile();

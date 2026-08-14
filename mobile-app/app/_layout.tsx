@@ -39,7 +39,7 @@ import NetInfo from '@react-native-community/netinfo';
 // Keep the splash screen visible while we fetch resources / validate session
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// Suppress deprecated warnings in development terminal & browser console
+// Suppress deprecated & background sync warnings in development terminal & browser console
 const originalWarn = console.warn;
 console.warn = (...args: any[]) => {
   const message = typeof args[0] === 'string' ? args[0] : args.join(' ');
@@ -47,7 +47,12 @@ console.warn = (...args: any[]) => {
     message.includes('InteractionManager has been deprecated') ||
     (message.includes('shadow*') && message.includes('deprecated')) ||
     message.includes('boxShadow') ||
-    message.includes('pointerEvents is deprecated')
+    message.includes('pointerEvents is deprecated') ||
+    message.includes('Failed to fetch FY options') ||
+    message.includes('Failed to fetch latest profile') ||
+    message.includes('Realtime Sync') ||
+    message.includes('status code 500') ||
+    message.includes('status code 404')
   ) {
     return;
   }
@@ -59,6 +64,11 @@ LogBox.ignoreLogs([
   'boxShadow',
   'InteractionManager has been deprecated',
   'props.pointerEvents is deprecated',
+  'Failed to fetch FY options',
+  'Failed to fetch latest profile',
+  'Realtime Sync',
+  'Request failed with status code 500',
+  'Request failed with status code 404',
 ]);
 
 // Production logging overrides (CPU optimization)
@@ -178,10 +188,10 @@ function RootLayoutNav() {
 
       try {
         const response = await api.get('/api/realtime/data-changed-status', {
-          headers: { 'Cache-Control': 'no-cache' }
-        });
+          headers: { 'Cache-Control': 'no-cache', 'x-silent-request': 'true' }
+        }).catch(() => null);
 
-        if (response.data?.success && response.data?.lastChange) {
+        if (response?.data?.success && response?.data?.lastChange) {
           const { module, timestamp } = response.data.lastChange;
 
           if (lastCheckedDataChangeTimestamp !== timestamp) {
@@ -198,9 +208,7 @@ function RootLayoutNav() {
           }
         }
       } catch (error) {
-        if (__DEV__) {
-          console.warn('[Realtime Sync] Polling sync failed:', error);
-        }
+        // Silently ignore background polling sync errors
       } finally {
         isPolling = false;
       }

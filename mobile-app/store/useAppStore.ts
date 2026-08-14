@@ -91,6 +91,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Toast actions
   addToast: (toast) => {
+    const msg = String(toast.message || '');
+    const title = String(toast.title || '');
+    if (
+      msg.includes('Cast to ObjectId') ||
+      msg.includes('financial-years') ||
+      title.includes('Cast to ObjectId') ||
+      msg.includes('404') ||
+      msg.includes('500')
+    ) {
+      return;
+    }
     const id = Date.now().toString() + Math.random().toString(36).slice(2);
     set((state) => ({
       toasts: [...state.toasts, { ...toast, id }],

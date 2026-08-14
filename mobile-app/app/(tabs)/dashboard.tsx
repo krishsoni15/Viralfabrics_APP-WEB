@@ -302,9 +302,9 @@ export default function DashboardScreen() {
         const { data } = await api.get('/api/orders/financial-years');
         return data?.data?.options || [];
       } catch (error) {
-        console.warn('Failed to fetch FY options for mobile dashboard:', error);
         return [
-          { value: '2526', label: 'FY 25-26', isCurrent: true }
+          { value: '2627', label: 'FY 26-27', isCurrent: true },
+          { value: '2526', label: 'FY 25-26', isCurrent: false }
         ];
       }
     },

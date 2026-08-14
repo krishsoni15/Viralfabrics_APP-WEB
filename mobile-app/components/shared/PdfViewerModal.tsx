@@ -467,50 +467,82 @@ export default function PdfViewerModal({
 
   // Build the PDF preview content
   const renderPdfPreview = () => {
-    // 1. Android Specific PDF.js Renderer
-    if (Platform.OS === 'android' && WebView && pdfBase64) {
-      return (
-        <View style={[styles.webViewContainer, { backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc' }]}>
-          <WebView
-            source={{ html: getAndroidHtml(pdfBase64, isDarkMode) }}
-            style={[styles.webView, { backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc' }]}
-            onLoadStart={() => setPdfLoading(true)}
-            onMessage={(event: any) => {
-              try {
-                const data = JSON.parse(event.nativeEvent.data);
-                if (data.type === 'page_rendered') {
-                  if (data.page === 1) {
+    // 1. Android Specific PDF Renderer
+    if (Platform.OS === 'android' && WebView) {
+      if (pdfBase64) {
+        return (
+          <View style={[styles.webViewContainer, { backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc' }]}>
+            <WebView
+              source={{ html: getAndroidHtml(pdfBase64, isDarkMode) }}
+              style={[styles.webView, { backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc' }]}
+              onLoadStart={() => setPdfLoading(true)}
+              onMessage={(event: any) => {
+                try {
+                  const data = JSON.parse(event.nativeEvent.data);
+                  if (data.type === 'page_rendered') {
+                    if (data.page === 1) {
+                      setPdfLoading(false);
+                    }
+                  } else if (data.type === 'error') {
                     setPdfLoading(false);
+                    setPdfError(true);
                   }
-                } else if (data.type === 'error') {
-                  setPdfLoading(false);
-                  setPdfError(true);
+                } catch (e) {
+                  // Ignore parse errors
                 }
-              } catch (e) {
-                // Ignore parse errors
-              }
-            }}
-            scalesPageToFit
-            bounces={false}
-            startInLoadingState={false}
-            allowFileAccess
-            allowFileAccessFromFileURLs
-            originWhitelist={['*']}
-            builtInZoomControls={true}
-            displayZoomControls={false}
-            domStorageEnabled={true}
-            javaScriptEnabled={true}
-          />
-          {pdfLoading && (
-            <View style={[styles.loadingOverlay, { backgroundColor: isDarkMode ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.9)' }]}>
-              <ActivityIndicator size="large" color={Colors.primary[500]} />
-              <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-                Loading PDF...
-              </Text>
-            </View>
-          )}
-        </View>
-      );
+              }}
+              scalesPageToFit
+              bounces={false}
+              startInLoadingState={false}
+              allowFileAccess
+              allowFileAccessFromFileURLs
+              originWhitelist={['*']}
+              builtInZoomControls={true}
+              displayZoomControls={false}
+              domStorageEnabled={true}
+              javaScriptEnabled={true}
+            />
+            {pdfLoading && (
+              <View style={[styles.loadingOverlay, { backgroundColor: isDarkMode ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.9)' }]}>
+                <ActivityIndicator size="large" color={Colors.primary[500]} />
+                <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+                  Loading PDF...
+                </Text>
+              </View>
+            )}
+          </View>
+        );
+      } else if (cachedUri) {
+        const isRemoteUrl = cachedUri.startsWith('http');
+        const viewSource = isRemoteUrl 
+          ? { uri: `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(cachedUri)}` }
+          : { uri: cachedUri };
+        return (
+          <View style={[styles.webViewContainer, { backgroundColor: isDarkMode ? '#0f172a' : '#ffffff' }]}>
+            <WebView
+              source={viewSource}
+              style={[styles.webView, { backgroundColor: isDarkMode ? '#0f172a' : '#ffffff' }]}
+              onLoadStart={() => setPdfLoading(true)}
+              onLoadEnd={() => setPdfLoading(false)}
+              onError={() => {
+                setPdfLoading(false);
+              }}
+              scalesPageToFit
+              allowFileAccess
+              allowFileAccessFromFileURLs
+              originWhitelist={['*']}
+            />
+            {pdfLoading && (
+              <View style={[styles.loadingOverlay, { backgroundColor: isDarkMode ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.9)' }]}>
+                <ActivityIndicator size="large" color={Colors.primary[500]} />
+                <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+                  Loading PDF...
+                </Text>
+              </View>
+            )}
+          </View>
+        );
+      }
     }
 
     // 2. iOS Native WebKit PDF Renderer

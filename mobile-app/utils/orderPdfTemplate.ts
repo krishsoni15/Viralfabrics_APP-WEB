@@ -1,4 +1,5 @@
 import { Order } from '../types';
+import { getDisplayOrderId } from './helpers';
 
 const COMPANY_HEADERS: Record<string, {
   name: string;
@@ -258,7 +259,7 @@ export function generateOrderHtml(order: Order, itemIndex: number = 0): string {
       <div class="grid-container">
         <div class="grid-cell">
           <span class="label">ORDER ID:</span>
-          <span class="value">${order.orderId || '-'}</span>
+          <span class="value">${getDisplayOrderId(order.orderId) || '-'}</span>
         </div>
         <div class="grid-cell">
           <span class="label">DATE:</span>
@@ -274,7 +275,7 @@ export function generateOrderHtml(order: Order, itemIndex: number = 0): string {
         </div>
         <div class="grid-cell">
           <span class="label">PO NUMBER:</span>
-          <span class="value">${order.poNumber || '-'}</span>
+          <span class="value">${getDisplayOrderId(order.poNumber) || '-'}</span>
         </div>
         <div class="grid-cell">
           <span class="label">STYLE NO:</span>

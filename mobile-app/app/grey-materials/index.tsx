@@ -730,14 +730,18 @@ export default function GreyMaterialsScreen() {
     initialPageParam: 1,
     staleTime: 30000,
     queryFn: async ({ pageParam = 1 }) => {
-      const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
-      if (debouncedSearch) params.search = debouncedSearch;
-      if (filterType && filterType !== 'All') params.type = filterType;
-      const { data } = await api.get('/api/grey-materials', { params });
-      const items = data?.data || [];
-      const pagination = data?.pagination || {};
-      const totalPages = pagination.totalPages || pagination.pages || 1;
-      return { items, hasNext: pageParam < totalPages, nextPage: pageParam + 1 };
+      try {
+        const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
+        if (debouncedSearch) params.search = debouncedSearch;
+        if (filterType && filterType !== 'All') params.type = filterType;
+        const { data } = await api.get('/api/grey-materials', { params });
+        const items = data?.data || data?.greyMaterials || data?.items || (Array.isArray(data) ? data : []);
+        const pagination = data?.pagination || {};
+        const totalPages = pagination.totalPages || pagination.pages || 1;
+        return { items, hasNext: pageParam < totalPages, nextPage: pageParam + 1, totalCount: pagination.totalCount || pagination.total || items.length };
+      } catch (e) {
+        return { items: [], hasNext: false, nextPage: 1 };
+      }
     },
     getNextPageParam: (lastPage) => lastPage.hasNext ? lastPage.nextPage : undefined,
   });

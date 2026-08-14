@@ -1109,9 +1109,13 @@ export default function FabricsScreen() {
   const unfilteredQuery = useQuery({
     queryKey: ['fabrics-unfiltered-count'],
     queryFn: async () => {
-      const { data } = await api.get('/api/fabrics', { params: { page: 1, limit: 1 } });
-      const pagination = data?.pagination || {};
-      return pagination.totalCount || 0;
+      try {
+        const { data } = await api.get('/api/fabrics', { params: { page: 1, limit: 1 } });
+        const pagination = data?.pagination || {};
+        return pagination.totalCount || pagination.total || 0;
+      } catch (e) {
+        return 0;
+      }
     },
     enabled: isAuthenticated,
     staleTime: 30000,
@@ -1136,29 +1140,33 @@ export default function FabricsScreen() {
     initialPageParam: 1,
     staleTime: 30000,
     queryFn: async ({ pageParam = 1 }) => {
-      const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
-      
-      if (debouncedSearch) {
-        if (searchType === 'all') {
-          params.search = debouncedSearch;
-        } else {
-          params[searchType] = debouncedSearch;
+      try {
+        const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
+        
+        if (debouncedSearch) {
+          if (searchType === 'all') {
+            params.search = debouncedSearch;
+          } else {
+            params[searchType] = debouncedSearch;
+          }
         }
+        
+        if (typeFilter && typeFilter !== 'All') {
+          params.type = typeFilter;
+        }
+        
+        const { data } = await api.get('/api/fabrics', { params });
+        const items = Array.isArray(data) ? data : data?.data || [];
+        const pagination = data?.pagination || {};
+        return { 
+          items, 
+          hasNext: pagination.hasNextPage || (pageParam < (pagination.totalPages || pagination.pages || 1)) || items.length >= PAGE_SIZE, 
+          nextPage: pageParam + 1,
+          totalCount: pagination.totalCount || pagination.total || items.length
+        };
+      } catch (e) {
+        return { items: [], hasNext: false, nextPage: 1, totalCount: 0 };
       }
-      
-      if (typeFilter && typeFilter !== 'All') {
-        params.type = typeFilter;
-      }
-      
-      const { data } = await api.get('/api/fabrics', { params });
-      const items = Array.isArray(data) ? data : data?.data || [];
-      const pagination = data?.pagination || {};
-      return { 
-        items, 
-        hasNext: pagination.hasNextPage || items.length >= PAGE_SIZE, 
-        nextPage: pageParam + 1,
-        totalCount: pagination.totalCount || items.length
-      };
     },
     getNextPageParam: (lastPage) => lastPage.hasNext ? lastPage.nextPage : undefined,
   });

@@ -45,6 +45,9 @@ export async function GET(
     await dbConnect();
 
     const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return Response.json({ success: false, error: 'Invalid Order ID' }, { status: 400 });
+    }
 
     const query: any = { _id: id };
     if (session && session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
@@ -572,6 +575,9 @@ export async function PUT(
 
     // ⚡ OPTIMIZED: Check if order exists using lean() for speed
     const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return new Response(JSON.stringify({ message: "Invalid Order ID" }), { status: 400 });
+    }
     const existingOrder = await Order.findById(id)
       .select('_id orderId orderType arrivalDate party contactName contactPhone poNumber styleNo poDate deliveryDate items status')
       .lean()
@@ -1269,6 +1275,9 @@ export async function DELETE(
     await dbConnect();
 
     const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return new Response(JSON.stringify({ success: false, message: "Invalid Order ID" }), { status: 400 });
+    }
 
     // Check if order exists
     const existingOrder = await Order.findById(id);
@@ -1354,6 +1363,9 @@ export async function PATCH(
     await dbConnect();
 
     const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return new Response(JSON.stringify({ success: false, message: "Invalid Order ID" }), { status: 400 });
+    }
     const requestData = await req.json();
     const { status, action, itemIndex } = requestData;
 

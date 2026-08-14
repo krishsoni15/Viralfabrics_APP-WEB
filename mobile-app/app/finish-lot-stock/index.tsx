@@ -581,7 +581,14 @@ export default function FinishLotStockScreen() {
   // ─ Data Fetching ──
   const unfilteredQuery = useQuery({
     queryKey: ['finish-lot-stocks-unfiltered-count'], enabled: isAuthenticated, staleTime: 30000,
-    queryFn: async () => { const { data } = await api.get('/api/finish-lot-stocks', { params: { page: 1, limit: 1 } }); return data?.pagination?.totalCount || 0; },
+    queryFn: async () => {
+      try {
+        const { data } = await api.get('/api/finish-lot-stocks', { params: { page: 1, limit: 1 } });
+        return data?.pagination?.totalCount || data?.pagination?.total || 0;
+      } catch (e) {
+        return 0;
+      }
+    },
   });
 
   const query = useInfiniteQuery({
@@ -589,12 +596,19 @@ export default function FinishLotStockScreen() {
     enabled: isAuthenticated, initialPageParam: 1,
     staleTime: 30000,
     queryFn: async ({ pageParam = 1 }) => {
-      const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
-      if (debouncedSearch) { params.search = debouncedSearch; }
-      if (searchType !== 'all') { params.status = searchType; }
-      if (filterLotType !== 'all') { params.lotType = filterLotType; }
-      const { data } = await api.get('/api/finish-lot-stocks', { params });
-      return { items: data?.data || [], hasNext: pageParam < (data?.pagination?.totalPages || 1), nextPage: pageParam + 1, totalCount: data?.pagination?.totalCount || 0 };
+      try {
+        const params: any = { page: pageParam, limit: PAGE_SIZE, sortBy: 'createdAt', sortOrder };
+        if (debouncedSearch) { params.search = debouncedSearch; }
+        if (searchType !== 'all') { params.status = searchType; }
+        if (filterLotType !== 'all') { params.lotType = filterLotType; }
+        const { data } = await api.get('/api/finish-lot-stocks', { params });
+        const items = data?.data || (Array.isArray(data) ? data : []);
+        const pagination = data?.pagination || {};
+        const totalPages = pagination.totalPages || pagination.pages || 1;
+        return { items, hasNext: pageParam < totalPages, nextPage: pageParam + 1, totalCount: pagination.totalCount || pagination.total || items.length };
+      } catch (e) {
+        return { items: [], hasNext: false, nextPage: 1, totalCount: 0 };
+      }
     },
     getNextPageParam: (lastPage) => lastPage.hasNext ? lastPage.nextPage : undefined,
   });

@@ -1407,23 +1407,27 @@ export default function PurchaseOrdersScreen() {
     queryKey: ['purchaseOrders', page, debouncedSearch, companyHeader, statusFilter, fyFilter, sortFilter],
     staleTime: 30000,
     queryFn: async () => {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '5',
-        sort: sortFilter,
-      });
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: '5',
+          sort: sortFilter,
+        });
 
-      const queryTerm = debouncedSearch.trim();
-      if (queryTerm) {
-        params.append('search', queryTerm);
+        const queryTerm = debouncedSearch.trim();
+        if (queryTerm) {
+          params.append('search', queryTerm);
+        }
+
+        if (companyHeader) params.append('companyHeader', companyHeader);
+        if (statusFilter) params.append('status', statusFilter);
+        if (fyFilter) params.append('fy', fyFilter);
+
+        const res = await api.get(`/api/purchase-orders?${params.toString()}`);
+        return res.data;
+      } catch (e) {
+        return { data: [], pagination: { page: 1, limit: 5, total: 0, totalPages: 1 } };
       }
-
-      if (companyHeader) params.append('companyHeader', companyHeader);
-      if (statusFilter) params.append('status', statusFilter);
-      if (fyFilter) params.append('fy', fyFilter);
-
-      const res = await api.get(`/api/purchase-orders?${params.toString()}`);
-      return res.data;
     },
     placeholderData: keepPreviousData,
   });

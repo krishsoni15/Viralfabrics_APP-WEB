@@ -416,8 +416,13 @@ export default function WeaverListScreen() {
   const unfilteredQuery = useQuery({
     queryKey: ['weavers-unfiltered-count'],
     queryFn: async () => {
-      const { data } = await api.get('/api/weaver/weavers', { params: { page: 1, limit: 1 } });
-      return data?.pagination?.total || 0;
+      try {
+        const { data } = await api.get('/api/weaver/weavers', { params: { page: 1, limit: 1 } });
+        const pagination = data?.pagination || {};
+        return pagination.total || pagination.totalCount || (data?.data?.length ?? (data?.weavers?.length ?? 0));
+      } catch (e) {
+        return 0;
+      }
     },
     enabled: isAuthenticated,
     staleTime: 30000,
@@ -429,13 +434,18 @@ export default function WeaverListScreen() {
     initialPageParam: 1,
     staleTime: 30000,
     queryFn: async ({ pageParam = 1 }) => {
-      const params: any = { page: pageParam, limit: PAGE_SIZE, sort: sortOrder };
-      if (debouncedSearch) params.search = debouncedSearch;
-      const { data } = await api.get('/api/weaver/weavers', { params });
-      const items = data?.data || [];
-      const pagination = data?.pagination || {};
-      const hasNext = pageParam < (pagination.pages || 1);
-      return { items, hasNext, nextPage: pageParam + 1, totalCount: pagination.total || items.length };
+      try {
+        const params: any = { page: pageParam, limit: PAGE_SIZE, sort: sortOrder };
+        if (debouncedSearch) params.search = debouncedSearch;
+        const { data } = await api.get('/api/weaver/weavers', { params });
+        const items = data?.data || data?.weavers || data?.items || (Array.isArray(data) ? data : []);
+        const pagination = data?.pagination || {};
+        const totalPages = pagination.pages || pagination.totalPages || 1;
+        const hasNext = pageParam < totalPages;
+        return { items, hasNext, nextPage: pageParam + 1, totalCount: pagination.total || pagination.totalCount || items.length };
+      } catch (e) {
+        return { items: [], hasNext: false, nextPage: 1, totalCount: 0 };
+      }
     },
     getNextPageParam: (lastPage) => lastPage.hasNext ? lastPage.nextPage : undefined,
   });

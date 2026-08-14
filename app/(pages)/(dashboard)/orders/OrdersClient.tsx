@@ -3978,8 +3978,8 @@ export default function OrdersClient({
 
   // PDF Download function for individual items - fetches fresh data
   const handleDownloadItemPDF = useCallback(async (order: any, item: any, itemIndex: number) => {
-    if (!isMaster) {
-      showMessage('error', 'Only master can download this PDF.', { autoDismiss: true });
+    if (isParty) {
+      showMessage('error', 'Party users cannot download this PDF.', { autoDismiss: true });
       return;
     }
     try {

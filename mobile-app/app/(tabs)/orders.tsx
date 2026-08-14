@@ -469,7 +469,7 @@ const OrderCard = React.memo(function OrderCard({
   const { theme, isDarkMode } = useTheme();
   const [showAllItems, setShowAllItems] = useState(false);
   const user = useAppStore((state) => state.user);
-  const isMaster = user?.role === 'master' || user?.role === 'superadmin';
+  const isMaster = user?.role === 'master' || user?.role === 'superadmin' || user?.role === 'admin';
   const isParty = user?.role === 'party';
   const partyName = typeof item.party === 'object' ? (item.party as any)?.name : item.party || 'Not selected';
   const partyContactRaw = typeof item.party === 'object' ? ((item.party as any)?.contactName || item.contactName) : item.contactName;
@@ -513,7 +513,7 @@ const OrderCard = React.memo(function OrderCard({
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 12 }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>PO:</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.poNumber || '—'}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{getDisplayOrderId(item.poNumber) || '—'}</Text>
             </View>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 12 }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>Style:</Text>
@@ -635,7 +635,7 @@ const OrderCard = React.memo(function OrderCard({
 
                     {/* Icon Actions */}
                     <View style={{ flexDirection: 'row', gap: 6 }}>
-                      {isMaster && (
+                      {!isParty && (
                         <TouchableOpacity
                           onPress={() => onDownloadPDF(item._id!, idx)}
                           activeOpacity={0.7}
@@ -3012,8 +3012,8 @@ export default function OrdersScreen() {
   }, []);
 
   const handleDownloadPDF = useCallback(async (orderId: string, itemIndex: number) => {
-    if (!isMaster) {
-      addToast({ type: 'error', title: 'Access Denied', message: 'Only master can download this PDF.' });
+    if (isParty) {
+      addToast({ type: 'error', title: 'Access Denied', message: 'Party users cannot download this PDF.' });
       return;
     }
     if (Platform.OS !== 'web') {

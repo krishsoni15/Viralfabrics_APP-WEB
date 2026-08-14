@@ -30,9 +30,9 @@ export function useSession() {
 
   const isSuperAdmin = user?.role === 'superadmin';
   const isUser = user?.role === 'user';
-  const isMaster = user?.role === 'master';
+  const isMaster = user?.role === 'master' || user?.role === 'superadmin' || user?.role === 'admin';
   const isParty = user?.role === 'party';
-  const canAccessStickers = user?.role === 'master' || user?.role === 'superadmin';
+  const canAccessStickers = user?.role === 'master' || user?.role === 'superadmin' || user?.role === 'admin';
 
   return {
     user,
