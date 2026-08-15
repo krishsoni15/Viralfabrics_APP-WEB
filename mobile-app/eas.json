@@ -11,7 +11,7 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://main.d2k666ii03c4ui.amplifyapp.com"
+        "EXPO_PUBLIC_API_URL": "https://main.dc643n4iwffih.amplifyapp.com"
       },
       "android": {
         "buildType": "apk"
@@ -24,7 +24,7 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://main.d2k666ii03c4ui.amplifyapp.com"
+        "EXPO_PUBLIC_API_URL": "https://main.dc643n4iwffih.amplifyapp.com"
       }
     }
   },

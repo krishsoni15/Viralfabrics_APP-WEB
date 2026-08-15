@@ -9,6 +9,7 @@ import { Platform, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { storage } from './storage';
 
 let Sharing: any = null;
 try {
@@ -341,16 +342,30 @@ export async function sharePdf(
   filename: string,
   dialogTitle?: string,
 ): Promise<boolean> {
-  const decodedCached = decodeURIComponent(cachedUri);
   try {
     if (Platform.OS === 'web') {
-      // Web: No native share, just open in new tab
-      window.open(decodedCached, '_blank');
+      window.open(cachedUri, '_blank');
       return true;
     }
 
+    let targetUri = cachedUri;
+
+    // If targetUri is a remote HTTP/HTTPS URL, download to cache directory first for Expo sharing
+    if (targetUri.startsWith('http://') || targetUri.startsWith('https://')) {
+      const token = await storage.getToken();
+      const sanitizedName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const localCachePath = `${FileSystem.cacheDirectory}${sanitizedName}`;
+
+      const downloadResult = await FileSystem.downloadAsync(targetUri, localCachePath, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (downloadResult.status === 200) {
+        targetUri = downloadResult.uri;
+      }
+    }
+
     if (Sharing && (await Sharing.isAvailableAsync())) {
-      await Sharing.shareAsync(decodedCached, {
+      await Sharing.shareAsync(targetUri, {
         mimeType: 'application/pdf',
         dialogTitle: dialogTitle || `Share ${filename}`,
         UTI: 'com.adobe.pdf',

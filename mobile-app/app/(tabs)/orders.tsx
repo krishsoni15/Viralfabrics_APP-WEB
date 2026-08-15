@@ -102,7 +102,6 @@ import DeleteConfirmModal from '../../components/shared/DeleteConfirmModal';
 import PdfViewer from '../../components/orders/PdfViewer';
 import PdfViewerModal from '../../components/shared/PdfViewerModal';
 import { savePdfToDevice, generatePdfFromHtml } from '../../utils/pdfUtils';
-import { generateOrderHtml } from '../../utils/orderPdfTemplate';
 import * as Print from 'expo-print';
 
 const getFullImageUrl = (url: string | null | undefined) => {
@@ -3030,25 +3029,14 @@ export default function OrdersScreen() {
     if (Platform.OS === 'web') {
       setPdfPreviewData({ order, itemIndex });
     } else {
-      try {
-        const html = generateOrderHtml(order, itemIndex);
-        const { uri } = await generatePdfFromHtml(html, filename);
+      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+      const token = await storage.getToken();
+      const serverPdfUrl = `${baseUrl}/api/orders/${order._id}/pdf?itemIndex=${itemIndex}${token ? `&token=${token}` : ''}`;
 
-        setOrderPdfViewerUrl(uri);
-        setOrderPdfViewerTitle(title);
-        setOrderPdfViewerFilename(filename);
-        setOrderPdfViewerVisible(true);
-      } catch (err) {
-        console.warn('[Orders] Local Order HTML generation failed, falling back to API URL:', err);
-        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
-        const token = await storage.getToken();
-        const serverPdfUrl = `${baseUrl}/api/orders/${order._id}/pdf?itemIndex=${itemIndex}${token ? `&token=${token}` : ''}`;
-
-        setOrderPdfViewerUrl(serverPdfUrl);
-        setOrderPdfViewerTitle(title);
-        setOrderPdfViewerFilename(filename);
-        setOrderPdfViewerVisible(true);
-      }
+      setOrderPdfViewerUrl(serverPdfUrl);
+      setOrderPdfViewerTitle(title);
+      setOrderPdfViewerFilename(filename);
+      setOrderPdfViewerVisible(true);
     }
   }, [orders, user, addToast]);
 

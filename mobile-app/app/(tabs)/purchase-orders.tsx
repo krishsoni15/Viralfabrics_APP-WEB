@@ -76,7 +76,6 @@ import { CONFIG } from '../../constants/config';
 import { storage } from '../../utils/storage';
 import PdfViewerModal from '../../components/shared/PdfViewerModal';
 import CustomCameraModal from '../../components/shared/CustomCameraModal';
-import { generatePoHtml } from '../../utils/poPdfTemplate';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { savePdfToDevice, generatePdfFromHtml } from '../../utils/pdfUtils';
 import ImagePreviewModal from '../../components/shared/ImagePreviewModal';
@@ -1828,25 +1827,16 @@ export default function PurchaseOrdersScreen() {
     const filename = `Purchase_Order_${displayId}.pdf`;
 
     try {
-      const html = generatePoHtml(po);
-      if (Platform.OS === 'web') {
-        await print.printAsync({ html });
-      } else {
-        const { uri } = await generatePdfFromHtml(html, filename);
-        setPdfViewerUrl(uri);
-        setPdfViewerTitle(`Purchase Order — #${displayId}`);
-        setPdfViewerFilename(filename);
-        setPdfViewerVisible(true);
-      }
-    } catch (err) {
-      console.log('Error previewing PDF locally, falling back to endpoint:', err);
       const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
       const token = await storage.getToken();
       const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
+
       setPdfViewerUrl(pdfUrl);
       setPdfViewerTitle(`Purchase Order — #${displayId}`);
       setPdfViewerFilename(filename);
       setPdfViewerVisible(true);
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Error', message: `Failed to load PDF: ${err.message}` });
     }
   };
   
@@ -1856,48 +1846,23 @@ export default function PurchaseOrdersScreen() {
     const filename = `Purchase_Order_${displayId}.pdf`;
     
     try {
-      const html = generatePoHtml(po);
-      const { uri } = await generatePdfFromHtml(html, filename);
+      const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
+      const token = await storage.getToken();
+      const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
       
-      if (Platform.OS === 'web') {
-        const a = document.createElement('a');
-        a.href = uri;
-        a.download = filename;
-        a.click();
-        addToast({ type: 'success', title: 'Downloaded ✅', message: 'Purchase Order PDF generated.' });
+      const result = await savePdfToDevice({
+        url: pdfUrl,
+        filename,
+        token,
+        dialogTitle: `Purchase Order — #${displayId}`
+      });
+      if (result.success) {
+        addToast({ type: 'success', title: 'Saved Successfully ✅', message: result.message });
       } else {
-        const result = await savePdfToDevice({
-          url: uri,
-          filename,
-          dialogTitle: `Purchase Order — #${displayId}`,
-          localUri: uri,
-        });
-        if (result.success) {
-          addToast({ type: 'success', title: 'Saved Successfully ✅', message: result.message });
-        } else {
-          addToast({ type: 'error', title: 'Save Failed ❌', message: result.message });
-        }
+        addToast({ type: 'error', title: 'Save Failed ❌', message: result.message });
       }
     } catch (err: any) {
-      console.log('Error generating local PDF, trying endpoint fallback:', err);
-      try {
-        const baseUrl = CONFIG.API_URL.endsWith('/') ? CONFIG.API_URL.slice(0, -1) : CONFIG.API_URL;
-        const token = await storage.getToken();
-        const pdfUrl = `${baseUrl}/api/purchase-orders/${po._id}/pdf${token ? `?token=${token}` : ''}`;
-        const result = await savePdfToDevice({
-          url: pdfUrl,
-          filename,
-          token,
-          dialogTitle: `Purchase Order — #${displayId}`
-        });
-        if (result.success) {
-          addToast({ type: 'success', title: 'Saved Successfully', message: result.message });
-        } else {
-          addToast({ type: 'error', title: 'Save Failed', message: result.message });
-        }
-      } catch (fallbackErr: any) {
-        addToast({ type: 'error', title: 'Error', message: `Failed to save PDF: ${fallbackErr.message || err.message}` });
-      }
+      addToast({ type: 'error', title: 'Error', message: `Failed to save PDF: ${err.message}` });
     }
   };
   // Form Input Helpers

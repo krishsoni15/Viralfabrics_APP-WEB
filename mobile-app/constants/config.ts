@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 
-const DEFAULT_PROD_API_URL = 'https://main.d2k666ii03c4ui.amplifyapp.com';
+const DEFAULT_PROD_API_URL = 'https://main.dc643n4iwffih.amplifyapp.com';
 
 // Dynamically extract the Metro host IP address to fallback if EXPO_PUBLIC_API_URL is missing or local
 const getDevApiUrl = () => {
