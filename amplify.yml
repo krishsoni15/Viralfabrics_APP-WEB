@@ -60,7 +60,6 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
-      - .next/cache/**/*
   customHeaders:
     - pattern: '**/*.html'
       headers:
