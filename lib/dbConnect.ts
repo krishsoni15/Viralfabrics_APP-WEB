@@ -1,7 +1,7 @@
 import mongoose, { type Mongoose } from "mongoose";
 import SystemConfig from "../models/SystemConfig";
 
-// Helper to recursively walk the query object and sanitize regex string values to prevent ReDoS
+// Helper to recursively walk the query object and sanitize invalid regex string values to prevent crashes
 function sanitizeRegexQuery(obj: any) {
   if (!obj || typeof obj !== 'object') return;
 
@@ -10,8 +10,13 @@ function sanitizeRegexQuery(obj: any) {
       const val = obj[key];
       if (key === '$regex') {
         if (typeof val === 'string') {
-          // Escape regex special characters to prevent ReDoS/crashes
-          obj[key] = val.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+          // Validate regex syntax safely without mangling explicit pattern logic (e.g. anchors ^, $, groups)
+          try {
+            new RegExp(val);
+          } catch {
+            // Only escape if the regex pattern is malformed to prevent DB query crashes
+            obj[key] = val.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+          }
         }
       } else if (typeof val === 'object') {
         sanitizeRegexQuery(val);

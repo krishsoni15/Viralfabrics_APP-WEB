@@ -36,8 +36,6 @@ interface JWTPayload {
 const PUBLIC_ROUTES = [
   '/api/auth/login',
   '/api/health',
-  '/api/fix-grey-materials',
-  '/api/copy-fabrics',
   '/api/proxy-image',
   '/login',
   '/_next',
@@ -58,6 +56,7 @@ const SUPERADMIN_ROUTES = [
   '/api/orders/renumber-ids',
   '/api/orders/reset-counter',
   '/api/backup',
+  '/api/copy-fabrics',
 ];
 
 /**

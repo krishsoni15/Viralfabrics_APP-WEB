@@ -5,6 +5,10 @@ import path from 'path';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ success: false, message: 'Endpoint disabled in production environment.' }, { status: 403 });
+  }
+
   try {
     const srcDir = path.join(process.cwd(), 'app/api/fabrics');
     const destDir = path.join(process.cwd(), 'app/api/grey-materials');
