@@ -9,6 +9,7 @@ export interface Weaver {
   name: string;
   phone?: string;
   address?: string;
+  sampleCount?: number;
 }
 
 export interface Sample {

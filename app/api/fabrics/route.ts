@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     const countStr = searchParams.get('count');
     const countParam = countStr ? Number(countStr) : NaN;
     const exact = searchParams.get('exact') === 'true';
-    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 100); // Enforce max 100
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50'), 1), 10000); // Enforce max 10000 to allow 'All'
     const page = Math.max(parseInt(searchParams.get('page') || '1'), 1); // Enforce min page 1
     const skip = (page - 1) * limit; // Calculate skip value for pagination
     const sortBy = searchParams.get('sortBy') || 'createdAt'; // Default sort field

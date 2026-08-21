@@ -479,8 +479,8 @@ function PaginationBar({
   page: number;
   totalPages: number;
   total: number;
-  limit: number;
-  setLimit: (limit: number) => void;
+  limit: number | 'All';
+  setLimit: (limit: number | 'All') => void;
   setPage: (page: number) => void;
   isDarkMode: boolean;
   inputBg: string;
@@ -501,8 +501,8 @@ function PaginationBar({
     return pages;
   };
 
-  const startIdx = total === 0 ? 0 : (page - 1) * limit + 1;
-  const endIdx = Math.min(page * limit, total);
+  const startIdx = total === 0 ? 0 : (page - 1) * (limit === 'All' ? total : limit) + 1;
+  const endIdx = Math.min(page * (limit === 'All' ? total : limit), total);
 
   return (
     <div className={`px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl border flex flex-row items-center justify-between gap-3 shadow-md ${
@@ -521,7 +521,8 @@ function PaginationBar({
           <select
             value={limit}
             onChange={(e) => {
-              setLimit(Number(e.target.value));
+              const val = e.target.value === 'All' ? 'All' : Number(e.target.value);
+              setLimit(val);
               setPage(1);
             }}
             className={`pl-2 pr-6 py-0.5 rounded-lg border text-xs font-bold ${inputBg} appearance-none outline-none cursor-pointer`}
@@ -530,6 +531,7 @@ function PaginationBar({
             <option value={25}>25</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
+            <option value="All">All</option>
           </select>
           <ChevronDownIcon className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-60" />
         </div>
@@ -842,12 +844,16 @@ export default function PurchaseOrdersClient() {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState<number | 'All'>(10);
 
   // Load saved page limit from localStorage on mount
   useEffect(() => {
     const savedLimit = localStorage.getItem('poPageLimit');
     if (savedLimit) {
+      if (savedLimit === 'All') {
+        setLimit(10); // Prevent defaulting to 'All'
+        return;
+      }
       const parsed = Number(savedLimit);
       if ([10, 25, 50, 100].includes(parsed)) {
         setLimit(parsed);
@@ -855,7 +861,7 @@ export default function PurchaseOrdersClient() {
     }
   }, []);
 
-  const handleLimitChange = useCallback((newLimit: number) => {
+  const handleLimitChange = useCallback((newLimit: number | 'All') => {
     setLimit(newLimit);
     setPage(1);
     localStorage.setItem('poPageLimit', String(newLimit));
@@ -999,7 +1005,6 @@ export default function PurchaseOrdersClient() {
     pcsMtr: '',
     delivery: '',
     rate: '',
-    greighMtr: '',
     greighLeadTime: '',
     images: [] as string[],
     paymentTerms: '',
@@ -1076,7 +1081,8 @@ export default function PurchaseOrdersClient() {
     try {
       const params = new URLSearchParams();
       params.set('page', String(pageNum));
-      params.set('limit', String(limit));
+      const limitValue = limit === 'All' ? 1000 : limit;
+      params.set('limit', String(limitValue));
       if (search) params.set('search', search);
       if (companyFilter) params.set('companyHeader', companyFilter);
       if (statusFilter) params.set('status', statusFilter);
@@ -1146,7 +1152,6 @@ export default function PurchaseOrdersClient() {
       pcsMtr: '',
       delivery: '',
       rate: '',
-      greighMtr: '',
       greighLeadTime: '',
       images: [],
       paymentTerms: '',
@@ -1177,7 +1182,6 @@ export default function PurchaseOrdersClient() {
       pcsMtr: po.pcsMtr || '',
       delivery: po.delivery || '',
       rate: po.rate || '',
-      greighMtr: po.greighMtr || '',
       greighLeadTime: po.greighLeadTime || '',
       images: po.images || [],
       paymentTerms: po.paymentTerms || '',
@@ -1273,7 +1277,8 @@ export default function PurchaseOrdersClient() {
         if (editingPO) {
           setPurchaseOrders(prev => prev.map(item => item._id === editingPO._id ? { ...item, ...data.data } : item));
         } else if (data.data) {
-          setPurchaseOrders(prev => [data.data, ...prev.slice(0, limit - 1)]);
+          const sliceLimit = limit === 'All' ? 1000 : limit;
+          setPurchaseOrders(prev => [data.data, ...prev.slice(0, sliceLimit - 1)]);
           setTotal(prev => prev + 1);
         }
 
@@ -1866,7 +1871,7 @@ export default function PurchaseOrdersClient() {
                 </tr>
               </thead>
               {loading ? (
-                <TableSkeleton isDarkMode={isDarkMode} limit={limit} />
+                <TableSkeleton isDarkMode={isDarkMode} limit={limit === 'All' ? 25 : limit} />
               ) : (
                 <tbody className={`divide-y ${isDarkMode ? 'divide-slate-700/60' : 'divide-gray-200/60'}`}>
                   {purchaseOrders.length === 0 ? (
@@ -2010,8 +2015,7 @@ export default function PurchaseOrdersClient() {
                             <div className={`font-bold text-sm ${textPrimary} truncate`}>{po.quality || '-'}</div>
                             <div className={`text-xs ${textSecondary} font-medium mt-0.5`}>
                               {po.pcsMtr ? <span className="font-bold text-emerald-600 dark:text-emerald-400">{po.pcsMtr} Pcs/Mtr</span> : null}
-                              {po.greighMtr ? <span className="text-blue-500 dark:text-blue-400 ml-1">(Greigh: {po.greighMtr} Mtr)</span> : null}
-                              {(po.pcsMtr || po.greighMtr) && po.delivery ? ' • ' : null}
+                              {po.pcsMtr && po.delivery ? ' • ' : null}
                               {po.delivery ? <span>{po.delivery}</span> : null}
                             </div>
                           </td>
@@ -2161,7 +2165,7 @@ export default function PurchaseOrdersClient() {
         /* CARDS VIEW */
         <div>
           {loading ? (
-            <CardsSkeleton isDarkMode={isDarkMode} limit={limit} />
+            <CardsSkeleton isDarkMode={isDarkMode} limit={limit === 'All' ? 25 : limit} />
           ) : purchaseOrders.length === 0 ? (
             <div className={`p-12 rounded-2xl border text-center ${cardBg}`}>
               <ClipboardDocumentListIcon className={`w-12 h-12 mx-auto mb-3 opacity-30 ${textSecondary}`} />
@@ -2311,7 +2315,7 @@ export default function PurchaseOrdersClient() {
                         <div className="flex items-center justify-between">
                           <span className={textSecondary}>Quality & Delivery:</span>
                           <span className={`font-semibold ${textPrimary} truncate max-w-[180px]`}>
-                            {po.quality} {po.pcsMtr || po.greighMtr ? `(${po.pcsMtr ? `${po.pcsMtr} Pcs/Mtr` : ''}${po.pcsMtr && po.greighMtr ? ', ' : ''}${po.greighMtr ? `Greigh: ${po.greighMtr} Mtr` : ''})` : ''}
+                            {po.quality} {po.pcsMtr ? `(${po.pcsMtr} Pcs/Mtr)` : ''}
                           </span>
                         </div>
                       )}
@@ -2835,10 +2839,9 @@ export default function PurchaseOrdersClient() {
                   <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Pcs / Mtr</label>
                   <input
                     type="text"
-                    inputMode="decimal"
                     value={formData.pcsMtr}
-                    onChange={(e) => setFormData({ ...formData, pcsMtr: e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1') })}
-                    placeholder="e.g. 3606.00"
+                    onChange={(e) => setFormData({ ...formData, pcsMtr: e.target.value })}
+                    placeholder="e.g. 100 Pcs or 3606.00"
                     className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
                   />
                 </div>
@@ -2854,8 +2857,8 @@ export default function PurchaseOrdersClient() {
                 </div>
               </div>
 
-              {/* Rate & Greigh Lead Time & Greigh Mtr */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Rate & Lead Time */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Rate</label>
                   <input
@@ -2874,16 +2877,6 @@ export default function PurchaseOrdersClient() {
                     value={formData.greighLeadTime || ''}
                     onChange={(e) => setFormData({ ...formData, greighLeadTime: e.target.value })}
                     placeholder="e.g. 10 Days"
-                    className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
-                  />
-                </div>
-                <div>
-                  <label className={`text-xs font-semibold ${textSecondary} block mb-1`}>Greigh Mtr</label>
-                  <input
-                    type="text"
-                    value={formData.greighMtr || ''}
-                    onChange={(e) => setFormData({ ...formData, greighMtr: e.target.value })}
-                    placeholder="e.g. 5000"
                     className={`w-full px-3 py-2.5 rounded-xl border text-sm ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
                   />
                 </div>

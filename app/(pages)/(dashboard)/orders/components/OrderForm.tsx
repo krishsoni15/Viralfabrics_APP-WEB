@@ -978,6 +978,64 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
   const [deletingParty, setDeletingParty] = useState<string | null>(null);
   const [deletingQuality, setDeletingQuality] = useState<string | null>(null);
   const [deleteCounter, setDeleteCounter] = useState(0);
+  const [contacts, setContacts] = useState<{ name: string; phone?: string }[]>([]);
+  const [showContactDropdown, setShowContactDropdown] = useState(false);
+  const contactDropdownRef = useRef<HTMLDivElement>(null);
+  const [activeContactIndex, setActiveContactIndex] = useState<number>(-1);
+
+  const filteredContacts = useMemo(() => {
+    if (!formData.contactName) {
+      return contacts;
+    }
+    const searchLower = formData.contactName.toLowerCase();
+    return contacts.filter(contact => 
+      contact.name.toLowerCase().includes(searchLower)
+    );
+  }, [contacts, formData.contactName]);
+
+  // Reset highlight index when dropdown shows/closes or filtered contacts change
+  useEffect(() => {
+    setActiveContactIndex(-1);
+  }, [filteredContacts, showContactDropdown]);
+
+  // Fetch contacts for selected party
+  useEffect(() => {
+    const fetchContacts = async () => {
+      const partyId = formData.party;
+      if (!partyId) {
+        setContacts([]);
+        return;
+      }
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const response = await fetch(`/api/parties/${partyId}/contacts`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && Array.isArray(data.contactDetails)) {
+            setContacts(data.contactDetails);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch party contacts:', error);
+      }
+    };
+
+    fetchContacts();
+  }, [formData.party]);
+
+  // Click outside to close contact dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contactDropdownRef.current && !contactDropdownRef.current.contains(event.target as Node)) {
+        setShowContactDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   // ⚡ FIX: Track deleted quality IDs to prevent them from being re-added
   // Persist across form opens using sessionStorage
   const getInitialDeletedQualityIds = (): Set<string> => {
@@ -1399,6 +1457,14 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
         setPartySearch(newParty.name);
         setRecentlyAddedParty(null); // Clear the flag
         onSetRecentlyAddedParty?.(null); // Clear the parent state
+
+        // Autofill contact info if available in new party doc
+        if (newParty.contactName) {
+          handleFieldChange('contactName', newParty.contactName);
+        }
+        if (newParty.contactPhone) {
+          handleFieldChange('contactPhone', newParty.contactPhone);
+        }
       }
     }
   }, [localParties, parties, recentlyAddedParty, onSetRecentlyAddedParty]);
@@ -2989,6 +3055,14 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                         setSelectedPartyName(party.name);
                         setPartySearch(party.name);
                         setShowPartyDropdown(false);
+
+                        // Autofill contact info if available in selected party doc
+                        if (party.contactName) {
+                          handleFieldChange('contactName', party.contactName);
+                        }
+                        if (party.contactPhone) {
+                          handleFieldChange('contactPhone', party.contactPhone);
+                        }
                       } else {
                         setValidationMessage({ type: 'error', text: 'Invalid party selected' });
                       }
@@ -3005,16 +3079,44 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                 {/* Contact Name */}
                 <div>
                   <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Contact Name</label>
-                  <div className="relative">
+                  <div className="relative" ref={contactDropdownRef}>
                     <input
                       type="text"
                       value={formData.contactName}
-                      onChange={(e) => handleFieldChange('contactName', e.target.value)}
+                      onChange={(e) => {
+                        handleFieldChange('contactName', e.target.value);
+                        setShowContactDropdown(true);
+                      }}
+                      onFocus={() => setShowContactDropdown(true)}
+                      onKeyDown={(e) => {
+                        if (!showContactDropdown || filteredContacts.length === 0) return;
+
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setActiveContactIndex(prev => (prev + 1) % filteredContacts.length);
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setActiveContactIndex(prev => (prev - 1 + filteredContacts.length) % filteredContacts.length);
+                        } else if (e.key === 'Enter') {
+                          if (activeContactIndex >= 0 && activeContactIndex < filteredContacts.length) {
+                            e.preventDefault();
+                            const selectedContact = filteredContacts[activeContactIndex];
+                            handleFieldChange('contactName', selectedContact.name);
+                            if (selectedContact.phone) {
+                              handleFieldChange('contactPhone', selectedContact.phone);
+                            }
+                            setShowContactDropdown(false);
+                          }
+                        } else if (e.key === 'Escape') {
+                          setShowContactDropdown(false);
+                        }
+                      }}
                       placeholder="Enter contact name"
                       className={`w-full p-3 pr-10 rounded-lg border transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDarkMode
                           ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                         }`}
+                      disabled={readOnly}
                     />
                     {!readOnly && formData.contactName && (
                       <button
@@ -3028,6 +3130,40 @@ export default function OrderForm({ order, parties, qualities, onClose, onSucces
                       >
                         <XMarkIcon className="h-4 w-4" />
                       </button>
+                    )}
+
+                    {/* Contacts Suggestion Dropdown */}
+                    {!readOnly && showContactDropdown && filteredContacts.length > 0 && (
+                      <div className={`absolute z-50 w-full mt-1 max-h-60 overflow-y-auto rounded-lg border shadow-xl ${isDarkMode
+                          ? 'bg-gray-800 border-gray-700 text-white'
+                          : 'bg-white border-gray-200 text-gray-900'
+                        }`}>
+                        {filteredContacts.map((contact, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => {
+                              handleFieldChange('contactName', contact.name);
+                              if (contact.phone) {
+                                handleFieldChange('contactPhone', contact.phone);
+                              }
+                              setShowContactDropdown(false);
+                            }}
+                            className={`w-full px-4 py-2.5 text-left text-xs sm:text-sm font-medium transition-colors duration-150 flex flex-col justify-center ${
+                              index === activeContactIndex
+                                ? (isDarkMode ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-900')
+                                : (isDarkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-900')
+                            }`}
+                          >
+                            <span className="font-semibold">{contact.name}</span>
+                            {contact.phone && (
+                              <span className={`text-[10px] sm:text-xs mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                                Phone: {contact.phone}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>

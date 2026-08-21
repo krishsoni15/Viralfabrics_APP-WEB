@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     await dbConnect();
 
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '25'), 1), 100);
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '25'), 1), 10000); // Enforce max 10000 to allow 'All'
     const page = Math.max(parseInt(searchParams.get('page') || '1'), 1);
     const search = sanitizeSearchQuery(searchParams.get('search') || '');
     const companyHeader = searchParams.get('companyHeader') || '';

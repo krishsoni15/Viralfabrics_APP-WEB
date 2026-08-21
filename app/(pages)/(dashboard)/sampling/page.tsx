@@ -6,6 +6,7 @@ import {
   PlusIcon,
   MagnifyingGlassIcon,
   PencilIcon,
+  PencilSquareIcon,
   TrashIcon,
   XMarkIcon,
   CheckIcon,
@@ -23,6 +24,7 @@ import {
   ListBulletIcon,
   CloudArrowUpIcon,
   EyeIcon,
+  DocumentArrowDownIcon,
   TagIcon,
   DocumentTextIcon,
   ScaleIcon,
@@ -42,6 +44,7 @@ interface Sampling {
   whereToPut?: string;
   weaverName?: string;
   weaverQuality?: string;
+  weaverRate?: number;
   millName?: string;
   processInMill?: string;
   images: string[];
@@ -84,6 +87,7 @@ export default function SamplingPage() {
     whereToPut: '',
     weaverName: '',
     weaverQuality: '',
+    weaverRate: '' as string | number,
     millName: '',
     processInMill: '',
     images: [] as string[],
@@ -97,6 +101,7 @@ export default function SamplingPage() {
     qualityName?: boolean;
     meter?: boolean;
     piece?: boolean;
+    weaverRate?: boolean;
   }>({});
 
   // UI & UX State
@@ -119,6 +124,12 @@ export default function SamplingPage() {
   const [currentStickerItem, setCurrentStickerItem] = useState<Sampling | null>(null);
   const [isLoadingStickerPreview, setIsLoadingStickerPreview] = useState(false);
   const stickerBlobUrlRef = useRef<string | null>(null);
+
+  // Drag to scroll table state
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeftState, setScrollLeftState] = useState(0);
 
   // Animation Triggers
   const [newlyAddedIds, setNewlyAddedIds] = useState<Set<string>>(new Set());
@@ -393,6 +404,7 @@ export default function SamplingPage() {
         whereToPut: item.whereToPut || '',
         weaverName: item.weaverName || '',
         weaverQuality: item.weaverQuality || '',
+        weaverRate: item.weaverRate !== undefined && item.weaverRate !== null ? item.weaverRate : '',
         millName: item.millName || '',
         processInMill: item.processInMill || '',
         images: item.images || [],
@@ -408,6 +420,7 @@ export default function SamplingPage() {
         whereToPut: '',
         weaverName: '',
         weaverQuality: '',
+        weaverRate: '',
         millName: '',
         processInMill: '',
         images: [],
@@ -426,12 +439,13 @@ export default function SamplingPage() {
     const errors = {
       qualityName: !formData.qualityName.trim(),
       meter: formData.meter !== '' && (Number(formData.meter) < 0 || isNaN(Number(formData.meter))),
-      piece: formData.piece !== '' && (Number(formData.piece) < 0 || !Number.isInteger(Number(formData.piece)))
+      piece: formData.piece !== '' && (Number(formData.piece) < 0 || !Number.isInteger(Number(formData.piece))),
+      weaverRate: formData.weaverRate !== '' && (Number(formData.weaverRate) < 0 || isNaN(Number(formData.weaverRate)))
     };
 
     setFormErrors(errors);
 
-    if (errors.qualityName || errors.meter || errors.piece) {
+    if (errors.qualityName || errors.meter || errors.piece || errors.weaverRate) {
       showToast('error', 'Please correct the invalid fields highlighted in red');
       return;
     }
@@ -472,6 +486,7 @@ export default function SamplingPage() {
         whereToPut: formData.whereToPut.trim(),
         weaverName: formData.weaverName.trim(),
         weaverQuality: formData.weaverQuality.trim(),
+        weaverRate: formData.weaverRate === '' ? null : Number(formData.weaverRate),
         millName: formData.millName.trim(),
         processInMill: formData.processInMill.trim(),
         images: uploadedUrls,
@@ -636,6 +651,39 @@ export default function SamplingPage() {
     }
   };
 
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === 'BUTTON' ||
+      target.tagName === 'INPUT' ||
+      target.tagName === 'A' ||
+      target.tagName === 'SELECT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'IMG' ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('a')
+    ) {
+      return;
+    }
+    setIsDragging(true);
+    setStartX(e.pageX - (scrollContainerRef.current?.offsetLeft || 0));
+    setScrollLeftState(scrollContainerRef.current?.scrollLeft || 0);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging || !scrollContainerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 1.5;
+    scrollContainerRef.current.scrollLeft = scrollLeftState - walk;
+  };
+
+  const handleMouseUpOrLeave = () => {
+    setIsDragging(false);
+  };
+
   // Handle sticker download - show preview first (or direct download on mobile)
   const isMobileDevice = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
@@ -646,6 +694,7 @@ export default function SamplingPage() {
         whereToPut: item.whereToPut || undefined,
         weaverName: item.weaverName || undefined,
         weaverQuality: item.weaverQuality || undefined,
+        weaverRate: item.weaverRate || undefined,
         millName: item.millName || undefined,
         processInMill: item.processInMill || undefined,
         notes: item.notes || undefined,
@@ -710,6 +759,27 @@ export default function SamplingPage() {
     }
   };
 
+  const handleStickerDownloadDirect = useCallback((item: Sampling) => {
+    try {
+      const stickerData = {
+        qualityName: item.qualityName || '-',
+        whereToPut: item.whereToPut || undefined,
+        weaverName: item.weaverName || undefined,
+        weaverQuality: item.weaverQuality || undefined,
+        weaverRate: item.weaverRate || undefined,
+        millName: item.millName || undefined,
+        processInMill: item.processInMill || undefined,
+        notes: item.notes || undefined,
+        meter: item.meter || undefined,
+        piece: item.piece || undefined,
+      };
+      downloadSampleStickerPDFDirect(stickerData);
+      showToast('success', 'Sticker PDF downloading...');
+    } catch {
+      showToast('error', 'Failed to download sticker. Please try again.');
+    }
+  }, []);
+
   const handleFinalStickerDownload = useCallback(() => {
     if (!currentStickerItem) {
       showToast('error', 'No item selected for download');
@@ -721,6 +791,7 @@ export default function SamplingPage() {
         whereToPut: currentStickerItem.whereToPut || undefined,
         weaverName: currentStickerItem.weaverName || undefined,
         weaverQuality: currentStickerItem.weaverQuality || undefined,
+        weaverRate: currentStickerItem.weaverRate || undefined,
         millName: currentStickerItem.millName || undefined,
         processInMill: currentStickerItem.processInMill || undefined,
         notes: currentStickerItem.notes || undefined,
@@ -813,9 +884,9 @@ export default function SamplingPage() {
       )}
 
       <div className="w-full pb-6">
-        <div className={`border-2 shadow-xl overflow-hidden ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-white'}`}>
+        <div className={`border-2 shadow-xl overflow-hidden rounded-2xl ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-white'}`}>
           {/* Search and Controls Bar */}
-          <div className={`mb-4 sm:mb-6 flex flex-col gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-b transition-all duration-200 ${isDarkMode ? 'bg-[#1E2938] border-gray-700' : 'bg-white border-gray-200'}`}>
+          <div className={`flex flex-col gap-3 sm:gap-4 p-3 sm:p-4 border-b transition-all duration-200 ${isDarkMode ? 'bg-[#1E2938] border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
             
             {/* First Row - Search Bar & Action Buttons */}
             <div className="flex flex-row items-center justify-between gap-2 sm:gap-3 w-full">
@@ -947,7 +1018,9 @@ export default function SamplingPage() {
             </div>
 
             {/* Pagination Row */}
-            <div className={`mt-2 pt-3 border-t flex flex-row items-center justify-between gap-2 w-full ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+          </div>
+
+          <div className={`px-3 py-3 sm:px-4 border-b flex flex-row items-center justify-between gap-2 w-full transition-all duration-200 ${isDarkMode ? 'border-gray-700 bg-[#1E2938]' : 'border-gray-200 bg-gray-50'}`}>
               <div className="flex flex-row items-center gap-2 sm:gap-3 lg:gap-4 flex-1 min-w-0">
                 {totalCount > 0 && (
                   <span className={`text-xs sm:text-sm whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
@@ -1070,7 +1143,6 @@ export default function SamplingPage() {
                 </div>
               )}
             </div>
-          </div>
 
           <div className={`min-h-[400px] ${viewMode === 'cards' || loading || samplings.length === 0 ? 'p-4' : ''}`}>
             {loading ? (
@@ -1123,6 +1195,11 @@ export default function SamplingPage() {
                         </th>
                         <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                           <div className="flex items-center space-x-2">
+                            <span>Weaver Rate</span>
+                          </div>
+                        </th>
+                        <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="flex items-center space-x-2">
                             <span>Mill Name</span>
                           </div>
                         </th>
@@ -1168,6 +1245,21 @@ export default function SamplingPage() {
                           </td>
                           <td className="px-6 py-4">
                             <div className={`h-4 rounded w-24 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className={`h-4 rounded w-28 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className={`h-4 rounded w-24 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className={`h-4 rounded w-16 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className={`h-4 rounded w-28 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className={`h-4 rounded w-36 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
                           </td>
                           <td className="px-6 py-4">
                             <div className={`h-4 rounded w-48 ${isDarkMode ? 'bg-slate-750' : 'bg-slate-200'}`} />
@@ -1226,7 +1318,7 @@ export default function SamplingPage() {
                       <div className="h-44 w-full bg-slate-900 overflow-hidden relative border-b dark:border-slate-700">
                         {item.images && item.images.length > 0 ? (
                           <>
-                            <img src={item.images[0]} alt={item.qualityName} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 cursor-pointer" onClick={() => setShowImagePreview({ urls: item.images, index: 0 })} />
+                            <img src={item.images[0]} alt={item.qualityName} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 cursor-pointer" onClick={() => setShowImagePreview({ urls: item.images, index: 0 })} draggable={false} />
                             {item.images.length > 1 && (
                               <div className="absolute bottom-3 left-3 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-400/40 shadow-lg z-10">
                                 {item.images.length} Images
@@ -1248,10 +1340,11 @@ export default function SamplingPage() {
                             <span className="truncate max-w-[150px]" title={item.whereToPut}>{item.whereToPut}</span>
                           </div>
                         )}
-                        {(item.weaverName || item.weaverQuality || item.millName) && (
+                        {(item.weaverName || item.weaverQuality || item.weaverRate || item.millName) && (
                           <div className="flex flex-wrap gap-1.5 mt-1.5">
                             {item.weaverName && <span className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md">W: {item.weaverName}</span>}
                             {item.weaverQuality && <span className="text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md">WQ: {item.weaverQuality}</span>}
+                            {item.weaverRate !== undefined && item.weaverRate !== null && <span className="text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-md">Rate: ₹{item.weaverRate}</span>}
                             {item.millName && <span className="text-[10px] font-semibold bg-violet-500/10 text-violet-600 dark:text-violet-400 px-2 py-0.5 rounded-md">Mill: {item.millName}</span>}
                           </div>
                         )}
@@ -1268,14 +1361,32 @@ export default function SamplingPage() {
                           </div>
                         </div>
                         <div className="mt-4 flex items-center gap-2">
-                          <button onClick={() => handleOpenForm('edit', item)} className={`flex-1 flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-semibold border transition-all ${isDarkMode ? 'border-gray-700 hover:bg-slate-750 text-gray-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'}`}>
-                            <PencilIcon className="h-3.5 w-3.5" /><span>Edit</span>
+                          <button
+                            onClick={() => handleOpenForm('edit', item)}
+                            className="flex-1 flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-semibold border transition-all border-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10"
+                          >
+                            <PencilSquareIcon className="h-3.5 w-3.5" /><span>Edit</span>
                           </button>
-                          <button onClick={() => handleStickerDownload(item)} className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'border-blue-500/20 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/40' : 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'}`} title="Download Sticker">
-                            <ArrowDownTrayIcon className="h-4 w-4" />
+                          <button
+                            onClick={() => handleStickerDownload(item)}
+                            className="p-2 rounded-xl border transition-all text-blue-600 dark:text-blue-400 border-blue-500/20 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                            title="Preview Sticker"
+                          >
+                            <EyeIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleStickerDownloadDirect(item)}
+                            className="p-2 rounded-xl border transition-all text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
+                            title="Download Sticker"
+                          >
+                            <DocumentArrowDownIcon className="h-4 w-4" />
                           </button>
                           {isMaster && (
-                            <button onClick={() => { setSelectedItem(item); setShowDeleteModal(true); }} className="p-2 rounded-xl border border-red-500/20 text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-all cursor-pointer">
+                            <button
+                              onClick={() => { setSelectedItem(item); setShowDeleteModal(true); }}
+                              className="p-2 rounded-xl border border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                              title="Delete Item"
+                            >
                               <TrashIcon className="h-4 w-4" />
                             </button>
                           )}
@@ -1286,9 +1397,19 @@ export default function SamplingPage() {
                 })}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div
+                ref={scrollContainerRef}
+                className={`overflow-x-auto ${isDragging ? 'cursor-grabbing select-none' : ''}`}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUpOrLeave}
+                onMouseLeave={handleMouseUpOrLeave}
+              >
                 <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700/80">
-                  <thead className={`${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`} style={{ borderBottom: isDarkMode ? '2px solid rgba(75, 85, 99, 0.6)' : '2px solid rgba(209, 213, 219, 1)' }}>
+                  <thead
+                    className={`${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'} ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                    onMouseDown={handleMouseDown}
+                    style={{ borderBottom: isDarkMode ? '2px solid rgba(75, 85, 99, 0.6)' : '2px solid rgba(209, 213, 219, 1)' }}
+                  >
                     <tr>
                       <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                         <div className="flex items-center space-x-2">
@@ -1313,6 +1434,9 @@ export default function SamplingPage() {
                       </th>
                       <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                         <span>Weaver Quality</span>
+                      </th>
+                      <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span>Weaver Rate</span>
                       </th>
                       <th className={`px-6 py-4 text-left text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                         <span>Mill Name</span>
@@ -1359,7 +1483,7 @@ export default function SamplingPage() {
                             <div className="h-24 w-40 rounded-lg bg-slate-950 border border-slate-700/60 overflow-hidden relative">
                               {item.images && item.images.length > 0 ? (
                                 <>
-                                  <img src={item.images[0]} alt="" className="object-contain h-full w-full cursor-pointer hover:scale-105 transition-transform duration-300" onClick={() => setShowImagePreview({ urls: item.images, index: 0 })} />
+                                  <img src={item.images[0]} alt="" className="object-contain h-full w-full cursor-pointer hover:scale-105 transition-transform duration-300" onClick={() => setShowImagePreview({ urls: item.images, index: 0 })} draggable={false} />
                                   {item.images.length > 1 && (
                                     <div className="absolute top-1.5 right-1.5 bg-blue-600 text-white text-[10px] font-extrabold h-5 min-w-5 px-1 flex items-center justify-center rounded-full border border-blue-400/40 shadow-lg pointer-events-none z-10">
                                       {item.images.length}
@@ -1375,22 +1499,47 @@ export default function SamplingPage() {
                           <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.whereToPut || '-'}</td>
                           <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.weaverName || '-'}</td>
                           <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.weaverQuality || '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">
+                            {item.weaverRate !== undefined && item.weaverRate !== null ? `₹${item.weaverRate}` : '-'}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-500 dark:text-slate-400">{item.millName || '-'}</td>
                           <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={item.processInMill}>{item.processInMill || '-'}</td>
                           <td className="px-6 py-4 font-medium max-w-[200px] truncate" title={item.notes}>{item.notes || '-'}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-blue-500">{item.meter} M</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-purple-500">{item.piece}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="flex items-center justify-center space-x-2">
-                              <button onClick={() => handleOpenForm('edit', item)} className="p-1.5 rounded-lg hover:bg-slate-700/10 dark:hover:bg-slate-200/10 text-blue-500 transition-colors" title="Edit Item">
-                                <PencilIcon className="h-4.5 w-4.5" />
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleStickerDownload(item)}
+                                title="Preview Sticker"
+                                className="p-2 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
+                              >
+                                <EyeIcon className="w-5 h-5" />
                               </button>
-                              <button onClick={() => handleStickerDownload(item)} className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-blue-400 hover:bg-blue-500/20' : 'text-blue-600 hover:bg-blue-50'}`} title="Download Sticker">
-                                <ArrowDownTrayIcon className="h-4.5 w-4.5" />
+                              <button
+                                onClick={() => handleStickerDownloadDirect(item)}
+                                title="Download Sticker"
+                                className="p-2 rounded-xl text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
+                              >
+                                <DocumentArrowDownIcon className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenForm('edit', item)}
+                                title="Edit Item"
+                                className="p-2 rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors"
+                              >
+                                <PencilSquareIcon className="w-5 h-5" />
                               </button>
                               {isMaster && (
-                                <button onClick={() => { setSelectedItem(item); setShowDeleteModal(true); }} className="p-1.5 rounded-lg hover:bg-slate-700/10 dark:hover:bg-slate-200/10 text-red-500 transition-colors" title="Delete Item">
-                                  <TrashIcon className="h-4.5 w-4.5" />
+                                <button
+                                  onClick={() => {
+                                    setSelectedItem(item);
+                                    setShowDeleteModal(true);
+                                  }}
+                                  title="Delete Item"
+                                  className="p-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                                >
+                                  <TrashIcon className="w-5 h-5" />
                                 </button>
                               )}
                             </div>
@@ -1532,8 +1681,8 @@ export default function SamplingPage() {
                 </div>
               </div>
 
-              {/* Row 2: Weaver Name & Weaver Quality */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Row 2: Weaver Name, Weaver Quality & Weaver Rate */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                     Weaver Name
@@ -1565,6 +1714,31 @@ export default function SamplingPage() {
                         : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
                     }`}
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Weaver Rate (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter weaver rate..."
+                    value={formData.weaverRate}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, weaverRate: e.target.value }));
+                      setFormErrors(prev => ({ ...prev, weaverRate: false }));
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all ${
+                      formErrors.weaverRate
+                        ? 'border-red-500 bg-red-500/5 animate-shake focus:ring-red-500/30'
+                        : isDarkMode
+                          ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                    }`}
+                  />
+                  {formErrors.weaverRate && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-1 block">{"Weaver Rate must be >= 0"}</span>
+                  )}
                 </div>
               </div>
 

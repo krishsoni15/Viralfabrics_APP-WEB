@@ -119,6 +119,18 @@ const getHighestPriorityProcess = (processData: any, qualityName?: string) => {
   return highestProcess;
 };
 
+// ⚡ Safety helper: Ensures a value is safe to render as a React child.
+// Prevents "Objects are not valid as React child" errors when party/quality/mill objects
+// are accidentally rendered directly instead of their .name property.
+const safeRender = (value: any, fallback: string = '—'): string => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') return value || fallback;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object' && value.name) return value.name;
+  if (typeof value === 'object' && value._id) return String(value._id);
+  return fallback;
+};
+
 interface OrdersClientProps {
   initialOrders?: Order[];
   initialParties?: Party[];
@@ -396,6 +408,8 @@ export default function OrdersClient({
   // Party-only order view modal (read-only)
   const [showOrderViewModal, setShowOrderViewModal] = useState(false);
   const [selectedOrderForView, setSelectedOrderForView] = useState<Order | null>(null);
+  const [activeViewTab, setActiveViewTab] = useState<'grey' | 'lab' | 'millInput' | 'millOutput' | 'dispatch'>('grey');
+  const [loadingViewData, setLoadingViewData] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [messages, setMessages] = useState<ValidationMessage[]>([]);
@@ -438,10 +452,13 @@ export default function OrdersClient({
     document.cookie = `${name}=${value};${expires};path=/;SameSite=Lax`;
   };
 
-  const [itemsPerPage, setItemsPerPage] = useState<number>(() => {
+  const [itemsPerPage, setItemsPerPage] = useState<number | 'All'>(() => {
     if (typeof window !== 'undefined') {
       const savedItemsPerPage = getCookie('ordersItemsPerPage');
       if (savedItemsPerPage) {
+        if (savedItemsPerPage === 'All') {
+          return 'All';
+        }
         const parsed = parseInt(savedItemsPerPage, 10);
         // Validate it's one of the allowed options
         if ([10, 25, 50, 100].includes(parsed)) {
@@ -449,7 +466,7 @@ export default function OrdersClient({
         }
       }
     }
-    return 10; // Default to 10 orders per page
+    return 'All'; // Default to 'All' orders per page
   });
   const [paginationInfo, setPaginationInfo] = useState({
     totalCount: 0,
@@ -518,7 +535,7 @@ export default function OrdersClient({
 
   // Performance optimization - single cache system
   // Ref to store fetchOrders function for use in handleClearFilters
-  const fetchOrdersRef = useRef<((retryCount?: number, page?: number, limit?: number, forceRefresh?: boolean, currentFilters?: any, searchQuery?: string) => Promise<void>) | null>(null);
+  const fetchOrdersRef = useRef<((retryCount?: number, page?: number, limit?: number | 'All', forceRefresh?: boolean, currentFilters?: any, searchQuery?: string) => Promise<void>) | null>(null);
 
   // ⚡ FIX: Track last visibility change time to prevent rapid refreshes
   const lastVisibilityChangeRef = useRef<number>(0);
@@ -539,7 +556,7 @@ export default function OrdersClient({
     ttl: 5 * 60 * 1000 // 5 minutes
   });
 
-  const itemsPerPageOptions = [10, 25, 50, 100] as const;
+  const itemsPerPageOptions = [10, 25, 50, 100, 'All'] as const;
   const [isInitialized, setIsInitialized] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [isValidating, setIsValidating] = useState(false);
@@ -848,14 +865,15 @@ export default function OrdersClient({
 
   // Enhanced server-side search handler with debounce and search type
   const handleSearchChange = useCallback(async (value: string) => {
-    const trimmedValue = value.trim();
-    setSearchTerm(trimmedValue);
+    setSearchTerm(value);
     setCurrentPage(1); // Reset to page 1 when searching
 
     // Clear previous timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
+
+    const trimmedValue = value.trim();
 
     // If empty search, fetch all orders immediately
     if (!trimmedValue) {
@@ -1661,7 +1679,8 @@ export default function OrdersClient({
 
       // Build URL with pagination and filter parameters
       const url = new URL('/api/orders', window.location.origin);
-      const limitValue = Math.max(limit, 10); // Use server-side pagination
+      const numericLimit = limit === 'All' ? 1000 : limit;
+      const limitValue = Math.max(numericLimit, 10); // Use server-side pagination
       url.searchParams.append('limit', limitValue.toString());
       url.searchParams.append('page', page.toString());
 
@@ -2279,7 +2298,8 @@ export default function OrdersClient({
   }, [currentPage, isChangingPage, totalPages, fetchOrders, itemsPerPage, filters, searchTerm, showMessage]);
 
   // Enhanced items per page handler with better loading states
-  const handleItemsPerPageChange = useCallback(async (newItemsPerPage: number) => {
+  // Enhanced items per page handler with better loading states
+  const handleItemsPerPageChange = useCallback(async (newItemsPerPage: number | 'All') => {
     if (newItemsPerPage === itemsPerPage) {
       console.log('🚫 Items per page change blocked - same value');
       return;
@@ -2334,7 +2354,7 @@ export default function OrdersClient({
 
   // Debounced version to prevent rapid clicking
   const debouncedHandleItemsPerPageChange = useCallback(
-    debounce((newItemsPerPage: number) => {
+    debounce((newItemsPerPage: number | 'All') => {
       handleItemsPerPageChange(newItemsPerPage);
     }, 150),
     [handleItemsPerPageChange]
@@ -2344,7 +2364,7 @@ export default function OrdersClient({
   const paginationDisplayInfo = useMemo(() => {
     const total = paginationInfo.totalCount || 0;
     const currentPageNum = Number(paginationInfo.currentPage) || currentPage || 1;
-    const itemsPerPageValue = itemsPerPage;
+    const itemsPerPageValue = itemsPerPage === 'All' ? total : itemsPerPage;
 
     console.log('🔍 paginationDisplayInfo calc:', {
       total,
@@ -4724,11 +4744,145 @@ export default function OrdersClient({
   const handleView = (order: Order) => {
     if (isParty) {
       setSelectedOrderForView(order);
+      setActiveViewTab('grey');
       setShowOrderViewModal(true);
       return;
     }
     router.push(`/orders/orderdetails?id=${order._id}`);
   };
+
+  // Fetch all process and material data for the viewed order in parallel
+  useEffect(() => {
+    if (showOrderViewModal && selectedOrderForView) {
+      const orderIdObj = selectedOrderForView._id ? String(selectedOrderForView._id) : '';
+      const readableOrderId = selectedOrderForView.orderId || '';
+
+      if (orderIdObj && readableOrderId) {
+        setLoadingViewData(true);
+        const token = localStorage.getItem('token');
+        const headers: any = {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        Promise.all([
+          // 1. Grey Info
+          fetch(`/api/grey-info?orderId=${encodeURIComponent(readableOrderId)}&t=${Date.now()}`, { headers, cache: 'no-store' })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && data.data) {
+                const greyInfo = data.data.greyInfo || [];
+                setOrderGreyInfo(prev => ({
+                  ...prev,
+                  [orderIdObj]: greyInfo,
+                  [readableOrderId]: greyInfo
+                }));
+              }
+            }).catch(err => console.error('Error loading view grey info:', err)),
+
+          // 2. Mill Inputs
+          fetch(`/api/mill-inputs?orderId=${encodeURIComponent(readableOrderId)}&limit=100&t=${Date.now()}`, { headers, cache: 'no-store' })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && data.data?.millInputs) {
+                setOrderMillInputs(prev => ({
+                  ...prev,
+                  [orderIdObj]: data.data.millInputs,
+                  [readableOrderId]: data.data.millInputs
+                }));
+              }
+            }).catch(err => console.error('Error loading view mill inputs:', err)),
+
+          // 3. Mill Outputs
+          fetch(`/api/mill-outputs?orderId=${encodeURIComponent(readableOrderId)}&limit=100&t=${Date.now()}`, { headers, cache: 'no-store' })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && data.data?.millOutputs) {
+                setOrderMillOutputs(prev => ({
+                  ...prev,
+                  [orderIdObj]: data.data.millOutputs,
+                  [readableOrderId]: data.data.millOutputs
+                }));
+              }
+            }).catch(err => console.error('Error loading view mill outputs:', err)),
+
+          // 4. Dispatches
+          fetch(`/api/dispatch?orderId=${encodeURIComponent(readableOrderId)}&limit=100&t=${Date.now()}`, { headers, cache: 'no-store' })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && data.data?.dispatches) {
+                setOrderDispatches(prev => ({
+                  ...prev,
+                  [orderIdObj]: data.data.dispatches,
+                  [readableOrderId]: data.data.dispatches
+                }));
+              }
+            }).catch(err => console.error('Error loading view dispatches:', err)),
+
+          // 5. Lab Data
+          fetch(`/api/labs/by-order/${orderIdObj}`, { headers, cache: 'no-store' })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && Array.isArray(data.data)) {
+                setOrders(prevOrders =>
+                  prevOrders.map(order => {
+                    if (order._id?.toString() === orderIdObj) {
+                      const updatedOrder = { ...order };
+                      updatedOrder.items = updatedOrder.items.map(item => {
+                        const itemLabData = data.data.find((lab: any) => {
+                          const labItemId = lab.orderItemId?.toString();
+                          const itemId = item._id?.toString();
+                          return labItemId === itemId;
+                        });
+
+                        if (itemLabData) {
+                          return {
+                            ...item,
+                            labData: {
+                              labSendDate: itemLabData.labSendDate || null,
+                              approvalDate: itemLabData.labSendData?.approvalDate || null,
+                              sampleNumber: itemLabData.labSendData?.sampleNumber || '',
+                              color: itemLabData.labSendData?.color || '',
+                              shade: itemLabData.labSendData?.shade || '',
+                              notes: itemLabData.labSendData?.notes || '',
+                              imageUrl: itemLabData.labSendData?.imageUrl || '',
+                              labSendNumber: itemLabData.labSendNumber || '',
+                              status: itemLabData.status || 'sent',
+                              remarks: itemLabData.remarks || ''
+                            }
+                          };
+                        }
+                        return { ...item, labData: undefined };
+                      });
+                      updatedOrder.labData = data.data.length > 0 ? data.data : [];
+                      return updatedOrder;
+                    }
+                    return order;
+                  })
+                );
+              }
+            }).catch(err => console.error('Error loading view labs:', err))
+        ]).finally(() => {
+          setLoadingViewData(false);
+        });
+      }
+    }
+  }, [showOrderViewModal, selectedOrderForView]);
+
+  // Prevent body scroll when View Details modal is open
+  useEffect(() => {
+    if (showOrderViewModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showOrderViewModal]);
 
   const handleAddLab = (order: Order) => {
     setSelectedOrderForLab(order);
@@ -5274,7 +5428,7 @@ export default function OrdersClient({
       setPaginationInfo(prev => ({
         ...prev,
         totalCount: orders.length,
-        totalPages: Math.ceil(orders.length / itemsPerPage)
+        totalPages: itemsPerPage === 'All' ? 1 : Math.ceil(orders.length / itemsPerPage)
       }));
     } else if (ordersLoaded && orders.length === 0 && paginationInfo.totalCount > 0 && !loading) {
       // Only refresh if we truly have no orders and pagination says we should have some
@@ -6540,9 +6694,14 @@ export default function OrdersClient({
               onChange={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                const value = parseInt(e.target.value);
-                if (!isNaN(value) && [10, 25, 50, 100].includes(value)) {
-                  debouncedHandleItemsPerPageChange(value);
+                const rawVal = e.target.value;
+                if (rawVal === 'All') {
+                  debouncedHandleItemsPerPageChange('All');
+                } else {
+                  const value = parseInt(rawVal, 10);
+                  if (!isNaN(value) && [10, 25, 50, 100].includes(value)) {
+                    debouncedHandleItemsPerPageChange(value);
+                  }
                 }
               }}
               disabled={isChangingPage || loading}
@@ -6958,7 +7117,7 @@ export default function OrdersClient({
                                             Name:
                                           </span>
                                           <span className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                            {order.party && typeof order.party === 'object' ? order.party.name || 'Not selected' : 'Not selected'}
+                                            {safeRender(order.party, 'Not selected')}
                                           </span>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -7107,12 +7266,12 @@ export default function OrdersClient({
                                               }`}>
                                               Images
                                             </th>
-                                            {isMaster && (
-                                              <th className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                                                }`}>
-                                                Actions
-                                              </th>
-                                            )}
+                                                                                         {!isParty && (
+                                               <th className={`px-4 py-3 text-center text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-200' : 'text-gray-700'
+                                                 }`}>
+                                                 Actions
+                                               </th>
+                                             )}
                                           </tr>
                                         </thead>
                                         <tbody className={`divide-y ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'
@@ -7423,7 +7582,7 @@ export default function OrdersClient({
                                                 )}
                                               </td>
 
-                                              {isMaster && (
+                                              {!isParty && (
                                                 <td className="px-2 py-2 text-center">
                                                   <div className="flex flex-col gap-2">
                                                     {/* PDF Download Button - Only show for Master ID */}
@@ -7439,20 +7598,22 @@ export default function OrdersClient({
                                                       PDF
                                                     </button>
 
-                                                    {/* Delete Button */}
-                                                    <button
-                                                      onClick={() => handleDeleteItemClick(order._id, index, item.quality && typeof item.quality === 'object' ? item.quality.name || 'Item' : 'Item')}
-                                                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 hover:scale-105 shadow-sm delete-button-hover ${isDarkMode
-                                                        ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-600/30 hover:border-red-500/50'
-                                                        : 'bg-red-100 text-red-600 hover:bg-red-200 border border-red-200 hover:border-red-300'
-                                                        }`}
-                                                      title="Delete item"
-                                                    >
-                                                      <TrashIcon className="h-3.5 w-3.5 inline mr-1.5" />
-                                                      Delete
-                                                    </button>
-                                                </div>
-                                               </td>
+                                                                                                         {/* Delete Button */}
+                                                     {isMaster && (
+                                                       <button
+                                                         onClick={() => handleDeleteItemClick(order._id, index, item.quality && typeof item.quality === 'object' ? item.quality.name || 'Item' : 'Item')}
+                                                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 hover:scale-105 shadow-sm delete-button-hover ${isDarkMode
+                                                           ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-600/30 hover:border-red-500/50'
+                                                           : 'bg-red-100 text-red-600 hover:bg-red-200 border border-red-200 hover:border-red-300'
+                                                           }`}
+                                                         title="Delete item"
+                                                       >
+                                                         <TrashIcon className="h-3.5 w-3.5 inline mr-1.5" />
+                                                         Delete
+                                                       </button>
+                                                     )}
+                                                   </div>
+                                                 </td>
                                                )}
                                             </tr>
                                           ))}
@@ -7507,148 +7668,138 @@ export default function OrdersClient({
                                     </div>
                                   </div>
 
-                                  {/* Table Actions - 2 Columns Layout */}
+                                  {/* Table Actions */}
                                   <div className="grid grid-cols-2 gap-4">
                                     {/* Column 1: Grey, Lab, Input, Output, Dispatch */}
                                     <div className="space-y-3">
-                                      {(!isParty || hasGreyInfo(order)) && (
-                                        <button
-                                          type="button"
-                                          key={`grey-info-${order._id}-${forceRender}`}
-                                          onClick={() => handleGreyInfo(order)}
-                                          disabled={loadingGreyInfo === order._id}
-                                          className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 relative disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${isDarkMode
-                                            ? 'bg-gray-700/50 text-gray-300 border border-gray-600 hover:bg-gray-700'
-                                            : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
-                                            }`}
-                                          title={isParty ? "View Grey Information" : (hasGreyInfo(order) ? "Edit Grey Information" : "Add Grey Information")}
-                                        >
-                                          {loadingGreyInfo === order._id ? (
-                                            <>
-                                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                              <span>Loading...</span>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <DocumentTextIcon className="h-4 w-4" />
-                                              <span>{isParty ? "View Grey Info" : (hasGreyInfo(order) ? "Edit Grey Info" : "Add Grey Info")}</span>
-                                            </>
-                                          )}
-                                          {loadingGreyInfo !== order._id && (
-                                            <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
-                                              } ${hasGreyInfo(order) ? 'bg-green-500' : 'bg-gray-400'
-                                              }`} title={hasGreyInfo(order) ? "Data exists" : "No data"} />
-                                          )}
-                                        </button>
-                                      )}
-
-                                      {(!isParty || hasLabData(order)) && (
-                                        <button
-                                          key={`lab-${order._id}-${forceRender}`}
-                                          onClick={() => handleLabData(order)}
-                                          className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 relative ${isDarkMode
-                                            ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30'
-                                            : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
-                                            }`}
-                                          title={isParty ? "View Lab Data" : (hasLabData(order) ? "Edit Lab Data" : "Add Lab Data")}
-                                        >
-                                          <BeakerIcon className="h-4 w-4" />
-                                          <span>{isParty ? "View Lab Data" : (hasLabData(order) ? "Edit Lab Data" : "Add Lab Data")}</span>
+                                      <button
+                                        type="button"
+                                        key={`grey-info-${order._id}-${forceRender}`}
+                                        onClick={() => handleGreyInfo(order)}
+                                        disabled={loadingGreyInfo === order._id}
+                                        className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 relative disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${isDarkMode
+                                          ? 'bg-gray-700/50 text-gray-300 border border-gray-600 hover:bg-gray-700'
+                                          : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                                          }`}
+                                        title={hasGreyInfo(order) ? (isParty ? "View Grey Information" : "Edit Grey Information") : (isParty ? "No Grey Info Available" : "Add Grey Information")}
+                                      >
+                                        {loadingGreyInfo === order._id ? (
+                                          <>
+                                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                            <span>Loading...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <DocumentTextIcon className="h-4 w-4" />
+                                            <span>{isParty ? "Grey Info" : (hasGreyInfo(order) ? "Edit Grey Info" : "Add Grey Info")}</span>
+                                          </>
+                                        )}
+                                        {loadingGreyInfo !== order._id && (
                                           <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
-                                            } ${hasLabData(order) ? 'bg-green-500' : 'bg-gray-400'
-                                            }`} title={hasLabData(order) ? "Data exists" : "No data"} />
-                                        </button>
-                                      )}
+                                            } ${hasGreyInfo(order) ? 'bg-green-500' : 'bg-gray-400'
+                                            }`} title={hasGreyInfo(order) ? "Data exists" : "No data"} />
+                                        )}
+                                      </button>
 
-                                      {(!isParty || hasMillInputs(order)) && (
-                                        <button
-                                          key={`mill-input-${order._id}-${forceRender}`}
-                                          onClick={() => handleMillInput(order)}
-                                          disabled={loadingMillInput === order._id}
-                                          className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 relative ${isDarkMode
-                                            ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30'
-                                            : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
-                                            } ${loadingMillInput === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
-                                          title={isParty ? "View Mill Input" : (hasMillInputs(order) ? "Edit Mill Input" : "Add Mill Input")}
-                                        >
-                                          {loadingMillInput === order._id ? (
-                                            <>
-                                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                              <span>Loading...</span>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <CubeIcon className="h-4 w-4" />
-                                              <span>{isParty ? "View Mill Input" : (hasMillInputs(order) ? "Edit Mill Input" : "Add Mill Input")}</span>
-                                            </>
-                                          )}
-                                          {loadingMillInput !== order._id && (
-                                            <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
-                                              } ${hasMillInputs(order) ? 'bg-green-500' : 'bg-gray-400'
-                                              }`} title={hasMillInputs(order) ? "Data exists" : "No data"} />
-                                          )}
-                                        </button>
-                                      )}
+                                      <button
+                                        key={`lab-${order._id}-${forceRender}`}
+                                        onClick={() => handleLabData(order)}
+                                        className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 relative ${isDarkMode
+                                          ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30'
+                                          : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                                          }`}
+                                        title={hasLabData(order) ? (isParty ? "View Lab Data" : "Edit Lab Data") : (isParty ? "No Lab Data Available" : "Add Lab Data")}
+                                      >
+                                        <BeakerIcon className="h-4 w-4" />
+                                        <span>{isParty ? "Lab Data" : (hasLabData(order) ? "Edit Lab Data" : "Add Lab Data")}</span>
+                                        <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
+                                          } ${hasLabData(order) ? 'bg-green-500' : 'bg-gray-400'
+                                          }`} title={hasLabData(order) ? "Data exists" : "No data"} />
+                                      </button>
 
-                                      {(!isParty || hasMillOutputs(order)) && (
-                                        <button
-                                          key={`mill-output-${order._id}-${forceRender}`}
-                                          onClick={() => handleMillOutput(order)}
-                                          disabled={loadingMillOutput === order._id}
-                                          className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 relative ${isDarkMode
-                                            ? 'bg-teal-600/20 text-teal-400 border border-teal-500/30 hover:bg-teal-600/30'
-                                            : 'bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100'
-                                            } ${loadingMillOutput === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
-                                          title={isParty ? "View Mill Output" : (hasMillOutputs(order) ? "Edit Mill Output" : "Add Mill Output")}
-                                        >
-                                          {loadingMillOutput === order._id ? (
-                                            <>
-                                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                              <span>Loading...</span>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <DocumentTextIcon className="h-4 w-4" />
-                                              <span>{isParty ? "View Mill Output" : (hasMillOutputs(order) ? "Edit Mill Output" : "Add Mill Output")}</span>
-                                            </>
-                                          )}
-                                          {loadingMillOutput !== order._id && (
-                                            <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
-                                              } ${hasMillOutputs(order) ? 'bg-green-500' : 'bg-gray-400'
-                                              }`} title={hasMillOutputs(order) ? "Data exists" : "No data"} />
-                                          )}
-                                        </button>
-                                      )}
+                                      <button
+                                        key={`mill-input-${order._id}-${forceRender}`}
+                                        onClick={() => handleMillInput(order)}
+                                        disabled={loadingMillInput === order._id}
+                                        className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 relative ${isDarkMode
+                                          ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30'
+                                          : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
+                                          } ${loadingMillInput === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
+                                        title={hasMillInputs(order) ? (isParty ? "View Mill Input" : "Edit Mill Input") : (isParty ? "No Mill Input Available" : "Add Mill Input")}
+                                      >
+                                        {loadingMillInput === order._id ? (
+                                          <>
+                                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                            <span>Loading...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <CubeIcon className="h-4 w-4" />
+                                            <span>{isParty ? "Mill Input" : (hasMillInputs(order) ? "Edit Mill Input" : "Add Mill Input")}</span>
+                                          </>
+                                        )}
+                                        {loadingMillInput !== order._id && (
+                                          <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
+                                            } ${hasMillInputs(order) ? 'bg-green-500' : 'bg-gray-400'
+                                            }`} title={hasMillInputs(order) ? "Data exists" : "No data"} />
+                                        )}
+                                      </button>
 
-                                      {(!isParty || hasDispatches(order)) && (
-                                        <button
-                                          key={`dispatch-${order._id}-${forceRender}`}
-                                          onClick={() => handleDispatch(order)}
-                                          disabled={loadingDispatch === order._id}
-                                          className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 relative ${isDarkMode
-                                            ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30 hover:bg-orange-600/30'
-                                            : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
-                                            } ${loadingDispatch === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
-                                          title={isParty ? "View Dispatch" : (hasDispatches(order) ? "Edit Dispatch" : "Add Dispatch")}
-                                        >
-                                          {loadingDispatch === order._id ? (
-                                            <>
-                                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                              <span>Loading...</span>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <TruckIcon className="h-4 w-4" />
-                                              <span>{isParty ? "View Dispatch" : (hasDispatches(order) ? "Edit Dispatch" : "Add Dispatch")}</span>
-                                            </>
-                                          )}
-                                          {loadingDispatch !== order._id && (
-                                            <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
-                                              } ${hasDispatches(order) ? 'bg-green-500' : 'bg-gray-400'
-                                              }`} title={hasDispatches(order) ? "Data exists" : "No data"} />
-                                          )}
-                                        </button>
-                                      )}
+                                      <button
+                                        key={`mill-output-${order._id}-${forceRender}`}
+                                        onClick={() => handleMillOutput(order)}
+                                        disabled={loadingMillOutput === order._id}
+                                        className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 relative ${isDarkMode
+                                          ? 'bg-teal-600/20 text-teal-400 border border-teal-500/30 hover:bg-teal-600/30'
+                                          : 'bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100'
+                                          } ${loadingMillOutput === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
+                                        title={hasMillOutputs(order) ? (isParty ? "View Mill Output Status" : "Edit Mill Output") : (isParty ? "No Mill Output Available" : "Add Mill Output")}
+                                      >
+                                        {loadingMillOutput === order._id ? (
+                                          <>
+                                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                            <span>Loading...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <DocumentTextIcon className="h-4 w-4" />
+                                            <span>{isParty ? "Mill Output" : (hasMillOutputs(order) ? "Edit Mill Output" : "Add Mill Output")}</span>
+                                          </>
+                                        )}
+                                        {loadingMillOutput !== order._id && (
+                                          <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
+                                            } ${hasMillOutputs(order) ? 'bg-green-500' : 'bg-gray-400'
+                                            }`} title={hasMillOutputs(order) ? "Data exists" : "No data"} />
+                                        )}
+                                      </button>
+
+                                      <button
+                                        key={`dispatch-${order._id}-${forceRender}`}
+                                        onClick={() => handleDispatch(order)}
+                                        disabled={loadingDispatch === order._id}
+                                        className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 flex items-center justify-center space-x-2 relative ${isDarkMode
+                                          ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30 hover:bg-orange-600/30'
+                                          : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
+                                          } ${loadingDispatch === order._id ? 'opacity-75 cursor-not-allowed' : ''}`}
+                                        title={hasDispatches(order) ? (isParty ? "View Dispatch Details" : "Edit Dispatch") : (isParty ? "No Dispatch Data Available" : "Add Dispatch")}
+                                      >
+                                        {loadingDispatch === order._id ? (
+                                          <>
+                                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                            <span>Loading...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <TruckIcon className="h-4 w-4" />
+                                            <span>{isParty ? "Dispatch" : (hasDispatches(order) ? "Edit Dispatch" : "Add Dispatch")}</span>
+                                          </>
+                                        )}
+                                        {loadingDispatch !== order._id && (
+                                          <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 ${isDarkMode ? 'border-gray-800' : 'border-white'
+                                            } ${hasDispatches(order) ? 'bg-green-500' : 'bg-gray-400'
+                                            }`} title={hasDispatches(order) ? "Data exists" : "No data"} />
+                                        )}
+                                      </button>
                                     </div>
 
                                     {/* Column 2: View, Edit, Delete, Logs */}
@@ -7864,7 +8015,7 @@ export default function OrdersClient({
                           <div className="flex items-center gap-1.5">
                             <span className={`text-[10px] sm:text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Party:</span>
                             <span className={`text-[11px] sm:text-[13px] font-extrabold truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
-                              {order.party && typeof order.party === 'object' ? order.party.name || '—' : order.party || '—'}
+                              {safeRender(order.party, '—')}
                             </span>
                           </div>
                           {(order.contactName || order.contactPhone) && (
@@ -7943,7 +8094,7 @@ export default function OrdersClient({
                                 {/* Details */}
                                 <div className="flex-1 mr-2 min-w-0">
                                   <div className={`text-xs sm:text-sm font-extrabold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-                                    {item.quality && typeof item.quality === 'object' ? item.quality.name || 'N/A' : 'N/A'}
+                                    {safeRender(item.quality, 'N/A')}
                                   </div>
                                   <div className="flex items-center flex-wrap gap-1.5 mt-0.5 sm:mt-1">
                                     <div className={`px-1.5 py-0.5 rounded-md border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'}`}>
@@ -7959,7 +8110,7 @@ export default function OrdersClient({
 
                                 {/* Actions */}
                                 <div className="flex items-center gap-1.5">
-                                  {isMaster && (
+                                  {!isParty && (
                                     <button
                                       onClick={() => handleDownloadItemPDF(order, item, itemIndex)}
                                       className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border transition-all hover-lift active:scale-95 ${isDarkMode ? 'bg-blue-600/15 border-blue-600/30' : 'bg-blue-50 border-blue-200'}`}
@@ -8001,125 +8152,127 @@ export default function OrdersClient({
                       )}
 
                       {/* Interactive Progress Pipeline */}
-                      <div className="my-2 mt-4">
-                        <div className="flex items-center justify-between px-2 sm:px-3">
-                          {/* Grey */}
-                          <div className="relative z-10 bg-inherit">
-                            <button
-                              onClick={() => handleGreyInfo(order)}
-                              disabled={loadingGreyInfo === order._id}
-                              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
-                                hasGreyInfo(order) 
-                                  ? (isDarkMode ? 'bg-slate-400/15 border-slate-400/80' : 'bg-slate-500/10 border-slate-500/80') 
-                                  : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
-                              }`}
-                            >
-                              {loadingGreyInfo === order._id ? (
-                                <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasGreyInfo(order) ? (isDarkMode ? 'text-slate-300' : 'text-slate-600') : 'text-gray-500'}`} />
-                              ) : (
-                                <DocumentTextIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasGreyInfo(order) ? (isDarkMode ? 'text-slate-300' : 'text-slate-600') : 'text-gray-500'}`} />
-                              )}
-                            </button>
-                            {hasGreyInfo(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                      {true && (
+                        <div className="my-2 mt-4">
+                          <div className="flex items-center justify-between px-2 sm:px-3">
+                            {/* Grey */}
+                            <div className="relative z-10 bg-inherit">
+                              <button
+                                onClick={() => handleGreyInfo(order)}
+                                disabled={loadingGreyInfo === order._id}
+                                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
+                                  hasGreyInfo(order) 
+                                    ? (isDarkMode ? 'bg-slate-400/15 border-slate-400/80' : 'bg-slate-500/10 border-slate-500/80') 
+                                    : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
+                                }`}
+                              >
+                                {loadingGreyInfo === order._id ? (
+                                  <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasGreyInfo(order) ? (isDarkMode ? 'text-slate-300' : 'text-slate-600') : 'text-gray-500'}`} />
+                                ) : (
+                                  <DocumentTextIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasGreyInfo(order) ? (isDarkMode ? 'text-slate-300' : 'text-slate-600') : 'text-gray-500'}`} />
+                                )}
+                              </button>
+                              {hasGreyInfo(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                            </div>
+
+                            <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasLabData(order) ? 'bg-violet-500' : (hasGreyInfo(order) ? (isDarkMode ? 'bg-slate-300' : 'bg-slate-600') : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
+
+                            {/* Lab */}
+                            <div className="relative z-10 bg-inherit">
+                              <button
+                                onClick={() => {
+                                  const latestOrder = orders.find(o => o._id === order._id) || order;
+                                  setSelectedOrderForLabData(latestOrder);
+                                  setShowLabDataModal(true);
+                                }}
+                                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
+                                  hasLabData(order) 
+                                    ? 'bg-violet-500/15 border-violet-500' 
+                                    : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
+                                }`}
+                              >
+                                <BeakerIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasLabData(order) ? 'text-violet-500' : 'text-gray-500'}`} />
+                              </button>
+                              {hasLabData(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                            </div>
+
+                            <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasMillInputs(order) ? 'bg-cyan-500' : (hasLabData(order) ? 'bg-violet-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
+
+                            {/* Mill In */}
+                            <div className="relative z-10 bg-inherit">
+                              <button
+                                onClick={() => handleMillInput(order)}
+                                disabled={loadingMillInput === order._id}
+                                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
+                                  hasMillInputs(order) 
+                                    ? 'bg-cyan-500/15 border-cyan-500' 
+                                    : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
+                                }`}
+                              >
+                                {loadingMillInput === order._id ? (
+                                  <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasMillInputs(order) ? 'text-cyan-600' : 'text-gray-500'}`} />
+                                ) : (
+                                  <CubeIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasMillInputs(order) ? 'text-cyan-600' : 'text-gray-500'}`} />
+                                )}
+                              </button>
+                              {hasMillInputs(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                            </div>
+
+                            <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasMillOutputs(order) ? 'bg-green-500' : (hasMillInputs(order) ? 'bg-cyan-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
+
+                            {/* Mill Out */}
+                            <div className="relative z-10 bg-inherit">
+                              <button
+                                onClick={() => handleMillOutput(order)}
+                                disabled={loadingMillOutput === order._id}
+                                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
+                                  hasMillOutputs(order) 
+                                    ? 'bg-green-500/15 border-green-500' 
+                                    : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
+                                }`}
+                              >
+                                {loadingMillOutput === order._id ? (
+                                  <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasMillOutputs(order) ? 'text-green-600' : 'text-gray-500'}`} />
+                                ) : (
+                                  <DocumentTextIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasMillOutputs(order) ? 'text-green-600' : 'text-gray-500'}`} />
+                                )}
+                              </button>
+                              {hasMillOutputs(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                            </div>
+
+                            <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasDispatches(order) ? 'bg-orange-500' : (hasMillOutputs(order) ? 'bg-green-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
+
+                            {/* Dispatch */}
+                            <div className="relative z-10 bg-inherit">
+                              <button
+                                onClick={() => handleDispatch(order)}
+                                disabled={loadingDispatch === order._id}
+                                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
+                                  hasDispatches(order) 
+                                    ? 'bg-orange-500/15 border-orange-500' 
+                                    : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
+                                }`}
+                              >
+                                {loadingDispatch === order._id ? (
+                                  <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasDispatches(order) ? 'text-orange-500' : 'text-gray-500'}`} />
+                                ) : (
+                                  <TruckIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasDispatches(order) ? 'text-orange-500' : 'text-gray-500'}`} />
+                                )}
+                              </button>
+                              {hasDispatches(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                            </div>
                           </div>
 
-                          <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasLabData(order) ? 'bg-violet-500' : (hasGreyInfo(order) ? (isDarkMode ? 'bg-slate-300' : 'bg-slate-600') : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
-
-                          {/* Lab */}
-                          <div className="relative z-10 bg-inherit">
-                            <button
-                              onClick={() => {
-                                const latestOrder = orders.find(o => o._id === order._id) || order;
-                                setSelectedOrderForLabData(latestOrder);
-                                setShowLabDataModal(true);
-                              }}
-                              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
-                                hasLabData(order) 
-                                  ? 'bg-violet-500/15 border-violet-500' 
-                                  : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
-                              }`}
-                            >
-                              <BeakerIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasLabData(order) ? 'text-violet-500' : 'text-gray-500'}`} />
-                            </button>
-                            {hasLabData(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
-                          </div>
-
-                          <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasMillInputs(order) ? 'bg-cyan-500' : (hasLabData(order) ? 'bg-violet-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
-
-                          {/* Mill In */}
-                          <div className="relative z-10 bg-inherit">
-                            <button
-                              onClick={() => handleMillInput(order)}
-                              disabled={loadingMillInput === order._id}
-                              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
-                                hasMillInputs(order) 
-                                  ? 'bg-cyan-500/15 border-cyan-500' 
-                                  : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
-                              }`}
-                            >
-                              {loadingMillInput === order._id ? (
-                                <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasMillInputs(order) ? 'text-cyan-600' : 'text-gray-500'}`} />
-                              ) : (
-                                <CubeIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasMillInputs(order) ? 'text-cyan-600' : 'text-gray-500'}`} />
-                              )}
-                            </button>
-                            {hasMillInputs(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
-                          </div>
-
-                          <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasMillOutputs(order) ? 'bg-green-500' : (hasMillInputs(order) ? 'bg-cyan-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
-
-                          {/* Mill Out */}
-                          <div className="relative z-10 bg-inherit">
-                            <button
-                              onClick={() => handleMillOutput(order)}
-                              disabled={loadingMillOutput === order._id}
-                              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
-                                hasMillOutputs(order) 
-                                  ? 'bg-green-500/15 border-green-500' 
-                                  : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
-                              }`}
-                            >
-                              {loadingMillOutput === order._id ? (
-                                <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasMillOutputs(order) ? 'text-green-600' : 'text-gray-500'}`} />
-                              ) : (
-                                <DocumentTextIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasMillOutputs(order) ? 'text-green-600' : 'text-gray-500'}`} />
-                              )}
-                            </button>
-                            {hasMillOutputs(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
-                          </div>
-
-                          <div className={`flex-1 h-0.5 mx-0 -mt-0 -mx-1 z-0 relative ${hasDispatches(order) ? 'bg-orange-500' : (hasMillOutputs(order) ? 'bg-green-500' : (isDarkMode ? 'bg-slate-700' : 'bg-slate-200'))}`} />
-
-                          {/* Dispatch */}
-                          <div className="relative z-10 bg-inherit">
-                            <button
-                              onClick={() => handleDispatch(order)}
-                              disabled={loadingDispatch === order._id}
-                              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border-[1.5px] transition-transform active:scale-95 ${
-                                hasDispatches(order) 
-                                  ? 'bg-orange-500/15 border-orange-500' 
-                                  : (isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-300')
-                              }`}
-                            >
-                              {loadingDispatch === order._id ? (
-                                <ArrowPathIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin ${hasDispatches(order) ? 'text-orange-500' : 'text-gray-500'}`} />
-                              ) : (
-                                <TruckIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${hasDispatches(order) ? 'text-orange-500' : 'text-gray-500'}`} />
-                              )}
-                            </button>
-                            {hasDispatches(order) && <div className={`absolute top-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 ${isDarkMode ? 'border-[#1e293b]' : 'border-white'}`} />}
+                          {/* Progress Labels */}
+                          <div className="flex justify-between px-1.5 sm:px-2 mt-1.5">
+                            <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasGreyInfo(order) ? (isDarkMode ? 'text-slate-300' : 'text-slate-600') : 'text-gray-500'}`}>Grey</span>
+                            <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasLabData(order) ? 'text-violet-500' : 'text-gray-500'}`}>Lab</span>
+                            <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasMillInputs(order) ? 'text-cyan-600' : 'text-gray-500'}`}>Mill In</span>
+                            <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasMillOutputs(order) ? 'text-green-600' : 'text-gray-500'}`}>Mill Out</span>
+                            <span className={`text-[8px] sm:text-[9px] font-bold w-11 text-center ${hasDispatches(order) ? 'text-orange-500' : 'text-gray-500'}`}>Dispatch</span>
                           </div>
                         </div>
-
-                        {/* Progress Labels */}
-                        <div className="flex justify-between px-1.5 sm:px-2 mt-1.5">
-                          <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasGreyInfo(order) ? (isDarkMode ? 'text-slate-300' : 'text-slate-600') : 'text-gray-500'}`}>Grey</span>
-                          <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasLabData(order) ? 'text-violet-500' : 'text-gray-500'}`}>Lab</span>
-                          <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasMillInputs(order) ? 'text-cyan-600' : 'text-gray-500'}`}>Mill In</span>
-                          <span className={`text-[8px] sm:text-[9px] font-bold w-10 text-center ${hasMillOutputs(order) ? 'text-green-600' : 'text-gray-500'}`}>Mill Out</span>
-                          <span className={`text-[8px] sm:text-[9px] font-bold w-11 text-center ${hasDispatches(order) ? 'text-orange-500' : 'text-gray-500'}`}>Dispatch</span>
-                        </div>
-                      </div>
+                      )}
 
                       <div className="flex-grow"></div>
 
@@ -8158,15 +8311,13 @@ export default function OrdersClient({
                           )}
                         </div>
                         <div className="flex items-center gap-1.5">
-                          {!isParty && (
-                            <button
-                              onClick={() => handleEdit(order)}
-                              className={`p-1.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20' : 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'}`}
-                              title="Edit Order"
-                            >
-                              <PencilIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleEdit(order)}
+                            className={`p-1.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20' : 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'}`}
+                            title={isParty ? "View Order" : "Edit Order"}
+                          >
+                            <PencilIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          </button>
                           {isMaster && (
                             <button
                               onClick={() => handleDeleteClick(order)}
@@ -8220,14 +8371,7 @@ export default function OrdersClient({
                 <div className="p-3 sm:p-3.5 flex flex-col h-full">
                   <div className="flex justify-between items-center mb-4">
                     <div className={`h-6 w-24 rounded-lg ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
-                    <div className={`h-6 w-16 rounded-lg ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
-                  </div>
-                  <div className={`h-4 w-32 rounded mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
-                  
-                  <div className="flex gap-2 mb-4">
-                    <div className={`h-14 flex-1 rounded-xl ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200'}`}></div>
-                    <div className={`h-14 flex-1 rounded-xl ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200'}`}></div>
-                    <div className={`h-14 flex-1 rounded-xl ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200'}`}></div>
+<div className={`h-14 flex-1 rounded-xl ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200'}`}></div>
                   </div>
 
                   <div className={`h-4 w-16 rounded mb-2 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
@@ -8240,174 +8384,228 @@ export default function OrdersClient({
                 </div>
               </div>
             ))
-          )}          {/* Card Layout Pagination removed - using top pagination only */}
-          {false && (
-            <div className={`mt-8 px-3 sm:px-4 py-2 sm:py-3 border-t flex justify-center items-center ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
-              }`}>
-              <div className="flex items-center space-x-1 sm:space-x-2">
-                <button
-                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1 || isChangingPage || loading}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 border-2 ${currentPage === 1 || isChangingPage || loading
-                    ? isDarkMode ? 'bg-gray-800 text-gray-500 cursor-not-allowed border-gray-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-300'
-                    : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
-                    }`}
-                >
-                  <span className="hidden sm:inline">Previous</span>
-                  <span className="sm:hidden">Prev</span>
-                </button>
-
-                {/* Smart Page numbers */}
-                <div className="flex items-center space-x-1">
-                  {(() => {
-                    const pages = [];
-
-                    if (totalPages <= 7) {
-                      // Show all pages if 7 or fewer
-                      for (let i = 1; i <= totalPages; i++) {
-                        pages.push(
-                          <button
-                            key={i}
-                            onClick={() => handlePageChange(i)}
-                            disabled={isChangingPage || loading}
-                            className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 ${currentPage === i
-                              ? isDarkMode ? 'bg-blue-600 text-white shadow-lg border-blue-500' : 'bg-blue-500 text-white shadow-lg border-blue-400'
-                              : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
-                              } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          >
-                            {i}
-                          </button>
-                        );
-                      }
-                    } else {
-                      // Smart pagination for more than 7 pages
-
-                      // Always show first page
-                      pages.push(
-                        <button
-                          key={1}
-                          onClick={() => handlePageChange(1)}
-                          disabled={isChangingPage || loading}
-                          className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 border-2 ${currentPage === 1
-                            ? isDarkMode ? 'bg-blue-600 text-white shadow-lg border-blue-500' : 'bg-blue-500 text-white shadow-lg border-blue-400'
-                            : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
-                            } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          1
-                        </button>
-                      );
-
-                      if (currentPage <= 4) {
-                        // Show: 1, 2, 3, 4, 5, ..., last
-                        for (let i = 2; i <= 5; i++) {
-                          pages.push(
-                            <button
-                              key={i}
-                              onClick={() => handlePageChange(i)}
-                              disabled={isChangingPage || loading}
-                              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 ${currentPage === i
-                                ? isDarkMode ? 'bg-blue-600 text-white shadow-lg border-blue-500' : 'bg-blue-500 text-white shadow-lg border-blue-400'
-                                : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
-                                } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                              {i}
-                            </button>
-                          );
-                        }
-                        pages.push(
-                          <span key="ellipsis1" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            ...
-                          </span>
-                        );
-                      } else if (currentPage >= totalPages - 3) {
-                        // Show: 1, ..., last-4, last-3, last-2, last-1, last
-                        pages.push(
-                          <span key="ellipsis1" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            ...
-                          </span>
-                        );
-                        for (let i = totalPages - 4; i <= totalPages; i++) {
-                          pages.push(
-                            <button
-                              key={i}
-                              onClick={() => handlePageChange(i)}
-                              disabled={isChangingPage || loading}
-                              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 ${currentPage === i
-                                ? isDarkMode ? 'bg-blue-600 text-white shadow-lg border-blue-500' : 'bg-blue-500 text-white shadow-lg border-blue-400'
-                                : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
-                                } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                              {i}
-                            </button>
-                          );
-                        }
-                      } else {
-                        // Show: 1, ..., current-1, current, current+1, ..., last
-                        pages.push(
-                          <span key="ellipsis1" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            ...
-                          </span>
-                        );
-                        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
-                          pages.push(
-                            <button
-                              key={i}
-                              onClick={() => handlePageChange(i)}
-                              disabled={isChangingPage || loading}
-                              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 ${currentPage === i
-                                ? isDarkMode ? 'bg-blue-600 text-white shadow-lg border-blue-500' : 'bg-blue-500 text-white shadow-lg border-blue-400'
-                                : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
-                                } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                              {i}
-                            </button>
-                          );
-                        }
-                        pages.push(
-                          <span key="ellipsis2" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            ...
-                          </span>
-                        );
-                      }
-
-                      // Always show last page (if not already shown)
-                      if (currentPage < totalPages - 3) {
-                        pages.push(
-                          <button
-                            key={totalPages}
-                            onClick={() => handlePageChange(totalPages)}
-                            disabled={isChangingPage || loading}
-                            className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm transition-colors ${currentPage === totalPages
-                              ? isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white'
-                              : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                              } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          >
-                            {totalPages}
-                          </button>
-                        );
-                      }
-                    }
-
-                    return pages;
-                  })()}
-                </div>
-
-                <button
-                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages || isChangingPage || loading}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 border-2 ${currentPage === totalPages || isChangingPage || loading
-                    ? isDarkMode ? 'bg-gray-800 text-gray-500 cursor-not-allowed border-gray-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed border-gray-300'
-                    : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
-                    }`}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
           )}
         </div>
       )}
 
+      {/* Bottom Pagination Info Bar */}
+      <div className={`mt-6 px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-t flex flex-row flex-wrap items-center justify-between gap-2 sm:gap-4 ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'
+        }`}>
+        <div className="flex flex-row items-center gap-2 sm:gap-3 lg:gap-4">
+          <span className={`text-[10px] xs:text-xs sm:text-sm whitespace-nowrap font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+            <span className="hidden sm:inline">Showing {paginationDisplayInfo.start} to {paginationDisplayInfo.end} of {paginationDisplayInfo.total} orders</span>
+            <span className="sm:hidden">{paginationDisplayInfo.start}-{paginationDisplayInfo.end} <span className="opacity-75">of {paginationDisplayInfo.total}</span></span>
+          </span>
+
+          {/* Items per page dropdown */}
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            <span className={`text-[10px] xs:text-xs sm:text-sm hidden xs:inline ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Show:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const rawVal = e.target.value;
+                if (rawVal === 'All') {
+                  debouncedHandleItemsPerPageChange('All');
+                } else {
+                  const value = parseInt(rawVal, 10);
+                  if (!isNaN(value) && [10, 25, 50, 100].includes(value)) {
+                    debouncedHandleItemsPerPageChange(value);
+                  }
+                }
+              }}
+              disabled={isChangingPage || loading}
+              className={`px-2 sm:px-3 py-1 rounded-lg border text-[10px] xs:text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDarkMode
+                ? 'bg-gray-700 border-gray-600 text-white'
+                : 'bg-white border-gray-300 text-gray-900'
+                } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              {itemsPerPageOptions.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Enhanced Navigation - Show when there are multiple pages */}
+        {(totalPages > 1 || orders.length > 0) && (
+          <div className="flex items-center space-x-1 sm:space-x-3 ml-auto">
+            <button
+              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1 || isChangingPage || loading}
+              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-medium transition-all duration-200 hover-lift active:scale-95 ${currentPage === 1 || isChangingPage || loading
+                ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+            >
+              {isChangingPage ? (
+                <span className="flex items-center space-x-2">
+                  <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${isDarkMode ? 'border-gray-400' : 'border-gray-600'
+                    }`}></div>
+                  <span className="hidden sm:inline">Loading...</span>
+                  <span className="sm:hidden">...</span>
+                </span>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">Previous</span>
+                  <span className="sm:hidden">Prev</span>
+                </>
+              )}
+            </button>
+
+            {/* Smart Page numbers */}
+            <div className="flex items-center space-x-1">
+              {(() => {
+                const pages = [];
+
+                if (totalPages <= 7) {
+                  for (let i = 1; i <= totalPages; i++) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => handlePageChange(i)}
+                        disabled={isChangingPage || loading}
+                        className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-medium transition-all duration-200 hover-lift active:scale-95 ${currentPage === i
+                          ? isDarkMode ? 'bg-blue-600 text-white shadow-md badge-pulse' : 'bg-blue-500 text-white shadow-md badge-pulse'
+                          : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                          } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+                } else {
+                  pages.push(
+                    <button
+                      key={1}
+                      onClick={() => handlePageChange(1)}
+                      disabled={isChangingPage || loading}
+                      className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 ${currentPage === 1
+                        ? isDarkMode ? 'bg-blue-600 text-white shadow-lg border-blue-500' : 'bg-blue-500 text-white shadow-lg border-blue-400'
+                        : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
+                        } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      1
+                    </button>
+                  );
+
+                  if (currentPage <= 4) {
+                    for (let i = 2; i <= 5; i++) {
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => handlePageChange(i)}
+                          disabled={isChangingPage || loading}
+                          className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 ${currentPage === i
+                            ? isDarkMode ? 'bg-blue-600 text-white shadow-lg border-blue-500' : 'bg-blue-500 text-white shadow-lg border-blue-400'
+                            : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
+                            } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+                    pages.push(
+                      <span key="ellipsis1" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        ...
+                      </span>
+                    );
+                  } else if (currentPage >= totalPages - 3) {
+                    pages.push(
+                      <span key="ellipsis1" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        ...
+                      </span>
+                    );
+                    for (let i = totalPages - 4; i <= totalPages; i++) {
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => handlePageChange(i)}
+                          disabled={isChangingPage || loading}
+                          className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 ${currentPage === i
+                            ? isDarkMode ? 'bg-blue-600 text-white shadow-lg border-blue-500' : 'bg-blue-500 text-white shadow-lg border-blue-400'
+                            : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
+                            } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+                  } else {
+                    pages.push(
+                      <span key="ellipsis1" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        ...
+                      </span>
+                    );
+                    for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => handlePageChange(i)}
+                          disabled={isChangingPage || loading}
+                          className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-semibold transition-all duration-200 border-2 ${currentPage === i
+                            ? isDarkMode ? 'bg-blue-600 text-white shadow-lg border-blue-500' : 'bg-blue-500 text-white shadow-lg border-blue-400'
+                            : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
+                            } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+                    pages.push(
+                      <span key="ellipsis2" className={`px-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        ...
+                      </span>
+                    );
+                  }
+
+                  if (currentPage < totalPages - 3) {
+                    pages.push(
+                      <button
+                        key={totalPages}
+                        onClick={() => handlePageChange(totalPages)}
+                        disabled={isChangingPage || loading}
+                        className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 border-2 hover-lift active:scale-95 ${currentPage === totalPages
+                          ? isDarkMode ? 'bg-blue-600 text-white shadow-lg border-blue-500 badge-pulse' : 'bg-blue-500 text-white shadow-lg border-blue-400 badge-pulse'
+                          : isDarkMode ? 'bg-gray-700 text-white hover:bg-gray-600 hover:border-gray-500 border-gray-600 shadow-md hover:shadow-lg' : 'bg-white text-gray-800 hover:bg-gray-50 border-gray-400 shadow-md hover:shadow-lg'
+                          } ${(isChangingPage || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {totalPages}
+                      </button>
+                    );
+                  }
+                }
+
+                return pages;
+              })()}
+            </div>
+
+            <button
+              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages || isChangingPage || loading}
+              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] xs:text-xs sm:text-sm font-medium transition-all duration-200 hover-lift active:scale-95 ${currentPage === totalPages || isChangingPage || loading
+                ? isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : isDarkMode ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+            >
+              {isChangingPage ? (
+                <span className="flex items-center space-x-1 sm:space-x-2">
+                  <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${isDarkMode ? 'border-gray-400' : 'border-gray-600'
+                    }`}></div>
+                  <span className="hidden sm:inline">Loading...</span>
+                  <span className="sm:hidden">...</span>
+                </span>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">Next</span>
+                  <span className="sm:hidden">Next</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Modals */}
       {showForm && (
@@ -8438,6 +8636,9 @@ export default function OrdersClient({
           onClose={() => {
             setShowForm(false);
             setEditingOrder(null);
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('orderFormDraftData');
+            }
           }}
           onSuccess={async (updatedOrderData?: any) => {
             // ⚡ IMMEDIATE: Close modal first for instant feedback
@@ -9027,119 +9228,652 @@ export default function OrdersClient({
       )}
 
       {showOrderViewModal && selectedOrderForView && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowOrderViewModal(false)} />
-          <div className={`max-w-4xl w-full ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} rounded-lg shadow-lg overflow-auto z-50 p-6`}> 
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">Order Details</h3>
-              <button onClick={() => setShowOrderViewModal(false)} className={`px-3 py-1 rounded ${isDarkMode ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-800'}`}>Close</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
+          <div className="absolute inset-0" onClick={() => setShowOrderViewModal(false)} />
+          <div className={`max-w-6xl w-full h-[100dvh] sm:h-auto sm:max-h-[90vh] md:max-h-[95vh] flex flex-col overflow-hidden rounded-none sm:rounded-2xl shadow-2xl z-50 transition-all duration-300 transform scale-100 ${
+            isDarkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white text-gray-900 border border-gray-200'
+          }`}> 
+            <div className={`flex-shrink-0 flex items-center justify-between p-4 sm:p-6 border-b ${
+              isDarkMode ? 'border-gray-700 bg-gray-900/10' : 'border-gray-200 bg-gray-50'
+            }`}>
+              <div>
+                <h3 className="text-lg sm:text-xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600 dark:from-indigo-400 dark:to-purple-400">Order Details Summary</h3>
+                <p className="text-xs text-gray-400 mt-1">Full view of order items and processing timeline</p>
+              </div>
+              <button 
+                onClick={() => setShowOrderViewModal(false)} 
+                className={`p-2 rounded-xl transition-all duration-200 hover:scale-105 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 ${
+                  isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
+                }`}
+                aria-label="Close modal"
+              >
+                <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
             </div>
 
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar">
+
             {/* Basic metadata */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div>
-                <div className="text-xs font-semibold">Order ID</div>
-                <div className="font-bold">{selectedOrderForView.orderId || selectedOrderForView._id}</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-gray-900/40 border-gray-700' : 'bg-gray-100 border-gray-200'} shadow-sm`}>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Order ID</div>
+                <div className="font-extrabold text-sm sm:text-base text-indigo-500 dark:text-indigo-400 mt-0.5">
+                  {selectedOrderForView.orderId ? getDisplayOrderId(selectedOrderForView.orderId) : '—'}
+                </div>
               </div>
-              <div>
-                <div className="text-xs font-semibold">Party</div>
-                <div className="font-medium">{selectedOrderForView.party && typeof selectedOrderForView.party === 'object' ? selectedOrderForView.party.name : selectedOrderForView.party}</div>
+              <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-gray-900/40 border-gray-700' : 'bg-gray-100 border-gray-200'} shadow-sm`}>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Party</div>
+                <div className="font-extrabold text-sm sm:text-base mt-0.5 truncate">{safeRender(selectedOrderForView.party, '—')}</div>
               </div>
-              <div>
-                <div className="text-xs font-semibold">PO Number</div>
-                <div className="font-medium">{selectedOrderForView.poNumber || '—'}</div>
+              <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-gray-900/40 border-gray-700' : 'bg-gray-100 border-gray-200'} shadow-sm`}>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">PO Number</div>
+                <div className="font-bold text-sm sm:text-base mt-0.5">{selectedOrderForView.poNumber || '—'}</div>
               </div>
-              <div>
-                <div className="text-xs font-semibold">Style No</div>
-                <div className="font-medium">{selectedOrderForView.styleNo || '—'}</div>
+              <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-gray-900/40 border-gray-700' : 'bg-gray-100 border-gray-200'} shadow-sm`}>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Style No</div>
+                <div className="font-bold text-sm sm:text-base mt-0.5">{selectedOrderForView.styleNo || '—'}</div>
               </div>
             </div>
 
             {/* Items */}
-            <div className="mb-4">
-              <h4 className="font-semibold mb-2">Items</h4>
+            <div className="mb-6">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-gray-400 mb-3">Items ({selectedOrderForView.items?.length || 0})</h4>
               {selectedOrderForView.items && selectedOrderForView.items.length > 0 ? (
-                <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {selectedOrderForView.items.map((it: any, idx: number) => (
-                    <div key={idx} className="p-2 border rounded">
-                      <div className="text-sm font-semibold">{it.quality || it.qualityName || 'Item'}</div>
-                      <div className="text-xs">Qty: {it.quantity || it.qty || 0}</div>
-                      <div className="text-xs">Shade: {it.shade || '—'}</div>
+                    <div key={idx} className={`p-3 rounded-xl border transition-all duration-200 ${isDarkMode ? 'bg-[#1e293b]/60 border-gray-700 hover:border-gray-650' : 'bg-[#f8fafc] border-gray-200 hover:border-gray-300'} hover:scale-[1.02] shadow-sm`}>
+                      <div className="text-sm font-extrabold text-indigo-500 dark:text-indigo-400">{safeRender(it.quality, it.qualityName || 'Item')}</div>
+                      <div className="flex justify-between items-center mt-2 text-xs font-semibold">
+                        <span className="text-gray-400">Qty: <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>{it.quantity || it.qty || 0}</span></span>
+                        <span className="text-gray-400">Shade: <span className={isDarkMode ? 'text-gray-200' : 'text-gray-800'}>{it.shade || '—'}</span></span>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-gray-500">No items found</div>
+                <div className="text-sm text-gray-505">No items found</div>
               )}
             </div>
 
-            {/* Process Data - Mill Inputs / Outputs / Dispatches / Grey Info */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <h5 className="font-semibold mb-2">Mill Inputs</h5>
-                {(orderMillInputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).length > 0 ? (
-                  (orderMillInputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).map((m: any, i: number) => (
-                    <div key={i} className="p-2 border rounded mb-2">
-                      <div className="text-sm font-semibold">{m.millName || m.mill || 'Mill'}</div>
-                      <div className="text-xs">Chalan: {m.chalanNo || m.chalan || '—'}</div>
-                      <div className="text-xs">Date: {m.millDate || m.recdDate || '—'}</div>
+            {/* Scrollable Timeline Content */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+              {(() => {
+                if (loadingViewData) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                      <ArrowPathIcon className="w-8 h-8 animate-spin text-indigo-500" />
+                      <span className="text-sm font-semibold text-gray-505">Loading process details...</span>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-gray-500">No mill inputs</div>
-                )}
-              </div>
+                  );
+                }
 
-              <div>
-                <h5 className="font-semibold mb-2">Mill Outputs</h5>
-                {(orderMillOutputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).length > 0 ? (
-                  (orderMillOutputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).map((m: any, i: number) => (
-                    <div key={i} className="p-2 border rounded mb-2">
-                      <div className="text-sm font-semibold">{m.millName || m.mill || 'Mill'}</div>
-                      <div className="text-xs">Bill No: {m.millBillNo || m.billNo || '—'}</div>
-                      <div className="text-xs">Pcs: {m.pcs || m.greighMtr || '—'}</div>
+                return (
+                  <div className="space-y-6">
+                  
+                  {/* 1. Grey Material Status Section */}
+                  <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-gray-900/40 border-gray-700' : 'bg-gray-50/50 border-gray-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CubeIcon className="w-4 h-4 text-indigo-400" />
+                        <h5 className="font-bold text-xs uppercase tracking-wider">1. Grey Material Status</h5>
+                      </div>
+                      {(() => {
+                        const greyList = orderGreyInfo[selectedOrderForView.orderId || String(selectedOrderForView._id)] || [];
+                        const hasGrey = greyList.length > 0;
+                        return (
+                          <span className={`px-2.5 py-1 text-[11px] font-bold rounded-full border ${
+                            hasGrey 
+                              ? 'bg-green-950/40 text-green-400 border-green-800' 
+                              : 'bg-red-950/40 text-red-400 border-red-800'
+                          }`}>
+                            {hasGrey ? 'Received' : 'Not Received'}
+                          </span>
+                        );
+                      })()}
                     </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-gray-500">No mill outputs</div>
-                )}
-              </div>
+                    {(() => {
+                      const greyList = orderGreyInfo[selectedOrderForView.orderId || String(selectedOrderForView._id)] || [];
+                      return !isParty && greyList.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 pt-3 border-t border-dashed border-gray-700/30">
+                          {greyList.map((g: any, i: number) => (
+                            <div key={i} className={`p-2.5 rounded-lg border text-xs ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                              <div><span className="text-gray-400">Grey Type:</span> <span className="font-bold">{g.greyType || 'Not Set'}</span></div>
+                              <div className="mt-1"><span className="text-gray-400">Meters:</span> <span className="font-semibold">{g.greighMtr ? `${g.greighMtr} mtr` : '—'}</span></div>
+                              {g.pcs && <div className="mt-1"><span className="text-gray-400">Pcs:</span> <span className="font-semibold">{g.pcs} pcs</span></div>}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
 
-              <div>
-                <h5 className="font-semibold mb-2">Dispatches</h5>
-                {(orderDispatches[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).length > 0 ? (
-                  (orderDispatches[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).map((d: any, i: number) => (
-                    <div key={i} className="p-2 border rounded mb-2">
-                      <div className="text-sm font-semibold">{d.dispatchNo || d.chalanNo || 'Dispatch'}</div>
-                      <div className="text-xs">Date: {d.dispatchDate || d.date || '—'}</div>
-                      <div className="text-xs">Qty: {d.qty || d.quantity || '—'}</div>
+                  {/* 2. Lab Recipes & Approvals Section */}
+                  <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-gray-900/40 border-gray-700' : 'bg-gray-50/50 border-gray-200'}`}>
+                    <div className="flex items-center gap-2 mb-3 border-b border-dashed border-gray-700/30 pb-2">
+                      <BeakerIcon className="w-4 h-4 text-pink-400" />
+                      <h5 className="font-bold text-xs uppercase tracking-wider">2. Lab Recipes & Approvals</h5>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-gray-500">No dispatches</div>
-                )}
-              </div>
+                    {(() => {
+                      const currentOrder = orders.find(o => o._id === selectedOrderForView._id) || selectedOrderForView;
+                      const labList = currentOrder.labData && Array.isArray(currentOrder.labData) ? currentOrder.labData : [];
 
-              <div>
-                <h5 className="font-semibold mb-2">Grey Info</h5>
-                {(orderGreyInfo[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).length > 0 ? (
-                  (orderGreyInfo[selectedOrderForView.orderId || String(selectedOrderForView._id)] || []).map((g: any, i: number) => (
-                    <div key={i} className="p-2 border rounded mb-2">
-                      <div className="text-sm font-semibold">{g.greyType || 'Grey'}</div>
-                      <div className="text-xs">Meters: {g.greighMtr || g.meters || '—'}</div>
+                      const simplifiedLabItems = (currentOrder.items || []).map((item: any) => {
+                        const itemLab = labList.find((l: any) => l.itemId === item._id || l.qualityName === (item.quality && typeof item.quality === 'object' ? item.quality.name : item.quality));
+                        return {
+                          qualityName: item.quality && typeof item.quality === 'object' ? item.quality.name : item.quality,
+                          sampleNumber: itemLab?.labSendData?.sampleNumber || itemLab?.sampleNumber || '—',
+                          sendDate: itemLab?.labSendDate || itemLab?.labSendData?.sendDate || '—',
+                          approvalDate: itemLab?.approvalDate || itemLab?.labSendData?.approvalDate || '—',
+                          hasData: !!itemLab
+                        };
+                      });
+
+                      const allPending = simplifiedLabItems.every(it => !it.hasData);
+                      if (allPending) {
+                        return <span className="text-xs text-yellow-600 dark:text-yellow-405 font-bold animate-pulse">Pending / No Lab Data Available</span>;
+                      }
+
+                      return (
+                        <>
+                          {/* Desktop Table View */}
+                          <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead>
+                                <tr className={`border-b ${isDarkMode ? 'border-gray-700 text-gray-400 bg-gray-900/20' : 'border-gray-250 text-gray-500 bg-gray-50'}`}>
+                                  <th className="py-2.5 px-3 font-semibold">Quality</th>
+                                  <th className="py-2.5 px-3 font-semibold">Sample No</th>
+                                  <th className="py-2.5 px-3 font-semibold">Send Date</th>
+                                  <th className="py-2.5 px-3 font-semibold">Approval Date</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-750/30">
+                                {simplifiedLabItems.map((item, idx) => (
+                                  <tr key={idx} className={isDarkMode ? 'hover:bg-gray-800/20' : 'hover:bg-gray-50'}>
+                                    <td className="py-2.5 px-3 font-bold text-gray-950 dark:text-white">{item.qualityName}</td>
+                                    <td className="py-2.5 px-3">{item.sampleNumber}</td>
+                                    <td className="py-2.5 px-3">{item.sendDate !== '—' ? formatDate(item.sendDate) : '—'}</td>
+                                    <td className="py-2.5 px-3">
+                                      {item.approvalDate !== '—' ? (
+                                        <span className="text-green-500 font-bold">{formatDate(item.approvalDate)}</span>
+                                      ) : (
+                                        <span className="text-amber-500 font-medium">Pending</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Mobile Card View */}
+                          <div className="space-y-3 md:hidden">
+                            {simplifiedLabItems.map((item, idx) => (
+                              <div key={idx} className={`p-4 rounded-xl border transition-all duration-200 ${isDarkMode ? 'bg-gray-800/40 border-gray-700' : 'bg-white border-gray-200'}`}>
+                                <div className="flex justify-between items-center border-b pb-2 mb-3 border-gray-200 dark:border-gray-700">
+                                  <span className="font-bold text-sm text-pink-500">{item.qualityName}</span>
+                                  <span className="text-[10px] text-gray-400 font-semibold">Sample: {item.sampleNumber}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-xs">
+                                  <div className="space-y-1">
+                                    <span className="text-gray-400 block font-medium">Send Date:</span>
+                                    <span className="font-semibold block">{item.sendDate !== '—' ? formatDate(item.sendDate) : '—'}</span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <span className="text-gray-400 block font-medium">Approval Date:</span>
+                                    <span className="block">
+                                      {item.approvalDate !== '—' ? (
+                                        <span className="text-green-500 font-bold">{formatDate(item.approvalDate)}</span>
+                                      ) : (
+                                        <span className="text-amber-500 font-medium">Pending</span>
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* 3. Mill Input Section */}
+                  <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-gray-900/40 border-gray-700' : 'bg-gray-50/50 border-gray-200'}`}>
+                    <div className="flex items-center gap-2 mb-3 border-b border-dashed border-gray-700/30 pb-2">
+                      <BuildingOfficeIcon className="w-4 h-4 text-indigo-400" />
+                      <h5 className="font-bold text-xs uppercase tracking-wider">3. Mill Input / Process</h5>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-gray-500">No grey info</div>
-                )}
+                    {(() => {
+                      const getLatestProcessForQuality = (quality: any, orderId: string): string => {
+                        try {
+                          const processDataCache = localStorage.getItem('process-data-cache');
+                          if (processDataCache) {
+                            const cached = JSON.parse(processDataCache);
+                            const processDataByQuality = cached.processData || {};
+                            let qualityId = typeof quality === 'object' ? quality._id : quality;
+                            let qualityName = typeof quality === 'object' ? quality.name : quality;
+                            if (typeof quality === 'string' && qualities) {
+                              const match = qualities.find(q => q.name.toLowerCase() === quality.toLowerCase() || q._id === quality);
+                              if (match) {
+                                qualityId = match._id;
+                                qualityName = match.name;
+                              }
+                            }
+                            const key1 = `${orderId}_${qualityId}_${qualityName}`;
+                            const key2 = `${orderId}_${qualityId}`;
+                            const key3 = `${String(orderId)}_${String(qualityId)}_${String(qualityName)}`;
+                            const processes: string[] = processDataByQuality[key1] || processDataByQuality[key2] || processDataByQuality[key3] || [];
+                            if (processes.length > 0) {
+                              const processPriority = [
+                                'Lot No Greigh', 'Charkha', 'Drum', 'Soflina WR', 'long jet',
+                                'setting', 'In Dyeing', 'jigar', 'in printing', 'loop',
+                                'washing', 'Finish', 'folding', 'ready to dispatch', 'In House'
+                              ];
+                              const sorted = [...processes].sort((a, b) => {
+                                const aIndex = processPriority.indexOf(a);
+                                const bIndex = processPriority.indexOf(b);
+                                if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+                                if (aIndex === -1) return 1;
+                                if (bIndex === -1) return -1;
+                                return bIndex - aIndex;
+                              });
+                              return sorted[0];
+                            }
+                          }
+                        } catch (e) {
+                          console.error('Error reading process cache:', e);
+                        }
+                        return '';
+                      };
+
+                      const inputsList = orderMillInputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || [];
+                      const rows: {
+                        quality: string;
+                        quantity: string;
+                        process: string;
+                        millDate: string;
+                        chalanNo: string;
+                        isAdditional?: boolean;
+                      }[] = [];
+
+                      const hasValidMillItems = inputsList && inputsList.length > 0;
+                      if (hasValidMillItems) {
+                        inputsList.forEach((item: any) => {
+                          const latestProc = getLatestProcessForQuality(item.quality, selectedOrderForView.orderId || '');
+                          rows.push({
+                            quality: typeof item.quality === 'object' ? item.quality?.name : (qualities.find(q => q._id === item.quality)?.name || item.quality || '—'),
+                            quantity: `${item.greighMtr || '0'} Mtr / ${item.pcs || '0'} Pcs`,
+                            process: latestProc || item.processName || item.process || '—',
+                            millDate: item.millDate || item.recdDate ? formatDate(item.millDate || item.recdDate) : '—',
+                            chalanNo: item.chalanNo || item.chalan || '—'
+                          });
+                          if (item.additionalMeters) {
+                            item.additionalMeters.forEach((am: any) => {
+                              const latestAmProc = getLatestProcessForQuality(am.quality, selectedOrderForView.orderId || '');
+                              rows.push({
+                                quality: typeof am.quality === 'object' ? am.quality?.name : (qualities.find(q => q._id === am.quality)?.name || am.quality || '—'),
+                                quantity: `${am.meters || '0'} Mtr / ${am.pieces || '0'} Pcs`,
+                                process: latestAmProc || am.process || '—',
+                                millDate: item.millDate || item.recdDate ? formatDate(item.millDate || item.recdDate) : '—',
+                                chalanNo: item.chalanNo || item.chalan || '—',
+                                isAdditional: true
+                              });
+                            });
+                          }
+                        });
+                      } else if (selectedOrderForView && selectedOrderForView.items) {
+                        selectedOrderForView.items.forEach((item: any) => {
+                          const qualityName = typeof item.quality === 'object' ? item.quality?.name : item.quality;
+                          const latestProc = getLatestProcessForQuality(item.quality, selectedOrderForView.orderId || '');
+                          rows.push({
+                            quality: qualityName || '—',
+                            quantity: String(item.quantity || '0'),
+                            process: latestProc || item.processData?.mainProcess || '—',
+                            millDate: 'Pending',
+                            chalanNo: 'Pending'
+                          });
+                        });
+                      }
+
+                      if (rows.length === 0) {
+                        return <p className="text-xs text-gray-400">No mill input items found.</p>;
+                      }
+
+                      return (
+                        <>
+                          {/* Desktop Table View */}
+                          <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead>
+                                <tr className={`${isDarkMode ? 'bg-gray-800 text-gray-200 border-b border-gray-700' : 'bg-gray-50 text-gray-700 border-b border-gray-200'}`}>
+                                  <th className="px-3 py-2 font-semibold">Quality</th>
+                                  <th className="px-3 py-2 font-semibold">Quantity</th>
+                                  <th className="px-3 py-2 font-semibold">Process</th>
+                                  <th className="px-3 py-2 font-semibold">Mill Date</th>
+                                  <th className="px-3 py-2 font-semibold">Challan No</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                {rows.map((row, idx) => (
+                                  <tr key={idx} className={row.isAdditional ? (isDarkMode ? 'bg-cyan-950/20' : 'bg-cyan-50/30') : ''}>
+                                    <td className="px-3 py-2">
+                                      <div className="flex items-center gap-1">
+                                        {row.isAdditional && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-900/30 text-cyan-400">Addl</span>}
+                                        <span className="font-semibold">{row.quality}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-2">{row.quantity}</td>
+                                    <td className="px-3 py-2">
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-900/30 text-blue-300">{row.process}</span>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <span className={row.millDate === 'Pending' ? 'text-yellow-405 font-bold animate-pulse' : ''}>{row.millDate}</span>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <span className={row.chalanNo === 'Pending' ? 'text-yellow-405 font-bold animate-pulse' : ''}>{row.chalanNo}</span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Mobile Card View */}
+                          <div className="space-y-3 md:hidden">
+                            {rows.map((row, idx) => (
+                              <div key={idx} className={`p-4 rounded-xl border transition-all duration-200 ${isDarkMode ? 'bg-gray-800/40 border-gray-700' : 'bg-white border-gray-200'} ${row.isAdditional ? (isDarkMode ? 'bg-cyan-950/10 border-cyan-800/40' : 'bg-cyan-50/20 border-cyan-205') : ''}`}>
+                                <div className="flex justify-between items-center border-b pb-2 mb-3 border-gray-205 dark:border-gray-700">
+                                  <div className="flex items-center gap-1.5">
+                                    {row.isAdditional && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-900/30 text-cyan-400">Addl</span>}
+                                    <span className="font-bold text-sm text-indigo-500 dark:text-indigo-400">{row.quality}</span>
+                                  </div>
+                                  <span className={`text-[10px] font-semibold ${row.millDate === 'Pending' ? 'text-yellow-500 animate-pulse' : 'text-gray-400'}`}>{row.millDate}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-xs">
+                                  <div className="space-y-1">
+                                    <span className="text-gray-400 block font-medium">Quantity:</span>
+                                    <span className="font-semibold block">{row.quantity}</span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <span className="text-gray-400 block font-medium">Process:</span>
+                                    <span className="px-1.5 py-0.5 inline-block rounded text-[10px] font-semibold bg-blue-900/30 text-blue-300">{row.process}</span>
+                                  </div>
+                                  <div className="space-y-1 col-span-2">
+                                    <span className="text-gray-400 block font-medium">Challan No:</span>
+                                    <span className={`font-semibold block ${row.chalanNo === 'Pending' ? 'text-yellow-500 animate-pulse' : ''}`}>{row.chalanNo}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* 4. Mill Output Section */}
+                  <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-gray-900/40 border-gray-700' : 'bg-gray-50/50 border-gray-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <DocumentTextIcon className="w-4 h-4 text-green-400" />
+                        <h5 className="font-bold text-xs uppercase tracking-wider">4. Mill Output Status</h5>
+                      </div>
+                      {(() => {
+                        const outputsList = orderMillOutputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || [];
+                        const hasOutput = outputsList.length > 0;
+                        return (
+                          <span className={`px-2.5 py-1 text-[11px] font-bold rounded-full border ${
+                            hasOutput 
+                              ? 'bg-green-950/40 text-green-400 border-green-800' 
+                              : 'bg-red-950/40 text-red-400 border-red-800'
+                          }`}>
+                            {hasOutput ? 'Completed / Done' : 'Pending / Not Done'}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    {(() => {
+                      const outputsList = orderMillOutputs[selectedOrderForView.orderId || String(selectedOrderForView._id)] || [];
+                      return !isParty && outputsList.length > 0 && (
+                        <>
+                          {/* Desktop Table View */}
+                          <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-700 mt-3">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead>
+                                <tr className="bg-gray-800 text-gray-200 border-b border-gray-700">
+                                  <th className="px-3 py-2 font-semibold">Mill</th>
+                                  <th className="px-3 py-2 font-semibold">Bill No</th>
+                                  <th className="px-3 py-2 font-semibold">Finish Meters</th>
+                                  <th className="px-3 py-2 font-semibold">Lump Pcs</th>
+                                  <th className="px-3 py-2 font-semibold">Date</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-700">
+                                {outputsList.map((m: any, idx: number) => (
+                                  <tr key={idx}>
+                                    <td className="px-3 py-2 font-semibold text-green-400">{m.millName || m.mill || '—'}</td>
+                                    <td className="px-3 py-2">{m.millBillNo || m.billNo || '—'}</td>
+                                    <td className="px-3 py-2 font-bold text-green-400">{m.greighMtr || '—'} mtr</td>
+                                    <td className="px-3 py-2">{m.pcs || '—'} pcs</td>
+                                    <td className="px-3 py-2">{m.createdAt ? formatDate(m.createdAt) : '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Mobile Card View */}
+                          <div className="space-y-3 md:hidden mt-3">
+                            {outputsList.map((m: any, idx: number) => (
+                              <div key={idx} className={`p-4 rounded-xl border transition-all duration-200 ${isDarkMode ? 'bg-gray-800/40 border-gray-700' : 'bg-white border-gray-200'}`}>
+                                <div className="flex justify-between items-center border-b pb-2 mb-3 border-gray-200 dark:border-gray-700">
+                                  <span className="font-bold text-sm text-green-500">{m.millName || m.mill || '—'}</span>
+                                  <span className="text-[10px] text-gray-400 font-semibold">{m.createdAt ? formatDate(m.createdAt) : '—'}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-xs">
+                                  <div className="space-y-1">
+                                    <span className="text-gray-400 block font-medium">Bill No:</span>
+                                    <span className="font-semibold block">{m.millBillNo || m.billNo || '—'}</span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <span className="text-gray-400 block font-medium">Finish Meters:</span>
+                                    <span className="font-bold text-green-500 block">{m.greighMtr || '—'} mtr</span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <span className="text-gray-400 block font-medium">Lump Pieces:</span>
+                                    <span className="font-semibold block">{m.pcs || '—'} pcs</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* 5. Dispatch Section */}
+                  <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-gray-900/40 border-gray-700' : 'bg-gray-50/50 border-gray-200'}`}>
+                    <div className="flex items-center gap-2 mb-3 border-b border-dashed border-gray-700/30 pb-2">
+                      <TruckIcon className="w-4 h-4 text-orange-400" />
+                      <h5 className="font-bold text-xs uppercase tracking-wider">5. Dispatches & Shipment Details</h5>
+                    </div>
+                    {(() => {
+                      const dispatchesList = orderDispatches[selectedOrderForView.orderId || String(selectedOrderForView._id)] || [];
+                      
+                      if (dispatchesList.length === 0) {
+                        return <span className="text-xs text-yellow-600 dark:text-yellow-405 font-bold animate-pulse">Pending / No Dispatch Data Available</span>;
+                      }
+
+                      const rows: {
+                        groupIndex: number;
+                        date: string;
+                        billNo: string;
+                        transportNo: string;
+                        lrNo: string;
+                        qualityName: string;
+                        finishMtr: number;
+                        pcs: number;
+                        photos: string[];
+                      }[] = [];
+
+                      dispatchesList.forEach((d: any, idx: number) => {
+                        const qName = typeof d.quality === 'object' ? d.quality?.name : (qualities.find(q => q._id === d.quality)?.name || d.qualityName || '—');
+                        rows.push({
+                          groupIndex: idx + 1,
+                          date: d.dispatchDate ? new Date(d.dispatchDate).toLocaleDateString('en-GB') : '—',
+                          billNo: d.billNo || '—',
+                          transportNo: d.transportNo || '—',
+                          lrNo: d.lrNo || '—',
+                          qualityName: qName,
+                          finishMtr: d.finishMtr || 0,
+                          pcs: d.pcs || 0,
+                          photos: d.photos || []
+                        });
+                      });
+
+                      return (
+                        <>
+                          {/* Desktop Table View */}
+                          <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead>
+                                <tr className={`${isDarkMode ? 'bg-gray-800 text-gray-205 border-b border-gray-700' : 'bg-gray-100 text-gray-700 border-b border-gray-200'}`}>
+                                  <th className="px-3 py-2 font-semibold">Group</th>
+                                  <th className="px-3 py-2 font-semibold">Date</th>
+                                  <th className="px-3 py-2 font-semibold">Invoice / Bill</th>
+                                  <th className="px-3 py-2 font-semibold">Transport / LR</th>
+                                  <th className="px-3 py-2 font-semibold">Quality</th>
+                                  <th className="px-3 py-2 font-semibold">Quantity</th>
+                                  <th className="px-3 py-2 font-semibold">Photos</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                {rows.map((row, idx) => (
+                                  <tr key={idx} className={`${isDarkMode ? 'bg-gray-900/40 hover:bg-gray-800/40' : 'bg-white hover:bg-gray-50'}`}>
+                                    <td className="px-3 py-2 font-semibold text-blue-600 dark:text-blue-400">
+                                      #{row.groupIndex}
+                                    </td>
+                                    <td className="px-3 py-2 whitespace-nowrap">{row.date}</td>
+                                    <td className="px-3 py-2 font-semibold">{row.billNo}</td>
+                                    <td className="px-3 py-2">
+                                      <div className="text-xs">
+                                        <span className="block font-medium">{row.transportNo}</span>
+                                        <span className="text-gray-400">LR: {row.lrNo}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-2 font-semibold">{row.qualityName}</td>
+                                    <td className="px-3 py-2">
+                                      <div className="flex flex-col">
+                                        <span className="text-green-600 dark:text-green-400 font-bold">{row.finishMtr} Mtr</span>
+                                        <span className="text-[10px] text-gray-400">{row.pcs} Pcs</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {row.photos && row.photos.length > 0 ? (
+                                        <div className="flex gap-1 overflow-x-auto py-0.5 custom-scrollbar max-w-[100px]">
+                                          {row.photos.map((photoUrl, pIdx) => (
+                                            <img
+                                              key={pIdx}
+                                              src={photoUrl}
+                                              alt={`Dispatch photo ${pIdx + 1}`}
+                                              className="w-8 h-8 object-cover rounded border border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-85 transition-opacity"
+                                              onClick={() => handleImagePreview(photoUrl, `Dispatch photo ${pIdx + 1}`, row.photos, pIdx)}
+                                            />
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs text-gray-400">No photos</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Mobile Card-Based View */}
+                          <div className="space-y-4 md:hidden">
+                            {rows.map((row, idx) => (
+                              <div key={idx} className={`p-3.5 rounded-xl border transition-all duration-200 hover:shadow-md ${isDarkMode ? 'bg-gray-900/60 border-gray-800' : 'bg-white border-gray-200'}`}>
+                                <div className="flex justify-between items-center border-b pb-2 mb-2.5 border-gray-200 dark:border-gray-700">
+                                  <span className="font-bold text-blue-600 dark:text-blue-400 text-xs">Group #{row.groupIndex}</span>
+                                  <span className={`text-[10px] font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{row.date}</span>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-3 text-[11px]">
+                                  <div className="space-y-0.5">
+                                    <span className="text-gray-400 block font-medium">Invoice / Bill:</span>
+                                    <span className="font-bold block truncate text-gray-900 dark:text-white">{row.billNo}</span>
+                                  </div>
+                                  <div className="space-y-0.5">
+                                    <span className="text-gray-400 block font-medium">Transport / LR:</span>
+                                    <span className="font-bold block truncate text-gray-900 dark:text-white">{row.transportNo || '—'}</span>
+                                    {row.lrNo && (
+                                      <span className="text-[10px] text-gray-400 block">LR: {row.lrNo}</span>
+                                    )}
+                                  </div>
+                                  <div className="space-y-0.5">
+                                    <span className="text-gray-400 block font-medium">Quality:</span>
+                                    <span className="font-semibold block truncate text-blue-600 dark:text-blue-400">{row.qualityName}</span>
+                                  </div>
+                                  <div className="space-y-0.5">
+                                    <span className="text-gray-400 block font-medium">Quantity:</span>
+                                    <span className="text-green-600 dark:text-green-400 font-bold block">{row.finishMtr} Mtr</span>
+                                    <span className="text-[10px] text-gray-400 block">{row.pcs} Pcs</span>
+                                  </div>
+                                </div>
+
+                                {row.photos && row.photos.length > 0 && (
+                                  <div className="mt-2.5 border-t pt-2.5 border-gray-200 dark:border-gray-700">
+                                    <span className="text-gray-400 block text-[10px] font-medium mb-1.5">Photos:</span>
+                                    <div className="flex gap-1.5 overflow-x-auto py-0.5 custom-scrollbar">
+                                      {row.photos.map((photoUrl, pIdx) => (
+                                        <img
+                                          key={pIdx}
+                                          src={photoUrl}
+                                          alt={`Dispatch photo ${pIdx + 1}`}
+                                          className="w-8 h-8 object-cover rounded border border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-85 transition-opacity flex-shrink-0"
+                                          onClick={() => handleImagePreview(photoUrl, `Dispatch photo ${pIdx + 1}`, row.photos, pIdx)}
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              );
+            })()}
+            </div>
+          </div>
+
+            {/* Sticky Footer */}
+            <div className={`flex-shrink-0 p-4 sm:p-6 border-t bg-inherit ${
+              isDarkMode ? 'border-gray-700 bg-gray-900/10' : 'border-gray-200 bg-gray-50'
+            }`}>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowOrderViewModal(false)}
+                  className={`px-8 py-3 rounded-lg font-semibold text-sm transition-all hover:scale-105 ${
+                    isDarkMode 
+                      ? 'bg-gray-700 text-white hover:bg-gray-600' 
+                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  }`}
+                >
+                  Close
+                </button>
               </div>
             </div>
 
           </div>
         </div>
-      )}
-
-      {showQualityModal && (
+      )}      {showQualityModal && (
         <QualityModal
           onClose={() => setShowQualityModal(false)}
           onSuccess={async (newQualityName?: string, newQualityData?: any) => {

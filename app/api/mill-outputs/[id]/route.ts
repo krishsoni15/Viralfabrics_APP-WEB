@@ -34,6 +34,15 @@ export async function GET(
       return NextResponse.json(notFoundResponse('Mill output'), { status: 404 });
     }
 
+    // Restrict to user's party if session has a partyId
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      const OrderModel = (await import('@/models/Order')).default;
+      const order = await OrderModel.findById(millOutput.order).select('party').lean().maxTimeMS(1000);
+      if (!order || !order.party || order.party.toString() !== session.partyId) {
+        return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
+      }
+    }
+
     return NextResponse.json(successResponse(millOutput, 'Mill output fetched successfully'));
 
   } catch (error: any) {
@@ -54,6 +63,10 @@ export async function PUT(
     const session = await getSession(request);
     if (!session) {
       return NextResponse.json(unauthorizedResponse('Unauthorized'), { status: 401 });
+    }
+    const allowedRoles = ['master', 'superadmin', 'admin', 'user'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json({ success: false, message: 'Access denied - Unauthorized role for update' }, { status: 403 });
     }
 
     await dbConnect();

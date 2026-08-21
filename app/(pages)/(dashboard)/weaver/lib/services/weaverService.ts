@@ -63,13 +63,28 @@ export async function getWeavers(params: WeaverQueryParams) {
       .lean(),
     SamplingWeaver.countDocuments(query)
   ]);
+
+  // Aggregate Sample counts grouped by weaverId for these weavers
+  const weaverIds = weavers.map(w => w._id);
+  const counts = await Sample.aggregate([
+    { $match: { weaverId: { $in: weaverIds } } },
+    { $group: { _id: "$weaverId", count: { $sum: 1 } } }
+  ]);
+  console.log('[weaverService] Sample counts aggregation:', JSON.stringify(counts));
+  const countMap = new Map<string, number>();
+  counts.forEach(c => {
+    if (c._id) {
+      countMap.set(c._id.toString(), c.count);
+    }
+  });
   
   return {
     weavers: (weavers as any[]).map((w: any) => ({
       _id: w._id?.toString() || String(w._id),
       name: w.name,
       phone: w.phone || '',
-      address: w.address || ''
+      address: w.address || '',
+      sampleCount: countMap.get(w._id?.toString() || String(w._id)) || 0
     })),
     pagination: {
       total,

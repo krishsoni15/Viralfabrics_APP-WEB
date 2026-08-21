@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/dbConnect';
-import { requireAuth } from '@/lib/session';
+import { getSession } from '@/lib/session';
 import { logCreate, logError } from '@/lib/logger';
 import { errorResponse } from '@/lib/response';
 import mongoose from 'mongoose';
@@ -14,7 +14,10 @@ export async function GET(request: NextRequest) {
     if (rateLimitError) return rateLimitError;
 
     // Validate session
-    await requireAuth(request);
+    const session = await getSession(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     await dbConnect();
 
@@ -38,6 +41,38 @@ export async function GET(request: NextRequest) {
     }
 
     const { MillOutput, Order, Quality } = await import('@/models');
+
+    // Restrict mill outputs to user's party if session has a partyId (applies to party users)
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      if (orderId) {
+        const orderQuery: any = { orderId, party: session.partyId };
+        if (session.contactNames && session.contactNames.length > 0) {
+          orderQuery.contactName = { $in: session.contactNames };
+        } else if (session.contactName) {
+          orderQuery.contactName = session.contactName;
+        }
+        const order = await Order.findOne(orderQuery).select('party').lean().maxTimeMS(1000);
+        if (!order) {
+          return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
+        }
+      } else {
+        const orderQuery: any = { party: session.partyId };
+        if (session.contactNames && session.contactNames.length > 0) {
+          orderQuery.contactName = { $in: session.contactNames };
+        } else if (session.contactName) {
+          orderQuery.contactName = session.contactName;
+        }
+        const partyOrders = await Order.find(orderQuery).select('orderId').lean().maxTimeMS(1000);
+        const partyOrderIds = partyOrders.map((o: any) => o.orderId);
+        if (query.orderId) {
+          const currentIds = Array.isArray(query.orderId.$in) ? query.orderId.$in : [query.orderId];
+          const allowedIds = currentIds.filter((id: string) => partyOrderIds.includes(id));
+          query.orderId = { $in: allowedIds.length > 0 ? allowedIds : ['__no_match__'] };
+        } else {
+          query.orderId = { $in: partyOrderIds.length > 0 ? partyOrderIds : ['__no_match__'] };
+        }
+      }
+    }
     
     // ⚡ OPTIMIZED: Query without populate (fetch related data separately - MUCH faster)
     const [millOutputs, total] = await Promise.all([
@@ -118,7 +153,14 @@ export async function POST(request: NextRequest) {
     if (rateLimitError) return rateLimitError;
 
     // Validate session
-    await requireAuth(request);
+    const session = await getSession(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const allowedRoles = ['master', 'superadmin', 'admin', 'user'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json({ error: 'Forbidden - Unauthorized role for creation' }, { status: 403 });
+    }
     await dbConnect();
     const body = await request.json();
     const { orderId, recdDate, millBillNo, finishedMtr, millRate, quality } = body;
@@ -158,6 +200,16 @@ export async function POST(request: NextRequest) {
         { error: 'Order not found' },
         { status: 404 }
       );
+    }
+
+    // Restrict to user's party if session has a partyId
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      const allowedContacts = session.contactNames && session.contactNames.length > 0
+        ? session.contactNames
+        : (session.contactName ? [session.contactName] : []);
+      if (!order.party || order.party.toString() !== session.partyId || (allowedContacts.length > 0 && !allowedContacts.includes(order.contactName || ''))) {
+        return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
+      }
     }
     
     // Import and create MillOutput
@@ -251,7 +303,10 @@ export async function DELETE(request: NextRequest) {
     if (rateLimitError) return rateLimitError;
 
     // Validate session - allow master, superadmin, admin, and user to delete
-    const session = await requireAuth(request);
+    const session = await getSession(request);
+    if (!session) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
     const allowedRoles = ['master', 'superadmin', 'admin', 'user'];
     if (!allowedRoles.includes(session.role)) {
       return NextResponse.json(

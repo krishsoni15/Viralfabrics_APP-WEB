@@ -1690,8 +1690,40 @@ export default function GreyInformationModal({
             </div>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Form / ReadOnly view */}
+          {readOnly ? (
+            <div className="p-6 space-y-6 flex flex-col items-center justify-center min-h-[300px]">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                entries && entries.length > 0
+                  ? (isDarkMode ? 'bg-green-950/40 text-green-400 border border-green-800' : 'bg-green-100 text-green-700')
+                  : (isDarkMode ? 'bg-red-950/40 text-red-400 border border-red-800' : 'bg-red-100 text-red-700')
+              }`}>
+                <DocumentTextIcon className="h-8 w-8" />
+              </div>
+              <div className="text-center">
+                <span className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Grey Information Status</span>
+                <h3 className={`text-2xl font-extrabold ${
+                  entries && entries.length > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                }`}>
+                  {entries && entries.length > 0 ? 'Received' : 'Not Received'}
+                </h3>
+              </div>
+
+              {/* Footer Close Button */}
+              <div className="w-full max-w-xs pt-6 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className={`w-full py-3 rounded-lg font-semibold text-sm transition-all hover:scale-105 ${
+                    isDarkMode ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  }`}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
             <fieldset disabled={readOnly} className="space-y-6 contents">
             {/* Show message when no existing data and modal was opened expecting data (edit mode) */}
             {!loadingGreyInfo && (() => {
@@ -2070,6 +2102,7 @@ export default function GreyInformationModal({
               )}
             </div>
           </form>
+          )}
         </div>
       </div>
 

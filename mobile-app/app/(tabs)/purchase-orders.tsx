@@ -949,7 +949,7 @@ const PurchaseOrderCard = React.memo(({
         <View style={{ height: 1, backgroundColor: theme.borderLight, marginVertical: 8 }} />
 
         {/* Quality & Delivery */}
-        {(Boolean(item.quality) || Boolean(item.pcsMtr) || Boolean(item.greighMtr) || Boolean(item.delivery)) && (
+        {(Boolean(item.quality) || Boolean(item.pcsMtr) || Boolean(item.delivery)) && (
           <View style={{ marginBottom: 8, gap: 6 }}>
             {!!item.quality && (
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -960,13 +960,12 @@ const PurchaseOrderCard = React.memo(({
               </View>
             )}
 
-            {(Boolean(item.pcsMtr) || Boolean(item.greighMtr) || Boolean(item.delivery)) && (
+            {(Boolean(item.pcsMtr) || Boolean(item.delivery)) && (
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '500' }}>Delivery / Details:</Text>
                 <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary, flex: 1, textAlign: 'right' }}>
                   {[
                     item.pcsMtr ? `${item.pcsMtr} Pcs/Mtr` : '',
-                    item.greighMtr ? `Greigh: ${item.greighMtr} Mtr` : '',
                     item.delivery ? `Delivery: ${item.delivery}` : ''
                   ].filter(Boolean).join(' • ')}
                 </Text>
@@ -1585,7 +1584,6 @@ export default function PurchaseOrdersScreen() {
       setFormData({
         ...order,
         supplierPhone: order.supplierPhone || '',
-        greighMtr: order.greighMtr || '',
         greighLeadTime: order.greighLeadTime || '',
         images: order.images || [],
         paymentTerms: cleanedTerms,
@@ -1614,7 +1612,6 @@ export default function PurchaseOrdersScreen() {
         quality: '',
         pcsMtr: '',
         rate: '',
-        greighMtr: '',
         greighLeadTime: '',
         images: [],
         delivery: '',
@@ -1877,7 +1874,7 @@ export default function PurchaseOrdersScreen() {
   };
 
   const updateField = (field: string, value: any) => {
-    if (field === 'pcsMtr' || field === 'rate') {
+    if (field === 'rate') {
       value = sanitizeNumeric(value);
     }
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -2371,9 +2368,8 @@ export default function PurchaseOrdersScreen() {
                       style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
                       value={formData.pcsMtr || ''}
                       onChangeText={(t) => updateField('pcsMtr', t)}
-                      placeholder="e.g. 3606.00"
+                      placeholder="e.g. 100 Pcs or 3606.00"
                       placeholderTextColor={theme.inputPlaceholder}
-                      keyboardType="decimal-pad"
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -2388,9 +2384,9 @@ export default function PurchaseOrdersScreen() {
                   </View>
                 </View>
 
-                {/* Rate & Greigh Lead Time & Greigh Mtr */}
+                {/* Rate & Lead Time */}
                 <View style={{ marginBottom: 20 }}>
-                  <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Rate</Text>
                       <TextInput
@@ -2414,17 +2410,6 @@ export default function PurchaseOrdersScreen() {
                         placeholderTextColor={theme.inputPlaceholder}
                       />
                     </View>
-                  </View>
-                  <View>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Greigh Mtr</Text>
-                    <TextInput
-                      style={{ backgroundColor: theme.input, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 12, padding: 14, fontSize: 15, color: theme.text }}
-                      value={formData.greighMtr || ''}
-                      onChangeText={(t) => updateField('greighMtr', t)}
-                      onFocus={scrollToFormEnd}
-                      placeholder="e.g. 5000"
-                      placeholderTextColor={theme.inputPlaceholder}
-                    />
                   </View>
                 </View>
 

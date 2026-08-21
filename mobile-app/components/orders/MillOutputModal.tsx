@@ -647,6 +647,68 @@ export default function MillOutputModal({
 
             {isLoading && (!existingMillOutputs || existingMillOutputs.length === 0) ? (
               <MillOutputModalSkeleton theme={theme} />
+            ) : isReadOnly ? (
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={{
+                  backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? '#334155' : '#e2e8f0',
+                  padding: 24,
+                  alignItems: 'center',
+                  gap: 16,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 8,
+                  elevation: 2,
+                  marginTop: 20
+                }}>
+                  <View style={{
+                    width: 48, height: 48, borderRadius: 24,
+                    backgroundColor: existingMillOutputs && existingMillOutputs.length > 0 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                    justifyContent: 'center', alignItems: 'center'
+                  }}>
+                    <FileOutput size={22} color={existingMillOutputs && existingMillOutputs.length > 0 ? '#22c55e' : '#ef4444'} />
+                  </View>
+
+                  <View style={{ alignItems: 'center', gap: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', letterSpacing: 0.5 }}>
+                      Mill Output Status
+                    </Text>
+                    <Text style={{ fontSize: 20, fontWeight: '800', color: existingMillOutputs && existingMillOutputs.length > 0 ? '#22c55e' : '#ef4444', textAlign: 'center', marginTop: 8 }}>
+                      {existingMillOutputs && existingMillOutputs.length > 0 ? 'Completed / Done' : 'Pending / Not Done'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Close Button */}
+                <TouchableOpacity
+                  onPress={onClose}
+                  activeOpacity={0.8}
+                  style={{
+                    height: 50,
+                    backgroundColor: isDarkMode ? Colors.neutral[700] : Colors.neutral[600],
+                    borderRadius: 14,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginTop: 24,
+                    shadowColor: isDarkMode ? 'transparent' : Colors.neutral[400],
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 12,
+                    elevation: 6,
+                  }}
+                >
+                  <Text style={{ color: Colors.white, fontSize: 15, fontWeight: '800', letterSpacing: 0.3 }}>
+                    Close
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
             ) : (
               <>
             <ScrollView

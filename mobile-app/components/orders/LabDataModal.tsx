@@ -441,100 +441,199 @@ export default function LabDataModal({
 
             {isLoading && !editItem ? (
               <LabDataModalSkeleton theme={theme} />
+            ) : isReadOnly ? (
+              <View style={{ gap: 16 }}>
+                {/* Status Card */}
+                <View style={{
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f8fafc',
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? '#334155' : '#e2e8f0',
+                  padding: 16,
+                  gap: 12
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: isDarkMode ? '#f8fafc' : '#0f172a' }}>Lab Details</Text>
+                    <View style={{
+                      backgroundColor: editItem?.status === 'received' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(139, 92, 246, 0.15)',
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: editItem?.status === 'received' ? '#22c55e' : '#8b5cf6'
+                    }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', color: editItem?.status === 'received' ? '#22c55e' : '#8b5cf6' }}>
+                        {editItem?.status || 'Sent'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ height: 1, backgroundColor: isDarkMode ? '#334155' : '#f1f5f9' }} />
+
+                  {/* Date Grid */}
+                  <View style={{ flexDirection: 'row', gap: 16 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Send Date</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#334155' }}>
+                        {editItem?.labSendDate ? toDisplay(editItem.labSendDate) : 'N/A'}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Approval Date</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: editItem?.approvalDate ? '#10b981' : (isDarkMode ? '#64748b' : '#94a3b8') }}>
+                        {editItem?.approvalDate ? toDisplay(editItem.approvalDate) : 'Pending'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Info Card */}
+                <View style={{
+                  backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? '#334155' : '#e2e8f0',
+                  padding: 16,
+                  gap: 12
+                }}>
+                  <View style={{ flexDirection: 'row', gap: 16 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Sample Number</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#334155' }}>
+                        {editItem?.sampleNumber || 'N/A'}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Lab Send Number</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#334155' }}>
+                        {editItem?.labSendNumber || 'N/A'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ height: 1, backgroundColor: isDarkMode ? '#334155' : '#f1f5f9' }} />
+
+                  <View style={{ flexDirection: 'row', gap: 16 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Color</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#334155' }}>
+                        {editItem?.color || editItem?.labSendData?.color || 'N/A'}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Shade</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#334155' }}>
+                        {editItem?.shade || editItem?.labSendData?.shade || 'N/A'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ height: 1, backgroundColor: isDarkMode ? '#334155' : '#f1f5f9' }} />
+
+                  <View>
+                    <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Remarks / Notes</Text>
+                    <Text style={{ fontSize: 13, color: isDarkMode ? '#cbd5e1' : '#475569', lineHeight: 18 }}>
+                      {editItem?.remarks || editItem?.notes || editItem?.labSendData?.notes || 'No remarks added.'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             ) : (
             <View>
-            {/* Lab Send Date */}
-            <View style={{ marginBottom: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5, gap: 4 }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: labelCol, letterSpacing: 0.3, textTransform: 'uppercase' }}>Lab Send Date</Text>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#ef4444', lineHeight: 16 }}>*</Text>
-              </View>
-              {validationErrors.labSendDate && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
-                  <AlertCircle size={12} color="#ef4444" />
-                  <Text style={{ fontSize: 11, color: '#ef4444', fontWeight: '600' }}>Lab Send Date is required</Text>
+              {/* Lab Send Date */}
+              <View style={{ marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5, gap: 4 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: labelCol, letterSpacing: 0.3, textTransform: 'uppercase' }}>Lab Send Date</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#ef4444', lineHeight: 16 }}>*</Text>
                 </View>
-              )}
-              <View style={{ position: 'relative' }}>
-                <TouchableOpacity
-                  onPress={() => setDatePickerFor('send')}
-                  disabled={isReadOnly}
-                  activeOpacity={isReadOnly ? 1 : 0.7}
-                  style={{
-                    width: '100%', height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                    paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5,
-                    borderColor: validationErrors.labSendDate ? '#ef4444' : borderCol,
-                    backgroundColor: inputBg,
-                  }}
-                >
-                  <Text style={{ fontSize: 14, color: formData.labSendDate ? theme.text : labelCol }}>
-                    {formData.labSendDate ? toDisplay(formData.labSendDate) : 'Select date'}
-                  </Text>
-                  <View style={{ width: 15 }} />
-                </TouchableOpacity>
-                <View style={{ position: 'absolute', right: 12, top: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  {formData.labSendDate && !isReadOnly ? (
-                    <TouchableOpacity
-                      onPress={() => setFormData((prev: any) => ({ ...prev, labSendDate: '' }))}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                      <X size={15} color={labelCol} />
-                    </TouchableOpacity>
-                  ) : null}
-                  <Calendar size={15} color={isDarkMode ? '#c084fc' : '#9333ea'} />
+                {validationErrors.labSendDate && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+                    <AlertCircle size={12} color="#ef4444" />
+                    <Text style={{ fontSize: 11, color: '#ef4444', fontWeight: '600' }}>Lab Send Date is required</Text>
+                  </View>
+                )}
+                <View style={{ position: 'relative' }}>
+                  <TouchableOpacity
+                    onPress={() => setDatePickerFor('send')}
+                    disabled={isReadOnly}
+                    activeOpacity={isReadOnly ? 1 : 0.7}
+                    style={{
+                      width: '100%', height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5,
+                      borderColor: validationErrors.labSendDate ? '#ef4444' : borderCol,
+                      backgroundColor: inputBg,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, color: formData.labSendDate ? theme.text : labelCol }}>
+                      {formData.labSendDate ? toDisplay(formData.labSendDate) : 'Select date'}
+                    </Text>
+                    <View style={{ width: 15 }} />
+                  </TouchableOpacity>
+                  <View style={{ position: 'absolute', right: 12, top: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {formData.labSendDate && !isReadOnly ? (
+                      <TouchableOpacity
+                        onPress={() => setFormData((prev: any) => ({ ...prev, labSendDate: '' }))}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <X size={15} color={labelCol} />
+                      </TouchableOpacity>
+                    ) : null}
+                    <Calendar size={15} color={isDarkMode ? '#c084fc' : '#9333ea'} />
+                  </View>
                 </View>
               </View>
-            </View>
 
-            {/* Approval Date */}
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: labelCol, marginBottom: 5, letterSpacing: 0.3, textTransform: 'uppercase' }}>Approval Date (Optional)</Text>
-              <View style={{ position: 'relative' }}>
-                <TouchableOpacity
-                  onPress={() => setDatePickerFor('approval')}
-                  disabled={isReadOnly}
-                  activeOpacity={isReadOnly ? 1 : 0.7}
-                  style={{
-                    width: '100%', height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                    paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5,
-                    borderColor: borderCol, backgroundColor: inputBg,
-                  }}
-                >
-                  <Text style={{ fontSize: 14, color: formData.approvalDate ? theme.text : labelCol }}>
-                    {formData.approvalDate ? toDisplay(formData.approvalDate) : 'Select date'}
-                  </Text>
-                  <View style={{ width: 15 }} />
-                </TouchableOpacity>
-                <View style={{ position: 'absolute', right: 12, top: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  {formData.approvalDate && !isReadOnly ? (
-                    <TouchableOpacity
-                      onPress={() => setFormData((prev: any) => ({ ...prev, approvalDate: '' }))}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                      <X size={15} color={labelCol} />
-                    </TouchableOpacity>
-                  ) : null}
-                  <Calendar size={15} color={isDarkMode ? '#c084fc' : '#9333ea'} />
+              {/* Approval Date */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: labelCol, marginBottom: 5, letterSpacing: 0.3, textTransform: 'uppercase' }}>Approval Date (Optional)</Text>
+                <View style={{ position: 'relative' }}>
+                  <TouchableOpacity
+                    onPress={() => setDatePickerFor('approval')}
+                    disabled={isReadOnly}
+                    activeOpacity={isReadOnly ? 1 : 0.7}
+                    style={{
+                      width: '100%', height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5,
+                      borderColor: borderCol, backgroundColor: inputBg,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, color: formData.approvalDate ? theme.text : labelCol }}>
+                      {formData.approvalDate ? toDisplay(formData.approvalDate) : 'Select date'}
+                    </Text>
+                    <View style={{ width: 15 }} />
+                  </TouchableOpacity>
+                  <View style={{ position: 'absolute', right: 12, top: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {formData.approvalDate && !isReadOnly ? (
+                      <TouchableOpacity
+                        onPress={() => setFormData((prev: any) => ({ ...prev, approvalDate: '' }))}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <X size={15} color={labelCol} />
+                      </TouchableOpacity>
+                    ) : null}
+                    <Calendar size={15} color={isDarkMode ? '#c084fc' : '#9333ea'} />
+                  </View>
                 </View>
               </View>
-            </View>
 
-            {/* Sample Number */}
-            <View style={{ marginBottom: 24 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: labelCol, marginBottom: 5, letterSpacing: 0.3, textTransform: 'uppercase' }}>Sample Number</Text>
-              <TextInput
-                style={{
-                  height: 44, borderWidth: 1.5, borderColor: borderCol,
-                  borderRadius: 12, paddingHorizontal: 14,
-                  color: theme.text, backgroundColor: inputBg, fontSize: 14,
-                }}
-                value={formData.sampleNumber}
-                onChangeText={(val) => setFormData((prev: any) => ({ ...prev, sampleNumber: val }))}
-                placeholder="Enter sample number"
-                placeholderTextColor={labelCol}
-                editable={!isReadOnly}
-              />
+              {/* Sample Number */}
+              <View style={{ marginBottom: 24 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: labelCol, marginBottom: 5, letterSpacing: 0.3, textTransform: 'uppercase' }}>Sample Number</Text>
+                <TextInput
+                  style={{
+                    height: 44, borderWidth: 1.5, borderColor: borderCol,
+                    borderRadius: 12, paddingHorizontal: 14,
+                    color: theme.text, backgroundColor: inputBg, fontSize: 14,
+                  }}
+                  value={formData.sampleNumber}
+                  onChangeText={(val) => setFormData((prev: any) => ({ ...prev, sampleNumber: val }))}
+                  placeholder="Enter sample number"
+                  placeholderTextColor={labelCol}
+                  editable={!isReadOnly}
+                />
+              </View>
             </View>
+            )}
 
             {/* Bottom Actions */}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
@@ -635,8 +734,6 @@ export default function LabDataModal({
                 </TouchableOpacity>
               )}
             </View>
-            </View>
-            )}
           </ScrollView>
           </KeyboardAvoidingView>
         </Animated.View>

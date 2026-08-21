@@ -154,6 +154,11 @@ export async function fetchOrdersAction(params: FetchOrdersParams = {}): Promise
       } else {
         query.party = payload.partyId;
       }
+      if (payload.contactNames && payload.contactNames.length > 0) {
+        query.contactName = { $in: payload.contactNames };
+      } else if (payload.contactName) {
+        query.contactName = payload.contactName;
+      }
     }
 
     // Sort
@@ -204,14 +209,22 @@ export async function fetchOrdersAction(params: FetchOrdersParams = {}): Promise
     const qualityMap = new Map(qualities.map((q: any) => [q._id.toString(), q]));
 
     // Enrich orders with related data
-    const enrichedOrders = orders.map((order: any) => ({
-      ...order,
-      party: order.party ? partyMap.get(order.party.toString()) : null,
-      items: (order.items || []).map((item: any) => ({
-        ...item,
-        quality: item.quality ? qualityMap.get(item.quality.toString()) : null,
-      })),
-    }));
+    const enrichedOrders = orders.map((order: any) => {
+      const partyObj = order.party ? partyMap.get(order.party.toString()) || null : null;
+      return {
+        ...order,
+        party: partyObj,
+        items: (order.items || []).map((item: any) => {
+          const qualityObj = item.quality ? qualityMap.get(item.quality.toString()) || null : null;
+          return {
+            ...item,
+            quality: qualityObj,
+            // Safe string field so quality name is always renderable
+            qualityName: qualityObj?.name || (typeof item.quality === 'string' ? item.quality : null),
+          };
+        }),
+      };
+    });
 
     const totalPages = Math.ceil(total / limit);
 
@@ -392,6 +405,11 @@ export async function fetchDashboardStatsAction(params?: {
           query.party = new mongoose.default.Types.ObjectId(payload.partyId);
         } else {
           query.party = payload.partyId;
+        }
+        if (payload.contactNames && payload.contactNames.length > 0) {
+          query.contactName = { $in: payload.contactNames };
+        } else if (payload.contactName) {
+          query.contactName = payload.contactName;
         }
       }
     }

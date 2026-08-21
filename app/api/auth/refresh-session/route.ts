@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the user to ensure they still exist
-    const user = await User.findById(decoded.id).select('_id username name role partyId email phoneNumber address profilePhoto');
+    const user = await User.findById(decoded.id).select('_id username name role partyId email phoneNumber address contactName contactNames profilePhoto');
     if (!user) {
       return unauthorized('User not found');
     }
@@ -45,6 +45,8 @@ export async function POST(request: NextRequest) {
       username: user.username || user.name,
       name: user.name,
       partyId: user.partyId ? user.partyId.toString() : undefined,
+      contactName: user.contactName || undefined,
+      contactNames: user.contactNames ? Array.from(user.contactNames) : (user.contactName ? [user.contactName] : []),
       loginTime: decoded.loginTime || decoded.iat || Math.floor(Date.now() / 1000) // Preserve original login time
     })
       .setProtectedHeader({ alg: "HS256" })
@@ -81,6 +83,8 @@ export async function POST(request: NextRequest) {
         address: user.address,
         role: user.role,
         partyId: user.partyId ? user.partyId.toString() : undefined,
+        contactName: user.contactName || undefined,
+        contactNames: user.contactNames ? Array.from(user.contactNames) : [],
         profilePhoto: user.profilePhoto,
         exp: exp // Include expiration time
       }

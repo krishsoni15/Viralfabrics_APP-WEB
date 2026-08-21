@@ -12,6 +12,8 @@ export interface IUser extends Document {
   address?: string;
   role: "master" | "superadmin" | "admin" | "user" | "party";
   partyId?: mongoose.Types.ObjectId;
+  contactName?: string;
+  contactNames?: string[];
   isActive: boolean;
   lastLogin?: Date;
   loginCount: number;
@@ -134,6 +136,17 @@ const UserSchema = new Schema<IUser>({
   partyId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Party",
+    index: true
+  },
+  contactName: {
+    type: String,
+    trim: true,
+    default: "",
+    index: true
+  },
+  contactNames: {
+    type: [String],
+    default: [],
     index: true
   },
   isActive: {
@@ -303,6 +316,16 @@ UserSchema.pre('save', async function(next) {
 
 UserSchema.pre('findOneAndUpdate', async function(next) {
   const update = this.getUpdate() as any;
+  if (update) {
+    if (update.contactNames !== undefined) {
+      update.contactName = Array.isArray(update.contactNames) && update.contactNames.length > 0 
+        ? update.contactNames[0] 
+        : "";
+    } else if (update.contactName !== undefined) {
+      update.contactNames = update.contactName ? [update.contactName] : [];
+    }
+  }
+  
   if (update.password) {
     try {
       // Check if password is already hashed (bcrypt hashes start with $2b$)
@@ -496,6 +519,8 @@ UserSchema.virtual('fullProfile').get(function() {
     preferences: this.preferences,
     metadata: this.metadata,
     partyId: this.partyId,
+    contactName: this.contactName,
+    contactNames: this.contactNames,
     createdAt: this.createdAt
   };
 });
@@ -505,6 +530,16 @@ UserSchema.pre('save', function(next) {
   if (this.phoneNumber) {
     this.phoneNumber = this.phoneNumber.replace(/\s+/g, '');
   }
+  
+  // Sync contactName and contactNames
+  if (this.isModified('contactNames')) {
+    this.contactName = this.contactNames && this.contactNames.length > 0 ? this.contactNames[0] : '';
+  } else if (this.isModified('contactName')) {
+    if (this.contactName && (!this.contactNames || !this.contactNames.includes(this.contactName))) {
+      this.contactNames = [this.contactName];
+    }
+  }
+  
   next();
 });
 
@@ -560,7 +595,7 @@ UserSchema.index({
   name: "idx_user_text_search"
 });
 
-if (mongoose.models.User && (!mongoose.models.User.schema.paths.partyId || !mongoose.models.User.schema.paths.profilePhoto)) {
+if (mongoose.models.User && (!mongoose.models.User.schema.paths.partyId || !mongoose.models.User.schema.paths.profilePhoto || !mongoose.models.User.schema.paths.contactName || !mongoose.models.User.schema.paths.contactNames)) {
   delete mongoose.models.User;
   if (mongoose.connection && mongoose.connection.models.User) {
     delete (mongoose.connection.models as any).User;

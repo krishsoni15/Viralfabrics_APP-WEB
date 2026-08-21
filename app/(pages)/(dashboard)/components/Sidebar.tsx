@@ -74,6 +74,7 @@ export default function Sidebar({
   const [screenSize, setScreenSize] = useState<number>(0);
   const [hasSetInitialState, setHasSetInitialState] = useState<boolean>(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [hoveredItem, setHoveredItem] = useState<{ name: string; rect: DOMRect } | null>(null);
   const previousThresholdRef = useRef<boolean | null>(null); // Track previous threshold state
   const userManuallyToggledRef = useRef<boolean>(false); // Track if user manually toggled collapse
   const lastPathnameRef = useRef<string>(pathname || ''); // Track pathname changes
@@ -133,6 +134,18 @@ export default function Sidebar({
       setIsProfileDropdownOpen(false);
     }
   }, [isOpen]);
+
+  // Hide tooltip when collapsed state changes or route changes
+  useEffect(() => {
+    setHoveredItem(null);
+  }, [isCollapsed, pathname]);
+
+  // Hide tooltip on window scroll to prevent it floating out of place
+  useEffect(() => {
+    const handleScroll = () => setHoveredItem(null);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Memoize nav items to prevent recalculation on every render
   const navItems = useMemo(() => {
@@ -445,7 +458,13 @@ export default function Sidebar({
                         ? 'text-gray-300 hover:bg-white/10 hover:text-white'
                         : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                     }`}
-                  title={!shouldShowText ? item.name : undefined}
+                  onMouseEnter={(e) => {
+                    if (!shouldShowText) {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setHoveredItem({ name: item.name, rect });
+                    }
+                  }}
+                  onMouseLeave={() => setHoveredItem(null)}
                 >
                   <div className="relative">
                     <Icon className={`h-6 w-6 transition-colors duration-300 ${active
@@ -489,12 +508,18 @@ export default function Sidebar({
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   } shadow-lg backdrop-blur-sm`}
                 aria-label="User profile menu"
-                title={!shouldShowText ? (user?.name || 'User Profile') : undefined}
+                onMouseEnter={(e) => {
+                  if (!shouldShowText) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHoveredItem({ name: user?.name || 'User Profile', rect });
+                  }
+                }}
+                onMouseLeave={() => setHoveredItem(null)}
               >
                 <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-all duration-300 overflow-hidden ${isDarkMode
                   ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white border-blue-500/30'
                   : 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-blue-200'
-                  }`} title="User Profile">
+                  }`}>
                   {user?.profilePhoto ? (
                     <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover" />
                   ) : (
@@ -802,6 +827,36 @@ export default function Sidebar({
         </div>
       </aside>
 
+      {hoveredItem && (
+        <div
+          style={{
+            position: 'fixed',
+            left: hoveredItem.rect.right + 12,
+            top: hoveredItem.rect.top + hoveredItem.rect.height / 2,
+            transform: 'translateY(-50%)',
+          }}
+          className={`px-3 py-2 rounded-xl shadow-2xl text-xs font-semibold z-50 whitespace-nowrap border pointer-events-none transition-all duration-150 ${
+            isDarkMode
+              ? 'bg-[#1e2530] text-white border-slate-700/80 shadow-slate-900/50'
+              : 'bg-gray-900 text-white border-gray-800 shadow-gray-900/20'
+          }`}
+        >
+          {hoveredItem.name}
+          {/* Tooltip Arrow */}
+          <div
+            style={{
+              left: '-4px',
+              top: '50%',
+              transform: 'translateY(-50%) rotate(45deg)',
+            }}
+            className={`absolute w-2 h-2 border-l border-b ${
+              isDarkMode
+                ? 'bg-[#1e2530] border-slate-700/80'
+                : 'bg-gray-900 border-gray-800'
+            }`}
+          />
+        </div>
+      )}
     </>
   );
 }

@@ -3242,11 +3242,206 @@ export default function MillInputForm({
             </button>
           </div>
 
-          {/* Form */}
-          <form ref={modalContentRef} onSubmit={handleSubmit} className={`overflow-y-auto max-h-[calc(95vh-140px)] custom-scrollbar ${isDarkMode
-            ? 'scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800'
-            : 'scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100'
-            }`}>
+          {/* Form / ReadOnly view */}
+          {readOnly ? (
+            <div className="p-6 space-y-6">
+              {(() => {
+                const getLatestProcessForQuality = (quality: any, orderId: string): string => {
+                  try {
+                    const processDataCache = localStorage.getItem('process-data-cache');
+                    if (processDataCache) {
+                      const cached = JSON.parse(processDataCache);
+                      const processDataByQuality = cached.processData || {};
+                      
+                      let qualityId = typeof quality === 'object' ? quality._id : quality;
+                      let qualityName = typeof quality === 'object' ? quality.name : quality;
+
+                      if (typeof quality === 'string' && qualities) {
+                        const match = qualities.find(q => q.name.toLowerCase() === quality.toLowerCase() || q._id === quality);
+                        if (match) {
+                          qualityId = match._id;
+                          qualityName = match.name;
+                        }
+                      }
+
+                      const key1 = `${orderId}_${qualityId}_${qualityName}`;
+                      const key2 = `${orderId}_${qualityId}`;
+                      const key3 = `${String(orderId)}_${String(qualityId)}_${String(qualityName)}`;
+
+                      const processes: string[] = processDataByQuality[key1] || processDataByQuality[key2] || processDataByQuality[key3] || [];
+                      
+                      if (processes.length > 0) {
+                        const processPriority = [
+                          'Lot No Greigh',
+                          'Charkha',
+                          'Drum',
+                          'Soflina WR',
+                          'long jet',
+                          'setting',
+                          'In Dyeing',
+                          'jigar',
+                          'in printing',
+                          'loop',
+                          'washing',
+                          'Finish',
+                          'folding',
+                          'ready to dispatch'
+                        ];
+                        const sorted = [...processes].sort((a, b) => {
+                          const aIndex = processPriority.indexOf(a);
+                          const bIndex = processPriority.indexOf(b);
+                          if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+                          if (aIndex === -1) return 1;
+                          if (bIndex === -1) return -1;
+                          return bIndex - aIndex;
+                        });
+                        return sorted[0];
+                      }
+                    }
+                  } catch (e) {
+                    console.error('Error reading process cache:', e);
+                  }
+                  
+                  return '';
+                };
+
+                const rows: {
+                  quality: string;
+                  quantity: string;
+                  process: string;
+                  millDate: string;
+                  chalanNo: string;
+                  isAdditional?: boolean;
+                }[] = [];
+
+                const hasValidMillItems = formData.millItems && formData.millItems.length > 0 && formData.millItems.some(item => item.millDate || item.chalanNo || item.quality);
+                if (hasValidMillItems) {
+                  formData.millItems.forEach(item => {
+                    const latestProc = getLatestProcessForQuality(item.quality, order?.orderId || '');
+                    rows.push({
+                      quality: item.quality || '—',
+                      quantity: `${item.greighMtr || '0'} Mtr / ${item.pcs || '0'} Pcs`,
+                      process: latestProc || item.process || '—',
+                      millDate: item.millDate ? (item.millDate.includes('-') ? item.millDate.split('-').reverse().join('/') : item.millDate) : '—',
+                      chalanNo: item.chalanNo || '—'
+                    });
+
+                    if (item.additionalMeters) {
+                      item.additionalMeters.forEach(am => {
+                        const latestAmProc = getLatestProcessForQuality(am.quality, order?.orderId || '');
+                        rows.push({
+                          quality: am.quality || '—',
+                          quantity: `${am.meters || '0'} Mtr / ${am.pieces || '0'} Pcs`,
+                          process: latestAmProc || am.process || '—',
+                          millDate: item.millDate ? (item.millDate.includes('-') ? item.millDate.split('-').reverse().join('/') : item.millDate) : '—',
+                          chalanNo: item.chalanNo || '—',
+                          isAdditional: true
+                        });
+                      });
+                    }
+                  });
+                } else if (order && order.items) {
+                  order.items.forEach(item => {
+                    const qualityName = typeof item.quality === 'object' ? item.quality?.name : item.quality;
+                    const latestProc = getLatestProcessForQuality(item.quality, order?.orderId || '');
+                    rows.push({
+                      quality: qualityName || '—',
+                      quantity: String(item.quantity || '0'),
+                      process: latestProc || item.processData?.mainProcess || '—',
+                      millDate: 'Pending',
+                      chalanNo: 'Pending'
+                    });
+                  });
+                }
+
+                if (rows.length === 0) {
+                  return (
+                    <div className={`p-8 text-center rounded-xl border-2 border-dashed ${isDarkMode ? 'border-gray-700 bg-gray-800/20' : 'border-gray-200 bg-gray-50/50'}`}>
+                      <p className={`text-lg font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>No items found</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                    <table className="w-full text-left border-collapse text-sm">
+                      <thead>
+                        <tr className={`${isDarkMode ? 'bg-gray-800 text-gray-200 border-b border-gray-700' : 'bg-gray-50 text-gray-700 border-b border-gray-200'}`}>
+                          <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Quality</th>
+                          <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Quantity</th>
+                          <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Process</th>
+                          <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Mill Date</th>
+                          <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Challan No</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {rows.map((row, idx) => (
+                          <tr key={idx} className={`${
+                            row.isAdditional 
+                              ? (isDarkMode ? 'bg-cyan-950/20' : 'bg-cyan-50/30')
+                              : (isDarkMode ? 'bg-gray-900/40 hover:bg-gray-800/40' : 'bg-white hover:bg-gray-50')
+                          }`}>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1.5">
+                                {row.isAdditional && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400">
+                                    Addl
+                                  </span>
+                                )}
+                                <span className="font-medium">{row.quality}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 font-medium">{row.quantity}</td>
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                {row.process}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={
+                                row.millDate === 'Pending' 
+                                  ? 'text-yellow-600 dark:text-yellow-400 font-semibold animate-pulse' 
+                                  : ''
+                              }>
+                                {row.millDate}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={
+                                row.chalanNo === 'Pending' 
+                                  ? 'text-yellow-600 dark:text-yellow-400 font-semibold animate-pulse' 
+                                  : ''
+                              }>
+                                {row.chalanNo}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+
+              {/* Close Button */}
+              <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all hover:scale-105 ${
+                    isDarkMode ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  }`}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+            <form ref={modalContentRef} onSubmit={handleSubmit} className={`overflow-y-auto max-h-[calc(95vh-140px)] custom-scrollbar ${isDarkMode
+              ? 'scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800'
+              : 'scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100'
+              }`}>
             <fieldset disabled={readOnly} className="space-y-6 sm:space-y-8 contents">
               <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 pb-20 sm:pb-24">
               {/* Success Message */}
@@ -4076,6 +4271,8 @@ export default function MillInputForm({
               )}
             </div>
           </div>
+          </>
+          )}
 
           {/* Add Mill Modal */}
           {showAddMillModal && (

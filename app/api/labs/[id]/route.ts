@@ -41,6 +41,14 @@ export async function GET(
     if (!lab) {
       return NextResponse.json(notFoundResponse('Lab'), { status: 404 });
     }
+
+    // Restrict to user's party if session has a partyId
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      const order = await Order.findById(lab.order).select('party').lean().maxTimeMS(1000);
+      if (!order || !order.party || order.party.toString() !== session.partyId) {
+        return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
+      }
+    }
     
     // Log the lab view
     logView('lab', id, request);
@@ -74,6 +82,10 @@ export async function PUT(
     const session = await getSession(request);
     if (!session) {
       return NextResponse.json(unauthorizedResponse('Unauthorized'), { status: 401 });
+    }
+    const allowedRoles = ['master', 'superadmin', 'admin', 'user'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json({ success: false, message: 'Access denied - Unauthorized role for update' }, { status: 403 });
     }
 
     await dbConnect();

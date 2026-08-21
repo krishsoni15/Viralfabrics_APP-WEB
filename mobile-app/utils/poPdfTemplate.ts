@@ -354,23 +354,12 @@ export const generatePoHtml = (po: PurchaseOrder) => {
           </div>
         </div>
 
-        <!-- Rate & Greigh Mtr -->
+        <!-- Rate & Lead Time -->
         <div class="row split-row">
           <div class="left-field" style="width: 70mm;">
             <span class="label" style="width: 18mm; display: inline-block;">Rate</span>
             <span class="colon" style="width: 2mm; display: inline-block;">:</span>
             <span class="value" style="width: 45mm; border-bottom: 0.3mm solid #000; display: inline-block;">${po.rate ? (/gst/i.test(po.rate) ? po.rate : `${po.rate} + GST`) : ''}</span>
-          </div>
-          <div class="right-field" style="width: 95mm; display: flex; justify-content: flex-end;">
-            <span class="label" style="width: 18mm; display: inline-block;">Greigh Mtr</span>
-            <span class="colon" style="width: 2mm; display: inline-block;">:</span>
-            <span class="value" style="width: 73mm; border-bottom: 0.3mm solid #000; display: inline-block;">${po.greighMtr || ''}</span>
-          </div>
-        </div>
-
-        <!-- Lead Time -->
-        <div class="row split-row">
-          <div class="left-field" style="width: 70mm;">
           </div>
           <div class="right-field" style="width: 95mm; display: flex; justify-content: flex-end;">
             <span class="label" style="width: 18mm; display: inline-block;">Lead Time</span>

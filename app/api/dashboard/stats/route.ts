@@ -26,7 +26,10 @@ export async function GET(request: NextRequest) {
     const financialYear = searchParams.get('financialYear');
 
     const partyKey = (session && (session.role === 'party' || session.partyId) && session.role !== 'master' && session.role !== 'superadmin') ? (session.partyId || 'party') : 'global';
-    const cacheKey = `dashboard-stats-${partyKey}-${startDate || 'all'}-${endDate || 'all'}-${financialYear || 'all'}`;
+    const contactsSuffix = (session && session.contactNames && session.contactNames.length > 0) 
+      ? `-${[...session.contactNames].sort().join(',')}` 
+      : (session?.contactName ? `-${session.contactName}` : '');
+    const cacheKey = `dashboard-stats-${partyKey}${contactsSuffix}-${startDate || 'all'}-${endDate || 'all'}-${financialYear || 'all'}`;
     const cached = statsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
       return NextResponse.json(successResponse(cached.data, 'Dashboard stats loaded from cache'), { 
@@ -113,6 +116,11 @@ export async function GET(request: NextRequest) {
           ? new mongoose.default.Types.ObjectId(session.partyId)
           : session.partyId;
         matchConditions.$and.push({ party: partyVal });
+      }
+      if (session.contactNames && session.contactNames.length > 0) {
+        matchConditions.$and.push({ contactName: { $in: session.contactNames } });
+      } else if (session.contactName) {
+        matchConditions.$and.push({ contactName: session.contactName });
       }
     }
 

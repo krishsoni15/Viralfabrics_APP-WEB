@@ -183,6 +183,8 @@ export async function POST(req: NextRequest) {
         weavers,
         weaver,
         challanNumber,
+        challanDate,
+        rate,
         piece,
         meter
       } = data;
@@ -202,6 +204,8 @@ export async function POST(req: NextRequest) {
             images: images || [],
             weaver: w.name.trim(),
             challanNumber: w.challanNumber?.trim() || '',
+            challanDate: w.challanDate ? new Date(w.challanDate) : undefined,
+            rate: w.rate ? Number(w.rate) : 0,
             piece: w.piece ? Number(w.piece) : 0,
             meter: w.meter ? Number(w.meter) : 0
           });
@@ -219,6 +223,8 @@ export async function POST(req: NextRequest) {
           images: images || [],
           weaver: weaver.trim(),
           challanNumber: challanNumber?.trim() || '',
+          challanDate: challanDate ? new Date(challanDate) : undefined,
+          rate: rate ? Number(rate) : 0,
           piece: piece ? Number(piece) : 0,
           meter: meter ? Number(meter) : 0
         });
@@ -353,6 +359,8 @@ export async function PUT(req: NextRequest) {
           images: images || [],
           weaver: w.name.trim(),
           challanNumber: w.challanNumber?.trim() || '',
+          challanDate: w.challanDate ? new Date(w.challanDate) : undefined,
+          rate: w.rate ? Number(w.rate) : 0,
           piece: w.piece ? Number(w.piece) : 0,
           meter: w.meter ? Number(w.meter) : 0
         };

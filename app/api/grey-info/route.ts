@@ -36,6 +36,38 @@ export async function GET(request: NextRequest) {
         query.orderId = { $in: ids };
       }
     }
+
+    // Restrict grey info to user's party if session has a partyId (applies to party users)
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      if (orderId) {
+        const orderQuery: any = { orderId, party: session.partyId };
+        if (session.contactNames && session.contactNames.length > 0) {
+          orderQuery.contactName = { $in: session.contactNames };
+        } else if (session.contactName) {
+          orderQuery.contactName = session.contactName;
+        }
+        const order = await Order.findOne(orderQuery).select('party').lean().maxTimeMS(1000);
+        if (!order) {
+          return NextResponse.json(errorResponse('Forbidden - Access denied'), { status: 403 });
+        }
+      } else {
+        const orderQuery: any = { party: session.partyId };
+        if (session.contactNames && session.contactNames.length > 0) {
+          orderQuery.contactName = { $in: session.contactNames };
+        } else if (session.contactName) {
+          orderQuery.contactName = session.contactName;
+        }
+        const partyOrders = await Order.find(orderQuery).select('orderId').lean().maxTimeMS(1000);
+        const partyOrderIds = partyOrders.map((o: any) => o.orderId);
+        if (query.orderId) {
+          const currentIds = Array.isArray(query.orderId.$in) ? query.orderId.$in : [query.orderId];
+          const allowedIds = currentIds.filter((id: string) => partyOrderIds.includes(id));
+          query.orderId = { $in: allowedIds.length > 0 ? allowedIds : ['__no_match__'] };
+        } else {
+          query.orderId = { $in: partyOrderIds.length > 0 ? partyOrderIds : ['__no_match__'] };
+        }
+      }
+    }
     
     const queryBuilder = GreyInfo.find(query)
       .select('orderId order quality quantity chalanNo numberOfPieces date weaverName createdAt updatedAt')
@@ -110,6 +142,16 @@ export async function POST(request: NextRequest) {
     const order = await Order.findOne({ orderId });
     if (!order) {
       return NextResponse.json(notFoundResponse('Order'), { status: 404 });
+    }
+
+    // Restrict to user's party if session has a partyId
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      const allowedContacts = session.contactNames && session.contactNames.length > 0
+        ? session.contactNames
+        : (session.contactName ? [session.contactName] : []);
+      if (!order.party || order.party.toString() !== session.partyId || (allowedContacts.length > 0 && !allowedContacts.includes(order.contactName || ''))) {
+        return NextResponse.json(errorResponse('Forbidden - Access denied'), { status: 403 });
+      }
     }
 
     // Create new grey info entry

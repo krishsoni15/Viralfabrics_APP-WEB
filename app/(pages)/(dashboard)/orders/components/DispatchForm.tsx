@@ -2334,7 +2334,7 @@ export default function DispatchForm({
   }, [isOpen]);
 
   // Handle scroll prevention on modal content
-  const modalContentRef = useRef<HTMLFormElement>(null);
+  const modalContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const modalContent = modalContentRef.current;
@@ -2391,7 +2391,7 @@ export default function DispatchForm({
       `}</style>
 
       <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-0 sm:p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
-        <div className={`relative w-full max-w-7xl min-h-screen sm:min-h-0 max-h-[100vh] sm:max-h-[95vh] overflow-hidden rounded-none sm:rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
+        <div className={`relative w-full max-w-7xl h-[100dvh] sm:h-auto sm:max-h-[90vh] md:max-h-[95vh] flex flex-col overflow-hidden rounded-none sm:rounded-xl shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'} ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'
           }`}>
           {/* Loading Overlay for Loading Data */}
           {loadingExistingData && (
@@ -2426,7 +2426,7 @@ export default function DispatchForm({
           )}
 
           {/* Header - Order ID badge with title and close button */}
-          <div className={`flex items-center justify-between p-6 border-b ${isDarkMode ? 'border-gray-700 bg-blue-900/20' : 'border-gray-200 bg-blue-50'
+          <div className={`flex-shrink-0 flex items-center justify-between p-4 sm:p-6 border-b ${isDarkMode ? 'border-gray-700 bg-blue-900/20' : 'border-gray-200 bg-blue-50'
             }`}>
             <div className="flex items-center gap-3">
               <span className={`px-3 py-1.5 rounded-lg text-lg font-bold ${isDarkMode
@@ -2449,13 +2449,198 @@ export default function DispatchForm({
             </button>
           </div>
 
-          {/* Form */}
-          <form ref={modalContentRef} onSubmit={handleSubmit} className={`overflow-y-auto max-h-[calc(95vh-140px)] custom-scrollbar ${isDarkMode
-            ? 'scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800'
-            : 'scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100'
-            }`}>
-            <fieldset disabled={readOnly} className="space-y-8 contents">
-              <div className="p-6 space-y-8 pb-24">
+          {/* Conditional View: ReadOnly Summary or Editable Form */}
+          {readOnly ? (
+            <>
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar">
+                {(() => {
+                  const rows: {
+                    groupIndex: number;
+                    date: string;
+                    billNo: string;
+                    transportNo: string;
+                    lrNo: string;
+                    qualityName: string;
+                    finishMtr: number;
+                    pcs: number;
+                    photos: string[];
+                    subItemInvoiceNo?: string;
+                  }[] = [];
+
+                  (formData.dispatchItems || []).forEach((item, idx) => {
+                    (item.subItems || []).forEach((sub: any) => {
+                      const qualObj = localQualities.find((q: any) => String(q._id || q.id) === String(sub.quality || item.quality));
+                      rows.push({
+                        groupIndex: idx + 1,
+                        date: item.dispatchDate || '—',
+                        billNo: item.billNo || '—',
+                        transportNo: item.transportNo || '—',
+                        lrNo: item.lrNo || '—',
+                        qualityName: qualObj ? qualObj.name : '—',
+                        finishMtr: sub.finishMtr || 0,
+                        pcs: sub.pcs || 0,
+                        photos: sub.photos || [],
+                        subItemInvoiceNo: sub.invoiceNo
+                      });
+                    });
+                  });
+
+                  if (rows.length === 0) {
+                    return (
+                      <div className={`p-12 text-center rounded-xl border-2 border-dashed ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-white'}`}>
+                        <DocumentTextIcon className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                        <p className={`text-lg font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                          No Dispatch Data Available
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {/* Desktop Table View */}
+                      <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                        <table className="w-full text-left border-collapse text-sm">
+                          <thead>
+                            <tr className={`${isDarkMode ? 'bg-gray-800 text-gray-205 border-b border-gray-700' : 'bg-gray-50 text-gray-700 border-b border-gray-200'}`}>
+                              <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Group</th>
+                              <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Date</th>
+                              <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Invoice / Bill</th>
+                              <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Transport / LR</th>
+                              <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Quality</th>
+                              <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Quantity</th>
+                              <th className="px-4 py-3 font-semibold uppercase tracking-wider text-xs">Photos</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                            {rows.map((row, idx) => (
+                              <tr key={idx} className={`${isDarkMode ? 'bg-gray-900/40 hover:bg-gray-800/40' : 'bg-white hover:bg-gray-50'}`}>
+                                <td className="px-4 py-3 font-semibold text-blue-600 dark:text-blue-400">
+                                  #{row.groupIndex}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">{row.date}</td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{row.billNo}</span>
+                                    {row.subItemInvoiceNo && (
+                                      <span className="text-xs text-gray-400">Inv: {row.subItemInvoiceNo}</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="text-xs">
+                                    <span className="block font-medium">{row.transportNo}</span>
+                                    <span className="text-gray-400">LR: {row.lrNo}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 font-semibold">{row.qualityName}</td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-col">
+                                    <span className="text-green-600 dark:text-green-400 font-bold">{row.finishMtr} Mtr</span>
+                                    <span className="text-xs text-gray-400">{row.pcs} Pcs</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  {row.photos && row.photos.length > 0 ? (
+                                    <div className="flex gap-1.5 overflow-x-auto py-0.5 custom-scrollbar max-w-[120px]">
+                                      {row.photos.map((photoUrl, pIdx) => (
+                                        <img
+                                          key={pIdx}
+                                          src={photoUrl}
+                                          alt={`Dispatch photo ${pIdx + 1}`}
+                                          className="w-10 h-10 object-cover rounded border border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-85 transition-opacity"
+                                          onClick={() => onPreviewImage && onPreviewImage(photoUrl, `Dispatch photo ${pIdx + 1}`, row.photos, pIdx)}
+                                        />
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">No photos</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Mobile Card-Based View */}
+                      <div className="space-y-4 md:hidden">
+                        {rows.map((row, idx) => (
+                          <div key={idx} className={`p-4 rounded-xl border transition-all duration-200 hover:shadow-md ${isDarkMode ? 'bg-gray-800/40 border-gray-700' : 'bg-white border-gray-205'}`}>
+                            <div className="flex justify-between items-center border-b pb-2 mb-3 border-gray-200 dark:border-gray-700">
+                              <span className="font-bold text-blue-600 dark:text-blue-400 text-sm">Group #{row.groupIndex}</span>
+                              <span className={`text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{row.date}</span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4 text-xs">
+                              <div className="space-y-1">
+                                <span className="text-gray-400 block font-medium">Invoice / Bill:</span>
+                                <span className="font-semibold block truncate">{row.billNo}</span>
+                                {row.subItemInvoiceNo && (
+                                  <span className="text-[10px] text-gray-400 block">Inv: {row.subItemInvoiceNo}</span>
+                                )}
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-gray-400 block font-medium">Transport / LR:</span>
+                                <span className="font-semibold block truncate">{row.transportNo || '—'}</span>
+                                {row.lrNo && (
+                                  <span className="text-[10px] text-gray-400 block">LR: {row.lrNo}</span>
+                                )}
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-gray-400 block font-medium">Quality:</span>
+                                <span className="font-semibold block truncate text-blue-600 dark:text-blue-400">{row.qualityName}</span>
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-gray-400 block font-medium">Quantity:</span>
+                                <span className="text-green-600 dark:text-green-400 font-bold block">{row.finishMtr} Mtr</span>
+                                <span className="text-[10px] text-gray-400 block">{row.pcs} Pcs</span>
+                              </div>
+                            </div>
+
+                            {row.photos && row.photos.length > 0 && (
+                              <div className="mt-3 border-t pt-3 border-gray-200 dark:border-gray-700">
+                                <span className="text-gray-400 block text-xs font-medium mb-2">Photos:</span>
+                                <div className="flex gap-2 overflow-x-auto py-1 custom-scrollbar">
+                                  {row.photos.map((photoUrl, pIdx) => (
+                                    <img
+                                      key={pIdx}
+                                      src={photoUrl}
+                                      alt={`Dispatch photo ${pIdx + 1}`}
+                                      className="w-12 h-12 object-cover rounded border border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-85 transition-opacity flex-shrink-0"
+                                      onClick={() => onPreviewImage && onPreviewImage(photoUrl, `Dispatch photo ${pIdx + 1}`, row.photos, pIdx)}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Fixed Footer for Read-Only mode */}
+              <div className={`flex-shrink-0 p-4 sm:p-6 border-t bg-inherit ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className={`px-8 py-3 rounded-lg font-semibold text-sm transition-all hover:scale-105 ${
+                      isDarkMode ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                    }`}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div ref={modalContentRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar">
+                <fieldset disabled={readOnly} className="space-y-6">
               {/* Success Message */}
               {successMessage && (
                 <div className={`p-4 rounded-lg border ${isDarkMode
@@ -2976,8 +3161,7 @@ export default function DispatchForm({
                           <PlusIcon className="h-5 w-5" />
                         </div>
                         <div className="text-center">
-                          <h4 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'
-                            }`}>
+                          <h4 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                             Add New Dispatch Item
                           </h4>
                         </div>
@@ -2986,13 +3170,11 @@ export default function DispatchForm({
                   )}
                 </div>
               </div>
-            </div>
-          </fieldset>
-        </form>
+            </fieldset>
+          </div>
 
-          {/* Sticky Submit Button */}
-          <div className={`sticky bottom-0 left-0 right-0 p-6 border-t shadow-lg bg-inherit ${isDarkMode ? 'border-gray-700' : 'border-gray-200'
-            }`}>
+          {/* Fixed Footer for Edit/Add mode */}
+          <div className={`flex-shrink-0 p-4 sm:p-6 border-t shadow-lg bg-inherit ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
             <div className="flex justify-end space-x-4">
               <button
                 type="button"
@@ -3002,7 +3184,7 @@ export default function DispatchForm({
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                   }`}
               >
-                {readOnly ? 'Close' : 'Cancel'}
+                Cancel
               </button>
 
               {/* Delete Button - Show only when has existing data */}
@@ -3015,7 +3197,7 @@ export default function DispatchForm({
                     ? 'border-gray-400 text-gray-400 cursor-not-allowed'
                     : isDarkMode
                       ? 'border-red-500 text-red-400 hover:bg-red-500 hover:text-white'
-                      : 'border-red-300 text-red-600 hover:bg-red-500 hover:text-white'
+                      : 'border-red-300 text-red-650 hover:bg-red-500 hover:text-white'
                     }`}
                 >
                   <TrashIcon className="h-5 w-5 inline mr-2" />
@@ -3044,7 +3226,9 @@ export default function DispatchForm({
               )}
             </div>
           </div>
-        </div>
+        </form>
+      )}
+    </div>
 
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (

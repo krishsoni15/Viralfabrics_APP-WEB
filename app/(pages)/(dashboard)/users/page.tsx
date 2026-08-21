@@ -37,6 +37,8 @@ interface User {
   role: string;
   isActive: boolean;
   partyId?: { _id: string; name: string } | string;
+  contactName?: string;
+  contactNames?: string[];
   profilePhoto?: string;
   createdAt: string;
   updatedAt: string;
@@ -50,6 +52,8 @@ interface UserFormData {
   address: string;
   role: string;
   partyId?: string;
+  contactName?: string;
+  contactNames?: string[];
   profilePhoto?: string;
 }
 
@@ -114,6 +118,7 @@ export default function UsersPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [loadingEditUserId, setLoadingEditUserId] = useState<string | null>(null);
   const [screenSize, setScreenSize] = useState<number>(0);
   const { user: currentUser, setUser: setStoreUser } = useAppStore();
   const [formData, setFormData] = useState<UserFormData>({
@@ -124,6 +129,8 @@ export default function UsersPage() {
     address: '',
     role: 'user',
     partyId: '',
+    contactName: '',
+    contactNames: [],
     profilePhoto: ''
   });
   const [formErrors, setFormErrors] = useState<Partial<UserFormData>>({});
@@ -141,12 +148,17 @@ export default function UsersPage() {
       address: '',
       role: 'user',
       partyId: '',
+      contactName: '',
+      contactNames: [],
       profilePhoto: ''
     });
     setFormErrors({});
     setShowPassword(false);
     setPartySearch('');
     setPartyDropdownOpen(false);
+    setContactSearch('');
+    setContactDropdownOpen(false);
+    setContacts([]);
   }, []);
 
   const handlePhotoUpload = async (file: File) => {
@@ -217,6 +229,10 @@ export default function UsersPage() {
   const [partyError, setPartyError] = useState<string | null>(null);
   const [partySearch, setPartySearch] = useState('');
   const [partyDropdownOpen, setPartyDropdownOpen] = useState(false);
+  const [contacts, setContacts] = useState<string[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [contactDropdownOpen, setContactDropdownOpen] = useState(false);
+  const [contactSearch, setContactSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false); // ⚡ FIX: Track deleting state for button disable
@@ -285,6 +301,18 @@ export default function UsersPage() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Lock body scroll when any modal is open to prevent background scrolling
+  useEffect(() => {
+    const isAnyModalOpen = showCreateModal || showEditModal || showDeleteModal || showAddPartyModal || showProfileModal;
+    if (isAnyModalOpen) {
+      const originalStyle = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalStyle;
+      };
+    }
+  }, [showCreateModal, showEditModal, showDeleteModal, showAddPartyModal, showProfileModal]);
 
   // Listen for Escape key to close modals
   useEffect(() => {
@@ -636,7 +664,7 @@ export default function UsersPage() {
       }
 
       if (response.ok && data.success !== false) {
-        const newUser = data.user || data.data;
+        const newUser = data.user || data.data || data;
         
         // Update UI immediately with new user
         if (newUser) {
@@ -760,7 +788,7 @@ export default function UsersPage() {
 
       if (response.ok) {
         const data = await response.json();
-        const updatedUser = data.user;
+        const updatedUser = data.user || data;
         
         // ⚡ FIX: Ensure updatedUser has _id - use the userIdToUpdate if missing
         if (!updatedUser._id) {
@@ -793,6 +821,7 @@ export default function UsersPage() {
         setSelectedUser(userWithId);
         
         // ⚡ FIX: Update form data with the updated user data so the form shows the latest values
+        const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
         setFormData({
           name: updatedUser.name || formData.name,
           username: updatedUser.username || formData.username,
@@ -800,6 +829,9 @@ export default function UsersPage() {
           phoneNumber: updatedUser.phoneNumber || formData.phoneNumber || '',
           address: updatedUser.address || formData.address || '',
           role: updatedUser.role || formData.role,
+          partyId: getPartyId(updatedUser.partyId) || '',
+          contactName: updatedUser.contactName || '',
+          contactNames: updatedUser.contactNames || [],
           profilePhoto: updatedUser.profilePhoto || ''
         });
         
@@ -850,14 +882,13 @@ export default function UsersPage() {
           // Ignore localStorage errors
         }
         
-        // ⚡ FIX: Don't clear selectedUser or close modal - allow user to make more changes
-        // Only close modal if user wants to, or keep it open for further edits
-        // setSelectedUser(null); // Keep selectedUser so user can edit again
-        // setShowEditModal(false); // Keep modal open for further edits
-        // resetForm(); // Don't reset form - keep the updated data visible
+        // Close modal and reset state on success
+        setSelectedUser(null);
+        setShowEditModal(false);
+        resetForm();
         
-        setValidationAlert({ type: 'success', text: 'User updated successfully' });
-        setTimeout(() => setValidationAlert(null), 3000);
+        setMessage({ type: 'success', text: 'User updated successfully' });
+        setTimeout(() => setMessage(null), 5000);
       } else {
         const error = await response.json();
         setValidationAlert({ type: 'error', text: error.message || 'Update failed' });
@@ -1017,14 +1048,47 @@ export default function UsersPage() {
     }
   }, []);
 
-  // Fetch parties automatically when role changes to 'party'
+  // Fetch parties automatically
   useEffect(() => {
-    if (formData.role === 'party' && parties.length === 0 && !loadingParties) {
+    if (parties.length === 0 && !loadingParties) {
       fetchParties();
     }
-  }, [formData.role, parties.length, loadingParties, fetchParties]);
+  }, [parties.length, loadingParties, fetchParties]);
 
+  // Fetch contacts for the selected party
+  const fetchContacts = useCallback(async (partyId: string) => {
+    if (!partyId) {
+      setContacts([]);
+      return;
+    }
+    setLoadingContacts(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const response = await fetch(`/api/parties/${partyId}/contacts`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setContacts(data.contacts || []);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch contacts:', error);
+    } finally {
+      setLoadingContacts(false);
+    }
+  }, []);
 
+  // Fetch contacts automatically when partyId changes
+  useEffect(() => {
+    if (formData.partyId) {
+      fetchContacts(formData.partyId);
+    } else {
+      setContacts([]);
+    }
+  }, [formData.partyId, fetchContacts]);
 
   // Save a new party created inline
   const handleSaveParty = async (e: React.FormEvent) => {
@@ -1147,6 +1211,7 @@ export default function UsersPage() {
                 placeholder="Search users..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                autoComplete="off"
                 className={`w-full pl-10 pr-10 py-2 sm:py-2.5 rounded-lg border-2 transition-all duration-300 font-medium text-xs sm:text-sm outline-none ${isDarkMode
                     ? 'bg-white/10 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-0 focus:outline-none'
                     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-0 focus:outline-none'
@@ -1692,7 +1757,8 @@ export default function UsersPage() {
                         </div>
                         {(!isLargeScreen || !isSmallScreen || !isMediumScreen) && (
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setSelectedUser(user);
                               setShowProfileModal(true);
                             }}
@@ -1731,15 +1797,22 @@ export default function UsersPage() {
                                   ? 'bg-blue-900/20 text-blue-400'
                                   : 'bg-blue-100 text-blue-800'
                       }`}>
-                        {user.role === 'master'
-                          ? 'Master'
-                          : user.role === 'superadmin'
-                            ? 'Super Admin'
-                            : user.role === 'admin'
-                              ? 'Admin'
-                              : user.role === 'party'
-                                ? `Party: ${typeof user.partyId === 'object' && user.partyId !== null ? user.partyId.name : (parties.find(p => p._id === user.partyId)?.name || 'Party User')}`
-                                : 'User'}
+                        {(() => {
+                          const contactSuffix = user.contactNames && user.contactNames.length > 0
+                            ? ` (${user.contactNames.join(', ')})`
+                            : (user.contactName ? ` (${user.contactName})` : '');
+                          
+                          if (user.role === 'master') return `Master${contactSuffix}`;
+                          if (user.role === 'superadmin') return `Super Admin${contactSuffix}`;
+                          if (user.role === 'admin') return `Admin${contactSuffix}`;
+                          if (user.role === 'party') {
+                            const partyName = typeof user.partyId === 'object' && user.partyId !== null 
+                              ? user.partyId.name 
+                              : (parties.find(p => p._id === user.partyId)?.name || 'Party User');
+                            return `Party: ${partyName}${contactSuffix}`;
+                          }
+                          return `User${contactSuffix}`;
+                        })()}
                       </span>
                     </td>
                   )}
@@ -1773,7 +1846,10 @@ export default function UsersPage() {
                     <div className="flex items-center space-x-2">
                       {(user.role !== 'master' || currentUser?.role === 'master') && (
                         <button
-                          onClick={async () => {
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (loadingEditUserId) return;
+                            if (user._id) setLoadingEditUserId(user._id);
                             // ⚡ FIX: Always get the latest user data from the list
                             const latestUser = users.find(u => String(u._id) === String(user._id));
                             const userToEdit = latestUser || user;
@@ -1799,21 +1875,25 @@ export default function UsersPage() {
                                     address: userData.address || userToEdit.address || '',
                                     role: userData.role || userToEdit.role,
                                     partyId: getPartyId(userData.partyId) || getPartyId(userToEdit.partyId),
+                                    contactName: userData.contactName || userToEdit.contactName || '',
+                                    contactNames: userData.contactNames || (userData.contactName ? [userData.contactName] : (userToEdit.contactNames || (userToEdit.contactName ? [userToEdit.contactName] : []))),
                                     profilePhoto: userData.profilePhoto || userToEdit.profilePhoto || ''
                                   });
                                 } else {
                                   // Fallback to user data without password
                                   const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
-                                  setFormData({
-                                    name: userToEdit.name,
-                                    username: userToEdit.username,
-                                    password: '',
-                                    phoneNumber: userToEdit.phoneNumber || '',
-                                    address: userToEdit.address || '',
-                                    role: userToEdit.role,
-                                    partyId: getPartyId(userToEdit.partyId),
-                                    profilePhoto: userToEdit.profilePhoto || ''
-                                  });
+                                   setFormData({
+                                     name: userToEdit.name,
+                                     username: userToEdit.username,
+                                     password: '',
+                                     phoneNumber: userToEdit.phoneNumber || '',
+                                     address: userToEdit.address || '',
+                                     role: userToEdit.role,
+                                     partyId: getPartyId(userToEdit.partyId),
+                                     contactName: userToEdit.contactName || '',
+                                     contactNames: userToEdit.contactNames || (userToEdit.contactName ? [userToEdit.contactName] : []),
+                                     profilePhoto: userToEdit.profilePhoto || ''
+                                   });
                                 }
                               } else {
                                 // Fallback to user data without password
@@ -1826,42 +1906,59 @@ export default function UsersPage() {
                                   address: userToEdit.address || '',
                                   role: userToEdit.role,
                                   partyId: getPartyId(userToEdit.partyId),
+                                  contactName: userToEdit.contactName || '',
+                                  contactNames: userToEdit.contactNames || (userToEdit.contactName ? [userToEdit.contactName] : []),
                                   profilePhoto: userToEdit.profilePhoto || ''
                                 });
                               }
                             } catch (error) {
                               // Fallback to user data without password
                               const getPartyId = (p: any) => typeof p === 'object' && p !== null ? p._id : (p || '');
-                              setFormData({
-                                name: userToEdit.name,
-                                username: userToEdit.username,
-                                password: '',
-                                  phoneNumber: userToEdit.phoneNumber || '',
-                                  address: userToEdit.address || '',
-                                  role: userToEdit.role,
-                                  partyId: getPartyId(userToEdit.partyId),
-                                  profilePhoto: userToEdit.profilePhoto || ''
-                                });
+                                  setFormData({
+                                    name: userToEdit.name,
+                                    username: userToEdit.username,
+                                    password: '',
+                                    phoneNumber: userToEdit.phoneNumber || '',
+                                    address: userToEdit.address || '',
+                                    role: userToEdit.role,
+                                    partyId: getPartyId(userToEdit.partyId),
+                                    contactName: userToEdit.contactName || '',
+                                    contactNames: userToEdit.contactNames || (userToEdit.contactName ? [userToEdit.contactName] : []),
+                                    profilePhoto: userToEdit.profilePhoto || ''
+                                  });
+                              } finally {
+                                setLoadingEditUserId(null);
                               }
                               
                               setShowPassword(false); // Reset password visibility when opening edit modal
                               setShowEditModal(true);
                               setValidationAlert(null);
                             }}
+                            disabled={loadingEditUserId !== null}
                             className={`p-2 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
+                              loadingEditUserId !== null ? 'opacity-50 cursor-not-allowed' : ''
+                            } ${
                               isDarkMode
                                 ? 'text-blue-400 hover:bg-blue-500/20 hover:text-blue-300'
                                 : 'text-blue-600 hover:bg-blue-50 hover:text-blue-700'
                             }`}
                             title="Edit user"
                           >
-                          <PencilIcon className="h-4 w-4" />
+                          {loadingEditUserId === user._id ? (
+                            <svg className="animate-spin h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                          ) : (
+                            <PencilIcon className="h-4 w-4" />
+                          )}
                         </button>
                       )}
                       {currentUser?.role === 'master' && (
                         canDeleteUser(user) ? (
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               // ⚡ FIX: Allow delete even if submitting from edit (but not if deleting)
                               if (user._id && !isDeleting && !deleteInProgressRef.current) {
                                 // ⚡ FIX: Ensure we use the latest user data from the list
@@ -2204,6 +2301,8 @@ export default function UsersPage() {
             currentUser={currentUser}
             isDarkMode={isDarkMode}
             onEditUser={async (user) => {
+              if (loadingEditUserId) return;
+              if (user._id) setLoadingEditUserId(user._id);
               // ⚡ FIX: Always get the latest user data from the list
               const latestUser = users.find(u => String(u._id) === String(user._id));
               const userToEdit = latestUser || user;
@@ -2215,7 +2314,7 @@ export default function UsersPage() {
                 if (token && userToEdit._id) {
                   const response = await fetch(`/api/users/${userToEdit._id}?includePassword=true`, {
                     headers: {
-                      'Authorization': `Bearer ${token}`
+                      'Authorization': 'Bearer ' + token
                     }
                   });
                   if (response.ok) {
@@ -2229,6 +2328,8 @@ export default function UsersPage() {
                       address: userData.address || userToEdit.address || '',
                       role: userData.role || userToEdit.role,
                       partyId: getPartyId(userData.partyId) || getPartyId(userToEdit.partyId),
+                      contactName: userData.contactName || userToEdit.contactName || '',
+                      contactNames: userData.contactNames || (userData.contactName ? [userData.contactName] : (userToEdit.contactNames || (userToEdit.contactName ? [userToEdit.contactName] : []))),
                       profilePhoto: userData.profilePhoto || userToEdit.profilePhoto || ''
                     });
                   } else {
@@ -2242,6 +2343,8 @@ export default function UsersPage() {
                       address: userToEdit.address || '',
                       role: userToEdit.role,
                       partyId: getPartyId(userToEdit.partyId),
+                      contactName: userToEdit.contactName || '',
+                      contactNames: userToEdit.contactNames || (userToEdit.contactName ? [userToEdit.contactName] : []),
                       profilePhoto: userToEdit.profilePhoto || ''
                     });
                   }
@@ -2256,6 +2359,8 @@ export default function UsersPage() {
                     address: userToEdit.address || '',
                     role: userToEdit.role,
                     partyId: getPartyId(userToEdit.partyId),
+                    contactName: userToEdit.contactName || '',
+                    contactNames: userToEdit.contactNames || (userToEdit.contactName ? [userToEdit.contactName] : []),
                     profilePhoto: userToEdit.profilePhoto || ''
                   });
                 }
@@ -2270,8 +2375,12 @@ export default function UsersPage() {
                   address: userToEdit.address || '',
                   role: userToEdit.role,
                   partyId: getPartyId(userToEdit.partyId),
+                  contactName: userToEdit.contactName || '',
+                  contactNames: userToEdit.contactNames || (userToEdit.contactName ? [userToEdit.contactName] : []),
                   profilePhoto: userToEdit.profilePhoto || ''
                 });
+              } finally {
+                setLoadingEditUserId(null);
               }
               
               setShowPassword(false); // Reset password visibility when opening edit modal
@@ -2301,6 +2410,7 @@ export default function UsersPage() {
             canDeleteUser={canDeleteUser}
             getUserInitials={getUserInitials}
             formatDate={formatDate}
+            loadingEditUserId={loadingEditUserId}
           />
           )}
 
@@ -2375,7 +2485,7 @@ export default function UsersPage() {
       {/* Create User Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className={`w-full max-w-2xl rounded-lg shadow-xl ${
+          <div className={`w-full max-w-2xl max-h-[90vh] flex flex-col rounded-lg shadow-xl ${
             isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-gray-200'
           }`}>
             <div className={`flex items-center justify-between p-6 border-b ${
@@ -2402,7 +2512,7 @@ export default function UsersPage() {
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto flex-1">
               {/* Validation Alert - Inside Modal */}
               {validationAlert && (
                 <div className={`mb-4 p-3 rounded-md border text-sm ${
@@ -2437,19 +2547,6 @@ export default function UsersPage() {
                 </div>
               )}
 
-              {/* Required Fields Note */}
-              <div className={`mb-6 p-3 rounded-lg border ${
-                isDarkMode
-                  ? 'bg-blue-900/20 border-blue-500/30'
-                  : 'bg-blue-50 border-blue-200'
-              }`}>
-                <p className={`text-sm ${
-                  isDarkMode ? 'text-blue-300' : 'text-blue-800'
-                }`}>
-                  <span className="text-red-500 font-semibold">*</span> Required fields
-                </p>
-              </div>
-              
               <div className="space-y-6">
                 {/* Profile Photo Upload/Capture */}
                 <div className="flex flex-col items-center justify-center space-y-3 pb-4 border-b border-gray-150 dark:border-slate-700/50">
@@ -2519,9 +2616,9 @@ export default function UsersPage() {
                 </div>
 
                 {/* Role and Party Select (Top Section) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-6">
                   {/* Role */}
-                  <div>
+                  <div className="w-full">
                     <label className={`block text-sm font-medium mb-2 ${
                       isDarkMode ? 'text-gray-300' : 'text-gray-700'
                     }`}>
@@ -2529,7 +2626,16 @@ export default function UsersPage() {
                     </label>
                     <select
                       value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      onChange={(e) => {
+                        const newRole = e.target.value;
+                        setFormData(prev => ({
+                          ...prev,
+                          role: newRole,
+                          partyId: newRole === 'party' ? prev.partyId : '',
+                          contactName: newRole === 'party' ? prev.contactName : '',
+                          contactNames: newRole === 'party' ? prev.contactNames : []
+                        }));
+                      }}
                       className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${
                         formErrors.role
                           ? 'border-red-500'
@@ -2553,131 +2659,288 @@ export default function UsersPage() {
                     )}
                   </div>
 
-                  {/* Party Dropdown */}
+                  {/* Party and Contact Select */}
                   {formData.role === 'party' && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Party Dropdown */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <label className={`block text-sm font-medium ${
+                            isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                          }`}>
+                            Select Party <span className="text-red-500">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPartyError(null);
+                              setShowAddPartyModal(true);
+                            }}
+                            className="text-xs font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+                          >
+                            + Add New Party
+                          </button>
+                        </div>
+                        <div className="relative z-50">
+                          {/* The Dropdown Button / Selector Display */}
+                          <button
+                            type="button"
+                            onClick={() => setPartyDropdownOpen(!partyDropdownOpen)}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors duration-300 ${
+                              formErrors.partyId
+                                ? 'border-red-500'
+                                : isDarkMode
+                                  ? 'bg-slate-700/50 border-slate-600 text-white hover:bg-slate-700/80 focus:border-blue-500'
+                                  : 'bg-white border-gray-300 text-gray-900 hover:bg-gray-50 focus:border-blue-500'
+                            }`}
+                          >
+                            <span className="block truncate">
+                              {parties.find(p => p._id === formData.partyId)?.name || '-- Choose Party --'}
+                            </span>
+                            <span className="pointer-events-none flex items-center">
+                              <ChevronDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                            </span>
+                          </button>
+
+                          {/* Dropdown Panel */}
+                          {partyDropdownOpen && (
+                            <>
+                              {/* Click outside backdrop to close */}
+                              <div 
+                                className="fixed inset-0 z-40 cursor-default" 
+                                onClick={() => setPartyDropdownOpen(false)} 
+                              />
+                              
+                              <div
+                                className={`absolute left-0 right-0 mt-1 max-h-60 overflow-hidden rounded-md py-1 shadow-lg ring-1 ring-black/5 focus:outline-none z-50 ${
+                                  isDarkMode 
+                                    ? 'bg-slate-800 border border-slate-700 text-white' 
+                                    : 'bg-white border border-gray-200 text-gray-900'
+                                }`}
+                              >
+                                {/* Search input inside dropdown */}
+                                <div className="p-2 border-b sticky top-0 z-10 bg-inherit border-inherit">
+                                  <input
+                                    type="text"
+                                    value={partySearch}
+                                    onChange={(e) => setPartySearch(e.target.value)}
+                                    placeholder="Search party..."
+                                    className={`w-full px-2 py-1.5 text-sm rounded border focus:outline-none focus:border-blue-500 ${
+                                      isDarkMode
+                                        ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
+                                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                    }`}
+                                    onClick={(e) => e.stopPropagation()} // Prevent closing dropdown
+                                  />
+                                </div>
+
+                                {/* Options */}
+                                <div className="max-h-48 overflow-y-auto">
+                                  {loadingParties ? (
+                                    <div className="py-3 px-3 text-sm text-gray-400 text-center flex items-center justify-center gap-2">
+                                      <svg className="animate-spin h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      </svg>
+                                      Loading parties...
+                                    </div>
+                                  ) : parties.filter(p => 
+                                    p.name.toLowerCase().includes(partySearch.toLowerCase())
+                                  ).length === 0 ? (
+                                    <div className="py-2 px-3 text-sm text-gray-400 text-center">
+                                      No parties found
+                                    </div>
+                                  ) : (
+                                    parties
+                                      .filter(p => p.name.toLowerCase().includes(partySearch.toLowerCase()))
+                                      .map(p => {
+                                        const isSelected = p._id === formData.partyId;
+                                        return (
+                                          <button
+                                            key={p._id}
+                                            type="button"
+                                            onClick={() => {
+                                              setFormData(prev => ({
+                                                ...prev,
+                                                partyId: p._id,
+                                                contactName: '',
+                                                contactNames: [],
+                                                username: getNextUsername(p.name, users),
+                                                phoneNumber: p.contactPhone || prev.phoneNumber || '',
+                                                address: p.address || prev.address || ''
+                                              }));
+                                              setPartyDropdownOpen(false);
+                                              setPartySearch('');
+                                            }}
+                                            className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 flex items-center justify-between ${
+                                              isSelected
+                                                ? 'bg-blue-600 text-white'
+                                                : isDarkMode
+                                                  ? 'hover:bg-slate-700 text-gray-200'
+                                                  : 'hover:bg-gray-100 text-gray-800'
+                                            }`}
+                                          >
+                                            <span>{p.name}</span>
+                                            {isSelected && (
+                                              <CheckIcon className="h-4 w-4 text-white" />
+                                            )}
+                                          </button>
+                                        );
+                                      })
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        {formErrors.partyId && (
+                          <p className="mt-1 text-xs text-red-500">{formErrors.partyId}</p>
+                        )}
+                      </div>
+
+                      {/* Contact Name Dropdown */}
+                      <div className="space-y-2">
                         <label className={`block text-sm font-medium ${
                           isDarkMode ? 'text-gray-300' : 'text-gray-700'
                         }`}>
-                          Select Party <span className="text-red-500">*</span>
+                          Contact Name <span className="text-xs text-gray-400">(Employee)</span>
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPartyError(null);
-                            setShowAddPartyModal(true);
-                          }}
-                          className="text-xs font-semibold text-blue-500 hover:text-blue-600 transition-colors"
-                        >
-                          + Add New Party
-                        </button>
-                      </div>
-                      <div className="relative z-50">
-                        {/* The Dropdown Button / Selector Display */}
-                        <button
-                          type="button"
-                          onClick={() => setPartyDropdownOpen(!partyDropdownOpen)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors duration-300 ${
-                            formErrors.partyId
-                              ? 'border-red-500'
-                              : isDarkMode
+                        <div className="relative z-40">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!formData.partyId) {
+                                setValidationAlert({ type: 'error', text: 'Please select a party name first' });
+                                setTimeout(() => setValidationAlert(null), 5000);
+                                return;
+                              }
+                              setContactDropdownOpen(!contactDropdownOpen);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors duration-300 ${
+                              isDarkMode
                                 ? 'bg-slate-700/50 border-slate-600 text-white hover:bg-slate-700/80 focus:border-blue-500'
                                 : 'bg-white border-gray-300 text-gray-900 hover:bg-gray-50 focus:border-blue-500'
-                          }`}
-                        >
-                          <span className="block truncate">
-                            {parties.find(p => p._id === formData.partyId)?.name || '-- Choose Party --'}
-                          </span>
-                          <span className="pointer-events-none flex items-center">
-                            <ChevronDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
-                          </span>
-                        </button>
+                            }`}
+                          >
+                            <span className={`block truncate ${!formData.partyId ? 'text-gray-400 dark:text-gray-500' : ''}`}>
+                              {formData.partyId
+                                ? (formData.contactNames && formData.contactNames.length > 0
+                                  ? formData.contactNames.join(', ')
+                                  : '-- All Orders (No Filter) --')
+                                : '-- Select a party first --'}
+                            </span>
+                            <span className="pointer-events-none flex items-center">
+                              <ChevronDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                            </span>
+                          </button>
 
-                        {/* Dropdown Panel */}
-                        {partyDropdownOpen && (
-                          <>
-                            {/* Click outside backdrop to close */}
-                            <div 
-                              className="fixed inset-0 z-40 cursor-default" 
-                              onClick={() => setPartyDropdownOpen(false)} 
-                            />
-                            
-                            <div
-                              className={`absolute left-0 right-0 mt-1 max-h-60 overflow-hidden rounded-md py-1 shadow-lg ring-1 ring-black/5 focus:outline-none z-50 ${
-                                isDarkMode 
-                                  ? 'bg-slate-800 border border-slate-700 text-white' 
-                                  : 'bg-white border border-gray-200 text-gray-900'
-                              }`}
-                            >
-                              {/* Search input inside dropdown */}
-                              <div className="p-2 border-b sticky top-0 z-10 bg-inherit border-inherit">
-                                <input
-                                  type="text"
-                                  value={partySearch}
-                                  onChange={(e) => setPartySearch(e.target.value)}
-                                  placeholder="Search party..."
-                                  className={`w-full px-2 py-1.5 text-sm rounded border focus:outline-none focus:border-blue-500 ${
-                                    isDarkMode
-                                      ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
-                                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                  }`}
-                                  onClick={(e) => e.stopPropagation()} // Prevent closing dropdown
-                                />
+                          {contactDropdownOpen && formData.partyId && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-30 cursor-default" 
+                                onClick={() => setContactDropdownOpen(false)} 
+                              />
+                              <div
+                                className={`absolute left-0 right-0 mt-1 max-h-60 overflow-hidden rounded-md py-1 shadow-lg ring-1 ring-black/5 focus:outline-none z-40 ${
+                                  isDarkMode 
+                                    ? 'bg-slate-800 border border-slate-700 text-white' 
+                                    : 'bg-white border border-gray-200 text-gray-900'
+                                }`}
+                              >
+                                <div className="p-2 border-b sticky top-0 z-10 bg-inherit border-inherit">
+                                  <input
+                                    type="text"
+                                    value={contactSearch}
+                                    onChange={(e) => setContactSearch(e.target.value)}
+                                    placeholder="Search contact..."
+                                    className={`w-full px-2 py-1.5 text-sm rounded border focus:outline-none focus:border-blue-500 ${
+                                      isDarkMode
+                                        ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
+                                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                    }`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </div>
+                                <div className="max-h-48 overflow-y-auto">
+                                  {/* Clear / No Filter option */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFormData(prev => ({ ...prev, contactName: '', contactNames: [] }));
+                                      setContactSearch('');
+                                    }}
+                                    className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 ${
+                                      !formData.contactNames || formData.contactNames.length === 0
+                                        ? 'bg-blue-600 text-white'
+                                        : isDarkMode
+                                          ? 'hover:bg-slate-700 text-gray-300'
+                                          : 'hover:bg-gray-100 text-gray-700'
+                                    }`}
+                                  >
+                                    -- All Orders (No Filter) --
+                                  </button>
+                                  {loadingContacts ? (
+                                    <div className="py-2 px-3 text-sm text-gray-400 text-center">Loading...</div>
+                                  ) : contacts.filter(c => 
+                                      c.toLowerCase().includes(contactSearch.toLowerCase())
+                                    ).length === 0 ? (
+                                    <div className="py-2 px-3 text-sm text-gray-400 text-center">
+                                      No contacts found
+                                    </div>
+                                  ) : (
+                                    contacts
+                                      .filter(c => c.toLowerCase().includes(contactSearch.toLowerCase()))
+                                      .map((contact, idx) => {
+                                        const isSelected = formData.contactNames?.includes(contact) || false;
+                                        return (
+                                          <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setFormData(prev => {
+                                                const current = prev.contactNames || [];
+                                                const updated = current.includes(contact)
+                                                  ? current.filter(c => c !== contact)
+                                                  : [...current, contact];
+                                                return {
+                                                  ...prev,
+                                                  contactNames: updated,
+                                                  contactName: updated.length > 0 ? updated[0] : ''
+                                                };
+                                              });
+                                            }}
+                                            className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 flex items-center justify-between ${
+                                              isSelected
+                                                ? 'bg-blue-600/20 text-blue-400 font-medium'
+                                                : isDarkMode
+                                                  ? 'hover:bg-slate-700 text-gray-200'
+                                                  : 'hover:bg-gray-100 text-gray-800'
+                                            }`}
+                                          >
+                                            <div className="flex items-center space-x-2">
+                                              <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                readOnly
+                                                className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 bg-transparent border-gray-300"
+                                              />
+                                              <span>{contact}</span>
+                                            </div>
+                                            {isSelected && (
+                                              <CheckIcon className="h-4 w-4 text-blue-500" />
+                                            )}
+                                          </button>
+                                        );
+                                      })
+                                  )}
+                                </div>
                               </div>
+                            </>
+                          )}
+                        </div>
 
-                              {/* Options */}
-                              <div className="max-h-48 overflow-y-auto">
-                                {parties.filter(p => 
-                                  p.name.toLowerCase().includes(partySearch.toLowerCase())
-                                ).length === 0 ? (
-                                  <div className="py-2 px-3 text-sm text-gray-400 text-center">
-                                    No parties found
-                                  </div>
-                                ) : (
-                                  parties
-                                    .filter(p => p.name.toLowerCase().includes(partySearch.toLowerCase()))
-                                    .map(p => {
-                                      const isSelected = p._id === formData.partyId;
-                                      return (
-                                        <button
-                                          key={p._id}
-                                          type="button"
-                                          onClick={() => {
-                                            setFormData(prev => ({
-                                              ...prev,
-                                              partyId: p._id,
-                                              username: getNextUsername(p.name, users),
-                                              phoneNumber: p.contactPhone || prev.phoneNumber || '',
-                                              address: p.address || prev.address || ''
-                                            }));
-                                            setPartyDropdownOpen(false);
-                                            setPartySearch('');
-                                          }}
-                                          className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 flex items-center justify-between ${
-                                            isSelected
-                                              ? 'bg-blue-600 text-white'
-                                              : isDarkMode
-                                                ? 'hover:bg-slate-700 text-gray-200'
-                                                : 'hover:bg-gray-100 text-gray-800'
-                                          }`}
-                                        >
-                                          <span>{p.name}</span>
-                                          {isSelected && (
-                                            <CheckIcon className="h-4 w-4 text-white" />
-                                          )}
-                                        </button>
-                                      );
-                                    })
-                                )}
-                              </div>
-                            </div>
-                          </>
-                        )}
                       </div>
-                      {formErrors.partyId && (
-                        <p className="mt-1 text-xs text-red-500">{formErrors.partyId}</p>
-                      )}
                     </div>
                   )}
                 </div>
@@ -2722,6 +2985,7 @@ export default function UsersPage() {
                         type="text"
                         value={formData.username}
                         onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                        autoComplete="off"
                         className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${
                           formErrors.username
                             ? 'border-red-500'
@@ -2756,6 +3020,7 @@ export default function UsersPage() {
                                 : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
                           }`}
                           placeholder="Enter password"
+                          autoComplete="new-password"
                         />
                         <button
                           type="button"
@@ -2866,7 +3131,7 @@ export default function UsersPage() {
       {/* Edit User Modal */}
       {showEditModal && selectedUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className={`w-full max-w-2xl rounded-lg shadow-xl ${
+          <div className={`w-full max-w-2xl max-h-[90vh] flex flex-col rounded-lg shadow-xl ${
             isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-gray-200'
           }`}>
             <div className={`flex items-center justify-between p-6 border-b ${
@@ -2893,7 +3158,7 @@ export default function UsersPage() {
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto flex-1">
               {/* Validation Alert */}
               {validationAlert && (
                 <div className={`mb-6 p-4 rounded-lg border ${
@@ -2985,9 +3250,9 @@ export default function UsersPage() {
                 </div>
 
                 {/* Role and Party Select (Top Section) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-6">
                   {/* Role */}
-                  <div>
+                  <div className="w-full">
                     <label className={`block text-sm font-medium mb-2 ${
                       isDarkMode ? 'text-gray-300' : 'text-gray-700'
                     }`}>
@@ -2995,7 +3260,16 @@ export default function UsersPage() {
                     </label>
                     <select
                       value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      onChange={(e) => {
+                        const newRole = e.target.value;
+                        setFormData(prev => ({
+                          ...prev,
+                          role: newRole,
+                          partyId: newRole === 'party' ? prev.partyId : '',
+                          contactName: newRole === 'party' ? prev.contactName : '',
+                          contactNames: newRole === 'party' ? prev.contactNames : []
+                        }));
+                      }}
                       className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${
                         isDarkMode
                           ? 'bg-white/10 border-white/20 text-white focus:border-blue-500'
@@ -3014,131 +3288,287 @@ export default function UsersPage() {
                     </select>
                   </div>
 
-                  {/* Party Dropdown */}
+                  {/* Party and Contact Select */}
                   {formData.role === 'party' && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Party Dropdown */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <label className={`block text-sm font-medium ${
+                            isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                          }`}>
+                            Select Party <span className="text-red-500">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPartyError(null);
+                              setShowAddPartyModal(true);
+                            }}
+                            className="text-xs font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+                          >
+                            + Add New Party
+                          </button>
+                        </div>
+                        <div className="relative z-50">
+                          {/* The Dropdown Button / Selector Display */}
+                          <button
+                            type="button"
+                            onClick={() => setPartyDropdownOpen(!partyDropdownOpen)}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors duration-300 ${
+                              formErrors.partyId
+                                ? 'border-red-500'
+                                : isDarkMode
+                                  ? 'bg-slate-700/50 border-slate-600 text-white hover:bg-slate-700/80 focus:border-blue-500'
+                                  : 'bg-white border-gray-300 text-gray-900 hover:bg-gray-50 focus:border-blue-500'
+                            }`}
+                          >
+                            <span className="block truncate">
+                              {parties.find(p => p._id === formData.partyId)?.name || '-- Choose Party --'}
+                            </span>
+                            <span className="pointer-events-none flex items-center">
+                              <ChevronDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                            </span>
+                          </button>
+
+                          {/* Dropdown Panel */}
+                          {partyDropdownOpen && (
+                            <>
+                              {/* Click outside backdrop to close */}
+                              <div 
+                                className="fixed inset-0 z-40 cursor-default" 
+                                onClick={() => setPartyDropdownOpen(false)} 
+                              />
+                              
+                              <div
+                                className={`absolute left-0 right-0 mt-1 max-h-60 overflow-hidden rounded-md py-1 shadow-lg ring-1 ring-black/5 focus:outline-none z-50 ${
+                                  isDarkMode 
+                                    ? 'bg-slate-800 border border-slate-700 text-white' 
+                                    : 'bg-white border border-gray-200 text-gray-900'
+                                }`}
+                              >
+                                {/* Search input inside dropdown */}
+                                <div className="p-2 border-b sticky top-0 z-10 bg-inherit border-inherit">
+                                  <input
+                                    type="text"
+                                    value={partySearch}
+                                    onChange={(e) => setPartySearch(e.target.value)}
+                                    placeholder="Search party..."
+                                    className={`w-full px-2 py-1.5 text-sm rounded border focus:outline-none focus:border-blue-500 ${
+                                      isDarkMode
+                                        ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
+                                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                    }`}
+                                    onClick={(e) => e.stopPropagation()} // Prevent closing dropdown
+                                  />
+                                </div>
+
+                                {/* Options */}
+                                <div className="max-h-48 overflow-y-auto">
+                                  {loadingParties ? (
+                                    <div className="py-3 px-3 text-sm text-gray-400 text-center flex items-center justify-center gap-2">
+                                      <svg className="animate-spin h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      </svg>
+                                      Loading parties...
+                                    </div>
+                                  ) : parties.filter(p => 
+                                    p.name.toLowerCase().includes(partySearch.toLowerCase())
+                                  ).length === 0 ? (
+                                    <div className="py-2 px-3 text-sm text-gray-400 text-center">
+                                      No parties found
+                                    </div>
+                                  ) : (
+                                    parties
+                                      .filter(p => p.name.toLowerCase().includes(partySearch.toLowerCase()))
+                                      .map(p => {
+                                        const isSelected = p._id === formData.partyId;
+                                        return (
+                                          <button
+                                            key={p._id}
+                                            type="button"
+                                            onClick={() => {
+                                              setFormData(prev => ({
+                                                ...prev,
+                                                partyId: p._id,
+                                                contactName: '',
+                                                contactNames: [],
+                                                username: getNextUsername(p.name, users),
+                                                phoneNumber: p.contactPhone || prev.phoneNumber || '',
+                                                address: p.address || prev.address || ''
+                                              }));
+                                              setPartyDropdownOpen(false);
+                                              setPartySearch('');
+                                            }}
+                                            className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 flex items-center justify-between ${
+                                              isSelected
+                                                ? 'bg-blue-600 text-white'
+                                                : isDarkMode
+                                                  ? 'hover:bg-slate-700 text-gray-200'
+                                                  : 'hover:bg-gray-100 text-gray-800'
+                                            }`}
+                                          >
+                                            <span>{p.name}</span>
+                                            {isSelected && (
+                                              <CheckIcon className="h-4 w-4 text-white" />
+                                            )}
+                                          </button>
+                                        );
+                                      })
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        {formErrors.partyId && (
+                          <p className="mt-1 text-xs text-red-500">{formErrors.partyId}</p>
+                        )}
+                      </div>
+
+                      {/* Contact Name Dropdown */}
+                      <div className="space-y-2">
                         <label className={`block text-sm font-medium ${
                           isDarkMode ? 'text-gray-300' : 'text-gray-700'
                         }`}>
-                          Select Party <span className="text-red-500">*</span>
+                          Contact Name <span className="text-xs text-gray-400">(Employee)</span>
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPartyError(null);
-                            setShowAddPartyModal(true);
-                          }}
-                          className="text-xs font-semibold text-blue-500 hover:text-blue-600 transition-colors"
-                        >
-                          + Add New Party
-                        </button>
-                      </div>
-                      <div className="relative z-50">
-                        {/* The Dropdown Button / Selector Display */}
-                        <button
-                          type="button"
-                          onClick={() => setPartyDropdownOpen(!partyDropdownOpen)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors duration-300 ${
-                            formErrors.partyId
-                              ? 'border-red-500'
-                              : isDarkMode
+                        <div className="relative z-40">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!formData.partyId) {
+                                setValidationAlert({ type: 'error', text: 'Please select a party name first' });
+                                setTimeout(() => setValidationAlert(null), 5000);
+                                return;
+                              }
+                              setContactDropdownOpen(!contactDropdownOpen);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors duration-300 ${
+                              isDarkMode
                                 ? 'bg-slate-700/50 border-slate-600 text-white hover:bg-slate-700/80 focus:border-blue-500'
                                 : 'bg-white border-gray-300 text-gray-900 hover:bg-gray-50 focus:border-blue-500'
-                          }`}
-                        >
-                          <span className="block truncate">
-                            {parties.find(p => p._id === formData.partyId)?.name || '-- Choose Party --'}
-                          </span>
-                          <span className="pointer-events-none flex items-center">
-                            <ChevronDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
-                          </span>
-                        </button>
+                            }`}
+                          >
+                            <span className={`block truncate ${!formData.partyId ? 'text-gray-400 dark:text-gray-500' : ''}`}>
+                              {formData.partyId
+                                ? (formData.contactNames && formData.contactNames.length > 0
+                                  ? formData.contactNames.join(', ')
+                                  : '-- All Orders (No Filter) --')
+                                : '-- Select a party first --'}
+                            </span>
+                            <span className="pointer-events-none flex items-center">
+                              <ChevronDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                            </span>
+                          </button>
 
-                        {/* Dropdown Panel */}
-                        {partyDropdownOpen && (
-                          <>
-                            {/* Click outside backdrop to close */}
-                            <div 
-                              className="fixed inset-0 z-40 cursor-default" 
-                              onClick={() => setPartyDropdownOpen(false)} 
-                            />
-                            
-                            <div
-                              className={`absolute left-0 right-0 mt-1 max-h-60 overflow-hidden rounded-md py-1 shadow-lg ring-1 ring-black/5 focus:outline-none z-50 ${
-                                isDarkMode 
-                                  ? 'bg-slate-800 border border-slate-700 text-white' 
-                                  : 'bg-white border border-gray-200 text-gray-900'
-                              }`}
-                            >
-                              {/* Search input inside dropdown */}
-                              <div className="p-2 border-b sticky top-0 z-10 bg-inherit border-inherit">
-                                <input
-                                  type="text"
-                                  value={partySearch}
-                                  onChange={(e) => setPartySearch(e.target.value)}
-                                  placeholder="Search party..."
-                                  className={`w-full px-2 py-1.5 text-sm rounded border focus:outline-none focus:border-blue-500 ${
-                                    isDarkMode
-                                      ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
-                                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                  }`}
-                                  onClick={(e) => e.stopPropagation()} // Prevent closing dropdown
-                                />
+                          {contactDropdownOpen && formData.partyId && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-30 cursor-default" 
+                                onClick={() => setContactDropdownOpen(false)} 
+                              />
+                              <div
+                                className={`absolute left-0 right-0 mt-1 max-h-60 overflow-hidden rounded-md py-1 shadow-lg ring-1 ring-black/5 focus:outline-none z-40 ${
+                                  isDarkMode 
+                                    ? 'bg-slate-800 border border-slate-700 text-white' 
+                                    : 'bg-white border border-gray-200 text-gray-900'
+                                }`}
+                              >
+                                <div className="p-2 border-b sticky top-0 z-10 bg-inherit border-inherit">
+                                  <input
+                                    type="text"
+                                    value={contactSearch}
+                                    onChange={(e) => setContactSearch(e.target.value)}
+                                    placeholder="Search contact..."
+                                    className={`w-full px-2 py-1.5 text-sm rounded border focus:outline-none focus:border-blue-500 ${
+                                      isDarkMode
+                                        ? 'bg-slate-700 border-slate-600 text-white placeholder-gray-400'
+                                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                    }`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </div>
+                                <div className="max-h-48 overflow-y-auto">
+                                  {/* Clear / No Filter option */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFormData(prev => ({ ...prev, contactName: '', contactNames: [] }));
+                                      setContactSearch('');
+                                    }}
+                                    className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 ${
+                                      !formData.contactNames || formData.contactNames.length === 0
+                                        ? 'bg-blue-600 text-white'
+                                        : isDarkMode
+                                          ? 'hover:bg-slate-700 text-gray-300'
+                                          : 'hover:bg-gray-100 text-gray-700'
+                                    }`}
+                                  >
+                                    -- All Orders (No Filter) --
+                                  </button>
+                                  {loadingContacts ? (
+                                    <div className="py-2 px-3 text-sm text-gray-400 text-center">Loading...</div>
+                                  ) : contacts.filter(c => 
+                                      c.toLowerCase().includes(contactSearch.toLowerCase())
+                                    ).length === 0 ? (
+                                    <div className="py-2 px-3 text-sm text-gray-400 text-center">
+                                      No contacts found
+                                    </div>
+                                  ) : (
+                                    contacts
+                                      .filter(c => c.toLowerCase().includes(contactSearch.toLowerCase()))
+                                      .map((contact, idx) => {
+                                        const isSelected = formData.contactNames?.includes(contact) || false;
+                                        return (
+                                          <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setFormData(prev => {
+                                                const current = prev.contactNames || [];
+                                                const updated = current.includes(contact)
+                                                  ? current.filter(c => c !== contact)
+                                                  : [...current, contact];
+                                                return {
+                                                  ...prev,
+                                                  contactNames: updated,
+                                                  contactName: updated.length > 0 ? updated[0] : ''
+                                                };
+                                              });
+                                            }}
+                                            className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 flex items-center justify-between ${
+                                              isSelected
+                                                ? 'bg-blue-600/20 text-blue-400 font-medium'
+                                                : isDarkMode
+                                                  ? 'hover:bg-slate-700 text-gray-200'
+                                                  : 'hover:bg-gray-100 text-gray-800'
+                                            }`}
+                                          >
+                                            <div className="flex items-center space-x-2">
+                                              <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                readOnly
+                                                className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 bg-transparent border-gray-300"
+                                              />
+                                              <span>{contact}</span>
+                                            </div>
+                                            {isSelected && (
+                                              <CheckIcon className="h-4 w-4 text-blue-500" />
+                                            )}
+                                          </button>
+                                        );
+                                      })
+                                  )}
+                                </div>
                               </div>
-
-                              {/* Options */}
-                              <div className="max-h-48 overflow-y-auto">
-                                {parties.filter(p => 
-                                  p.name.toLowerCase().includes(partySearch.toLowerCase())
-                                ).length === 0 ? (
-                                  <div className="py-2 px-3 text-sm text-gray-400 text-center">
-                                    No parties found
-                                  </div>
-                                ) : (
-                                  parties
-                                    .filter(p => p.name.toLowerCase().includes(partySearch.toLowerCase()))
-                                    .map(p => {
-                                      const isSelected = p._id === formData.partyId;
-                                      return (
-                                        <button
-                                          key={p._id}
-                                          type="button"
-                                          onClick={() => {
-                                            setFormData(prev => ({
-                                              ...prev,
-                                              partyId: p._id,
-                                              username: getNextUsername(p.name, users),
-                                              phoneNumber: p.contactPhone || prev.phoneNumber || '',
-                                              address: p.address || prev.address || ''
-                                            }));
-                                            setPartyDropdownOpen(false);
-                                            setPartySearch('');
-                                          }}
-                                          className={`w-full text-left px-3 py-2 text-sm transition-colors duration-200 flex items-center justify-between ${
-                                            isSelected
-                                              ? 'bg-blue-600 text-white'
-                                              : isDarkMode
-                                                ? 'hover:bg-slate-700 text-gray-200'
-                                                : 'hover:bg-gray-100 text-gray-800'
-                                          }`}
-                                        >
-                                          <span>{p.name}</span>
-                                          {isSelected && (
-                                            <CheckIcon className="h-4 w-4 text-white" />
-                                          )}
-                                        </button>
-                                      );
-                                    })
-                                )}
-                              </div>
-                            </div>
-                          </>
-                        )}
+                            </>
+                          )}
+                        </div>
                       </div>
-                      {formErrors.partyId && (
-                        <p className="mt-1 text-xs text-red-500">{formErrors.partyId}</p>
-                      )}
                     </div>
                   )}
                 </div>
@@ -3183,6 +3613,7 @@ export default function UsersPage() {
                         type="text"
                         value={formData.username}
                         onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                        autoComplete="off"
                         className={`w-full px-3 py-2 rounded-lg border transition-colors duration-300 ${
                           formErrors.username
                             ? 'border-red-500'
@@ -3564,28 +3995,66 @@ export default function UsersPage() {
                               ? 'bg-blue-900/20 text-blue-400'
                               : 'bg-blue-100 text-blue-800'
                   }`}>
-                    {selectedUser.role === 'master' ? 'Master' : selectedUser.role === 'superadmin' ? 'Super Admin' : selectedUser.role === 'admin' ? 'Admin' : selectedUser.role === 'party' ? `Party: ${typeof selectedUser.partyId === 'object' && selectedUser.partyId !== null ? selectedUser.partyId.name : (parties.find(p => p._id === selectedUser.partyId)?.name || 'Party User')}` : 'User'}
+                    {(() => {
+                      const contactSuffix = selectedUser.contactNames && selectedUser.contactNames.length > 0
+                        ? ` (${selectedUser.contactNames.join(', ')})`
+                        : (selectedUser.contactName ? ` (${selectedUser.contactName})` : '');
+                      
+                      if (selectedUser.role === 'master') return `Master${contactSuffix}`;
+                      if (selectedUser.role === 'superadmin') return `Super Admin${contactSuffix}`;
+                      if (selectedUser.role === 'admin') return `Admin${contactSuffix}`;
+                      if (selectedUser.role === 'party') {
+                        const partyName = typeof selectedUser.partyId === 'object' && selectedUser.partyId !== null 
+                          ? selectedUser.partyId.name 
+                          : (parties.find(p => p._id === selectedUser.partyId)?.name || 'Party User');
+                        return `Party: ${partyName}${contactSuffix}`;
+                      }
+                      return `User${contactSuffix}`;
+                    })()}
                   </span>
                 </div>
 
-                {selectedUser.role === 'party' && (
-                  <div>
-                    <label className={`block text-sm font-medium mb-1 ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                    }`}>
-                      Party Information
-                    </label>
-                    <div className={`p-3 rounded-lg border ${
-                      isDarkMode ? 'bg-green-900/10 border-green-500/20' : 'bg-green-50 border-green-200'
-                    }`}>
-                      <p className={`text-sm font-medium ${
-                        isDarkMode ? 'text-green-400' : 'text-green-800'
+                {selectedUser.partyId && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
                       }`}>
-                        {typeof selectedUser.partyId === 'object' && selectedUser.partyId !== null
-                          ? selectedUser.partyId.name
-                          : parties.find(p => p._id === selectedUser.partyId)?.name || 'N/A'}
-                      </p>
+                        Party Information
+                      </label>
+                      <div className={`p-3 rounded-lg border ${
+                        isDarkMode ? 'bg-green-900/10 border-green-500/20' : 'bg-green-50 border-green-200'
+                      }`}>
+                        <p className={`text-sm font-medium ${
+                          isDarkMode ? 'text-green-400' : 'text-green-800'
+                        }`}>
+                          {typeof selectedUser.partyId === 'object' && selectedUser.partyId !== null
+                            ? selectedUser.partyId.name
+                            : parties.find(p => p._id === selectedUser.partyId)?.name || 'N/A'}
+                        </p>
+                      </div>
                     </div>
+
+                    {((selectedUser.contactNames && selectedUser.contactNames.length > 0) || selectedUser.contactName) && (
+                      <div>
+                        <label className={`block text-sm font-medium mb-1 ${
+                          isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          Contact Name(s)
+                        </label>
+                        <div className={`p-3 rounded-lg border ${
+                          isDarkMode ? 'bg-blue-900/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'
+                        }`}>
+                          <p className={`text-sm font-medium ${
+                            isDarkMode ? 'text-blue-400' : 'text-blue-800'
+                          }`}>
+                            {selectedUser.contactNames && selectedUser.contactNames.length > 0
+                              ? selectedUser.contactNames.join(', ')
+                              : selectedUser.contactName}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

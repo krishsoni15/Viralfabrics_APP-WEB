@@ -76,7 +76,7 @@ async function performLogin(req: Request) {
         { name: username.trim() }
       ]
     })
-    .select('+password role _id name username phoneNumber address partyId profilePhoto createdAt updatedAt failedLoginAttempts accountLocked lockExpiresAt loginCount lastLogin')
+    .select('+password role _id name username phoneNumber address partyId contactName contactNames profilePhoto createdAt updatedAt failedLoginAttempts accountLocked lockExpiresAt loginCount lastLogin')
     .maxTimeMS(3000); // 3 second timeout - faster
 
     if (!user) {
@@ -134,6 +134,8 @@ async function performLogin(req: Request) {
       username: user.username || user.name,
       name: user.name,
       partyId: user.partyId ? user.partyId.toString() : undefined,
+      contactName: user.contactName || undefined,
+      contactNames: user.contactNames ? Array.from(user.contactNames) : (user.contactName ? [user.contactName] : []),
       loginTime: now // Store original login time for logout-all checking
     })
       .setProtectedHeader({ alg: "HS256" })
@@ -184,6 +186,8 @@ async function performLogin(req: Request) {
       address: user.address,
       role: user.role,
       partyId: user.partyId ? user.partyId.toString() : undefined,
+      contactName: user.contactName || undefined,
+      contactNames: user.contactNames ? Array.from(user.contactNames) : [],
       profilePhoto: user.profilePhoto,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

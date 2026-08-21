@@ -10,6 +10,8 @@ export interface TokenPayload {
   phoneNumber?: string;
   address?: string;
   partyId?: string;
+  contactName?: string;
+  contactNames?: string[];
   iat?: number; // Issued at timestamp
   loginTime?: number; // Original login timestamp (for logout-all check)
   exp?: number; // Expiration timestamp
@@ -78,6 +80,9 @@ export async function verifyToken(token: string, checkLogoutAll: boolean = true)
       }
     }
 
+    const contactName = (payload as Record<string, unknown>).contactName as string | undefined;
+    const contactNames = (payload as Record<string, unknown>).contactNames as string[] | undefined;
+
     return {
       id: (payload as Record<string, unknown>).id as string,
       username: (payload as Record<string, unknown>).username as string,
@@ -86,6 +91,8 @@ export async function verifyToken(token: string, checkLogoutAll: boolean = true)
       phoneNumber: (payload as Record<string, unknown>).phoneNumber as string | undefined,
       address: (payload as Record<string, unknown>).address as string | undefined,
       partyId: (payload as Record<string, unknown>).partyId as string | undefined,
+      contactName,
+      contactNames: contactNames || (contactName ? [contactName] : []),
       iat: payload.iat as number | undefined,
       loginTime: (payload as Record<string, unknown>).loginTime as number | undefined,
       exp: payload.exp as number | undefined,

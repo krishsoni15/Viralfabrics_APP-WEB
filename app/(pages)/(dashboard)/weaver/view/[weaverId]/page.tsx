@@ -400,6 +400,8 @@ export default function WeaverSamplesViewPage() {
       const stickerData = {
         qualityName: sample.qualityName,
         weaverName: weaver.name,
+        whereToPut: sample.rack || '',
+        notes: sample.note || '',
         width: sample.finishWidth,
         gsm: sample.gsm,
         content: sample.content || '',
@@ -454,6 +456,30 @@ export default function WeaverSamplesViewPage() {
     }
   }, [weaver]);
 
+  const handleStickerDirectDownload = useCallback((sample: Sample) => {
+    if (!weaver) return;
+    try {
+      const stickerData = {
+        qualityName: sample.qualityName,
+        weaverName: weaver.name,
+        whereToPut: sample.rack || '',
+        notes: sample.note || '',
+        width: sample.finishWidth,
+        gsm: sample.gsm,
+        content: sample.content || '',
+        count: sample.count,
+        rxP: sample.reed && sample.pick ? `${sample.reed}/${sample.pick}` : '',
+        danier: sample.danier || '',
+        moq: undefined,
+        rack: sample.rack || ''
+      };
+      downloadSampleStickerPDFDirect(stickerData);
+    } catch (error) {
+      logger.error('Error downloading sticker PDF', error instanceof Error ? error : new Error(String(error)));
+      alert('Failed to download sticker PDF');
+    }
+  }, [weaver]);
+
   const handleFinalStickerDownload = useCallback(() => {
     if (!currentStickerSample || !weaver) return;
     
@@ -462,6 +488,8 @@ export default function WeaverSamplesViewPage() {
       const stickerData = {
         qualityName: currentStickerSample.qualityName,
         weaverName: weaver.name,
+        whereToPut: currentStickerSample.rack || '',
+        notes: currentStickerSample.note || '',
         width: currentStickerSample.finishWidth,
         gsm: currentStickerSample.gsm,
         content: currentStickerSample.content || '',
@@ -1446,44 +1474,44 @@ export default function WeaverSamplesViewPage() {
                         </div>
                       </div>
                     </div>
-                    
-                    {/* Second Row: Action Buttons */}
-                    <div className="flex items-center gap-1.5 sm:gap-2 min-[500px]:flex-wrap">
+                                     <div className="flex items-center gap-1.5 flex-wrap">
                       <button
-                        id={`download-sticker-btn-${sample._id}`}
                         onClick={() => handleStickerDownload(sample)}
-                        className={`px-2 sm:px-2.5 md:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center justify-center space-x-1 sm:space-x-1.5 shadow-sm text-xs sm:text-sm font-medium flex-1 min-[500px]:flex-initial ${
-                          isNewlyAdded
-                            ? 'animate-view-button-purple-glow'
-                            : ''
-                        } ${
-                          isDarkMode
-                            ? 'text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 bg-purple-500/10'
-                            : 'text-purple-600 hover:bg-purple-100 border border-purple-200 bg-purple-50'
-                        }`}
-                        title="Sticker"
-                      >
-                        <DocumentTextIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                        <span className="whitespace-nowrap">Sticker</span>
-                      </button>
-                      <button
-                        id={`edit-sample-btn-${sample._id}`}
-                        onClick={() => handleEditSample(sample)}
-                        className={`px-2 sm:px-2.5 md:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center justify-center space-x-1 sm:space-x-1.5 shadow-sm text-xs sm:text-sm font-medium flex-1 min-[500px]:flex-initial ${
+                        className={`p-1.5 rounded-lg transition-all duration-150 hover:scale-105 active:scale-95 ${
                           isDarkMode
                             ? 'text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 bg-blue-500/10'
                             : 'text-blue-600 hover:bg-blue-100 border border-blue-200 bg-blue-50'
                         }`}
+                        title="Preview Sticker"
+                      >
+                        <EyeIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      </button>
+                      <button
+                        onClick={() => handleStickerDirectDownload(sample)}
+                        className={`p-1.5 rounded-lg transition-all duration-150 hover:scale-105 active:scale-95 ${
+                          isDarkMode
+                            ? 'text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 bg-emerald-500/10'
+                            : 'text-emerald-600 hover:bg-emerald-100 border border-emerald-200 bg-emerald-50'
+                        }`}
+                        title="Download Sticker"
+                      >
+                        <ArrowDownTrayIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      </button>
+                      <button
+                        onClick={() => handleEditSample(sample)}
+                        className={`p-1.5 rounded-lg transition-all duration-150 hover:scale-105 active:scale-95 ${
+                          isDarkMode
+                            ? 'text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 bg-amber-500/10'
+                            : 'text-amber-600 hover:bg-amber-100 border border-amber-200 bg-amber-50'
+                        }`}
                         title="Edit Sample"
                       >
                         <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                        <span className="whitespace-nowrap">Edit</span>
                       </button>
                       {isMaster && (
                         <button
-                          id={`delete-sample-btn-${sample._id}`}
                           onClick={() => handleDeleteSample(sample._id, sample.qualityName)}
-                          className={`px-2 sm:px-2.5 md:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center justify-center space-x-1 sm:space-x-1.5 shadow-sm text-xs sm:text-sm font-medium flex-1 min-[500px]:flex-initial ${
+                          className={`p-1.5 rounded-lg transition-all duration-150 hover:scale-105 active:scale-95 ${
                             isDarkMode
                               ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
                               : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
@@ -1491,7 +1519,6 @@ export default function WeaverSamplesViewPage() {
                           title="Delete Sample"
                         >
                           <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                          <span className="whitespace-nowrap">Delete</span>
                         </button>
                       )}
                     </div>
@@ -1532,40 +1559,42 @@ export default function WeaverSamplesViewPage() {
                     </div>
                     <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0 ml-4">
                       <button
-                        id={`download-sticker-btn-${sample._id}`}
                         onClick={() => handleStickerDownload(sample)}
-                        className={`px-2.5 md:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${
-                          isNewlyAdded
-                            ? 'animate-view-button-purple-glow'
-                            : ''
-                        } ${
-                          isDarkMode
-                            ? 'text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 bg-purple-500/10'
-                            : 'text-purple-600 hover:bg-purple-100 border border-purple-200 bg-purple-50'
-                        }`}
-                        title="Sticker"
-                      >
-                        <DocumentTextIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                        <span className="whitespace-nowrap">Sticker</span>
-                      </button>
-                      <button
-                        id={`edit-sample-btn-${sample._id}`}
-                        onClick={() => handleEditSample(sample)}
-                        className={`px-2.5 md:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${
+                        className={`p-1.5 rounded-lg transition-all duration-150 hover:scale-105 active:scale-95 ${
                           isDarkMode
                             ? 'text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 bg-blue-500/10'
                             : 'text-blue-600 hover:bg-blue-100 border border-blue-200 bg-blue-50'
                         }`}
+                        title="Preview Sticker"
+                      >
+                        <EyeIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      </button>
+                      <button
+                        onClick={() => handleStickerDirectDownload(sample)}
+                        className={`p-1.5 rounded-lg transition-all duration-150 hover:scale-105 active:scale-95 ${
+                          isDarkMode
+                            ? 'text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 bg-emerald-500/10'
+                            : 'text-emerald-600 hover:bg-emerald-100 border border-emerald-200 bg-emerald-50'
+                        }`}
+                        title="Download Sticker"
+                      >
+                        <ArrowDownTrayIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      </button>
+                      <button
+                        onClick={() => handleEditSample(sample)}
+                        className={`p-1.5 rounded-lg transition-all duration-150 hover:scale-105 active:scale-95 ${
+                          isDarkMode
+                            ? 'text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 bg-amber-500/10'
+                            : 'text-amber-600 hover:bg-amber-100 border border-amber-200 bg-amber-50'
+                        }`}
                         title="Edit Sample"
                       >
                         <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                        <span className="whitespace-nowrap">Edit</span>
                       </button>
                       {isMaster && (
                         <button
-                          id={`delete-sample-btn-${sample._id}`}
                           onClick={() => handleDeleteSample(sample._id, sample.qualityName)}
-                          className={`px-2.5 md:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-md flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-sm text-xs sm:text-sm font-medium ${
+                          className={`p-1.5 rounded-lg transition-all duration-150 hover:scale-105 active:scale-95 ${
                             isDarkMode
                               ? 'text-red-400 hover:bg-red-500/20 border border-red-500/30 bg-red-500/10'
                               : 'text-red-600 hover:bg-red-100 border border-red-200 bg-red-50'
@@ -1573,7 +1602,6 @@ export default function WeaverSamplesViewPage() {
                           title="Delete Sample"
                         >
                           <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                          <span className="whitespace-nowrap">Delete</span>
                         </button>
                       )}
                     </div>

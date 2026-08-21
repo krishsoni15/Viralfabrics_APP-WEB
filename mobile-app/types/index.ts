@@ -302,6 +302,8 @@ export interface GreyMaterial {
   piece?: number;
   meter?: number;
   challanNumber?: string;
+  challanDate?: string | Date;
+  rate?: number;
   images?: string[];
   gsm?: string | number;
   weight?: number;

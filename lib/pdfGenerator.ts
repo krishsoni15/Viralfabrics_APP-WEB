@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getBase64Image } from './poPdfGenerator';
 
 // Extend jsPDF type to include autoTable
 declare module 'jspdf' {
@@ -1137,7 +1138,7 @@ export const generateOrderPDF = (order: OrderData): any => {
         doc.setFillColor(255, 255, 255);
         doc.rect(purchaseFieldX - 2, purchaseFieldY - 3, 30, 4, 'F');
         // Draw the filtered purchase amount
-        doc.text(`₹${purchaseAmount}`.toUpperCase(), purchaseFieldX, purchaseFieldY);
+        doc.text(`Rs. ${purchaseAmount}`.toUpperCase(), purchaseFieldX, purchaseFieldY);
         doc.setTextColor(0, 0, 0); // Reset to black
       }
 
@@ -2514,9 +2515,11 @@ interface SampleStickerData {
   whereToPut?: string;
   weaverName?: string;
   weaverQuality?: string;
+  weaverRate?: number;
   millName?: string;
   processInMill?: string;
   notes?: string;
+  note?: string;
   meter?: number;
   piece?: number;
   width?: number;
@@ -2574,6 +2577,15 @@ export const generateSampleStickerPDF = (sample: SampleStickerData): string => {
     const brandX = (widthMM - brandWidth) / 2;
     doc.text(brandText, brandX, yPos);
 
+    // Draw "Where to Put" on the very top-right side of brand name
+    const whereToPutVal = sample.whereToPut || sample.rack || '-';
+    const whereText = `WTP: ${whereToPutVal}`;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    const whereWidth = doc.getTextWidth(whereText);
+    const whereX = widthMM - margin - whereWidth - 2;
+    doc.text(whereText, whereX, yPos);
+
     // Add slogan text
     yPos += 2.0;
     const sloganText = 'MFG & SUPPLIER OF ALL TYPES OF EXPORT FABRICS';
@@ -2677,11 +2689,11 @@ export const generateSampleStickerPDF = (sample: SampleStickerData): string => {
     // Row 1: Quality Name
     addTableRow('Quality Name', sample.qualityName || '-');
 
-    // Row 2: Where to Put
-    addTableRow('Where to Put', sample.whereToPut || '-');
+    // Row 2: Weaver Name
+    addTableRow('Weaver', sample.weaverName || '-');
 
-    // Row 3: Weaver Name with Weaver Quality on right
-    addTableRowWithRight('Weaver', sample.weaverName || '-', 'W. Quality', sample.weaverQuality || '-');
+    // Row 3: Weaver Quality (wever qution afe nxt row of wever name)
+    addTableRow('W. Quality', sample.weaverQuality || '-');
 
     // Row 4: Mill Name
     addTableRow('Mill Name', sample.millName || '-');
@@ -2692,7 +2704,7 @@ export const generateSampleStickerPDF = (sample: SampleStickerData): string => {
     addTableRowWithRight('Meter', meterVal, 'Piece', pieceVal);
 
     // Row 6: Notes
-    addTableRow('Notes', sample.notes || '');
+    addTableRow('Notes', sample.notes || sample.note || '');
 
     // Return PDF as data URL for preview
     return doc.output('dataurlstring');
@@ -2748,6 +2760,15 @@ export const downloadSampleStickerPDFDirect = (sample: SampleStickerData): void 
     const brandX = (widthMM - brandWidth) / 2;
     doc.text(brandText, brandX, yPos);
 
+    // Draw "Where to Put" on the very top-right side of brand name
+    const whereToPutVal = sample.whereToPut || sample.rack || '-';
+    const whereText = `WTP: ${whereToPutVal}`;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    const whereWidth = doc.getTextWidth(whereText);
+    const whereX = widthMM - margin - whereWidth - 2;
+    doc.text(whereText, whereX, yPos);
+
     // Add slogan text
     yPos += 2.0;
     const sloganText = 'MFG & SUPPLIER OF ALL TYPES OF EXPORT FABRICS';
@@ -2851,11 +2872,11 @@ export const downloadSampleStickerPDFDirect = (sample: SampleStickerData): void 
     // Row 1: Quality Name
     addTableRow('Quality Name', sample.qualityName || '-');
 
-    // Row 2: Where to Put
-    addTableRow('Where to Put', sample.whereToPut || '-');
+    // Row 2: Weaver Name
+    addTableRow('Weaver', sample.weaverName || '-');
 
-    // Row 3: Weaver Name with Weaver Quality on right
-    addTableRowWithRight('Weaver', sample.weaverName || '-', 'W. Quality', sample.weaverQuality || '-');
+    // Row 3: Weaver Quality (wever qution afe nxt row of wever name)
+    addTableRow('W. Quality', sample.weaverQuality || '-');
 
     // Row 4: Mill Name
     addTableRow('Mill Name', sample.millName || '-');
@@ -2866,7 +2887,7 @@ export const downloadSampleStickerPDFDirect = (sample: SampleStickerData): void 
     addTableRowWithRight('Meter', meterVal, 'Piece', pieceVal);
 
     // Row 6: Notes
-    addTableRow('Notes', sample.notes || '');
+    addTableRow('Notes', sample.notes || sample.note || '');
 
     // Download the PDF using blob method
     const fileName = `SAMPLE_STICKER_${sample.qualityName || 'STICKER'}_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -3113,5 +3134,227 @@ export const downloadFinishLotStickerPDFDirect = async (data: FinishLotStickerDa
     if (typeof window !== 'undefined') {
       alert('Failed to generate sticker PDF. Please try again.');
     }
+  }
+};
+
+export const generateGreyMaterialsInventoryPDF = async (greyMaterials: any[], sortOrder: 'asc' | 'desc' = 'desc'): Promise<void> => {
+  try {
+    // Resolve all images first to base64 Data URLs
+    const imageMap: { [url: string]: { dataUrl: string; format: string; width: number; height: number } } = {};
+    await Promise.all(
+      greyMaterials.map(async (item) => {
+        const imageUrl = item.images && item.images.filter((img: any) => img && img.trim() !== '')[0];
+        if (imageUrl) {
+          try {
+            const imgData = await getBase64Image(imageUrl);
+            if (imgData) {
+              imageMap[imageUrl] = imgData;
+            }
+          } catch (e) {
+            console.error('Failed to pre-load image for PDF:', imageUrl, e);
+          }
+        }
+      })
+    );
+
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('VIRAL FABRICS', 148.5, 15, { align: 'center' });
+
+    // Subtitle
+    doc.setFontSize(12);
+    doc.text('GREY MATERIAL INVENTORY REPORT', 148.5, 22, { align: 'center' });
+
+    // Date & Count
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 15, 30);
+    doc.text(`Total Entries: ${greyMaterials.length}`, 282, 30, { align: 'right' });
+
+    // Dividers
+    doc.setDrawColor(200, 200, 200);
+    doc.line(15, 33, 282, 33);
+
+    // Calculate totals
+    const totalPieces = greyMaterials.reduce((sum, item) => sum + (Number(item.piece) || 0), 0);
+    const totalMeters = greyMaterials.reduce((sum, item) => sum + (Number(item.meter) || 0), 0);
+    const totalAmount = greyMaterials.reduce((sum, item) => sum + ((Number(item.meter) || 0) * (Number(item.rate) || 0)), 0);
+
+    // Group materials by quality code to match the Web UI grouping & sorting
+    const groupedMap = new Map<string, any[]>();
+    const groupOrder: string[] = [];
+    
+    greyMaterials.forEach(item => {
+      const code = item.qualityCode || 'Unknown';
+      if (!groupedMap.has(code)) {
+        groupedMap.set(code, []);
+        groupOrder.push(code);
+      }
+      groupedMap.get(code)!.push(item);
+    });
+
+    // Sort groups by greyMaterial creation time to match the Web UI sorting order (desc = Latest, asc = Oldest)
+    groupOrder.sort((a, b) => {
+      const listA = groupedMap.get(a)!;
+      const listB = groupedMap.get(b)!;
+
+      const minDateA = Math.min(...listA.map(f => new Date(f.createdAt || 0).getTime()));
+      const minDateB = Math.min(...listB.map(f => new Date(f.createdAt || 0).getTime()));
+
+      return sortOrder === 'desc' ? minDateB - minDateA : minDateA - minDateB;
+    });
+
+    // Sort weavers within each group by creation time oldest-first (W1, W2, W3...)
+    groupOrder.forEach(code => {
+      const list = groupedMap.get(code)!;
+      list.sort((a, b) => {
+        const aDate = new Date(a.createdAt || 0).getTime();
+        const bDate = new Date(b.createdAt || 0).getTime();
+        return aDate - bDate;
+      });
+    });
+
+    // Table Data Headers
+    const headers = [
+      ['S.No', 'IMG', 'Code', 'Quality Name', 'Type', 'Weaver', 'Challan Date', 'Challan No', 'Rate', 'Piece', 'Meter']
+    ];
+
+    const body: any[] = [];
+    let sNo = 1;
+
+    groupOrder.forEach((code) => {
+      const list = groupedMap.get(code)!;
+      const N = list.length;
+      const firstItem = list[0];
+      const imageUrl = firstItem.images && firstItem.images.filter((img: any) => img && img.trim() !== '')[0] || '';
+      
+      const subtotalPieces = list.reduce((sum, item) => sum + (Number(item.piece) || 0), 0);
+      const subtotalMeters = list.reduce((sum, item) => sum + (Number(item.meter) || 0), 0);
+      const subtotalAmount = list.reduce((sum, item) => sum + ((Number(item.meter) || 0) * (Number(item.rate) || 0)), 0);
+
+      list.forEach((item, weaverIndex) => {
+        const row: any[] = [];
+        
+        // Only add rowspanned columns on the first row of the group
+        if (weaverIndex === 0) {
+          row.push({ content: sNo++, rowSpan: N > 1 ? N + 1 : 1 });
+          row.push({ content: '', rawImage: imageUrl, rowSpan: N > 1 ? N + 1 : 1 });
+          row.push({ content: item.qualityCode || '', rowSpan: N > 1 ? N + 1 : 1 });
+          row.push({ content: item.qualityName || '', rowSpan: N > 1 ? N + 1 : 1 });
+          row.push({ content: item.type || '', rowSpan: N > 1 ? N + 1 : 1 });
+        }
+        
+        row.push(item.weaver || '');
+        row.push(item.challanDate ? new Date(item.challanDate).toLocaleDateString() : '-');
+        row.push(item.challanNumber || '-');
+        row.push(item.rate && Number(item.rate) > 0 ? `Rs. ${item.rate}` : '-');
+        row.push(item.piece || '-');
+        row.push(item.meter || '-');
+        
+        body.push(row);
+      });
+
+      // Add group subtotal row if there are multiple weavers
+      if (N > 1) {
+        const subtotalRow: any[] = [];
+        subtotalRow.push({
+          content: `Total for ${code}`,
+          colSpan: 3,
+          styles: { halign: 'right', fontStyle: 'bold', fillColor: [249, 250, 251] }
+        });
+        subtotalRow.push({
+          content: subtotalAmount && subtotalAmount > 0 ? `Rs. ${subtotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : '-',
+          styles: { fontStyle: 'bold', halign: 'center', fillColor: [249, 250, 251] }
+        });
+        subtotalRow.push({
+          content: subtotalPieces || '-',
+          styles: { fontStyle: 'bold', halign: 'center', fillColor: [249, 250, 251] }
+        });
+        subtotalRow.push({
+          content: subtotalMeters || '-',
+          styles: { fontStyle: 'bold', halign: 'center', fillColor: [249, 250, 251] }
+        });
+        body.push(subtotalRow);
+      }
+    });
+
+    // Footer row with totals (merged columns 0 to 7 = 8 columns total)
+    const foot = [
+      [
+        { content: 'GRAND TOTAL', colSpan: 8, styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: totalAmount && totalAmount > 0 ? `Rs. ${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : '-', styles: { fontStyle: 'bold', halign: 'center' } },
+        { content: totalPieces || '-', styles: { fontStyle: 'bold', halign: 'center' } },
+        { content: totalMeters || '-', styles: { fontStyle: 'bold', halign: 'center' } }
+      ]
+    ];
+
+    // Generate Table
+    autoTable(doc, {
+      startY: 37,
+      head: headers,
+      body: body,
+      foot: foot,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, halign: 'center', valign: 'middle' },
+      headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' },
+      footStyles: { fillColor: [243, 244, 246], textColor: [0, 0, 0] },
+      columnStyles: {
+        1: { cellWidth: 20, minCellHeight: 15 }, // Image column
+        3: { halign: 'left' }, // Quality name left aligned
+        5: { halign: 'left' }  // Weaver name left aligned
+      },
+      didDrawCell: (data: any) => {
+        // Prevent drawing images on cells spanned by a parent cell
+        if (data.cell.spannedBy) return;
+
+        if (data.section === 'body' && data.column.index === 1) {
+          const raw = data.cell.raw;
+          const imageUrl = raw && raw.rawImage;
+          if (imageUrl && imageMap[imageUrl]) {
+            const imgData = imageMap[imageUrl];
+            const padding = 1.2;
+            const cellWidth = data.cell.width - (padding * 2);
+            const cellHeight = data.cell.height - (padding * 2);
+            
+            const imgAspect = imgData.width / imgData.height;
+            const cellAspect = cellWidth / cellHeight;
+            
+            let renderWidth = cellWidth;
+            let renderHeight = cellHeight;
+            
+            if (imgAspect > cellAspect) {
+              renderWidth = cellWidth;
+              renderHeight = cellWidth / imgAspect;
+            } else {
+              renderHeight = cellHeight;
+              renderWidth = cellHeight * imgAspect;
+            }
+            
+            const x = data.cell.x + padding + (cellWidth - renderWidth) / 2;
+            const y = data.cell.y + padding + (cellHeight - renderHeight) / 2;
+            
+            try {
+              doc.addImage(imgData.dataUrl, imgData.format, x, y, renderWidth, renderHeight);
+            } catch (err) {
+              console.error('Error drawing image to PDF cell:', err);
+            }
+          }
+        }
+      },
+      margin: { left: 15, right: 15 }
+    } as any);
+
+    // Save PDF
+    doc.save(`grey-materials-report-${new Date().toISOString().split('T')[0]}.pdf`);
+  } catch (error) {
+    console.error('Error generating PDF report:', error);
+    throw error;
   }
 };

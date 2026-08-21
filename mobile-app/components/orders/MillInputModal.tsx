@@ -712,6 +712,114 @@ export default function MillInputModal({
 
             {isLoading && (!existingMillInputs || existingMillInputs.length === 0) ? (
               <MillInputModalSkeleton theme={theme} />
+            ) : isReadOnly ? (
+              // Simplified view for read-only user displaying ONLY process name
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={{
+                  backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? '#334155' : '#e2e8f0',
+                  padding: 24,
+                  alignItems: 'center',
+                  gap: 16,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 8,
+                  elevation: 2,
+                  marginTop: 20
+                }}>
+                  <View style={{
+                    width: 48, height: 48, borderRadius: 24,
+                    backgroundColor: 'rgba(6,182,212,0.15)',
+                    justifyContent: 'center', alignItems: 'center'
+                  }}>
+                    <Layers size={22} color={Colors.info[500]} />
+                  </View>
+
+                  <View style={{ alignItems: 'center', gap: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', letterSpacing: 0.5 }}>
+                      Current Process Status
+                    </Text>
+                    
+                    {(() => {
+                      const processes: string[] = [];
+                      millItems.forEach(item => {
+                        if (item.processName) {
+                          processes.push(item.processName);
+                        }
+                        if (item.additionalMeters) {
+                          item.additionalMeters.forEach((am: any) => {
+                            if (am.processName) {
+                              processes.push(am.processName);
+                            }
+                          });
+                        }
+                      });
+                      const lastProcess = processes.length > 0 ? processes[processes.length - 1] : null;
+
+                      if (lastProcess) {
+                        return (
+                          <View style={{ alignItems: 'center', marginTop: 8 }}>
+                            <Text style={{ fontSize: 20, fontWeight: '800', color: isDarkMode ? '#f8fafc' : '#0f172a', textAlign: 'center' }}>
+                              {lastProcess}
+                            </Text>
+                            <View style={{
+                              marginTop: 8,
+                              backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                              paddingHorizontal: 12,
+                              paddingVertical: 4,
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor: '#22c55e'
+                            }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', color: '#22c55e' }}>
+                                In Process
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      } else {
+                        return (
+                          <View style={{ alignItems: 'center', marginTop: 8 }}>
+                            <Text style={{ fontSize: 16, fontWeight: '600', color: isDarkMode ? '#94a3b8' : '#64748b', fontStyle: 'italic' }}>
+                              No process active
+                            </Text>
+                          </View>
+                        );
+                      }
+                    })()}
+                  </View>
+                </View>
+
+                {/* Close Button */}
+                <TouchableOpacity
+                  onPress={onClose}
+                  activeOpacity={0.8}
+                  style={{
+                    height: 50,
+                    backgroundColor: isDarkMode ? Colors.neutral[700] : Colors.neutral[600],
+                    borderRadius: 14,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginTop: 24,
+                    shadowColor: isDarkMode ? 'transparent' : Colors.neutral[400],
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 12,
+                    elevation: 6,
+                  }}
+                >
+                  <Text style={{ color: Colors.white, fontSize: 15, fontWeight: '800', letterSpacing: 0.3 }}>
+                    Close
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
             ) : (
               <ScrollView
                 style={{ flex: 1 }}
