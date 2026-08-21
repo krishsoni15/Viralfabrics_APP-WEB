@@ -6,6 +6,8 @@ export interface IGreyMaterial extends Document {
   type?: string;
   weaver?: string; // Corresponds to Name
   challanNumber?: string;
+  challanDate?: Date;
+  rate?: number;
   piece?: number;
   meter?: number;
   images?: string[];
@@ -41,6 +43,15 @@ const GreyMaterialSchema = new Schema<IGreyMaterial>({
     type: String,
     required: false,
     default: '',
+  },
+  challanDate: {
+    type: Date,
+    required: false,
+  },
+  rate: {
+    type: Number,
+    required: false,
+    default: 0,
   },
   piece: {
     type: Number,

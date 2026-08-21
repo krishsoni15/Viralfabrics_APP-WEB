@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '25'), 1), 100); // Enforce max 100
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '25'), 1), 10000); // Enforce max 10000 to allow 'All'
     const page = Math.max(parseInt(searchParams.get('page') || '1'), 1); // Enforce min page 1
     // Sanitize search input to prevent NoSQL injection
     const search = sanitizeSearchQuery(searchParams.get('search') || '');
@@ -140,8 +140,13 @@ export async function GET(request: NextRequest) {
       } else {
         query.$and.push({ party: session.partyId });
       }
+      if (session.contactNames && session.contactNames.length > 0) {
+        query.$and.push({ contactName: { $in: session.contactNames } });
+      } else if (session.contactName) {
+        query.$and.push({ contactName: session.contactName });
+      }
       // 🔍 DEBUG: Confirm party filter was applied
-      console.log('🔍 Party filter applied:', session.partyId);
+      console.log('🔍 Party filter applied:', session.partyId, session.contactNames || session.contactName);
     } else if (session) {
       // Party filter NOT applied (user is master or superadmin)
     }

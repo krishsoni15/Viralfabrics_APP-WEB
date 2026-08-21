@@ -349,19 +349,31 @@ export default function GreyMaterialDetails({
                       <div className="flex justify-between">
                         <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Weaver Name:</span>
                         <span className={`font-bold ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>{item.weaver || '-'}</span>
-                  </div>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Challan Date:</span>
+                        <span className={`font-bold ${isDarkMode ? 'text-purple-300' : 'text-purple-600'}`}>
+                          {item.challanDate ? new Date(item.challanDate).toLocaleDateString() : '-'}
+                        </span>
+                      </div>
                       <div className="flex justify-between">
                         <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Challan No:</span>
                         <span className={`font-bold ${isDarkMode ? 'text-green-300' : 'text-green-600'}`}>{item.challanNumber || '-'}</span>
-                </div>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Rate:</span>
+                        <span className={`font-bold ${isDarkMode ? 'text-rose-300' : 'text-rose-600'}`}>
+                          {item.rate && Number(item.rate) > 0 ? `₹${item.rate}` : '-'}
+                        </span>
+                      </div>
                       <div className="flex justify-between">
                         <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Piece:</span>
                         <span className={`font-bold ${isDarkMode ? 'text-teal-300' : 'text-teal-600'}`}>{item.piece || '-'}</span>
-                        </div>
+                      </div>
                       <div className="flex justify-between">
                         <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>Meter:</span>
                         <span className={`font-bold ${isDarkMode ? 'text-orange-300' : 'text-orange-600'}`}>{item.meter || '-'}</span>
-                        </div>
+                      </div>
                     </div>
                     
                     {/* Delete button only - no edit */}

@@ -847,9 +847,171 @@ export default function DispatchModal({
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
+            {isReadOnly ? (
+              // Beautiful Read-Only Grid Display for Dispatch details
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {dispatchItems.length === 0 ? (
+                  <View style={{
+                    padding: 30,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+                    borderRadius: 16,
+                    borderWidth: 1.5,
+                    borderStyle: 'dashed',
+                    borderColor: theme.border,
+                    marginVertical: 20
+                  }}>
+                    <Truck size={36} color={theme.textTertiary} style={{ marginBottom: 12 }} />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>No Dispatch Data</Text>
+                    <Text style={{ fontSize: 12, color: theme.textTertiary, textAlign: 'center' }}>No dispatch information has been recorded for this order yet.</Text>
+                  </View>
+                ) : (
+                  dispatchItems.map((item, idx) => (
+                    <View
+                      key={item.id}
+                      style={{
+                        backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: isDarkMode ? '#334155' : '#e2e8f0',
+                        padding: 16,
+                        gap: 12,
+                        marginBottom: 16,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 8,
+                        elevation: 2
+                      }}
+                    >
+                      {/* Group Header */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: isDarkMode ? '#334155' : '#f1f5f9', paddingBottom: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Truck size={16} color="#ea580c" />
+                          <Text style={{ fontSize: 14, fontWeight: '800', color: isDarkMode ? '#f8fafc' : '#0f172a' }}>Dispatch Group #{idx + 1}</Text>
+                        </View>
+                        {item.dispatchDate ? (
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: isDarkMode ? '#94a3b8' : '#64748b' }}>{toDisplay(item.dispatchDate)}</Text>
+                        ) : null}
+                      </View>
+
+                      {/* Transport Info Grid */}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Bill / Invoice No</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#334155' }}>{item.billNo || 'N/A'}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Transport</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#334155' }}>{item.transportNo || 'N/A'}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>LR No</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#334155' }}>{item.lrNo || 'N/A'}</Text>
+                        </View>
+                      </View>
+
+                      {/* Sub-items Table/Cards */}
+                      <View style={{ marginTop: 8, gap: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#ea580c', textTransform: 'uppercase', letterSpacing: 0.3 }}>Dispatched Items</Text>
+                        {(item.subItems || []).map((sub: any, subIdx: number) => {
+                          const qualityName = qualities.find((q: any) => String(q._id) === String(sub.quality))?.name || 'Unknown Quality';
+                          return (
+                            <View
+                              key={sub.id}
+                              style={{
+                                backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc',
+                                borderRadius: 12,
+                                padding: 12,
+                                borderWidth: 1,
+                                borderColor: isDarkMode ? '#1e293b' : '#e2e8f0',
+                                gap: 8
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: isDarkMode ? '#f1f5f9' : '#1e293b' }}>{qualityName}</Text>
+                                {sub.invoiceNo ? (
+                                  <Text style={{ fontSize: 11, color: isDarkMode ? '#94a3b8' : '#64748b' }}>Inv: {sub.invoiceNo}</Text>
+                                ) : null}
+                              </View>
+                              <View style={{ flexDirection: 'row', gap: 16 }}>
+                                <View>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#475569' : '#94a3b8' }}>Finish Qty</Text>
+                                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#10b981' }}>{sub.finishMtr || '0'} Mtr</Text>
+                                </View>
+                                <View>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#475569' : '#94a3b8' }}>Pieces</Text>
+                                  <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#475569' }}>{sub.pcs || '0'} Pcs</Text>
+                                </View>
+                              </View>
+
+                              {/* Photo Preview inside Grid if present */}
+                              {sub.photos && sub.photos.length > 0 && (
+                                <View style={{ marginTop: 6, gap: 4 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#475569' : '#94a3b8' }}>Photos</Text>
+                                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                                    {sub.photos.map((photoUrl: string, pIdx: number) => {
+                                      const fullUrl = getFullImageUrl(photoUrl);
+                                      if (!fullUrl) return null;
+                                      return (
+                                        <TouchableOpacity
+                                          key={pIdx}
+                                          onPress={() => {
+                                            const allImages = sub.photos.map((u: string) => getFullImageUrl(u)).filter(Boolean) as string[];
+                                            setPreviewImages(allImages);
+                                            setPreviewImageIndex(pIdx);
+                                          }}
+                                        >
+                                          <Image
+                                            source={{ uri: fullUrl }}
+                                            style={{ width: 44, height: 44, borderRadius: 6, borderWidth: 1, borderColor: isDarkMode ? '#334155' : '#e2e8f0' }}
+                                          />
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+                                  </ScrollView>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))
+                )}
+
+                {/* Close Button */}
+                <TouchableOpacity
+                  onPress={onClose}
+                  activeOpacity={0.8}
+                  style={{
+                    height: 50,
+                    backgroundColor: isDarkMode ? Colors.neutral[700] : Colors.neutral[600],
+                    borderRadius: 14,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginTop: 8,
+                    shadowColor: isDarkMode ? 'transparent' : Colors.neutral[400],
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 12,
+                    elevation: 6,
+                  }}
+                >
+                  <Text style={{ color: Colors.white, fontSize: 15, fontWeight: '800', letterSpacing: 0.3 }}>
+                    Close
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            ) : (
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
@@ -1591,6 +1753,7 @@ export default function DispatchModal({
               </View>
               )}
             </ScrollView>
+          )}
           </KeyboardAvoidingView>
         </Animated.View>
       </View>

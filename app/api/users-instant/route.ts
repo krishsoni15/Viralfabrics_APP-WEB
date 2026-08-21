@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') ?? '25');
     const page = parseInt(searchParams.get('page') ?? '1');
-    const cacheKey = `users-instant-${limit}-${page}-${session.role}`;
+    const cacheKey = `users-instant-v2-${limit}-${page}-${session.role}`;
     
     const cached = usersCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
@@ -70,6 +70,8 @@ export async function GET(request: NextRequest) {
       role: 1,
       isActive: 1,
       partyId: 1,
+      contactName: 1,
+      contactNames: 1,
       profilePhoto: 1,
       createdAt: 1
     })

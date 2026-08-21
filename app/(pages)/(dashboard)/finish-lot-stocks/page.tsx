@@ -6,6 +6,7 @@ import {
   PlusIcon,
   MagnifyingGlassIcon,
   PencilIcon,
+  PencilSquareIcon,
   TrashIcon,
   XMarkIcon,
   CheckIcon,
@@ -28,7 +29,9 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ArrowDownTrayIcon,
-  QrCodeIcon
+  QrCodeIcon,
+  EyeIcon,
+  DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { useSession } from '../hooks/useSession';
@@ -472,6 +475,26 @@ export default function FinishLotStockPage() {
       setIsLoadingStickerPreview(false);
     }
   };
+
+  const handleStickerDownloadDirect = useCallback(async (stock: FinishLotStock) => {
+    try {
+      await downloadFinishLotStickerPDFDirect({
+        qualityName: stock.qualityName,
+        sequence: stock.sequence,
+        lotType: stock.lotType,
+        weaverName: stock.weaverName,
+        weaverQuality: stock.weaverQuality,
+        millName: stock.millName,
+        processInMill: stock.processInMill,
+        meter: stock.meter,
+        piece: stock.piece
+      });
+      showToast('success', 'Sticker PDF downloading...');
+    } catch (error) {
+      console.error('Error downloading sticker:', error);
+      showToast('error', 'Failed to download sticker');
+    }
+  }, []);
 
   const cleanupPreviews = () => {
     pendingImageFiles.forEach(item => {
@@ -1298,27 +1321,33 @@ export default function FinishLotStockPage() {
                         <div className="mt-4 flex items-center gap-2">
                           <button
                             onClick={() => handleOpenForm('edit', stock)}
-                            className={`flex-1 flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-semibold border transition-all ${isDarkMode
-                              ? 'border-gray-700 hover:bg-slate-750 text-gray-300'
-                              : 'border-slate-200 hover:bg-slate-100 text-slate-700'
-                              }`}
+                            className="flex-1 flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-semibold border transition-all border-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10"
                           >
-                            <PencilIcon className="h-3.5 w-3.5" />
+                            <PencilSquareIcon className="h-3.5 w-3.5" />
                             <span>Edit</span>
                           </button>
                           {(isMaster || isSuperAdmin) && (
                             <button
                               onClick={() => handleStickerDownload(stock)}
-                              className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'border-blue-500/20 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/40' : 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'}`}
+                              className="p-2 rounded-xl border transition-all text-blue-600 dark:text-blue-400 border-blue-500/20 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                              title="Preview Sticker"
+                            >
+                              <EyeIcon className="h-4 w-4" />
+                            </button>
+                          )}
+                          {(isMaster || isSuperAdmin) && (
+                            <button
+                              onClick={() => handleStickerDownloadDirect(stock)}
+                              className="p-2 rounded-xl border transition-all text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
                               title="Download Sticker"
                             >
-                              <ArrowDownTrayIcon className="h-4 w-4" />
+                              <DocumentArrowDownIcon className="h-4 w-4" />
                             </button>
                           )}
                           {(isMaster || isSuperAdmin) && (
                             <button
                               onClick={() => handleOpenQrModal(stock)}
-                              className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/40' : 'border-indigo-300 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400'}`}
+                              className="p-2 rounded-xl border transition-all text-indigo-600 dark:text-indigo-400 border-indigo-500/20 hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
                               title="View QR Code"
                             >
                               <QrCodeIcon className="h-4 w-4" />
@@ -1330,7 +1359,8 @@ export default function FinishLotStockPage() {
                                 setSelectedStock(stock);
                                 setShowDeleteModal(true);
                               }}
-                              className="p-2 rounded-xl border border-red-500/20 text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-all cursor-pointer"
+                              className="p-2 rounded-xl border border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                              title="Delete Stock"
                             >
                               <TrashIcon className="h-4 w-4" />
                             </button>
@@ -1512,42 +1542,51 @@ export default function FinishLotStockPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-blue-500">{stock.meter} M</td>
                           <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-purple-500">{stock.piece}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="flex items-center justify-center space-x-2">
-                              <button
-                                onClick={() => handleOpenForm('edit', stock)}
-                                className="p-1.5 rounded-lg hover:bg-slate-700/10 dark:hover:bg-slate-200/10 text-blue-500 transition-colors"
-                                title="Edit Stock"
-                              >
-                                <PencilIcon className="h-4.5 w-4.5" />
-                              </button>
+                            <div className="flex items-center justify-center gap-1.5">
                               {(isMaster || isSuperAdmin) && (
                                 <button
                                   onClick={() => handleStickerDownload(stock)}
-                                  className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-blue-400 hover:bg-blue-500/20' : 'text-blue-600 hover:bg-blue-50'}`}
-                                  title="Download Sticker"
+                                  title="Preview Sticker"
+                                  className="p-2 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
                                 >
-                                  <ArrowDownTrayIcon className="h-4.5 w-4.5" />
+                                  <EyeIcon className="w-5 h-5" />
+                                </button>
+                              )}
+                              {(isMaster || isSuperAdmin) && (
+                                <button
+                                  onClick={() => handleStickerDownloadDirect(stock)}
+                                  title="Download Sticker"
+                                  className="p-2 rounded-xl text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
+                                >
+                                  <DocumentArrowDownIcon className="w-5 h-5" />
                                 </button>
                               )}
                               {(isMaster || isSuperAdmin) && (
                                 <button
                                   onClick={() => handleOpenQrModal(stock)}
-                                  className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'text-indigo-400 hover:bg-indigo-500/20' : 'text-indigo-600 hover:bg-indigo-50'}`}
                                   title="View QR Code"
+                                  className="p-2 rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors"
                                 >
-                                  <QrCodeIcon className="h-4.5 w-4.5" />
+                                  <QrCodeIcon className="w-5 h-5" />
                                 </button>
                               )}
+                              <button
+                                onClick={() => handleOpenForm('edit', stock)}
+                                title="Edit Stock"
+                                className="p-2 rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors"
+                              >
+                                <PencilSquareIcon className="w-5 h-5" />
+                              </button>
                               {isMaster && (
                                 <button
                                   onClick={() => {
                                     setSelectedStock(stock);
                                     setShowDeleteModal(true);
                                   }}
-                                  className="p-1.5 rounded-lg hover:bg-slate-700/10 dark:hover:bg-slate-200/10 text-red-500 transition-colors"
                                   title="Delete Stock"
+                                  className="p-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                                 >
-                                  <TrashIcon className="h-4.5 w-4.5" />
+                                  <TrashIcon className="w-5 h-5" />
                                 </button>
                               )}
                             </div>

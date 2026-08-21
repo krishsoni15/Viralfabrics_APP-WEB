@@ -33,6 +33,14 @@ export async function GET(
     if (!fetchedGreyInfo) {
       return NextResponse.json(notFoundResponse('Grey information'), { status: 404 });
     }
+
+    // Restrict to user's party if session has a partyId
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      const order = await Order.findById(fetchedGreyInfo.order).select('party').lean().maxTimeMS(1000);
+      if (!order || !order.party || order.party.toString() !== session.partyId) {
+        return NextResponse.json(errorResponse('Forbidden - Access denied'), { status: 403 });
+      }
+    }
     
     // ⚡ Fetch related data separately
     const orderId = (fetchedGreyInfo as any).order;

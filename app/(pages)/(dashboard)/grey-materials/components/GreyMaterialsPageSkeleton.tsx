@@ -134,7 +134,17 @@ export default function GreyMaterialsPageSkeleton({ viewMode = 'table' }: GreyMa
             <th className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center text-[9px] xs:text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-wide border-b-2 border-r whitespace-nowrap min-w-[80px] sm:min-w-[100px] md:min-w-[120px] ${
               effectiveDarkMode ? 'text-white border-slate-500 bg-slate-700/50' : 'text-black border-gray-300 bg-white'
             }`}>
+              Challan Date
+            </th>
+            <th className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center text-[9px] xs:text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-wide border-b-2 border-r whitespace-nowrap min-w-[80px] sm:min-w-[100px] md:min-w-[120px] ${
+              effectiveDarkMode ? 'text-white border-slate-500 bg-slate-700/50' : 'text-black border-gray-300 bg-white'
+            }`}>
               Challan No
+            </th>
+            <th className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center text-[9px] xs:text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-wide border-b-2 border-r whitespace-nowrap min-w-[60px] sm:min-w-[80px] ${
+              effectiveDarkMode ? 'text-white border-slate-500 bg-slate-700/50' : 'text-black border-gray-300 bg-white'
+            }`}>
+              Rate
             </th>
             <th className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center text-[9px] xs:text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-wide border-b-2 border-r whitespace-nowrap min-w-[50px] sm:min-w-[60px] ${
               effectiveDarkMode ? 'text-white border-slate-500 bg-slate-700/50' : 'text-black border-gray-300 bg-white'
@@ -219,7 +229,7 @@ export default function GreyMaterialsPageSkeleton({ viewMode = 'table' }: GreyMa
                       </td>
                     )}
 
-                    <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center align-middle border-r border-b ${
+                     <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center align-middle border-r border-b ${
                       effectiveDarkMode ? 'text-gray-300 border-gray-700/60' : 'text-gray-900 border-gray-200'
                     }`}>
                       <div className={`h-4 w-8 rounded mx-auto ${skeletonBgClass}`}></div>
@@ -235,6 +245,18 @@ export default function GreyMaterialsPageSkeleton({ viewMode = 'table' }: GreyMa
                       effectiveDarkMode ? 'text-gray-300 border-gray-700/60' : 'text-gray-900 border-gray-200'
                     }`}>
                       <div className={`h-4 w-16 rounded mx-auto ${skeletonBgClass}`}></div>
+                    </td>
+
+                    <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center align-middle border-r border-b ${
+                      effectiveDarkMode ? 'text-gray-300 border-gray-700/60' : 'text-gray-900 border-gray-200'
+                    }`}>
+                      <div className={`h-4 w-16 rounded mx-auto ${skeletonBgClass}`}></div>
+                    </td>
+
+                    <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center align-middle border-r border-b ${
+                      effectiveDarkMode ? 'text-gray-300 border-gray-700/60' : 'text-gray-900 border-gray-200'
+                    }`}>
+                      <div className={`h-4 w-10 rounded mx-auto ${skeletonBgClass}`}></div>
                     </td>
 
                     <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center align-middle border-r border-b ${

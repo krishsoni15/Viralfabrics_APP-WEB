@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+// v2: includes sampleCount aggregation
 
 import dbConnect from "@/lib/dbConnect";
 import { getSession } from "@/lib/session";
@@ -77,6 +78,11 @@ export async function GET(req: NextRequest) {
       data: result.weavers,
       pagination: result.pagination
     };
+    
+    // Debug: log first weaver to verify sampleCount
+    if (result.weavers.length > 0) {
+      console.log('[API /weaver/weavers] First weaver data:', JSON.stringify(result.weavers[0]));
+    }
     
     // Cache response
     weaverCache.set(cacheKey, response, CACHE_TTL.MEDIUM);

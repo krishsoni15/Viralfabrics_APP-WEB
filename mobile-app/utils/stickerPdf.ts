@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import { generateQrSvg } from './qrCode';
 
 interface StickerData {
-  type: 'sample' | 'fabric' | 'grey' | 'finish-lot-stock';
+  type: 'sample' | 'fabric' | 'grey' | 'finish-lot-stock' | 'sampling-process';
   qualityCode?: string;
   qualityName: string;
   weaverName?: string;
@@ -24,6 +24,7 @@ interface StickerData {
   weaverQuality?: string;
   millName?: string;
   processInMill?: string;
+  whereToPut?: string;
 }
 
 function generateStickerHtml(data: StickerData): string {
@@ -156,6 +157,42 @@ function generateStickerHtml(data: StickerData): string {
       </tr>
     `;
     qrPayload = `Quality: ${data.qualityName || '-'}\nSeq: ${data.sequence || '-'}\nType: ${data.lotType || '-'}\nWeaver: ${data.weaverName || '-'}\nW.Qual: ${data.weaverQuality || '-'}\nMill: ${data.millName || '-'}\nProc: ${data.processInMill || '-'}\nMeter: ${data.meter || '-'}\nPiece: ${data.piece || '-'}`;
+  } else if (data.type === 'sampling-process') {
+    headerHtml = `
+      <div class="header" style="position: relative; width: 100%;">
+        <div class="brand">VIRAL FABRICS</div>
+        <div class="slogan" style="margin-top: 0.5mm;">MFG &amp; SUPPLIER OF ALL TYPES OF EXPORT FABRICS</div>
+        <div style="position: absolute; right: 2mm; top: 1.0mm; font-size: 11pt; font-weight: bold; color: #000;">WTP: ${data.whereToPut || '-'}</div>
+      </div>
+    `;
+    tableContent = `
+      <tr>
+        <td class="label">Quality Name</td>
+        <td class="value" colspan="3">${data.qualityName || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Weaver</td>
+        <td class="value" colspan="3">${data.weaverName || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">W. Quality</td>
+        <td class="value" colspan="3">${data.weaverQuality || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Mill Name</td>
+        <td class="value" colspan="3">${data.millName || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Meter</td>
+        <td class="value">${data.meter ? data.meter + ' M' : '-'}</td>
+        <td class="right-label">Piece</td>
+        <td class="right-value">${data.piece || '-'}</td>
+      </tr>
+      <tr>
+        <td class="label">Notes</td>
+        <td class="value" colspan="3">${data.remarks || ''}</td>
+      </tr>
+    `;
   } else {
     // Sample sticker: Brand + slogan, matches website
     headerHtml = `

@@ -62,6 +62,8 @@ export async function GET(req: NextRequest) {
       role: 1,
       isActive: 1,
       partyId: 1,
+      contactName: 1,
+      contactNames: 1,
       profilePhoto: 1,
       createdAt: 1
     })
@@ -144,7 +146,7 @@ export async function POST(req: NextRequest) {
 
     const session = await requireSuperAdmin(req);
 
-    const { name, username, password, role: newUserRole, phoneNumber, address, partyId, profilePhoto } = await req.json();
+    const { name, username, password, role: newUserRole, phoneNumber, address, partyId, contactName, contactNames, profilePhoto } = await req.json();
 
     // Validation
     const errors: string[] = [];
@@ -204,6 +206,8 @@ export async function POST(req: NextRequest) {
       phoneNumber?: string;
       address?: string;
       partyId?: string;
+      contactName?: string;
+      contactNames?: string[];
       profilePhoto?: string;
     } = {
       name: name.trim(),
@@ -217,6 +221,8 @@ export async function POST(req: NextRequest) {
 
     if (targetRole === "party" && partyId) {
       userData.partyId = partyId;
+      userData.contactName = contactName ? contactName.trim() : undefined;
+      userData.contactNames = Array.isArray(contactNames) ? contactNames : (contactName ? [contactName.trim()] : []);
     }
     
     const created = await User.create(userData);
@@ -228,6 +234,9 @@ export async function POST(req: NextRequest) {
       phoneNumber: created.phoneNumber,
       address: created.address,
       role: created.role,
+      partyId: created.partyId,
+      contactName: created.contactName,
+      contactNames: created.contactNames,
       profilePhoto: created.profilePhoto,
       createdAt: created.createdAt,
       updatedAt: created.updatedAt,

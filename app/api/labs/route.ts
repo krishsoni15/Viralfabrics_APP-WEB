@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import dbConnect from '@/lib/dbConnect';
 import { Lab, Order, Quality } from '@/models';
 import { getSession } from '@/lib/session';
-import { successResponse, errorResponse, validationErrorResponse, unauthorizedResponse, createdResponse, conflictResponse } from '@/lib/response';
+import { successResponse, errorResponse, validationErrorResponse, unauthorizedResponse, createdResponse, conflictResponse, notFoundResponse } from '@/lib/response';
 import { logCreate, logView, logError } from '@/lib/logger';
 import { checkRateLimitOrError, apiRateLimiter, writeRateLimiter } from '@/lib/rateLimit';
 
@@ -17,6 +18,10 @@ export async function POST(request: NextRequest) {
     const session = await getSession(request);
     if (!session) {
       return NextResponse.json(unauthorizedResponse('Unauthorized'), { status: 401 });
+    }
+    const allowedRoles = ['master', 'superadmin', 'admin', 'user'];
+    if (!allowedRoles.includes(session.role)) {
+      return NextResponse.json({ success: false, message: 'Access denied - Unauthorized role for creation' }, { status: 403 });
     }
 
     await dbConnect();
@@ -36,6 +41,19 @@ export async function POST(request: NextRequest) {
     
     if (!labSendDate) {
       return NextResponse.json(validationErrorResponse('Lab send date is required'), { status: 400 });
+    }
+
+    // Check if order exists
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return NextResponse.json(notFoundResponse('Order'), { status: 404 });
+    }
+
+    // Check party access
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      if (!order.party || order.party.toString() !== session.partyId) {
+        return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
+      }
     }
     
     // Check if lab already exists for this order item
@@ -72,10 +90,9 @@ export async function POST(request: NextRequest) {
     
     // Log the lab creation
     try {
-      const order = await Order.findOne({ orderId });
       await logCreate('lab', lab._id?.toString() || 'unknown', { 
-        orderId,
-        orderObjectId: order?._id?.toString(),
+        orderId: order.orderId,
+        orderObjectId: order._id?.toString(),
         orderItemId,
         labSendDate: lab.labSendDate,
         labSendNumber: lab.labSendNumber,
@@ -138,6 +155,38 @@ export async function GET(request: NextRequest) {
     
     if (orderId) {
       filter.order = orderId;
+    }
+
+    // Restrict labs to user's party if session has a partyId (applies to party users)
+    if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
+      if (orderId) {
+        const orderQuery: any = { _id: orderId, party: session.partyId };
+        if (session.contactNames && session.contactNames.length > 0) {
+          orderQuery.contactName = { $in: session.contactNames };
+        } else if (session.contactName) {
+          orderQuery.contactName = session.contactName;
+        }
+        const order = await Order.findOne(orderQuery).select('party').lean().maxTimeMS(1000);
+        if (!order) {
+          return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
+        }
+      } else {
+        const orderQuery: any = { party: session.partyId };
+        if (session.contactNames && session.contactNames.length > 0) {
+          orderQuery.contactName = { $in: session.contactNames };
+        } else if (session.contactName) {
+          orderQuery.contactName = session.contactName;
+        }
+        const partyOrders = await Order.find(orderQuery).select('_id').lean().maxTimeMS(1000);
+        const partyOrderIds = partyOrders.map((o: any) => o._id);
+        if (filter.order) {
+          const currentIds = Array.isArray(filter.order.$in) ? filter.order.$in : [filter.order];
+          const allowedIds = currentIds.filter((id: any) => partyOrderIds.some(poId => poId.toString() === id.toString()));
+          filter.order = { $in: allowedIds.length > 0 ? allowedIds : [new mongoose.Types.ObjectId()] };
+        } else {
+          filter.order = { $in: partyOrderIds.length > 0 ? partyOrderIds : [new mongoose.Types.ObjectId()] };
+        }
+      }
     }
     
     if (status) {

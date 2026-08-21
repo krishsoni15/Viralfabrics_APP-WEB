@@ -38,12 +38,24 @@ export async function GET(request: NextRequest) {
 
     if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
       if (orderId) {
-        const order = await Order.findOne({ orderId }).select('party').lean().maxTimeMS(1000);
+        const orderQuery: any = { orderId, party: session.partyId };
+        if (session.contactNames && session.contactNames.length > 0) {
+          orderQuery.contactName = { $in: session.contactNames };
+        } else if (session.contactName) {
+          orderQuery.contactName = session.contactName;
+        }
+        const order = await Order.findOne(orderQuery).select('party').lean().maxTimeMS(1000);
         if (!order || !order.party || order.party.toString() !== session.partyId) {
           return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
         }
       } else {
-        const partyOrders = await Order.find({ party: session.partyId }).select('orderId').lean().maxTimeMS(1000);
+        const orderQuery: any = { party: session.partyId };
+        if (session.contactNames && session.contactNames.length > 0) {
+          orderQuery.contactName = { $in: session.contactNames };
+        } else if (session.contactName) {
+          orderQuery.contactName = session.contactName;
+        }
+        const partyOrders = await Order.find(orderQuery).select('orderId').lean().maxTimeMS(1000);
         const orderIds = partyOrders.map((order: any) => order.orderId);
         query.orderId = { $in: orderIds.length > 0 ? orderIds : ['__no_match__'] };
       }
@@ -163,7 +175,10 @@ export async function POST(request: NextRequest) {
 
     if (session.partyId && session.role !== 'master' && session.role !== 'superadmin') {
       const orderPartyId = order.party ? String(order.party) : undefined;
-      if (!orderPartyId || orderPartyId !== session.partyId) {
+      const allowedContacts = session.contactNames && session.contactNames.length > 0
+        ? session.contactNames
+        : (session.contactName ? [session.contactName] : []);
+      if (!orderPartyId || orderPartyId !== session.partyId || (allowedContacts.length > 0 && !allowedContacts.includes(order.contactName || ''))) {
         return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
       }
     }

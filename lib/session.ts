@@ -11,6 +11,8 @@ export interface SessionUser {
   phoneNumber?: string;
   address?: string;
   partyId?: string;
+  contactName?: string;
+  contactNames?: string[];
 }
 
 export async function getSession(req: NextRequest): Promise<SessionUser | null> {
@@ -56,6 +58,9 @@ export async function getSession(req: NextRequest): Promise<SessionUser | null> 
       console.warn('Could not check logout all timestamp in getSession:', error);
     }
 
+    const contactName = (payload as Record<string, unknown>).contactName as string | undefined;
+    const contactNames = (payload as Record<string, unknown>).contactNames as string[] | undefined;
+
     const sessionUser: SessionUser = {
       id: (payload as Record<string, unknown>).id as string,
       name: (payload as Record<string, unknown>).name as string,
@@ -64,6 +69,8 @@ export async function getSession(req: NextRequest): Promise<SessionUser | null> 
       phoneNumber: (payload as Record<string, unknown>).phoneNumber as string | undefined,
       address: (payload as Record<string, unknown>).address as string | undefined,
       partyId: (payload as Record<string, unknown>).partyId as string | undefined,
+      contactName,
+      contactNames: contactNames || (contactName ? [contactName] : []),
     };
 
     return sessionUser;

@@ -5,6 +5,8 @@ export interface GreyMaterial {
   type?: string;
   weaver?: string; // Corresponds to Name
   challanNumber?: string;
+  challanDate?: string | Date;
+  rate?: number | string;
   piece?: number | string;
   meter?: number | string;
   images?: string[];

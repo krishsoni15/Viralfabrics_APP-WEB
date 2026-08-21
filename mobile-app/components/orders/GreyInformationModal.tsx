@@ -527,6 +527,88 @@ export default function GreyInformationModal({
 
             {isLoading && (!greyInfo || greyInfo.length === 0) ? (
               <GreyInformationModalSkeleton theme={theme} cardBg={cardBg} borderCol={borderCol} />
+            ) : isReadOnly ? (
+              // Beautiful Read-Only UI
+              <View style={{ gap: 12 }}>
+                {entries.length === 0 ? (
+                  <View style={{
+                    padding: 30,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+                    borderRadius: 16,
+                    borderWidth: 1.5,
+                    borderStyle: 'dashed',
+                    borderColor: borderCol,
+                    marginVertical: 20
+                  }}>
+                    <Package size={36} color={theme.textTertiary} style={{ marginBottom: 12 }} />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textSecondary, marginBottom: 4 }}>No Grey Data Available</Text>
+                    <Text style={{ fontSize: 12, color: theme.textTertiary, textAlign: 'center' }}>No grey information has been recorded for this order yet.</Text>
+                  </View>
+                ) : (
+                  entries.map((entry, idx) => {
+                    const qualityName = qualities.find((q: any) => String(q._id) === String(entry.quality))?.name || 'Unknown Quality';
+                    return (
+                      <View
+                        key={entry.id}
+                        style={{
+                          backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: isDarkMode ? '#334155' : '#e2e8f0',
+                          padding: 16,
+                          gap: 12,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.05,
+                          shadowRadius: 8,
+                          elevation: 2
+                        }}
+                      >
+                        {/* Title Row */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: isDarkMode ? '#334155' : '#f1f5f9', paddingBottom: 10 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981' }} />
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: isDarkMode ? '#f8fafc' : '#0f172a' }}>Entry #{idx + 1}</Text>
+                          </View>
+                          {entry.date ? (
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: isDarkMode ? '#94a3b8' : '#64748b' }}>{toDisplay(entry.date)}</Text>
+                          ) : null}
+                        </View>
+
+                        {/* Weaver & Quality Grid */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16 }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Weaver</Text>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#e2e8f0' : '#334155' }}>{entry.weaverName || 'N/A'}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Quality</Text>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#e2e8f0' : '#334155' }}>{qualityName}</Text>
+                          </View>
+                        </View>
+
+                        {/* Quantity, Pieces, Challan Grid */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, borderTopWidth: 1, borderTopColor: isDarkMode ? '#334155' : '#f1f5f9', paddingTop: 10 }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Challan No</Text>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#e2e8f0' : '#334155' }}>{entry.chalanNo || 'N/A'}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Meters</Text>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: '#10b981' }}>{entry.quantity || '0'} Mtr</Text>
+                          </View>
+                          <View style={{ flex: 0.8 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', color: isDarkMode ? '#64748b' : '#94a3b8', marginBottom: 2 }}>Pieces</Text>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: isDarkMode ? '#cbd5e1' : '#475569' }}>{entry.numberOfPieces || '0'} Pcs</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
             ) : (
               <>
               {entries.length === 0 ? (

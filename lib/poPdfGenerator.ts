@@ -46,7 +46,7 @@ export function formatLeadTime(val: string | undefined | null): string {
   return trimmed;
 }
 
-async function getBase64Image(url: string): Promise<{ dataUrl: string; format: string; width: number; height: number } | null> {
+export async function getBase64Image(url: string): Promise<{ dataUrl: string; format: string; width: number; height: number } | null> {
   try {
     let fetchUrl = url;
     
@@ -289,7 +289,7 @@ export async function generatePurchaseOrderPDF(po: any): Promise<jsPDF> {
   // Underline for Delivery
   doc.line(margin + 104, y + 1, rightMargin, y + 1);
 
-  // ─── 11. ROW 2: RATE & GREIGH MTR ───
+  // ─── 11. ROW 2: RATE & LEAD TIME ───
   y += 8.5;
   doc.setFont('helvetica', 'normal');
   doc.text('Rate', margin, y);
@@ -300,16 +300,6 @@ export async function generatePurchaseOrderPDF(po: any): Promise<jsPDF> {
   // Underline for Rate
   doc.line(margin + 17, y + 1, margin + 62, y + 1);
 
-  // Greigh Mtr on same line (Right side)
-  doc.setFont('helvetica', 'normal');
-  doc.text('Greigh Mtr : ', margin + 85, y);
-  doc.setFont('helvetica', 'bold');
-  doc.text(po.greighMtr || '', margin + 105, y);
-  // Underline for Greigh Mtr
-  doc.line(margin + 104, y + 1, rightMargin, y + 1);
-
-  // ─── 11b. ROW 3: LEAD TIME ───
-  y += 8.5;
   // Lead Time on same line (Right side)
   doc.setFont('helvetica', 'normal');
   doc.text('Lead Time : ', margin + 85, y);

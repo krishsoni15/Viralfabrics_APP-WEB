@@ -24,7 +24,10 @@ export async function GET(request: NextRequest) {
     }
 
     const partyKey = (session && (session.role === 'party' || session.partyId) && session.role !== 'master' && session.role !== 'superadmin') ? (session.partyId || 'party') : 'global';
-    const cacheKey = `upcoming-deliveries-${partyKey}`;
+    const contactsSuffix = (session && session.contactNames && session.contactNames.length > 0) 
+      ? `-${[...session.contactNames].sort().join(',')}` 
+      : (session?.contactName ? `-${session.contactName}` : '');
+    const cacheKey = `upcoming-deliveries-${partyKey}${contactsSuffix}`;
     const cached = upcomingCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
       return NextResponse.json(successResponse(cached.data, 'Upcoming deliveries loaded from cache'), { 
@@ -78,6 +81,11 @@ export async function GET(request: NextRequest) {
           ? new mongoose.default.Types.ObjectId(session.partyId)
           : session.partyId
       });
+      if (session.contactNames && session.contactNames.length > 0) {
+        queryConditions.push({ contactName: { $in: session.contactNames } });
+      } else if (session.contactName) {
+        queryConditions.push({ contactName: session.contactName });
+      }
     }
 
     const upcomingOrders = await Order.find({ $and: queryConditions })

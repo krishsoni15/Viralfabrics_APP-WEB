@@ -5,6 +5,7 @@ export interface ISampling extends Document {
   whereToPut?: string;
   weaverName?: string;
   weaverQuality?: string;
+  weaverRate?: number;
   millName?: string;
   processInMill?: string;
   images?: string[];
@@ -39,6 +40,10 @@ const SamplingSchema = new Schema<ISampling>({
     required: false,
     trim: true,
     maxlength: 200
+  },
+  weaverRate: {
+    type: Number,
+    required: false
   },
   millName: {
     type: String,

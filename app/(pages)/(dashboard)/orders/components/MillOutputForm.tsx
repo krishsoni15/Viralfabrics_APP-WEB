@@ -2007,11 +2007,44 @@ export default function MillOutputForm({
             </button>
           </div>
 
-          {/* Form */}
-          <form ref={modalContentRef} onSubmit={handleSubmit} className={`overflow-y-auto max-h-[calc(95vh-140px)] custom-scrollbar ${isDarkMode
-            ? 'scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800'
-            : 'scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100'
-            }`}>
+          {/* Form / ReadOnly view */}
+          {readOnly ? (
+            <div className="p-6 space-y-6 flex flex-col items-center justify-center min-h-[300px]">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                existingMillOutputs && existingMillOutputs.length > 0
+                  ? (isDarkMode ? 'bg-green-950/40 text-green-400 border border-green-800' : 'bg-green-100 text-green-700')
+                  : (isDarkMode ? 'bg-red-950/40 text-red-400 border border-red-800' : 'bg-red-100 text-red-700')
+              }`}>
+                <DocumentTextIcon className="h-8 w-8" />
+              </div>
+              <div className="text-center">
+                <span className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Mill Output Status</span>
+                <h3 className={`text-2xl font-extrabold ${
+                  existingMillOutputs && existingMillOutputs.length > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                }`}>
+                  {existingMillOutputs && existingMillOutputs.length > 0 ? 'Completed / Done' : 'Pending / Not Done'}
+                </h3>
+              </div>
+
+              {/* Close Button */}
+              <div className="w-full max-w-xs pt-6 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className={`w-full py-3 rounded-lg font-semibold text-sm transition-all hover:scale-105 ${
+                    isDarkMode ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  }`}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+            <form ref={modalContentRef} onSubmit={handleSubmit} className={`overflow-y-auto max-h-[calc(95vh-140px)] custom-scrollbar ${isDarkMode
+              ? 'scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-gray-800'
+              : 'scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-gray-100'
+              }`}>
             <fieldset disabled={readOnly} className="space-y-8 contents">
               <div className="p-6 space-y-8 pb-24">
               {/* Success Message */}
@@ -2517,6 +2550,8 @@ export default function MillOutputForm({
               )}
             </div>
           </div>
+          </>
+          )}
         </div>
 
         {/* Delete Confirmation Modal */}

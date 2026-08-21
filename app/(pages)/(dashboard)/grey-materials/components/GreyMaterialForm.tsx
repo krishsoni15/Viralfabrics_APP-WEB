@@ -13,7 +13,8 @@ import {
   UserIcon,
   DocumentTextIcon,
   ScaleIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  CalendarDaysIcon
 } from '@heroicons/react/24/outline';
 import ToastNotification, { useToast } from '../../components/ToastNotification';
 import CameraModal from '../../components/CameraModal';
@@ -32,6 +33,8 @@ export default function GreyMaterialForm(props: any) {
       _id: item?._id || '',
       name: item?.weaver || '',
       challanNumber: item?.challanNumber || '',
+      challanDate: item?.challanDate ? new Date(item.challanDate).toISOString().split('T')[0] : '',
+      rate: item?.rate || 0,
       piece: item?.piece || 0,
       meter: item?.meter || 0
     }];
@@ -41,6 +44,8 @@ export default function GreyMaterialForm(props: any) {
         _id: w._id || '',
         name: w.weaver || '',
         challanNumber: w.challanNumber || '',
+        challanDate: w.challanDate ? new Date(w.challanDate).toISOString().split('T')[0] : '',
+        rate: w.rate || 0,
         piece: w.piece || 0,
         meter: w.meter || 0
       }));
@@ -132,6 +137,8 @@ export default function GreyMaterialForm(props: any) {
             _id: w._id || '',
             name: w.weaver || '',
             challanNumber: w.challanNumber || '',
+            challanDate: w.challanDate ? new Date(w.challanDate).toISOString().split('T')[0] : '',
+            rate: w.rate || 0,
             piece: w.piece || 0,
             meter: w.meter || 0
           }));
@@ -189,7 +196,7 @@ export default function GreyMaterialForm(props: any) {
   const addWeaver = () => {
     setFormData(prev => ({
       ...prev,
-      weavers: [...prev.weavers, { _id: '', name: '', challanNumber: '', piece: 0, meter: 0 }]
+      weavers: [...prev.weavers, { _id: '', name: '', challanNumber: '', challanDate: '', rate: 0, piece: 0, meter: 0 }]
     }));
   };
 
@@ -411,27 +418,27 @@ export default function GreyMaterialForm(props: any) {
       const url = '/api/grey-materials';
       const method = isEditMode ? 'PUT' : 'POST';
       
+      const formattedWeavers = formData.weavers.map((w: any) => ({
+        _id: w._id || undefined,
+        name: w.name?.trim() || '',
+        challanNumber: w.challanNumber?.trim() || '',
+        challanDate: w.challanDate || '',
+        rate: Number(w.rate) || 0,
+        piece: Number(w.piece) || 0,
+        meter: Number(w.meter) || 0,
+      }));
+
       let payload: any = { 
-        ...formData,
-        images: allImages
+        qualityCode: formData.qualityCode.trim(),
+        qualityName: formData.qualityName.trim(),
+        type: formData.type?.trim() || '',
+        images: allImages,
+        weavers: formattedWeavers
       };
       
       if (isEditMode) {
-        payload = {
-          qualityCode: formData.qualityCode.trim(),
-          qualityName: formData.qualityName.trim(),
-          type: formData.type?.trim() || '',
-          images: allImages,
-          originalQualityCode: item.qualityCode,
-          deletedWeaverIds: deletedWeaverIds,
-          weavers: formData.weavers.map((w: any) => ({
-            _id: w._id,
-            name: w.name?.trim() || '',
-            challanNumber: w.challanNumber?.trim() || '',
-            piece: Number(w.piece) || 0,
-            meter: Number(w.meter) || 0,
-          }))
-        };
+        payload.originalQualityCode = item.qualityCode;
+        payload.deletedWeaverIds = deletedWeaverIds;
       }
       
       const res = await fetch(url, {
@@ -829,7 +836,7 @@ export default function GreyMaterialForm(props: any) {
                       )}
                     </div>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                       {/* Name */}
                       <div>
                         <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -840,9 +847,24 @@ export default function GreyMaterialForm(props: any) {
                           required
                           value={weaver.name}
                           onChange={(e) => handleWeaverChange(index, 'name', e.target.value)}
-                          placeholder="Enter weaver name"
+                          placeholder="Weaver name"
                           className={`w-full px-3 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none transition-all ${
                             isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                          }`}
+                        />
+                      </div>
+
+                      {/* Challan Date */}
+                      <div>
+                        <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <CalendarDaysIcon className="w-3.5 h-3.5 text-gray-400" /> Challan Date
+                        </label>
+                        <input
+                          type="date"
+                          value={weaver.challanDate || ''}
+                          onChange={(e) => handleWeaverChange(index, 'challanDate', e.target.value)}
+                          className={`w-full px-3 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none transition-all ${
+                            isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                           }`}
                         />
                       </div>
@@ -857,6 +879,24 @@ export default function GreyMaterialForm(props: any) {
                           value={weaver.challanNumber}
                           onChange={(e) => handleWeaverChange(index, 'challanNumber', e.target.value)}
                           placeholder="e.g., CH-1234"
+                          className={`w-full px-3 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none transition-all ${
+                            isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                          }`}
+                        />
+                      </div>
+
+                      {/* Rate */}
+                      <div>
+                        <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <TagIcon className="w-3.5 h-3.5 text-gray-400" /> Rate (₹)
+                        </label>
+                        <input
+                          type="number"
+                          value={weaver.rate || ''}
+                          onChange={(e) => handleWeaverChange(index, 'rate', Number(e.target.value))}
+                          placeholder="0"
+                          min="0"
+                          step="0.01"
                           className={`w-full px-3 py-2 text-sm rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none transition-all ${
                             isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                           }`}

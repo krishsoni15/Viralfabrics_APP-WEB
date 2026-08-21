@@ -376,9 +376,12 @@ export default function SamplingScreen() {
 
     try {
       const { uri, base64 } = await generateStickerPdf({
-        type: 'sample',
+        type: 'sampling-process',
         qualityName: item.qualityName || '',
-        weaverName: '',
+        whereToPut: item.whereToPut || '',
+        weaverName: item.weaverName || '',
+        weaverQuality: item.weaverQuality || '',
+        millName: item.millName || '',
         remarks: item.notes || '',
         piece: item.piece != null ? Number(item.piece) : undefined,
         meter: item.meter != null ? Number(item.meter) : undefined,

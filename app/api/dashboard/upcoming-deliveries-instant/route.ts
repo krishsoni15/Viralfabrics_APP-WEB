@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
     }
 
     const partyKey = (session && (session.role === 'party' || session.partyId) && session.role !== 'master' && session.role !== 'superadmin') ? (session.partyId || 'party') : 'global';
-    const cacheKey = `upcoming-deliveries-instant-${partyKey}`;
+    const contactsSuffix = (session && session.contactNames && session.contactNames.length > 0) 
+      ? `-${[...session.contactNames].sort().join(',')}` 
+      : (session?.contactName ? `-${session.contactName}` : '');
+    const cacheKey = `upcoming-deliveries-instant-${partyKey}${contactsSuffix}`;
     
     // ⚡ FIX: Respect no-cache header for real-time synchronization
     const skipCache = request.headers.get('cache-control')?.includes('no-cache') || 
@@ -83,6 +86,11 @@ export async function GET(request: NextRequest) {
           ? new mongoose.default.Types.ObjectId(session.partyId)
           : session.partyId
       });
+      if (session.contactNames && session.contactNames.length > 0) {
+        queryConditions.push({ contactName: { $in: session.contactNames } });
+      } else if (session.contactName) {
+        queryConditions.push({ contactName: session.contactName });
+      }
     }
 
     // ⚡ ULTRA-FAST: Optimized query with minimal fields and no populate

@@ -66,7 +66,7 @@ export async function PUT(
     // Require superadmin access
     const session = await requireSuperAdmin(req);
 
-    const { name, username, password, role, phoneNumber, address, partyId, profilePhoto } = await req.json();
+    const { name, username, password, role, phoneNumber, address, partyId, contactName, contactNames, profilePhoto } = await req.json();
     
     // Validation
     const errors: string[] = [];
@@ -131,8 +131,16 @@ export async function PUT(
     // Handle partyId settings
     if (role === "party") {
       update.partyId = partyId || null;
+      update.contactName = contactName || null;
+      update.contactNames = Array.isArray(contactNames) ? contactNames : (contactName ? [contactName] : []);
     } else if (role) {
       update.partyId = null; // Clear partyId if the role changed to something else
+      update.contactName = null;
+      update.contactNames = [];
+    } else {
+      if (partyId !== undefined) update.partyId = partyId || null;
+      if (contactName !== undefined) update.contactName = contactName || null;
+      if (contactNames !== undefined) update.contactNames = Array.isArray(contactNames) ? contactNames : [];
     }
     // Only master can assign master role (privilege escalation prevention)
     if (role === "master" && session.role === "master") update.role = role;

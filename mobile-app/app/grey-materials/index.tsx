@@ -6,11 +6,28 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated from 'react-native-reanimated';
 import { useSegments, Redirect } from 'expo-router';
-import { Boxes, Search, X, ArrowUpDown, Plus, Image as ImageIcon, Trash2, Edit, Camera, User, WifiOff, SlidersHorizontal, RotateCcw, Tag } from 'lucide-react-native';
+import { Boxes, Search, X, ArrowUpDown, Plus, Image as ImageIcon, Trash2, Edit, Camera, User, WifiOff, SlidersHorizontal, RotateCcw, Tag, Calendar } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import PdfViewerModal from '../../components/shared/PdfViewerModal';
+import DatePickerModal from '../../components/shared/DatePickerModal';
 import { generateStickerPdf } from '../../utils/stickerPdf';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+
+const toDisplay = (dateStr: string | Date | undefined) => {
+  if (!dateStr) return '';
+  const dateObj = new Date(dateStr);
+  if (isNaN(dateObj.getTime())) return '';
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const y = dateObj.getFullYear();
+  return `${d}/${m}/${y}`;
+};
+
+const toISO = (dateStr: string) => {
+  if (!dateStr) return '';
+  const [d, m, y] = dateStr.split('/');
+  return d && m && y ? `${y}-${m}-${d}` : dateStr;
+};
 let ImagePicker: any = null;
 try {
   ImagePicker = require('expo-image-picker');
@@ -31,7 +48,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Colors } from '../../constants/colors';
 import { GreyMaterial } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
-import { formatDate, resolveImageUrl, uploadSingleImage } from '../../utils/helpers';
+import { formatDate, resolveImageUrl, uploadSingleImage, formatCurrency } from '../../utils/helpers';
 
 const PAGE_SIZE = 20;
 
@@ -291,6 +308,18 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
                     <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }} numberOfLines={1}>{item.challanNumber}</Text>
                   </View>
                 )}
+                {!!item.challanDate && (
+                  <View style={{ minWidth: 80 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>Challan Date</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{toDisplay(item.challanDate)}</Text>
+                  </View>
+                )}
+                {item.rate != null && Number(item.rate) > 0 && (
+                  <View style={{ minWidth: 60 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>Rate</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>₹{item.rate}</Text>
+                  </View>
+                )}
                 {item.gsm != null && String(item.gsm).trim() !== '' && (
                   <View style={{ minWidth: 60 }}>
                     <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>GSM</Text>
@@ -303,7 +332,7 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
                     <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>{item.greighWidth}"</Text>
                   </View>
                 )}
-                {item.greighRate != null && item.greighRate > 0 && (
+                {item.greighRate != null && item.greighRate > 0 && !(item.rate != null && Number(item.rate) > 0) && (
                   <View style={{ minWidth: 60 }}>
                     <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 1 }}>Rate</Text>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>₹{item.greighRate}</Text>
@@ -318,6 +347,43 @@ const GreyMaterialCard = React.memo(function GreyMaterialCard({
               </View>
             </View>
           ))}
+
+          {group.items.length > 1 && (() => {
+            const totalPieces = group.items.reduce((sum, item) => sum + (Number(item.piece) || 0), 0);
+            const totalMeters = group.items.reduce((sum, item) => sum + (Number(item.meter) || 0), 0);
+            const totalAmount = group.items.reduce((sum, item) => sum + ((Number(item.meter) || 0) * (Number(item.rate) || 0)), 0);
+            return (
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: isDarkMode ? 'rgba(52, 211, 153, 0.08)' : '#f0fdf4',
+                borderRadius: 10,
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                marginTop: 6,
+                borderWidth: 1,
+                borderColor: isDarkMode ? 'rgba(52, 211, 153, 0.15)' : '#bbf7d0',
+              }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: isDarkMode ? '#34d399' : '#166534' }}>
+                  Group Total
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: theme.text }}>
+                    {totalPieces} Pcs
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: theme.text }}>
+                    {totalMeters.toFixed(2)} Mtr
+                  </Text>
+                  {totalAmount > 0 && (
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: isDarkMode ? '#fb7185' : '#e11d48' }}>
+                      {formatCurrency(totalAmount)}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          })()}
 
           {group.items.length > 1 && (
             <TouchableOpacity
@@ -485,9 +551,10 @@ export default function GreyMaterialsScreen() {
   const [formData, setFormData] = useState({ qualityName: '', qualityCode: '', type: '' });
   
   // Weavers multi-add state
-  const [formWeavers, setFormWeavers] = useState<Array<{ name: string; piece: string; meter: string; challanNumber: string }>>([
-    { name: '', piece: '', meter: '', challanNumber: '' }
+  const [formWeavers, setFormWeavers] = useState<Array<{ name: string; piece: string; meter: string; challanNumber: string; challanDate: string; rate: string }>>([
+    { name: '', piece: '', meter: '', challanNumber: '', challanDate: '', rate: '' }
   ]);
+  const [datePickerFor, setDatePickerFor] = useState<{ weaverIndex: number } | null>(null);
 
   const [formImages, setFormImages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -758,6 +825,18 @@ export default function GreyMaterialsScreen() {
 
   const rawMaterials = query.data?.pages.flatMap(p => p.items) || [];
 
+  const grandTotalPieces = useMemo(() => {
+    return rawMaterials.reduce((sum, item) => sum + (Number(item.piece) || 0), 0);
+  }, [rawMaterials]);
+
+  const grandTotalMeters = useMemo(() => {
+    return rawMaterials.reduce((sum, item) => sum + (Number(item.meter) || 0), 0);
+  }, [rawMaterials]);
+
+  const grandTotalAmount = useMemo(() => {
+    return rawMaterials.reduce((sum, item) => sum + ((Number(item.meter) || 0) * (Number(item.rate) || 0)), 0);
+  }, [rawMaterials]);
+
   // Group raw materials by Quality Code & Name
   const groupedMaterials = useMemo(() => {
     const groups: GroupedGreyMaterial[] = [];
@@ -784,7 +863,7 @@ export default function GreyMaterialsScreen() {
   const openCreateForm = () => {
     setEditingItem(null);
     setFormData({ qualityName: '', qualityCode: '', type: '' });
-    setFormWeavers([{ name: '', piece: '', meter: '', challanNumber: '' }]);
+     setFormWeavers([{ name: '', piece: '', meter: '', challanNumber: '', challanDate: '', rate: '' }]);
     setFormImages([]);
     setShowForm(true);
   };
@@ -801,7 +880,9 @@ export default function GreyMaterialsScreen() {
         name: item.weaver || '',
         piece: item.piece?.toString() || '',
         meter: item.meter?.toString() || '',
-        challanNumber: item.challanNumber || ''
+        challanNumber: item.challanNumber || '',
+        challanDate: item.challanDate ? toDisplay(item.challanDate) : '',
+        rate: item.rate?.toString() || ''
       }
     ]);
     setFormImages(item.images || []);
@@ -809,7 +890,7 @@ export default function GreyMaterialsScreen() {
   };
 
   const addWeaver = () => {
-    setFormWeavers(prev => [...prev, { name: '', piece: '', meter: '', challanNumber: '' }]);
+    setFormWeavers(prev => [...prev, { name: '', piece: '', meter: '', challanNumber: '', challanDate: '', rate: '' }]);
   };
 
   const removeWeaver = (index: number) => {
@@ -885,7 +966,9 @@ export default function GreyMaterialsScreen() {
           weaver: formWeavers[0].name.trim(),
           piece: formWeavers[0].piece ? Number(formWeavers[0].piece) : undefined,
           meter: formWeavers[0].meter ? Number(formWeavers[0].meter) : undefined,
-          challanNumber: formWeavers[0].challanNumber.trim()
+          challanNumber: formWeavers[0].challanNumber.trim(),
+          challanDate: formWeavers[0].challanDate ? toISO(formWeavers[0].challanDate) : undefined,
+          rate: formWeavers[0].rate ? Number(formWeavers[0].rate) : undefined
         };
         await api.put(`/api/grey-materials/${editingItem._id}`, payload);
 
@@ -900,7 +983,9 @@ export default function GreyMaterialsScreen() {
               name: w.name.trim(),
               piece: w.piece ? Number(w.piece) : undefined,
               meter: w.meter ? Number(w.meter) : undefined,
-              challanNumber: w.challanNumber.trim()
+              challanNumber: w.challanNumber.trim(),
+              challanDate: w.challanDate ? toISO(w.challanDate) : undefined,
+              rate: w.rate ? Number(w.rate) : undefined
             }))
           };
           await api.post('/api/grey-materials', createPayload);
@@ -918,7 +1003,9 @@ export default function GreyMaterialsScreen() {
             name: w.name.trim(),
             piece: w.piece ? Number(w.piece) : undefined,
             meter: w.meter ? Number(w.meter) : undefined,
-            challanNumber: w.challanNumber.trim()
+            challanNumber: w.challanNumber.trim(),
+            challanDate: w.challanDate ? toISO(w.challanDate) : undefined,
+            rate: w.rate ? Number(w.rate) : undefined
           }))
         };
         await api.post('/api/grey-materials', payload);
@@ -1522,6 +1609,41 @@ export default function GreyMaterialsScreen() {
                         theme={theme}
                         isDarkMode={isDarkMode}
                       />
+
+                      {/* Challan Date picker trigger */}
+                      <View style={{ marginBottom: 14 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginBottom: 6 }}>Challan Date</Text>
+                        <TouchableOpacity
+                          onPress={() => setDatePickerFor({ weaverIndex: wIdx })}
+                          activeOpacity={0.7}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 14,
+                            paddingVertical: 12,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: isDarkMode ? '#334155' : '#cbd5e1',
+                            backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc',
+                          }}
+                        >
+                          <Text style={{ fontSize: 15, color: w.challanDate ? theme.text : theme.inputPlaceholder }}>
+                            {w.challanDate || 'Select challan date'}
+                          </Text>
+                          <Calendar size={18} color={theme.textSecondary} />
+                        </TouchableOpacity>
+                      </View>
+
+                      <WeaverFormField
+                        label="Rate (₹)"
+                        value={formWeavers[wIdx]?.rate || ''}
+                        onChangeText={(t: string) => updateWeaver(wIdx, 'rate', t)}
+                        placeholder="Enter rate (e.g. 150.00)"
+                        keyboard="numeric"
+                        theme={theme}
+                        isDarkMode={isDarkMode}
+                      />
                     </View>
                   ))}
 
@@ -1598,6 +1720,67 @@ export default function GreyMaterialsScreen() {
         localBase64={pdfViewerLocalBase64}
         addToast={addToast}
       />
+
+      {/* Date Picker Modal for Weavers Challan Date */}
+      <DatePickerModal
+        visible={datePickerFor !== null}
+        onClose={() => setDatePickerFor(null)}
+        value={(() => {
+          if (datePickerFor === null) return '';
+          return formWeavers[datePickerFor.weaverIndex]?.challanDate || '';
+        })()}
+        onSelectDate={(ddmmyyyy) => {
+          if (datePickerFor !== null) {
+            updateWeaver(datePickerFor.weaverIndex, 'challanDate', ddmmyyyy);
+          }
+          setDatePickerFor(null);
+        }}
+      />
+
+      {/* Grand Totals Bar */}
+      {rawMaterials.length > 0 && (
+        <View style={{
+          position: 'absolute',
+          bottom: insets.bottom + 10,
+          left: 16,
+          right: 16,
+          backgroundColor: isDarkMode ? '#1e293b' : '#eff6ff',
+          borderRadius: 16,
+          paddingVertical: 12,
+          paddingHorizontal: 16,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor: isDarkMode ? '#334155' : '#bfdbfe',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
+          elevation: 5,
+        }}>
+          <View>
+            <Text style={{ fontSize: 10, fontWeight: '800', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>Inventory Grand Totals</Text>
+            <Text style={{ fontSize: 11, color: theme.textTertiary, marginTop: 1 }}>{rawMaterials.length} entries</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 14 }}>
+            {grandTotalAmount > 0 && (
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase' }}>Amount</Text>
+                <Text style={{ fontSize: 14, fontWeight: '900', color: isDarkMode ? '#fb7185' : '#e11d48' }}>{formatCurrency(grandTotalAmount)}</Text>
+              </View>
+            )}
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase' }}>Pieces</Text>
+              <Text style={{ fontSize: 14, fontWeight: '900', color: isDarkMode ? '#4ade80' : '#16a34a' }}>{grandTotalPieces}</Text>
+            </View>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textSecondary, textTransform: 'uppercase' }}>Meters</Text>
+              <Text style={{ fontSize: 14, fontWeight: '900', color: isDarkMode ? '#2dd4bf' : '#0d9488' }}>{grandTotalMeters.toFixed(2)}</Text>
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }

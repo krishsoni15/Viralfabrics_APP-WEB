@@ -386,6 +386,7 @@ export default function WeaverPage() {
       url.searchParams.append('page', page.toString());
       url.searchParams.append('limit', limit.toString());
       url.searchParams.append('sort', sort);
+      url.searchParams.append('force', 'true');
       if (search.trim()) {
         url.searchParams.append('search', search.trim());
       }
@@ -1670,6 +1671,8 @@ export default function WeaverPage() {
       const stickerData = {
         qualityName: sample.qualityName || '-',
         weaverName: weaverName,
+        whereToPut: sample.rack || undefined,
+        notes: sample.note || undefined,
         width: sample.finishWidth || undefined,
         gsm: sample.gsm || undefined,
         content: sample.content || undefined,
@@ -1754,6 +1757,8 @@ export default function WeaverPage() {
       const stickerData = {
         qualityName: currentStickerSample.qualityName || '-',
         weaverName: weaverName,
+        whereToPut: currentStickerSample.rack || undefined,
+        notes: currentStickerSample.note || undefined,
         width: currentStickerSample.finishWidth || undefined,
         gsm: currentStickerSample.gsm || undefined,
         content: currentStickerSample.content || undefined,
@@ -2519,7 +2524,7 @@ export default function WeaverPage() {
                                   title="View Samples"
                                 >
                                   <EyeIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                                  <span className="font-medium whitespace-nowrap">View</span>
+                                  <span className="font-medium whitespace-nowrap">View Samples ({weaver.sampleCount || 0})</span>
                                 </button>
                                 {/* Add Sample Button - Full width on 900px-1023px, normal on others */}
                                 <button
@@ -2766,7 +2771,7 @@ export default function WeaverPage() {
                               title="View Samples"
                             >
                               <EyeIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                              <span className="font-medium whitespace-nowrap">View</span>
+                              <span className="font-medium whitespace-nowrap">View Samples ({weaver.sampleCount || 0})</span>
                             </button>
                             {/* Delete Button - Show for master only */}
                             {isMaster && (

@@ -535,18 +535,12 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate, 
         throw new Error('No authentication token found');
       }
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
-
       const response = await fetch(`/api/labs/by-order/${order._id}?t=${Date.now()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        },
-        signal: controller.signal
+        }
       });
-
-      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
@@ -1199,23 +1193,25 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate, 
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEditLabData(item)}
-                            disabled={isLoading || loadingData || (readOnly && !item.labData?.labSendDate)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${isDarkMode
-                                ? 'bg-amber-600/20 border border-amber-500/30 text-amber-400 hover:bg-amber-600/30 hover:border-amber-500/50'
-                                : 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300'
-                              }`}
-                          >
-                            {isLoading ? (
-                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <BeakerIcon className="h-4 w-4" />
-                            )}
-                            {isLoading ? 'Loading Lab Data...' : item.labData?.labSendDate ? (readOnly ? 'View Lab' : 'Edit Lab') : (readOnly ? 'No Lab Data' : 'Add Lab')}
-                          </button>
-                        </div>
+                        {!readOnly && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEditLabData(item)}
+                              disabled={isLoading || loadingData}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${isDarkMode
+                                  ? 'bg-amber-600/20 border border-amber-500/30 text-amber-400 hover:bg-amber-600/30 hover:border-amber-500/50'
+                                  : 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300'
+                                }`}
+                            >
+                              {isLoading ? (
+                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <BeakerIcon className="h-4 w-4" />
+                              )}
+                              {isLoading ? 'Loading Lab Data...' : item.labData?.labSendDate ? 'Edit Lab' : 'Add Lab'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1262,6 +1258,12 @@ export default function LabDataModal({ isOpen, onClose, order, onLabDataUpdate, 
                             </div>
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {!item.labData?.labSendDate && readOnly && (
+                      <div className={`p-4 border-t ${isDarkMode ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-gray-50 border-gray-100 text-gray-500'} text-sm text-left`}>
+                        Pending / No Lab Data Available
                       </div>
                     )}
 
