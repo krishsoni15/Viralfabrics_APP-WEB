@@ -385,10 +385,7 @@ export const generatePoHtml = (po: PurchaseOrder) => {
               <td class="specs-label">Finish GSM:</td>
               <td class="specs-val">${po.specs?.finishGsm || ''}</td>
             </tr>
-            <tr>
-              <td class="specs-label">Grey Width:</td>
-              <td class="specs-val">${po.specs?.greyWidth || ''}</td>
-            </tr>
+
             <tr>
               <td class="specs-label">Finish Width:</td>
               <td class="specs-val">${po.specs?.finishWidth || ''}</td>

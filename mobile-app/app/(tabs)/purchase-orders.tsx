@@ -1012,7 +1012,7 @@ const PurchaseOrderCard = React.memo(({
         )}
 
         {/* Specs Grid */}
-        {!!(item.specs?.finishGsm || item.specs?.greyWidth || item.specs?.finishWidth || item.specs?.weight) && (
+        {!!(item.specs?.finishGsm || item.specs?.finishWidth || item.specs?.weight) && (
           <View style={{ marginTop: 10 }}>
             <View style={{ height: 1, backgroundColor: theme.borderLight, marginBottom: 8 }} />
             <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: theme.textSecondary, marginBottom: 6 }}>
@@ -1021,7 +1021,6 @@ const PurchaseOrderCard = React.memo(({
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {[
                 { label: 'GSM', val: item.specs?.finishGsm },
-                { label: 'Grey W', val: item.specs?.greyWidth },
                 { label: 'Finish W', val: item.specs?.finishWidth },
                 { label: 'Weight', val: item.specs?.weight }
               ].filter(s => s.val).map((spec, i) => (
@@ -1329,7 +1328,7 @@ export default function PurchaseOrdersScreen() {
   const [formData, setFormData] = useState<Partial<PurchaseOrder>>({
     companyHeader: 'Viral Fabrics',
     poDate: new Date().toISOString(),
-    specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' }
+    specs: { finishGsm: '', finishWidth: '', weight: '' }
   });
   const [selectedImageUris, setSelectedImageUris] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -1588,7 +1587,7 @@ export default function PurchaseOrdersScreen() {
         images: order.images || [],
         paymentTerms: cleanedTerms,
         notes: cleanedNotes,
-        specs: order.specs || { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
+        specs: order.specs || { finishGsm: '', finishWidth: '', weight: '' },
         status: order.status || 'Pending'
       });
       setSelectedImageUris(order.images || []);
@@ -1617,7 +1616,7 @@ export default function PurchaseOrdersScreen() {
         delivery: '',
         paymentTerms: '',
         notes: '',
-        specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
+        specs: { finishGsm: '', finishWidth: '', weight: '' },
         status: 'Pending'
       });
     }
@@ -2463,7 +2462,6 @@ export default function PurchaseOrdersScreen() {
                   <View style={{ borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, overflow: 'hidden', backgroundColor: theme.surface }}>
                     {[
                       { key: 'finishGsm', label: 'Finish GSM' },
-                      { key: 'greyWidth', label: 'Grey Width' },
                       { key: 'finishWidth', label: 'Finish Width' },
                       { key: 'weight', label: 'Weight' }
                     ].map((spec, index) => (
@@ -2472,7 +2470,7 @@ export default function PurchaseOrdersScreen() {
                         style={{ 
                           flexDirection: 'row', 
                           alignItems: 'center', 
-                          borderBottomWidth: index < 3 ? 1 : 0, 
+                          borderBottomWidth: index < 2 ? 1 : 0, 
                           borderBottomColor: theme.borderLight,
                           height: 48
                         }}

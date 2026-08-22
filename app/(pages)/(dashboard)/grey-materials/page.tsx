@@ -4658,7 +4658,6 @@ export default function GreyMaterialsPage() {
                         <tbody className={`divide-y ${isDarkMode ? 'divide-gray-700 bg-gray-800' : 'divide-gray-200 bg-white'
                           }`}>
                           {(() => {
-                            // ⚡ CRITICAL: Don't show "no data" while loading or initial fetch not done
                             if (loading || !initialFetchDone || fetchInFlight > 0 || initialLoading || !hasInitialFetchRef.current) {
                               return (
                                 <tr>
@@ -4742,8 +4741,7 @@ export default function GreyMaterialsPage() {
                             if (loading || !initialFetchDone || fetchInFlight > 0 || initialLoading || !hasInitialFetchRef.current) {
                               return (
                                 <tr>
-                                  <td colSpan={16} className={`px-6 py-8 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                                    }`}>
+                                  <td colSpan={16} className={`px-6 py-8 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                                     <div className="flex flex-col items-center justify-center">
                                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-3"></div>
                                       <p className="text-sm">Loading greyMaterials...</p>
@@ -4753,279 +4751,249 @@ export default function GreyMaterialsPage() {
                               );
                             }
 
-                            // Check if grouping resulted in any groups (only after loading completes)
-                            if (groupOrder.length === 0) {
-                              return (
-                                <tr>
-                                  <td colSpan={16} className={`px-6 py-8 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                                    }`}>
-                                    <DocumentTextIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                    <p className="text-lg font-medium">No greyMaterial groups found</p>
-                                    <p className="text-sm mt-1">Unable to group greyMaterials by quality code</p>
-                                  </td>
-                                </tr>
-                              );
-                            }
-
                             return groupOrder.map(qualityCode => {
                               const greyMaterials = groupedGreyMaterials.get(qualityCode)!;
-                              // Sort weavers within group by creation time (when weaver was added)
-                              // Always sort weavers oldest first (W1, W2, W3...) regardless of main sort order
-                              greyMaterials.sort((a, b) => {
-                                const aDate = new Date(a.createdAt || 0).getTime();
-                                const bDate = new Date(b.createdAt || 0).getTime();
-                                return aDate - bDate; // Oldest first (maintain original order)
+                              
+                              const weaverMap = new Map<string, GreyMaterial[]>();
+                              const weaversList: string[] = [];
+                              greyMaterials.forEach(item => {
+                                const w = item.weaver || 'Unknown';
+                                if (!weaverMap.has(w)) {
+                                  weaverMap.set(w, []);
+                                  weaversList.push(w);
+                                }
+                                weaverMap.get(w)!.push(item);
                               });
-                              const mainGreyMaterial = greyMaterials[0]; // Use first greyMaterial for quality info
-                              const subtotalPieces = greyMaterials.reduce((sum, w) => sum + (Number(w.piece) || 0), 0);
-                              const subtotalMeters = greyMaterials.reduce((sum, w) => sum + (Number(w.meter) || 0), 0);
-                              const subtotalAmount = greyMaterials.reduce((sum, w) => sum + ((Number(w.meter) || 0) * (Number(w.rate) || 0)), 0);
+                              weaversList.sort((a, b) => a.localeCompare(b));
+
+                              const totalQualityRows = greyMaterials.length + 1; // All weaver rows + 1 row for quality subtotal
+
+                              const mainGreyMaterial = greyMaterials[0];
+                              let isFirstRowOfQuality = true;
+                              let globalWeaverIndex = 0;
 
                               return (
                                 <React.Fragment key={qualityCode}>
-                                  {greyMaterials.map((greyMaterial, weaverIndex) => (
-                                    <tr key={`${qualityCode}-${greyMaterial._id}`} className={`relative transition-all duration-300 hover:bg-opacity-50 animate-in fade-in-0 slide-in-from-left-2 ${weaverIndex === 0 ? '' : 'border-t-2'} ${isDarkMode ? 'border-gray-500' : 'border-gray-300'
-                                      } ${redGlowingIds.has(String(greyMaterial._id)) ? 'animate-red-glow-delete' : ''
-                                      } ${fadeOutRows.has(String(greyMaterial._id))
-                                        ? 'opacity-0 scale-95 -translate-y-2 blur-sm'
-                                        : 'opacity-100 scale-100 translate-y-0 blur-0'
-                                      } ${fadeOutRows.has(String(greyMaterial._id))
-                                        ? isDarkMode
-                                          ? 'bg-red-900/20 border-red-500/50'
-                                          : 'bg-red-50 border-red-300'
-                                        : ''
-                                      } ${deletingIds.has(String(greyMaterial._id)) ? 'opacity-60' : ''} ${greyMaterial._id && glowingIds.has(greyMaterial._id) ? 'animate-weaver-green-glow' : ''}`} style={{
-                                        animationDelay: `${weaverIndex * 0.05}s`,
-                                        transition: fadeOutRows.has(String(greyMaterial._id)) ? 'all 0.5s ease-in-out' : 'all 0.15s ease-in-out'
-                                      }}>
-                                      {/* Quality Information - Only show on first row with rowspan */}
-                                      {weaverIndex === 0 && (
-                                        <td rowSpan={greyMaterials.length + 1} className={`px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-3 align-top border-r border-b-4 ${isDarkMode ? 'text-gray-300 border-gray-600 border-b-gray-500' : 'text-gray-900 border-gray-300 border-b-gray-300'
-                                          }`}>
-                                          <div className="space-y-1 sm:space-y-1.5 md:space-y-2">
-                                            <div className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm">
-                                              <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                                                }`}>Code:</span>
-                                              <span className={`ml-1 sm:ml-1.5 md:ml-2 font-bold text-[10px] xs:text-xs sm:text-sm md:text-base lg:text-lg ${isDarkMode ? 'text-blue-400' : 'text-blue-600'
-                                                }`}>
-                                                {mainGreyMaterial.qualityCode}
-                                              </span>
-                                            </div>
-                                            <div className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm flex items-center">
-                                              <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                                                }`}>Name:</span>
-                                              <span className={`ml-1 sm:ml-1.5 md:ml-2 font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm truncate max-w-[100px] sm:max-w-[120px] md:max-w-none ${isDarkMode ? 'text-purple-300' : 'text-purple-600'
-                                                }`} title={mainGreyMaterial.qualityName}>
-                                                {mainGreyMaterial.qualityName}
-                                              </span>
-                                            </div>
-                                            <div className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm">
-                                              <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                                                }`}>Type:</span>
-                                              <span className={`ml-1 sm:ml-1.5 md:ml-2 font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${mainGreyMaterial.type
-                                                  ? (isDarkMode ? 'text-orange-300' : 'text-orange-600')
-                                                  : (isDarkMode ? 'text-gray-400' : 'text-gray-500')
-                                                }`} title={mainGreyMaterial.type || '-'}>
-                                                {mainGreyMaterial.type || '-'}
-                                              </span>
-                                            </div>
-                                            <div className="pt-1 sm:pt-1.5 md:pt-2 border-t-2 border-gray-400/30">
-                                              <div className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm">
-                                                <span className={`font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-505'
-                                                  }`}>Created:</span>
-                                                <span className={`ml-1 sm:ml-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                                                  }`}>
-                                                  {mainGreyMaterial.createdAt ? new Date(mainGreyMaterial.createdAt).toLocaleDateString() : '-'}
-                                                </span>
-                                              </div>
-                                            </div>
-                                            <div className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm">
-                                              <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                                                }`}>Weavers:</span>
-                                              <span className={`ml-1 sm:ml-1.5 md:ml-2 font-bold text-[10px] xs:text-xs sm:text-sm md:text-base lg:text-lg ${isDarkMode ? 'text-green-400' : 'text-green-600'
-                                                }`}>
-                                                {greyMaterials.length}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </td>
-                                      )}
+                                  {weaversList.map((w) => {
+                                    const weaverItems = weaverMap.get(w)!;
 
-                                      {/* Images - Only show on first row with rowspan */}
-                                      {weaverIndex === 0 && (
-                                        <td rowSpan={greyMaterials.length + 1} className={`px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b-4 ${isDarkMode ? 'border-gray-600 border-b-gray-500' : 'border-gray-300 border-b-gray-300'
-                                          }`}>
-                                          <div className="flex justify-center items-center">
-                                            {mainGreyMaterial.images && (mainGreyMaterial.images || []).filter(img => img && img.trim() !== '').length > 0 ? (
-                                              <div className="flex flex-col items-center space-y-0.5 sm:space-y-1">
-                                                <div className="relative">
-                                                  <img
-                                                    src={(mainGreyMaterial.images || []).filter(img => img && img.trim() !== '')[0]}
-                                                    alt="GreyMaterial"
-                                                    className="w-16 h-12 xs:w-20 xs:h-14 sm:w-24 sm:h-20 md:w-32 md:h-24 lg:w-40 lg:h-28 xl:w-48 xl:h-36 object-contain bg-slate-950 rounded-lg border-2 cursor-pointer shadow-md hover:shadow-lg transition-all duration-150 hover:scale-105"
-                                                    onClick={() => handleImageClick(mainGreyMaterial, 0)}
-                                                    onError={(e) => {
-                                                      const target = e.target as HTMLImageElement;
-                                                      target.style.display = 'none';
-                                                      const fallback = target.parentElement?.querySelector('.fallback-icon') as HTMLElement;
-                                                      if (fallback) {
-                                                        fallback.style.display = 'flex';
-                                                      }
-                                                    }}
-                                                  />
-                                                  <div className={`hidden fallback-icon w-16 h-12 xs:w-20 xs:h-14 sm:w-24 sm:h-20 md:w-32 md:h-24 lg:w-40 lg:h-28 xl:w-48 xl:h-36 rounded-lg items-center justify-center border-2 ${isDarkMode ? 'bg-gray-600 border-gray-500' : 'bg-gray-100 border-gray-200'
-                                                    }`} style={{ display: 'none' }}>
-                                                    <PhotoIcon className={`h-5 w-5 xs:h-6 xs:w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 lg:h-10 lg:w-10 xl:h-12 xl:w-12 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                                                      }`} />
+                                    weaverItems.sort((a, b) => {
+                                      const aDate = new Date(a.createdAt || 0).getTime();
+                                      const bDate = new Date(b.createdAt || 0).getTime();
+                                      return aDate - bDate;
+                                    });
+
+                                    return (
+                                      <React.Fragment key={`${qualityCode}-${w}`}>
+                                        {weaverItems.map((greyMaterial) => {
+                                          const isFirstRow = isFirstRowOfQuality;
+                                          if (isFirstRowOfQuality) {
+                                            isFirstRowOfQuality = false;
+                                          }
+                                          const wNo = globalWeaverIndex++;
+
+                                          return (
+                                            <tr 
+                                              key={`${qualityCode}-${greyMaterial._id}`} 
+                                              className={`relative transition-all duration-300 hover:bg-opacity-50 animate-in fade-in-0 slide-in-from-left-2 ${
+                                                isFirstRow ? '' : 'border-t-2'
+                                              } ${
+                                                isDarkMode ? 'border-gray-500' : 'border-gray-300'
+                                              } ${
+                                                redGlowingIds.has(String(greyMaterial._id)) ? 'animate-red-glow-delete' : ''
+                                              } ${
+                                                fadeOutRows.has(String(greyMaterial._id))
+                                                  ? 'opacity-0 scale-95 -translate-y-2 blur-sm'
+                                                  : 'opacity-100 scale-100 translate-y-0 blur-0'
+                                              } ${
+                                                fadeOutRows.has(String(greyMaterial._id))
+                                                  ? isDarkMode
+                                                    ? 'bg-red-900/20 border-red-500/50'
+                                                    : 'bg-red-50 border-red-300'
+                                                  : ''
+                                              } ${
+                                                deletingIds.has(String(greyMaterial._id)) ? 'opacity-60' : ''
+                                              } ${
+                                                greyMaterial._id && glowingIds.has(greyMaterial._id) ? 'animate-weaver-green-glow' : ''
+                                              }`} 
+                                              style={{
+                                                animationDelay: `${wNo * 0.05}s`,
+                                                transition: fadeOutRows.has(String(greyMaterial._id)) ? 'all 0.5s ease-in-out' : 'all 0.15s ease-in-out'
+                                              }}
+                                            >
+                                              {isFirstRow && (
+                                                <td rowSpan={totalQualityRows} className={`px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-3 align-top border-r border-b-4 ${isDarkMode ? 'text-gray-300 border-gray-600 border-b-gray-500' : 'text-gray-900 border-gray-300 border-b-gray-300'}`}>
+                                                  <div className="space-y-1 sm:space-y-1.5 md:space-y-2">
+                                                    <div className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm">
+                                                      <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>Code:</span>
+                                                      <span className={`ml-1 sm:ml-1.5 md:ml-2 font-bold text-[10px] xs:text-xs sm:text-sm md:text-base lg:text-lg ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                                                        {mainGreyMaterial.qualityCode}
+                                                      </span>
+                                                    </div>
+                                                    <div className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm flex items-center">
+                                                      <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>Name:</span>
+                                                      <span className={`ml-1 sm:ml-1.5 md:ml-2 font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm truncate max-w-[100px] sm:max-w-[120px] md:max-w-none ${isDarkMode ? 'text-purple-300' : 'text-purple-650'}`} title={mainGreyMaterial.qualityName}>
+                                                        {mainGreyMaterial.qualityName}
+                                                      </span>
+                                                    </div>
+                                                    <div className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm">
+                                                      <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>Type:</span>
+                                                      <span className={`ml-1 sm:ml-1.5 md:ml-2 font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${mainGreyMaterial.type ? (isDarkMode ? 'text-orange-300' : 'text-orange-600') : (isDarkMode ? 'text-gray-400' : 'text-gray-500')}`} title={mainGreyMaterial.type || '-'}>
+                                                        {mainGreyMaterial.type || '-'}
+                                                      </span>
+                                                    </div>
+                                                    <div className="pt-1 sm:pt-1.5 md:pt-2 border-t-2 border-gray-400/30">
+                                                      <div className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm">
+                                                        <span className={`font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-550'}`}>Created:</span>
+                                                        <span className={`ml-1 sm:ml-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                                                          {mainGreyMaterial.createdAt ? new Date(mainGreyMaterial.createdAt).toLocaleDateString() : '-'}
+                                                        </span>
+                                                      </div>
+                                                    </div>
+                                                    <div className="text-[9px] xs:text-[10px] sm:text-xs md:text-sm">
+                                                      <span className={`font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>Weavers:</span>
+                                                      <span className={`ml-1 sm:ml-1.5 md:ml-2 font-bold text-[10px] xs:text-xs sm:text-sm md:text-base lg:text-lg ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                                                        {greyMaterials.length}
+                                                      </span>
+                                                    </div>
                                                   </div>
+                                                </td>
+                                              )}
+                                              {isFirstRow && (
+                                                <td rowSpan={totalQualityRows} className={`px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b-4 ${isDarkMode ? 'border-gray-600 border-b-gray-500' : 'border-gray-300 border-b-gray-300'}`}>
+                                                  <div className="flex justify-center items-center">
+                                                    {mainGreyMaterial.images && (mainGreyMaterial.images || []).filter(img => img && img.trim() !== '').length > 0 ? (
+                                                      <div className="flex flex-col items-center space-y-0.5 sm:space-y-1">
+                                                        <div className="relative group/img overflow-hidden rounded-lg cursor-zoom-in shadow-md border-2 border-gray-300 hover:border-blue-500 transition-all duration-200">
+                                                          <img
+                                                            src={mainGreyMaterial.images.filter(img => img && img.trim() !== '')[0]}
+                                                            alt="Grey Material"
+                                                            className="w-16 h-12 xs:w-20 xs:h-14 sm:w-24 sm:h-20 md:w-32 md:h-24 lg:w-40 lg:h-28 xl:w-48 xl:h-36 object-cover transform hover:scale-105 transition-transform duration-200"
+                                                            onClick={() => handleImageClick(mainGreyMaterial, 0)}
+                                                            onError={(e) => {
+                                                              const target = e.target as HTMLImageElement;
+                                                              target.style.display = 'none';
+                                                              const fallback = target.parentElement?.querySelector('.fallback-icon') as HTMLElement;
+                                                              if (fallback) fallback.style.display = 'flex';
+                                                            }}
+                                                          />
+                                                          <div className="hidden fallback-icon w-16 h-12 xs:w-20 xs:h-14 sm:w-24 sm:h-20 md:w-32 md:h-24 lg:w-40 lg:h-28 xl:w-48 xl:h-36 rounded-lg items-center justify-center border-2" style={{ display: 'none' }}>
+                                                            <PhotoIcon className={`h-5 w-5 xs:h-6 xs:w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 lg:h-10 lg:w-10 xl:h-12 xl:w-12 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                                                          </div>
+                                                        </div>
+                                                        {mainGreyMaterial.images && mainGreyMaterial.images.filter(img => img && img.trim() !== '').length > 1 && (
+                                                          <span className={`text-[8px] xs:text-[9px] sm:text-[10px] md:text-xs px-1.5 xs:px-2 py-0.5 rounded-full font-medium ${isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'}`}>
+                                                            +{(mainGreyMaterial.images || []).filter(img => img && img.trim() !== '').length - 1}
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                    ) : (
+                                                      <div className={`w-16 h-12 xs:w-20 xs:h-14 sm:w-24 sm:h-20 md:w-32 md:h-24 lg:w-40 lg:h-28 xl:w-48 xl:h-36 rounded-lg flex flex-col items-center justify-center border-2 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+                                                        <PhotoIcon className={`h-5 w-5 xs:h-6 xs:w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 lg:h-10 lg:w-10 xl:h-12 xl:w-12 mb-0.5 sm:mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-550'}`} />
+                                                        <span className={`text-[8px] xs:text-[9px] sm:text-[10px] md:text-xs font-medium ${isDarkMode ? 'text-gray-555' : 'text-gray-400'}`}>
+                                                          No img
+                                                        </span>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                </td>
+                                              )}
+                                              <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'}`}>
+                                                <div className={`text-[10px] xs:text-xs sm:text-sm md:text-base font-bold text-center ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+                                                  W{wNo + 1}
                                                 </div>
-                                                {mainGreyMaterial.images && mainGreyMaterial.images.filter(img => img && img.trim() !== '').length > 1 && (
-                                                  <span className={`text-[8px] xs:text-[9px] sm:text-[10px] md:text-xs px-1.5 xs:px-2 py-0.5 rounded-full font-medium ${isDarkMode
-                                                      ? 'bg-blue-600 text-white'
-                                                      : 'bg-blue-100 text-blue-800'
-                                                    }`}>
-                                                    +{(mainGreyMaterial.images || []).filter(img => img && img.trim() !== '').length - 1}
-                                                  </span>
-                                                )}
-                                              </div>
-                                            ) : (
-                                              <div className={`w-16 h-12 xs:w-20 xs:h-14 sm:w-24 sm:h-20 md:w-32 md:h-24 lg:w-40 lg:h-28 xl:w-48 xl:h-36 rounded-lg flex flex-col items-center justify-center border-2 ${isDarkMode
-                                                  ? 'bg-gray-700 border-gray-600'
-                                                  : 'bg-gray-50 border-gray-200'
-                                                }`}>
-                                                <PhotoIcon className={`h-5 w-5 xs:h-6 xs:w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 lg:h-10 lg:w-10 xl:h-12 xl:w-12 mb-0.5 sm:mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                                                  }`} />
-                                                <span className={`text-[8px] xs:text-[9px] sm:text-[10px] md:text-xs font-medium ${isDarkMode ? 'text-gray-550' : 'text-gray-400'
-                                                  }`}>
-                                                  No img
+                                              </td>
+                                              <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'}`}>
+                                                <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm break-words block w-full ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+                                                  {greyMaterial.weaver}
                                                 </span>
-                                              </div>
-                                            )}
-                                          </div>
+                                              </td>
+                                              <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'}`}>
+                                                <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-purple-300' : 'text-purple-650'}`}>
+                                                  {greyMaterial.challanDate ? new Date(greyMaterial.challanDate).toLocaleDateString() : '-'}
+                                                </span>
+                                              </td>
+                                              <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'}`}>
+                                                <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-purple-300' : 'text-purple-605'}`}>
+                                                  {greyMaterial.challanNumber || '-'}
+                                                </span>
+                                              </td>
+                                              <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'}`}>
+                                                <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-rose-300' : 'text-rose-600'}`}>
+                                                  {greyMaterial.rate && Number(greyMaterial.rate) > 0 ? `₹${greyMaterial.rate}` : '-'}
+                                                </span>
+                                              </td>
+                                              <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'}`}>
+                                                <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-green-300' : 'text-green-600'}`}>
+                                                  {greyMaterial.piece && Number(greyMaterial.piece) > 0 ? greyMaterial.piece : '-'}
+                                                </span>
+                                              </td>
+                                              <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'}`}>
+                                                <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-teal-300' : 'text-teal-600'}`}>
+                                                  {greyMaterial.meter && Number(greyMaterial.meter) > 0 ? greyMaterial.meter : '-'}
+                                                </span>
+                                              </td>
+                                              {isFirstRow && (
+                                                <td rowSpan={totalQualityRows} className={`px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-3 align-middle border-b-4 ${isDarkMode ? 'border-gray-600 border-b-gray-500' : 'border-gray-300 border-b-gray-300'}`}>
+                                                  <div className="flex flex-col justify-center space-y-1 sm:space-y-1.5 md:space-y-2">
+                                                    <button
+                                                      onClick={() => handleView(mainGreyMaterial)}
+                                                      className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium flex items-center justify-center space-x-1 transition-all duration-150 hover:scale-105 active:scale-95 hover-lift ${isDarkMode ? 'text-blue-400 border border-blue-400 hover:bg-blue-500/20' : 'text-blue-600 border border-blue-600 hover:bg-blue-50'}`}
+                                                      title="View Details"
+                                                    >
+                                                      <EyeIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                                      <span className="hidden sm:inline">View</span>
+                                                    </button>
+                                                    <button
+                                                      onClick={() => handleEdit(mainGreyMaterial)}
+                                                      className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium flex items-center justify-center space-x-1 transition-colors ${isDarkMode ? 'text-emerald-400 border border-emerald-400 hover:bg-emerald-500/20' : 'text-emerald-600 border border-emerald-600 hover:bg-emerald-50'}`}
+                                                      title="Edit"
+                                                    >
+                                                      <PencilIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                                      <span className="hidden sm:inline">Edit</span>
+                                                    </button>
+                                                    {isMaster && (
+                                                      <button
+                                                        onClick={() => handleDeleteQualityGroup(mainGreyMaterial, greyMaterials)}
+                                                        className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium flex items-center justify-center space-x-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isDarkMode ? 'text-red-400 border border-red-400 hover:bg-red-500/20' : 'text-red-600 border border-red-600 hover:bg-red-50'}`}
+                                                        title={`Delete Quality Group (${greyMaterials.length} items)`}
+                                                      >
+                                                        <TrashIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                                        <span className="hidden sm:inline">Delete</span>
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                </td>
+                                              )}
+                                            </tr>
+                                          );
+                                        })}
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                  {/* Add Quality-wise subtotal row at the end of quality group */}
+                                  {(() => {
+                                    const qualityPieces = greyMaterials.reduce((sum, item) => sum + (Number(item.piece) || 0), 0);
+                                    const qualityMeters = greyMaterials.reduce((sum, item) => sum + (Number(item.meter) || 0), 0);
+                                    const qualityAmount = greyMaterials.reduce((sum, item) => sum + ((Number(item.meter) || 0) * (Number(item.rate) || 0)), 0);
+
+                                    return (
+                                      <tr className={`font-semibold border-b-4 ${isDarkMode ? 'bg-slate-700/50 text-gray-200 border-gray-650 border-b-gray-500' : 'bg-slate-100 text-gray-800 border-gray-300 border-b-gray-300'}`}>
+                                        <td colSpan={4} className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-right border-r font-bold ${isDarkMode ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-700'}`}>
+                                          Total for {mainGreyMaterial.qualityCode}
                                         </td>
-                                      )}
-
-                                      {/* W No. Column */}
-                                      <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'
-                                        }`}>
-                                        <div className={`text-[10px] xs:text-xs sm:text-sm md:text-base font-bold text-center ${isDarkMode ? 'text-blue-300' : 'text-blue-600'
-                                          }`}>
-                                          W{weaverIndex + 1}
-                                        </div>
-                                      </td>
-
-                                      {/* W Name Column */}
-                                      <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'
-                                        }`}>
-                                        <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm break-words block w-full ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>
-                                          {greyMaterial.weaver}
-                                        </span>
-                                      </td>
-
-                                      {/* Challan Date Column */}
-                                      <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'
-                                        }`}>
-                                        <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-purple-300' : 'text-purple-650'}`}>
-                                          {greyMaterial.challanDate ? new Date(greyMaterial.challanDate).toLocaleDateString() : '-'}
-                                        </span>
-                                      </td>
-
-                                      {/* Challan No Column */}
-                                      <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'
-                                        }`}>
-                                        <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-purple-300' : 'text-purple-600'}`}>
-                                          {greyMaterial.challanNumber || '-'}
-                                        </span>
-                                      </td>
-
-                                      {/* Rate Column */}
-                                      <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'
-                                        }`}>
-                                        <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-rose-300' : 'text-rose-600'}`}>
-                                          {greyMaterial.rate && Number(greyMaterial.rate) > 0 ? `₹${greyMaterial.rate}` : '-'}
-                                        </span>
-                                      </td>
-
-                                      {/* Piece Column */}
-                                      <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'
-                                        }`}>
-                                        <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-green-300' : 'text-green-600'}`}>
-                                          {greyMaterial.piece && Number(greyMaterial.piece) > 0 ? greyMaterial.piece : '-'}
-                                        </span>
-                                      </td>
-
-                                      {/* Meter Column */}
-                                      <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 align-middle border-r border-b text-center ${isDarkMode ? 'text-gray-300 border-gray-600' : 'text-gray-900 border-gray-300'
-                                        }`}>
-                                        <span className={`font-bold text-[9px] xs:text-[10px] sm:text-xs md:text-sm ${isDarkMode ? 'text-teal-300' : 'text-teal-600'}`}>
-                                          {greyMaterial.meter && Number(greyMaterial.meter) > 0 ? greyMaterial.meter : '-'}
-                                        </span>
-                                      </td>
-
-                                      {/* Actions - Only show on first row with rowspan */}
-                                      {weaverIndex === 0 && (
-                                        <td rowSpan={greyMaterials.length + 1} className={`px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-3 align-middle border-b-4 ${isDarkMode ? 'border-gray-600 border-b-gray-500' : 'border-gray-300 border-b-gray-300'
-                                          }`}>
-                                          <div className="flex flex-col justify-center space-y-1 sm:space-y-1.5 md:space-y-2">
-                                            <button
-                                              onClick={() => handleView(mainGreyMaterial)}
-                                              className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium flex items-center justify-center space-x-1 transition-all duration-150 hover:scale-105 active:scale-95 hover-lift ${isDarkMode
-                                                  ? 'text-blue-400 border border-blue-400 hover:bg-blue-500/20'
-                                                  : 'text-blue-600 border border-blue-600 hover:bg-blue-50'
-                                                }`}
-                                              title="View Details"
-                                            >
-                                              <EyeIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                              <span className="hidden sm:inline">View</span>
-                                            </button>
-
-                                            <button
-                                              onClick={() => handleEdit(mainGreyMaterial)}
-                                              className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium flex items-center justify-center space-x-1 transition-colors ${isDarkMode
-                                                  ? 'text-emerald-400 border border-emerald-400 hover:bg-emerald-500/20'
-                                                  : 'text-emerald-600 border border-emerald-600 hover:bg-emerald-50'
-                                                }`}
-                                              title="Edit"
-                                            >
-                                              <PencilIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                              <span className="hidden sm:inline">Edit</span>
-                                            </button>
-
-                                            {isMaster && (
-                                              <button
-                                                onClick={() => handleDeleteQualityGroup(mainGreyMaterial, greyMaterials)}
-                                                className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium flex items-center justify-center space-x-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isDarkMode
-                                                    ? 'text-red-400 border border-red-400 hover:bg-red-500/20'
-                                                    : 'text-red-600 border border-red-600 hover:bg-red-50'
-                                                  }`}
-                                                title={`Delete Quality Group (${greyMaterials.length} items)`}
-                                              >
-                                                <TrashIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                                <span className="hidden sm:inline">Delete</span>
-                                              </button>
-                                            )}
-                                          </div>
+                                        <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center border-r font-bold ${isDarkMode ? 'text-rose-300 border-gray-600' : 'text-rose-600 border-gray-300'}`}>
+                                          {qualityAmount && qualityAmount > 0 ? `₹${qualityAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : '-'}
                                         </td>
-                                      )}
-                                    </tr>
-                                  ))}
-                                  {/* Subtotal row */}
-                                  {true && (
-                                    <tr className={`font-semibold border-b-4 ${isDarkMode ? 'bg-slate-700/30 text-gray-200 border-gray-650 border-b-gray-500' : 'bg-slate-50 text-gray-800 border-gray-300 border-b-gray-300'}`}>
-                                      <td colSpan={4} className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-right border-r font-bold ${isDarkMode ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-700'}`}>
-                                        Total for {mainGreyMaterial.qualityCode}
-                                      </td>
-                                      <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center border-r font-bold ${isDarkMode ? 'text-rose-300 border-gray-600' : 'text-rose-600 border-gray-300'}`}>
-                                        {subtotalAmount && subtotalAmount > 0 ? `₹${subtotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : '-'}
-                                      </td>
-                                      <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center border-r font-bold ${isDarkMode ? 'text-green-300 border-gray-600' : 'text-green-700 border-gray-300'}`}>
-                                        {subtotalPieces || '-'}
-                                      </td>
-                                      <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center border-r font-bold ${isDarkMode ? 'text-teal-300 border-gray-600' : 'text-teal-750 border-gray-300'}`}>
-                                        {subtotalMeters || '-'}
-                                      </td>
-                                    </tr>
-                                  )}
+                                        <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center border-r font-bold ${isDarkMode ? 'text-green-300 border-gray-600' : 'text-green-700 border-gray-300'}`}>
+                                          {qualityPieces || '-'}
+                                        </td>
+                                        <td className={`px-1 sm:px-1.5 md:px-2 py-1.5 sm:py-2 md:py-3 text-center border-r font-bold ${isDarkMode ? 'text-teal-300 border-gray-600' : 'text-teal-750 border-gray-300'}`}>
+                                          {qualityMeters || '-'}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })()}
                                 </React.Fragment>
                               );
                             });

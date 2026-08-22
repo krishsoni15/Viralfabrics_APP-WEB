@@ -3163,31 +3163,42 @@ export const generateGreyMaterialsInventoryPDF = async (greyMaterials: any[], so
       format: 'a4'
     });
 
+    // Premium Top Accent Bar
+    doc.setFillColor(79, 70, 229); // Indigo `#4f46e5`
+    doc.rect(0, 0, 297, 4, 'F');
+
     // Title
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(18);
+    doc.setTextColor(15, 23, 42); // Slate 900
     doc.text('VIRAL FABRICS', 148.5, 15, { align: 'center' });
 
     // Subtitle
-    doc.setFontSize(12);
-    doc.text('GREY MATERIAL INVENTORY REPORT', 148.5, 22, { align: 'center' });
+    doc.setFontSize(11);
+    doc.setTextColor(71, 85, 105); // Slate 600
+    doc.text('GREY MATERIAL INVENTORY REPORT', 148.5, 21, { align: 'center' });
 
     // Date & Count
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 15, 30);
-    doc.text(`Total Entries: ${greyMaterials.length}`, 282, 30, { align: 'right' });
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 15, 29);
+    doc.text(`Total Entries: ${greyMaterials.length}`, 282, 29, { align: 'right' });
 
     // Dividers
-    doc.setDrawColor(200, 200, 200);
-    doc.line(15, 33, 282, 33);
+    doc.setDrawColor(226, 232, 240); // Slate 200
+    doc.setLineWidth(0.4);
+    doc.line(15, 32, 282, 32);
+
+    // Reset Text Color for general drawing
+    doc.setTextColor(0, 0, 0);
 
     // Calculate totals
     const totalPieces = greyMaterials.reduce((sum, item) => sum + (Number(item.piece) || 0), 0);
     const totalMeters = greyMaterials.reduce((sum, item) => sum + (Number(item.meter) || 0), 0);
     const totalAmount = greyMaterials.reduce((sum, item) => sum + ((Number(item.meter) || 0) * (Number(item.rate) || 0)), 0);
 
-    // Group materials by quality code to match the Web UI grouping & sorting
+    // Group materials by quality code
     const groupedMap = new Map<string, any[]>();
     const groupOrder: string[] = [];
     
@@ -3211,16 +3222,6 @@ export const generateGreyMaterialsInventoryPDF = async (greyMaterials: any[], so
       return sortOrder === 'desc' ? minDateB - minDateA : minDateA - minDateB;
     });
 
-    // Sort weavers within each group by creation time oldest-first (W1, W2, W3...)
-    groupOrder.forEach(code => {
-      const list = groupedMap.get(code)!;
-      list.sort((a, b) => {
-        const aDate = new Date(a.createdAt || 0).getTime();
-        const bDate = new Date(b.createdAt || 0).getTime();
-        return aDate - bDate;
-      });
-    });
-
     // Table Data Headers
     const headers = [
       ['S.No', 'IMG', 'Code', 'Quality Name', 'Type', 'Weaver', 'Challan Date', 'Challan No', 'Rate', 'Piece', 'Meter']
@@ -3231,58 +3232,93 @@ export const generateGreyMaterialsInventoryPDF = async (greyMaterials: any[], so
 
     groupOrder.forEach((code) => {
       const list = groupedMap.get(code)!;
-      const N = list.length;
-      const firstItem = list[0];
-      const imageUrl = firstItem.images && firstItem.images.filter((img: any) => img && img.trim() !== '')[0] || '';
-      
-      const subtotalPieces = list.reduce((sum, item) => sum + (Number(item.piece) || 0), 0);
-      const subtotalMeters = list.reduce((sum, item) => sum + (Number(item.meter) || 0), 0);
-      const subtotalAmount = list.reduce((sum, item) => sum + ((Number(item.meter) || 0) * (Number(item.rate) || 0)), 0);
-
-      list.forEach((item, weaverIndex) => {
-        const row: any[] = [];
-        
-        // Only add rowspanned columns on the first row of the group
-        if (weaverIndex === 0) {
-          row.push({ content: sNo++, rowSpan: N > 1 ? N + 1 : 1 });
-          row.push({ content: '', rawImage: imageUrl, rowSpan: N > 1 ? N + 1 : 1 });
-          row.push({ content: item.qualityCode || '', rowSpan: N > 1 ? N + 1 : 1 });
-          row.push({ content: item.qualityName || '', rowSpan: N > 1 ? N + 1 : 1 });
-          row.push({ content: item.type || '', rowSpan: N > 1 ? N + 1 : 1 });
+      let imageUrl = '';
+      for (const item of list) {
+        const firstValidImg = item.images && item.images.find((img: any) => img && typeof img === 'string' && img.trim() !== '');
+        if (firstValidImg) {
+          imageUrl = firstValidImg;
+          break;
         }
-        
-        row.push(item.weaver || '');
-        row.push(item.challanDate ? new Date(item.challanDate).toLocaleDateString() : '-');
-        row.push(item.challanNumber || '-');
-        row.push(item.rate && Number(item.rate) > 0 ? `Rs. ${item.rate}` : '-');
-        row.push(item.piece || '-');
-        row.push(item.meter || '-');
-        
-        body.push(row);
+      }
+      
+      // Group items within this quality by weaver
+      const weaverMap = new Map<string, any[]>();
+      const weaversList: string[] = [];
+      list.forEach(item => {
+        const w = item.weaver || 'Unknown';
+        if (!weaverMap.has(w)) {
+          weaverMap.set(w, []);
+          weaversList.push(w);
+        }
+        weaverMap.get(w)!.push(item);
       });
 
-      // Add group subtotal row if there are multiple weavers
-      if (N > 1) {
-        const subtotalRow: any[] = [];
-        subtotalRow.push({
-          content: `Total for ${code}`,
-          colSpan: 3,
-          styles: { halign: 'right', fontStyle: 'bold', fillColor: [249, 250, 251] }
+      // Sort weavers alphabetically
+      weaversList.sort((a, b) => a.localeCompare(b));
+
+      // Calculate total rows for this quality group to determine rowspan for first 5 columns
+      const totalQualityRows = list.length + 1; // All weaver rows + 1 row for quality subtotal
+
+      let isFirstRowOfQuality = true;
+
+      weaversList.forEach((w) => {
+        const weaverItems = weaverMap.get(w)!;
+        
+        // Sort weaver items by date oldest first
+        weaverItems.sort((a, b) => {
+          const aDate = new Date(a.createdAt || 0).getTime();
+          const bDate = new Date(b.createdAt || 0).getTime();
+          return aDate - bDate;
         });
-        subtotalRow.push({
-          content: subtotalAmount && subtotalAmount > 0 ? `Rs. ${subtotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : '-',
-          styles: { fontStyle: 'bold', halign: 'center', fillColor: [249, 250, 251] }
+
+        weaverItems.forEach((item) => {
+          const row: any[] = [];
+          
+          // Only add rowspanned columns on the first row of the quality group
+          if (isFirstRowOfQuality) {
+            row.push({ content: sNo++, rowSpan: totalQualityRows });
+            row.push({ content: '', rawImage: imageUrl, rowSpan: totalQualityRows });
+            row.push({ content: item.qualityCode || '', rowSpan: totalQualityRows });
+            row.push({ content: item.qualityName || '', rowSpan: totalQualityRows });
+            row.push({ content: item.type || '', rowSpan: totalQualityRows });
+            isFirstRowOfQuality = false;
+          }
+          
+          row.push(item.weaver || '');
+          row.push(item.challanDate ? new Date(item.challanDate).toLocaleDateString() : '-');
+          row.push(item.challanNumber || '-');
+          row.push(item.rate && Number(item.rate) > 0 ? `Rs. ${item.rate}` : '-');
+          row.push(item.piece || '-');
+          row.push(item.meter || '-');
+          
+          body.push(row);
         });
-        subtotalRow.push({
-          content: subtotalPieces || '-',
-          styles: { fontStyle: 'bold', halign: 'center', fillColor: [249, 250, 251] }
-        });
-        subtotalRow.push({
-          content: subtotalMeters || '-',
-          styles: { fontStyle: 'bold', halign: 'center', fillColor: [249, 250, 251] }
-        });
-        body.push(subtotalRow);
-      }
+      });
+
+      // Add Quality-wise subtotal row at the end of the group
+      const qualityPieces = list.reduce((sum, item) => sum + (Number(item.piece) || 0), 0);
+      const qualityMeters = list.reduce((sum, item) => sum + (Number(item.meter) || 0), 0);
+      const qualityAmount = list.reduce((sum, item) => sum + ((Number(item.meter) || 0) * (Number(item.rate) || 0)), 0);
+
+      const qualitySubtotalRow: any[] = [];
+      qualitySubtotalRow.push({
+        content: `Total for ${code}`,
+        colSpan: 3,
+        styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } // Slate 100
+      });
+      qualitySubtotalRow.push({
+        content: qualityAmount && qualityAmount > 0 ? `Rs. ${qualityAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : '-',
+        styles: { fontStyle: 'bold', halign: 'center', fillColor: [241, 245, 249] }
+      });
+      qualitySubtotalRow.push({
+        content: qualityPieces || '-',
+        styles: { fontStyle: 'bold', halign: 'center', fillColor: [241, 245, 249] }
+      });
+      qualitySubtotalRow.push({
+        content: qualityMeters || '-',
+        styles: { fontStyle: 'bold', halign: 'center', fillColor: [241, 245, 249] }
+      });
+      body.push(qualitySubtotalRow);
     });
 
     // Footer row with totals (merged columns 0 to 7 = 8 columns total)
@@ -3297,14 +3333,14 @@ export const generateGreyMaterialsInventoryPDF = async (greyMaterials: any[], so
 
     // Generate Table
     autoTable(doc, {
-      startY: 37,
+      startY: 35,
       head: headers,
       body: body,
       foot: foot,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 2, halign: 'center', valign: 'middle' },
-      headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' },
-      footStyles: { fillColor: [243, 244, 246], textColor: [0, 0, 0] },
+      styles: { fontSize: 8, cellPadding: 2.5, halign: 'center', valign: 'middle' },
+      headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+      footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42] },
       columnStyles: {
         1: { cellWidth: 20, minCellHeight: 15 }, // Image column
         3: { halign: 'left' }, // Quality name left aligned

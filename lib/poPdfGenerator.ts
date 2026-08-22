@@ -342,7 +342,6 @@ export async function generatePurchaseOrderPDF(po: any): Promise<jsPDF> {
   const specs = po.specs || {};
   const specRows = [
     { label: 'Finish GSM:', value: specs.finishGsm || '' },
-    { label: 'Grey Width:', value: specs.greyWidth || '' },
     { key: 'finishWidth', label: 'Finish Width:', value: specs.finishWidth || '' },
     { key: 'weight', label: 'Weight:', value: specs.weight || '' }
   ];
