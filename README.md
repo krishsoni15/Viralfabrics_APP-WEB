@@ -418,7 +418,7 @@ All APIs are served under `/api/` with JWT authentication enforced via Next.js m
 
 ## 🔐 Role-Based Access Control (RBAC)
 
-The platform enforces granular access control across 5 user roles:
+The platform enforces granular access control across 4 user roles:
 
 | Role | Access Level | Capabilities |
 |:---|:---|:---|
@@ -426,7 +426,6 @@ The platform enforces granular access control across 5 user roles:
 | **Superadmin** | 🟠 Administrative | Full CRUD, user management, report generation, bulk operations |
 | **User** | 🟢 Standard | View dashboards, manage assigned orders/fabrics, generate PDFs, limited edit |
 | **Party** | 🔵 External | View linked orders and fabrics only, restricted to party-specific data, contact-scoped |
-| **Admin** | 🟡 Legacy | Administrative access (legacy role) |
 
 > **Note:** Authentication is enforced at the middleware level using JWT tokens verified with the `jose` library. Each API route checks the `role` claim from the decoded JWT payload.
 
