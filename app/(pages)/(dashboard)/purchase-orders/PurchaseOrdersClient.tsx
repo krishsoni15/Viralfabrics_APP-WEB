@@ -1008,7 +1008,7 @@ export default function PurchaseOrdersClient() {
     greighLeadTime: '',
     images: [] as string[],
     paymentTerms: '',
-    specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
+    specs: { finishGsm: '', finishWidth: '', weight: '' },
     notes: '',
     status: 'Pending' as 'Pending' | 'Completed'
   });
@@ -1155,7 +1155,7 @@ export default function PurchaseOrdersClient() {
       greighLeadTime: '',
       images: [],
       paymentTerms: '',
-      specs: { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
+      specs: { finishGsm: '', finishWidth: '', weight: '' },
       notes: '',
       status: 'Pending'
     });
@@ -1185,7 +1185,7 @@ export default function PurchaseOrdersClient() {
       greighLeadTime: po.greighLeadTime || '',
       images: po.images || [],
       paymentTerms: po.paymentTerms || '',
-      specs: po.specs || { finishGsm: '', greyWidth: '', finishWidth: '', weight: '' },
+      specs: po.specs || { finishGsm: '', finishWidth: '', weight: '' },
       notes: po.notes || '',
       status: po.status || 'Pending'
     });
@@ -2048,11 +2048,7 @@ export default function PurchaseOrdersClient() {
                                   GSM: {po.specs.finishGsm}
                                 </span>
                               )}
-                              {po.specs?.greyWidth && (
-                                <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg shadow-sm border transition-all ${isDarkMode ? 'bg-slate-700/80 text-slate-100 border-slate-600' : 'bg-slate-100 text-slate-800 border-slate-200'}`}>
-                                  Grey W: {po.specs.greyWidth}
-                                </span>
-                              )}
+
                               {po.specs?.finishWidth && (
                                 <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg shadow-sm border transition-all ${isDarkMode ? 'bg-slate-700/80 text-slate-100 border-slate-600' : 'bg-slate-100 text-slate-800 border-slate-200'}`}>
                                   Finish W: {po.specs.finishWidth}
@@ -2063,7 +2059,7 @@ export default function PurchaseOrdersClient() {
                                   Wt: {po.specs.weight}
                                 </span>
                               )}
-                              {!po.specs?.finishGsm && !po.specs?.greyWidth && !po.specs?.finishWidth && !po.specs?.weight && (
+                              {!po.specs?.finishGsm && !po.specs?.finishWidth && !po.specs?.weight && (
                                 <span className={textMuted}>-</span>
                               )}
                             </div>
@@ -2346,12 +2342,11 @@ export default function PurchaseOrdersClient() {
                       )}
 
                       {/* Specs Grid in Card */}
-                      {(po.specs?.finishGsm || po.specs?.greyWidth || po.specs?.finishWidth || po.specs?.weight) && (
+                      {(po.specs?.finishGsm || po.specs?.finishWidth || po.specs?.weight) && (
                         <div className="pt-2 border-t border-gray-100 dark:border-slate-700/60">
                           <span className={`text-[10px] font-bold block mb-1 uppercase tracking-wider ${textMuted}`}>Specifications</span>
                           <div className="grid grid-cols-2 gap-1 text-xs">
                             {po.specs.finishGsm && <div className={`p-1.5 rounded-lg border text-xs font-semibold ${isDarkMode ? 'bg-slate-700/60 border-slate-600 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-800'}`}>GSM: {po.specs.finishGsm}</div>}
-                            {po.specs.greyWidth && <div className={`p-1.5 rounded-lg border text-xs font-semibold ${isDarkMode ? 'bg-slate-700/60 border-slate-600 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-800'}`}>Grey W: {po.specs.greyWidth}</div>}
                             {po.specs.finishWidth && <div className={`p-1.5 rounded-lg border text-xs font-semibold ${isDarkMode ? 'bg-slate-700/60 border-slate-600 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-800'}`}>Finish W: {po.specs.finishWidth}</div>}
                             {po.specs.weight && <div className={`p-1.5 rounded-lg border text-xs font-semibold ${isDarkMode ? 'bg-slate-700/60 border-slate-600 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-800'}`}>Weight: {po.specs.weight}</div>}
                           </div>
@@ -2900,7 +2895,6 @@ export default function PurchaseOrdersClient() {
                 <div className={`rounded-xl border overflow-hidden ${isDarkMode ? 'border-slate-600' : 'border-gray-200'}`}>
                   {[
                     { key: 'finishGsm', label: 'Finish GSM' },
-                    { key: 'greyWidth', label: 'Grey Width' },
                     { key: 'finishWidth', label: 'Finish Width' },
                     { key: 'weight', label: 'Weight' }
                   ].map((spec, i) => (

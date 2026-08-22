@@ -40,7 +40,7 @@ try {
 }
 import CustomCameraModal from '../../components/shared/CustomCameraModal';
 
-const ROLES = ['user', 'admin', 'superadmin', 'weaver', 'party'];
+const ROLES = ['user', 'superadmin', 'party'];
 
 const UserAvatar = ({ 
   photoUrl, 
@@ -186,7 +186,8 @@ export default function UsersScreen() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    name: '', username: '', password: '', phoneNumber: '', address: '', role: 'user', partyId: '', profilePhoto: ''
+    name: '', username: '', password: '', phoneNumber: '', address: '', role: 'user', partyId: '', profilePhoto: '',
+    contactName: '', contactNames: [] as string[]
   });
   const [cameraVisible, setCameraVisible] = useState(false);
   const [uploadingFormPhoto, setUploadingFormPhoto] = useState(false);
@@ -216,6 +217,13 @@ export default function UsersScreen() {
     name: '', contactName: '', contactPhone: '', address: ''
   });
   const [partyFormErrors, setPartyFormErrors] = useState<Record<string, string>>({});
+  
+  // States for contact selection
+  const [contacts, setContacts] = useState<string[]>([]);
+  const [contactDetails, setContactDetails] = useState<{ name: string; phone: string }[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [showFormContactPicker, setShowFormContactPicker] = useState(false);
+  const [contactSearch, setContactSearch] = useState('');
 
   const pickerTranslateY = useRef(new RNAnimated.Value(0)).current;
 
@@ -266,6 +274,7 @@ export default function UsersScreen() {
           }).start(() => {
             setShowFormRolePicker(false);
             setShowFormPartyPicker(false);
+            setShowFormContactPicker(false);
             setShowFiltersModal(false);
             pickerTranslateY.setValue(0);
           });
@@ -283,11 +292,11 @@ export default function UsersScreen() {
   ).current;
 
   useEffect(() => {
-    if (showFormRolePicker || showFormPartyPicker || showFiltersModal) {
+    if (showFormRolePicker || showFormPartyPicker || showFormContactPicker || showFiltersModal) {
       pickerTranslateY.setValue(0);
       pickerScrollOffset.current = 0;
     }
-  }, [showFormRolePicker, showFormPartyPicker, showFiltersModal]);
+  }, [showFormRolePicker, showFormPartyPicker, showFormContactPicker, showFiltersModal]);
 
   const usersQuery = useQuery({
     queryKey: ['users'],
@@ -332,13 +341,35 @@ export default function UsersScreen() {
 
   const parties = partiesQuery.data || [];
 
+  // Fetch contacts automatically when partyId changes
+  useEffect(() => {
+    const fetchContacts = async () => {
+      if (!formData.partyId) {
+        setContacts([]);
+        setContactDetails([]);
+        return;
+      }
+      setLoadingContacts(true);
+      try {
+        const { data } = await api.get(`/api/parties/${formData.partyId}/contacts`);
+        if (data?.success) {
+          setContacts(data.contacts || []);
+          setContactDetails(data.contactDetails || []);
+        }
+      } catch (error) {
+        console.warn('Failed to fetch contacts:', error);
+      } finally {
+        setLoadingContacts(false);
+      }
+    };
+
+    fetchContacts();
+  }, [formData.partyId]);
+
   const availableRoles = useMemo(() => {
     const baseRoles = ['user', 'party', 'superadmin'];
     
-    // Master can assign any role
-    let roles = isMaster 
-      ? ['user', 'party', 'superadmin', 'master', 'admin', 'weaver'] 
-      : baseRoles;
+    let roles = baseRoles;
       
     // If editing a user and their current role is not in the list, keep it
     if (selectedUser && !roles.includes(selectedUser.role)) {
@@ -357,6 +388,8 @@ export default function UsersScreen() {
       const payload: any = { ...data };
       if (payload.role !== 'party') {
         delete payload.partyId;
+        delete payload.contactName;
+        delete payload.contactNames;
       }
       const res = await api.post('/api/users', payload);
       return res.data;
@@ -381,6 +414,8 @@ export default function UsersScreen() {
       if (!updateData.password?.trim()) delete updateData.password;
       if (updateData.role !== 'party') {
         updateData.partyId = null;
+        updateData.contactName = null;
+        updateData.contactNames = [];
       }
       const res = await api.put(`/api/users/${id}`, updateData);
       return res.data;
@@ -713,7 +748,7 @@ export default function UsersScreen() {
                 {/* Role Filter Section */}
                 <Text style={{ fontSize: 13, fontWeight: '800', color: theme.textTertiary, marginBottom: 12, letterSpacing: 0.5 }}>FILTER BY ROLE</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
-                  {['all', ...(isMaster ? ['master'] : []), 'superadmin', 'user', 'party'].map((r) => {
+                  {['all', 'superadmin', 'user', 'party'].map((r) => {
                     const isSelected = roleFilter === r;
                     const label = r === 'all' ? 'All Roles' : r === 'superadmin' ? 'Super Admin' : r.charAt(0).toUpperCase() + r.slice(1);
                     return (
@@ -948,14 +983,23 @@ export default function UsersScreen() {
                           key={p._id}
                           onPress={() => {
                             if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            setFormData(prev => ({
-                              ...prev,
-                              partyId: p._id,
-                              name: p.name,
-                              username: p.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
-                              phoneNumber: p.contactPhone || prev.phoneNumber || '',
-                              address: p.address || prev.address || ''
-                            }));
+                            setFormData(prev => {
+                              const contactName = p.contactName || '';
+                              const contactPhone = p.contactPhone || prev.phoneNumber || '';
+                              const displayName = contactName || p.name || '';
+                              const generatedUsername = displayName.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+
+                              return {
+                                ...prev,
+                                partyId: p._id,
+                                contactName: contactName,
+                                contactNames: contactName ? [contactName] : [],
+                                name: displayName,
+                                username: generatedUsername,
+                                phoneNumber: contactPhone,
+                                address: p.address || prev.address || ''
+                              };
+                            });
                             setShowFormPartyPicker(false);
                           }}
                           style={{
@@ -992,11 +1036,202 @@ export default function UsersScreen() {
     );
   };
 
+  const renderFormContactSelectionModal = () => {
+    const filteredContacts = contacts.filter((c: string) =>
+      c.toLowerCase().includes(contactSearch.toLowerCase())
+    );
+
+    return (
+      <Modal
+        visible={showFormContactPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFormContactPicker(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setShowFormContactPicker(false)}
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.05)',
+              justifyContent: isLargeScreen ? 'center' : 'flex-end',
+              alignItems: isLargeScreen ? 'center' : 'stretch',
+            }}
+          >
+            <RNAnimated.View
+              {...pickerPanResponder.panHandlers}
+              style={{
+                width: '100%',
+                maxWidth: modalMaxWidth,
+                maxHeight: '85%',
+                minHeight: '50%',
+                transform: isLargeScreen ? undefined : [{ translateY: pickerTranslateY }],
+              }}
+            >
+              <TouchableOpacity
+                activeOpacity={1}
+                style={{
+                  backgroundColor: isDarkMode ? '#1e293b' : Colors.white,
+                  borderTopLeftRadius: 24,
+                  borderTopRightRadius: 24,
+                  borderBottomLeftRadius: isLargeScreen ? 24 : 0,
+                  borderBottomRightRadius: isLargeScreen ? 24 : 0,
+                  paddingTop: 16,
+                  paddingBottom: isLargeScreen ? 24 : (Platform.OS === 'ios' ? 34 : 24) + insets.bottom,
+                  borderTopWidth: 1,
+                  borderTopColor: borderColor,
+                  width: '100%',
+                }}
+              >
+                {/* Header Drag Zone */}
+                <View style={{ width: '100%' }}>
+                  <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? '#334155' : '#e2e8f0', alignSelf: 'center', marginBottom: 16 }} />
+                  <View style={{ paddingHorizontal: 20, marginBottom: 16, paddingRight: 60, width: '100%' }}>
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text }}>Select Contact(s)</Text>
+                  </View>
+                </View>
+
+                {/* Done Button absolute */}
+                <TouchableOpacity
+                  onPress={() => setShowFormContactPicker(false)}
+                  style={{
+                    position: 'absolute',
+                    top: 24,
+                    right: 20,
+                    backgroundColor: isDarkMode ? '#60a5fa' : '#2563eb',
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 10,
+                    zIndex: 10,
+                  }}
+                >
+                  <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>Done</Text>
+                </TouchableOpacity>
+
+                {/* Search Input */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: searchBg,
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  marginHorizontal: 16,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: borderColor,
+                  height: 44
+                }}>
+                  <Search size={16} color={theme.textTertiary} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={{ flex: 1, fontSize: 14, color: theme.text, height: '100%' }}
+                    placeholder="Search contacts..."
+                    placeholderTextColor={theme.textTertiary}
+                    value={contactSearch}
+                    onChangeText={setContactSearch}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {contactSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setContactSearch('')}>
+                      <X size={16} color={theme.textTertiary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Contacts List */}
+                <ScrollView 
+                  keyboardShouldPersistTaps="handled" 
+                  style={{ paddingHorizontal: 16, maxHeight: 350 }}
+                  scrollEventThrottle={16}
+                  onScroll={(e) => { pickerScrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                >
+                  {loadingContacts ? (
+                    <ActivityIndicator size="small" color={theme.text} style={{ padding: 12 }} />
+                  ) : contacts.length === 0 ? (
+                    <Text style={{ color: theme.textTertiary, padding: 12, textAlign: 'center' }}>No contacts found</Text>
+                  ) : (
+                    filteredContacts.map((contact: string, idx: number) => {
+                      const isSelected = formData.contactNames?.includes(contact) || false;
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          onPress={() => {
+                            if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setFormData(prev => {
+                              const current = prev.contactNames || [];
+                              const updated = current.includes(contact)
+                                ? current.filter(c => c !== contact)
+                                : [...current, contact];
+                              
+                              // Find phone number for the contact
+                              const contactDetail = contactDetails.find((d: any) => d.name === contact);
+                              const newPhone = contactDetail?.phone || prev.phoneNumber;
+
+                              const firstContact = updated.length > 0 ? updated[0] : '';
+                              const generatedUsername = firstContact
+                                ? firstContact.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+                                : prev.username;
+
+                              return {
+                                ...prev,
+                                contactNames: updated,
+                                contactName: firstContact,
+                                name: updated.join(', '),
+                                username: generatedUsername,
+                                phoneNumber: newPhone
+                              };
+                            });
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingVertical: 14,
+                            paddingHorizontal: 16,
+                            borderRadius: 12,
+                            backgroundColor: isSelected ? (isDarkMode ? 'rgba(59, 130, 246, 0.12)' : 'rgba(37, 99, 235, 0.08)') : 'transparent',
+                            marginBottom: 4,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 15,
+                              fontWeight: isSelected ? '700' : '500',
+                              color: isSelected ? (isDarkMode ? '#60a5fa' : '#2563eb') : theme.text,
+                            }}
+                          >
+                            {contact}
+                          </Text>
+                          {isSelected && <CheckCircle size={16} color={isDarkMode ? '#60a5fa' : '#2563eb'} />}
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              </TouchableOpacity>
+            </RNAnimated.View>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+    );
+  };
+
   const resetForm = () => {
-    setFormData({ name: '', username: '', password: '', phoneNumber: '', address: '', role: 'user', partyId: '', profilePhoto: '' });
+    setFormData({ 
+      name: '', username: '', password: '', phoneNumber: '', address: '', role: 'user', partyId: '', profilePhoto: '',
+      contactName: '', contactNames: []
+    });
     setFormErrors({});
     setShowPassword(false);
     setPartySearch('');
+    setContacts([]);
+    setContactDetails([]);
+    setContactSearch('');
+    setShowFormContactPicker(false);
   };
 
   const createPartyMutation = useMutation({
@@ -1008,12 +1243,23 @@ export default function UsersScreen() {
       queryClient.invalidateQueries({ queryKey: ['parties'] });
       const createdParty = data.data || data;
       if (createdParty && createdParty._id) {
-        setFormData(prev => ({
-          ...prev,
-          partyId: createdParty._id,
-          name: createdParty.name,
-          username: createdParty.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-        }));
+        setFormData(prev => {
+          const contactName = createdParty.contactName || '';
+          const contactPhone = createdParty.contactPhone || prev.phoneNumber || '';
+          const displayName = contactName || createdParty.name || '';
+          const generatedUsername = displayName.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+
+          return {
+            ...prev,
+            partyId: createdParty._id,
+            contactName: contactName,
+            contactNames: contactName ? [contactName] : [],
+            name: displayName,
+            username: generatedUsername,
+            phoneNumber: contactPhone,
+            address: createdParty.address || prev.address || ''
+          };
+        });
       }
       setShowAddPartyModal(false);
       setNewPartyForm({ name: '', contactName: '', contactPhone: '', address: '' });
@@ -1074,6 +1320,8 @@ export default function UsersScreen() {
       role: user.role || 'user',
       partyId: typeof user.partyId === 'object' ? user.partyId?._id : user.partyId || '',
       profilePhoto: user.profilePhoto || '',
+      contactName: user.contactName || '',
+      contactNames: user.contactNames || (user.contactName ? [user.contactName] : []),
     });
     setFormErrors({});
     setShowEditModal(true);
@@ -1349,6 +1597,47 @@ export default function UsersScreen() {
                   <ChevronDown size={18} color={theme.textTertiary} />
                 </TouchableOpacity>
                 {!!formErrors.partyId && <Text style={styles.fieldError}>{formErrors.partyId}</Text>}
+              </View>
+            )}
+
+            {/* Contact Name (Employee) Selection (visible only if role is 'party') */}
+            {formData.role === 'party' && (
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Contact Name (Employee)</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    if (!formData.partyId) {
+                      useAppStore.getState().addToast({
+                        type: 'error',
+                        title: 'Action Required',
+                        message: 'Please select a party name first',
+                      });
+                      return;
+                    }
+                    pickerScrollOffset.current = 0;
+                    pickerTranslateY.setValue(0);
+                    setContactSearch('');
+                    setShowFormContactPicker(true);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: inputBg,
+                    borderColor: inputBorder,
+                    borderWidth: 1,
+                    borderRadius: 14,
+                    paddingHorizontal: 16,
+                    height: 48,
+                  }}
+                >
+                  <Text style={{ fontSize: 15, color: formData.contactNames?.length > 0 ? theme.text : theme.textTertiary, flex: 1 }}>
+                    {formData.contactNames?.length > 0 
+                      ? formData.contactNames.join(', ') 
+                      : formData.partyId ? 'Select Contact(s)...' : '-- Select a party first --'}
+                  </Text>
+                  <ChevronDown size={18} color={theme.textTertiary} />
+                </TouchableOpacity>
               </View>
             )}
 
@@ -1872,11 +2161,18 @@ export default function UsersScreen() {
           value: role
         })),
         formData.role,
-        (val) => setFormData(p => ({ ...p, role: val })),
+        (val) => setFormData(p => ({ 
+          ...p, 
+          role: val,
+          partyId: val === 'party' ? p.partyId : '',
+          contactName: val === 'party' ? p.contactName : '',
+          contactNames: val === 'party' ? p.contactNames : []
+        })),
         'Select User Role'
       )}
 
       {renderFormPartySelectionModal()}
+      {renderFormContactSelectionModal()}
 
       {/* Custom Profile photo preview modal */}
       <Modal
