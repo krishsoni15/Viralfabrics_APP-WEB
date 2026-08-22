@@ -395,7 +395,7 @@ export interface PurchaseOrder {
   paymentTerms: string;
   specs: {
     finishGsm: string;
-    greyWidth: string;
+    greyWidth?: string;
     finishWidth: string;
     weight: string;
   };
